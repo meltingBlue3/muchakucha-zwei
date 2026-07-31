@@ -35,7 +35,15 @@ Muchakucha Zwei 将以“可实际使用的家庭协作闭环”为顺序推进�
 4. 用户可修改显示昵称，重复昵称不会造成账户身份冲突。
 5. 移动端长期凭据进入系统安全存储，Web Refresh Token 使用 HttpOnly Cookie；服务端实现 Token 轮换、撤销、重放检测和哈希存储。
 
-**Plans:** TBD
+**Plans:** 6 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Block dependency installation until exact official pins and Expo/Nest/Prisma compatibility are approved.
+- [ ] 01-02-PLAN.md — Build and migrate the Expo → generated client → Nest → PostgreSQL registration walking skeleton.
+- [ ] 01-03-PLAN.md — Complete safe email verification, resend, deep-link sanitization, and same-device continuation.
+- [ ] 01-04-PLAN.md — Deliver verified login, rotating platform-split sessions, restart restore, and offline/expired routing.
+- [ ] 01-05-PLAN.md — Complete atomic password reset, current-device logout, and duplicate-allowed nickname editing.
+- [ ] 01-06-PLAN.md — Run the full automated gate and accept native Android/security/accessibility behavior.
 
 ### Phase 2: 家庭组与成员协作
 
@@ -127,7 +135,7 @@ Muchakucha Zwei 将以“可实际使用的家庭协作闭环”为顺序推进�
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 安全账户入口 | 0 / TBD | Not started | — |
+| 1. 安全账户入口 | 0 / 6 | Not started | — |
 | 2. 家庭组与成员协作 | 0 / TBD | Not started | — |
 | 3. 共享家庭日历 | 0 / TBD | Not started | — |
 | 4. 任务与今日视图 | 0 / TBD | Not started | — |
