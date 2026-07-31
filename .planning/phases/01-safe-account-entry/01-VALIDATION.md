@@ -26,17 +26,17 @@ Every PowerShell verification uses `&&` under PowerShell 7, or checks `$LASTEXIT
 
 Every path below is created before behavior implementation. Test files may be executable skipped contracts until their owning RED plan activates them; they may not contain fake passing assertions.
 
-### Workspace and runner paths — Plans 01-02 and 01-03
+### Workspace and runner paths — Plans 01-02, 01-03, and 01-04
 
 - `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `tsconfig.base.json`
 - `compose.yaml`, `.env.test.example`, `playwright.config.ts`
-- `scripts/assert-red.ps1`, `scripts/check-openapi-drift.ps1`
+- `scripts/assert-red.ps1`, `scripts/check-required-tests.ps1`, `scripts/check-openapi-drift.ps1`
 - `apps/api/package.json`, `apps/api/tsconfig.json`, `apps/api/vitest.config.ts`
 - `apps/api/test/setup-integration.ts`, `apps/api/test/reset-database.ts`
 - `apps/client/package.json`, `apps/client/app.json`, `apps/client/tsconfig.json`
 - `apps/client/jest.config.js`, `apps/client/jest.setup.ts`
 
-### API/security contract paths — Plan 01-04
+### API/security contract paths — Plans 01-05 and 01-06
 
 - `apps/api/test/auth/register.int.test.ts`
 - `apps/api/test/auth/verify-email.int.test.ts`
@@ -50,7 +50,7 @@ Every path below is created before behavior implementation. Test files may be ex
 - `apps/api/src/modules/auth/data/common-passwords-SOURCE.md`
 - `docs/security/asvs-v5.0.0-l1.md`
 
-### Client and Web contract paths — Plan 01-05
+### Client and Web contract paths — Plans 01-07, 01-08, and 01-09
 
 - `apps/client/src/features/auth/__tests__/register-form-test.tsx`
 - `apps/client/src/features/auth/__tests__/verification-flow-test.tsx`
@@ -118,7 +118,8 @@ Source: `https://raw.githubusercontent.com/OWASP/ASVS/v5.0.0/5.0/docs_en/OWASP_A
 
 - After each task: `pnpm test:quick` plus the focused task command.
 - After each wave: `pnpm test && pnpm test:integration`.
-- Final automated gate: `pnpm test && pnpm test:integration && pnpm test:e2e:web && pnpm openapi:check`.
+- Final automated gate: `pwsh -NoProfile -File scripts/check-required-tests.ps1 && pnpm test && pnpm test:integration && pnpm test:e2e:web && pnpm openapi:check`.
+- The required-test audit enumerates every exact API, client, design, and E2E path in this document and fails before the suites if any path is absent or contains `.skip`, `.todo`, `test.todo`, `describe.skip`, or `IMPLEMENTATION_MISSING`.
 - Final manual Android gate: SecureStore restart/clear, same-device deep link, offline-vs-expired, keyboard, 200% text, screen-reader announcements, and 48px targets.
 - iOS EAS/real-device verification and production domains/SMTP/provider remain explicit Phase 6 release gates.
 

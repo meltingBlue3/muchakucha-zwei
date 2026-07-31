@@ -35,28 +35,36 @@ Muchakucha Zwei 将以“可实际使用的家庭协作闭环”为顺序推进�
 4. 用户可修改显示昵称，重复昵称不会造成账户身份冲突。
 5. 移动端长期凭据进入系统安全存储，Web Refresh Token 使用 HttpOnly Cookie；服务端实现 Token 轮换、撤销、重放检测和哈希存储。
 
-**Plans:** 19 plans
+**Plans:** 27 plans
 
 Plans:
 - [ ] 01-01-PLAN.md — Approve exact official dependency pins before installation.
 - [ ] 01-02-PLAN.md — Install the pinned workspace and deterministic local services.
-- [ ] 01-03-PLAN.md — Configure API/client runners and fail-fast RED evidence.
-- [ ] 01-04-PLAN.md — Create every API/security Wave 0 contract, common-password fixture, and ASVS map.
-- [ ] 01-05-PLAN.md — Create every client/Web/design/accessibility Wave 0 contract.
-- [ ] 01-06-PLAN.md — Migrate the durable authentication persistence foundation.
-- [ ] 01-07-PLAN.md — Implement registration API, common-password policy, and registration-side proof issuance.
-- [ ] 01-08-PLAN.md — Deliver the branded registration walking-skeleton client.
-- [ ] 01-09-PLAN.md — Implement transactional verification, resend, and server-owned proof cookies.
-- [ ] 01-10-PLAN.md — Deliver sanitized same/cross-device verification client flows.
-- [ ] 01-11-PLAN.md — Implement verified login and atomic rotating sessions.
-- [ ] 01-12-PLAN.md — Register and expose minimal GET/PATCH users/me before bootstrap.
-- [ ] 01-13-PLAN.md — Deliver platform session transports, login, restore, offline state, and no-household handoff.
-- [ ] 01-14-PLAN.md — Implement atomic password-reset server behavior and global revoke.
-- [ ] 01-15-PLAN.md — Deliver sanitized forgot/reset/success client flows.
-- [ ] 01-16-PLAN.md — Implement sid-only current-device logout.
-- [ ] 01-17-PLAN.md — Deliver nickname editing and current-device logout UI.
-- [ ] 01-18-PLAN.md — Close automated accessibility, design-system, ASVS, and full-suite gates.
-- [ ] 01-19-PLAN.md — Accept the complete account lifecycle on a real Android target.
+- [ ] 01-03-PLAN.md — Configure API integration runners and fail-fast RED/no-placeholder audits.
+- [ ] 01-04-PLAN.md — Configure the Expo component and platform-adapter runner.
+- [ ] 01-05-PLAN.md — Create the seven API behavior contracts.
+- [ ] 01-06-PLAN.md — Ground the common-password fixture and ASVS audit.
+- [ ] 01-07-PLAN.md — Create six client feature and platform-adapter contracts.
+- [ ] 01-08-PLAN.md — Create typed design-system behavior contracts.
+- [ ] 01-09-PLAN.md — Create Web lifecycle and accessibility E2E contracts.
+- [ ] 01-10-PLAN.md — Migrate the durable authentication persistence foundation.
+- [ ] 01-11-PLAN.md — Bootstrap the versioned API and provider-neutral mail boundary.
+- [ ] 01-12-PLAN.md — Establish PendingProofStore, SessionTransport, and session-state contracts.
+- [ ] 01-13-PLAN.md — Implement registration API and registration-side proof issuance.
+- [ ] 01-14-PLAN.md — Implement the typed theme and owned accessible primitives.
+- [ ] 01-15-PLAN.md — Deliver registration UI with native pending-proof persistence.
+- [ ] 01-16-PLAN.md — Implement transactional verification, resend, and proof/session issuance.
+- [ ] 01-17-PLAN.md — Deliver sanitized verification with D-06 authenticated handoff.
+- [ ] 01-18-PLAN.md — Implement verified login and atomic rotating session APIs.
+- [ ] 01-19-PLAN.md — Register and expose minimal GET/PATCH users/me.
+- [ ] 01-20-PLAN.md — Wire platform SessionTransport to generated session APIs.
+- [ ] 01-21-PLAN.md — Deliver login, restore, offline, and no-household routes.
+- [ ] 01-22-PLAN.md — Implement atomic password-reset server behavior and global revoke.
+- [ ] 01-23-PLAN.md — Deliver sanitized forgot/reset/success client flows.
+- [ ] 01-24-PLAN.md — Implement sid-only current-device logout.
+- [ ] 01-25-PLAN.md — Deliver nickname editing and current-device logout UI.
+- [ ] 01-26-PLAN.md — Enforce no-skips, accessibility, ASVS, and full-suite gates.
+- [ ] 01-27-PLAN.md — Accept the complete account lifecycle on a real Android target.
 
 ### Phase 2: 家庭组与成员协作
 
@@ -148,7 +156,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 安全账户入口 | 0 / 19 | Not started | — |
+| 1. 安全账户入口 | 0 / 27 | Not started | — |
 | 2. 家庭组与成员协作 | 0 / TBD | Not started | — |
 | 3. 共享家庭日历 | 0 / TBD | Not started | — |
 | 4. 任务与今日视图 | 0 / TBD | Not started | — |
