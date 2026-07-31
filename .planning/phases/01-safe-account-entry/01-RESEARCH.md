@@ -423,29 +423,17 @@ Retry serialization conflicts a small bounded number of times; never retry a dom
 | A14 | Corepack activation, proposed scripts and the under-30-second quick-test target fit this Windows workspace. | Installation / Validation | Tool setup or test startup may require different commands/targets after the skeleton exists. |
 | A15 | Proposed endpoint names, error codes, error envelope and bootstrap state taxonomy are the stable v1 contract. | API / Client Patterns | Renaming after generated client adoption causes contract churn; planner should lock them in Wave 0. |
 | A16 | POST-only link consumption, pending-device proof, single-flight/Web Locks, in-memory Access Token and credential-source response selection are acceptable v1 mechanics. | Architecture Patterns | Different deployment/browser constraints could require another continuation/refresh protocol. |
-| A17 | `mk_refresh` with narrow auth path is preferred over a root-path `__Host-` cookie. | Cookie Example | If the team prioritizes the `__Host-` prefix, it must use Path `/` and reassess exposure. |
+| A17 | Production uses `__Secure-mk_refresh` with the narrow auth path; local HTTP uses an explicitly development-only unprefixed name. | Cookie Example | ASVS v5.0.0 L1 requires Secure and a `__Secure-` prefix when `__Host-` is not used; `__Host-` still conflicts with the narrow path. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **What are the production Web, API and email-link origins?**
-   - What we know: HTTPS link routing, cookie SameSite, CORS and iOS/Android association files depend on final domains. `[ASSUMED]`
-   - What's unclear: no deployment domains are chosen in project state.
-   - Recommendation: Wave 0 defines `WEB_ORIGIN`, `API_ORIGIN`, `EMAIL_LINK_ORIGIN`, Expo scheme and placeholder associated-domain config; production release remains blocked until real domains/association files are verified.
+1. **Production origins — deployment-deferred release gate.** Wave 0 defines and validates `WEB_ORIGIN`, `API_ORIGIN`, `EMAIL_LINK_ORIGIN`, the Expo scheme, and association-file configuration without claiming real production domains. The Phase 6 release owner must select the public origins and verify HTTPS, CORS, Android App Links, and iOS associated domains before release. This is not a Phase 1 implementation blocker.
 
-2. **Which production transactional email provider is selected?**
-   - What we know: Nodemailer supports SMTP and `verify()` checks connection/TLS/auth reachability.[CITED: https://nodemailer.com/smtp]
-   - What's unclear: provider, sender domain, SPF/DKIM/DMARC and production credentials are deployment decisions.
-   - Recommendation: plan against `MailPort` and SMTP env contract; use Mailpit in local/E2E; record provider setup as deployment checkpoint, not auth-domain code.
+2. **Production transactional email — deployment-deferred release gate.** Phase 1 implements `MailPort`, an SMTP environment contract, Mailpit local delivery, and a capture adapter for tests. The Phase 6 release owner must select the SMTP provider and sender domain, provision credentials, and verify SPF/DKIM/DMARC and transport reachability. Provider selection does not enter authentication-domain code and is not a Phase 1 implementation blocker.
 
-3. **Will the team accept the v1 email canonicalization policy?**
-   - What we know: database uniqueness must use one deterministic key; PostgreSQL has multiple case-insensitive strategies.[CITED: https://www.postgresql.org/docs/17/citext.html]
-   - What's unclear: whether full-address lowercase is accepted for all target users.
-   - Recommendation: lock A3 before migration becomes durable; do not change canonicalization after accounts exist without a migration plan.
+3. **Email identity canonicalization — locked for Phase 1.** Trim surrounding whitespace, apply Unicode normalization, then lowercase the complete address for the durable unique `emailCanonical` key. Preserve the original submitted address separately for delivery and display. Tests must cover case, surrounding whitespace, Unicode-equivalent forms, race safety, and preservation of the delivery value. Any later change requires an explicit data migration and collision analysis.
 
-4. **What common/breached-password dataset is available offline?**
-   - What we know: ASVS 5.0 calls for common-password checks and at higher levels breached-password checks.[CITED: https://cornucopia.owasp.org/taxonomy/asvs-5.0/06-authentication/02-password-security]
-   - What's unclear: dataset/license/update mechanism; adding network HIBP lookup expands privacy/availability scope.
-   - Recommendation: require at least a checked-in, licensed common-password denylist for Phase 1 if approved; otherwise document the gap rather than silently inventing an online dependency.
+4. **Common/breached password policy — locked for Phase 1.** Registration and password-reset completion reject passwords found in a committed, licensed deterministic fixture containing at least the top 3000 policy-matching common passwords. The fixture records source, license, checksum, and update date and is exercised locally with no network dependency. A production-scale breached-password dataset/provider is owned by the Phase 6 release gate; online HIBP lookup is not introduced in Phase 1. This satisfies the applicable ASVS v5.0.0 L1 common-password control; breached-password screening is an L2 control and remains release-policy work.
 
 ## Environment Availability
 
@@ -715,7 +703,7 @@ These are Phase 1 policy choices under the agent's discretion, not universal sta
 
 | Control | Recommendation | Provenance |
 |---------|----------------|------------|
-| Password length | 12–128 Unicode characters; no forced upper/lower/digit/symbol classes; reject known-common list in Wave 1 if dataset is locally available | ASVS requires at least 8, strongly recommends 15, permits at least 64 and rejects composition rules.[CITED: https://cornucopia.owasp.org/taxonomy/asvs-5.0/06-authentication/02-password-security] Exact 12/128 is `[ASSUMED]`. |
+| Password length and common-password policy | 12–128 Unicode characters; no forced upper/lower/digit/symbol classes; reject a committed licensed fixture of at least the top 3000 policy-matching common passwords during registration and reset | ASVS v5.0.0 L1 controls 6.2.1, 6.2.4, 6.2.5 and 6.2.8; exact 12/128 bounds are a project policy. [CITED: https://raw.githubusercontent.com/OWASP/ASVS/v5.0.0/5.0/docs_en/OWASP_Application_Security_Verification_Standard_5.0.0_en.csv] |
 | Password hash | Argon2id, memory 19 MiB, iterations 2, parallelism 1 as floor; benchmark target host and only raise cost | OWASP minimum.[CITED: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html] |
 | Access JWT | 15 minutes; asymmetric signing preferred when deploy topology warrants, otherwise rotated high-entropy symmetric secret | Exact lifetime/key choice `[ASSUMED]`; short-lived is project locked. |
 | Refresh | 30-day inactivity expiry, 90-day absolute Session cap; opaque 32 random bytes | Exact durations `[ASSUMED]`; rotation/replay behavior is RFC-backed.[CITED: https://www.rfc-editor.org/rfc/rfc9700.html] |
@@ -724,7 +712,7 @@ These are Phase 1 policy choices under the agent's discretion, not universal sta
 | Opaque token generation | `randomBytes(32)`, base64url; persist lowercase SHA-256 hex | Node crypto provides CSPRNG/hashing APIs.[CITED: https://nodejs.org/docs/latest-v24.x/api/crypto.html] Exact 32-byte format `[ASSUMED]`. |
 | Login throttle | per IP 10/min plus per canonical email 5/15min; return generic 429/retry time | Thresholds `[ASSUMED]`; rate limiting is OWASP/Nest recommended.[CITED: https://docs.nestjs.com/security/rate-limiting] |
 | Register/reset/resend | per IP 5/hour; per email 3/hour; local UI resend cooldown 60s does not replace server limit | Thresholds `[ASSUMED]`; server-side automated-abuse controls are OWASP-backed.[CITED: https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html] |
-| Web refresh cookie | `HttpOnly`, `Secure` outside local HTTP, `SameSite=Lax`, `Path=/api/v1/auth`, no broad Domain, bounded `Max-Age` | Attribute choice `[ASSUMED]`; Fastify cookie mechanism is official.[CITED: https://docs.nestjs.com/techniques/cookies] |
+| Web refresh cookie | Production `__Secure-mk_refresh`; local-HTTP development name is explicitly separate. `HttpOnly`, `Secure` in production, `SameSite=Lax`, `Path=/api/v1/auth`, no broad Domain, bounded `Max-Age` | ASVS v5.0.0 L1 control 3.3.1 requires Secure and a `__Secure-` prefix when `__Host-` is not used.[CITED: https://raw.githubusercontent.com/OWASP/ASVS/v5.0.0/5.0/docs_en/OWASP_Application_Security_Verification_Standard_5.0.0_en.csv] Fastify cookie mechanism is official.[CITED: https://docs.nestjs.com/techniques/cookies] |
 | Cookie endpoint CSRF | POST only, exact Origin allowlist, credentialed CORS to exact Web origin; never `*`; Access Authorization header for business APIs | `[ASSUMED]` defense-in-depth recommendation. |
 | Email canonicalization | trim, Unicode normalization, lowercase full address; preserve original email for display/delivery; unique canonical column | `[ASSUMED]` project identity policy; document it as an API invariant. |
 
@@ -841,7 +829,7 @@ export const prisma = new PrismaClient({ adapter });
 
 ```typescript
 // Source: https://docs.nestjs.com/techniques/cookies
-reply.setCookie('mk_refresh', refreshToken, {
+reply.setCookie(config.isProduction ? '__Secure-mk_refresh' : 'mk_refresh_dev', refreshToken, {
   httpOnly: true,
   secure: config.isProduction,
   sameSite: 'lax',
@@ -850,7 +838,7 @@ reply.setCookie('mk_refresh', refreshToken, {
 });
 ```
 
-`__Host-` cookies formally require `Secure`, `Path=/`, and no `Domain`; because the recommended narrow auth path conflicts with `Path=/`, use a non-`__Host-` name such as `mk_refresh` unless adopting root path. `[ASSUMED]` The planner must not combine `__Host-` with `/api/v1/auth`.
+`__Host-` cookies formally require `Secure`, `Path=/`, and no `Domain`; because the recommended narrow auth path conflicts with `Path=/`, use production `__Secure-mk_refresh`. Local HTTP uses the explicitly development-only `mk_refresh_dev` because Secure-prefixed cookies cannot be set over insecure transport. The planner must not combine `__Host-` with `/api/v1/auth`.
 
 ### Native SecureStore Adapter
 

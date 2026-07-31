@@ -5,101 +5,127 @@ status: ready
 nyquist_compliant: true
 wave_0_complete: false
 created: 2026-08-01
+revised: 2026-08-01
 ---
 
 # Phase 1 — Validation Strategy
 
-> Per-phase validation contract for feedback sampling during execution.
-
----
-
 ## Test Infrastructure
 
-| Property | Value |
-|----------|-------|
-| **API/shared framework** | Vitest + `@nestjs/testing` + Supertest |
-| **Expo component framework** | Jest + `jest-expo` + React Native Testing Library |
-| **Web E2E/a11y** | Playwright + `@axe-core/playwright` |
-| **Database/email integration** | Docker Compose PostgreSQL 18 + Mailpit; dedicated migrated test database |
-| **Config files** | None — Wave 0 creates root/API/client/Playwright configs |
-| **Quick run command** | `pnpm test:quick` |
-| **Full suite command** | `pnpm test && pnpm test:integration && pnpm test:e2e:web` |
-| **Estimated runtime** | Quick ≤30 seconds warm; full suite target ≤5 minutes in CI |
+| Layer | Runner | One-shot command |
+|---|---|---|
+| API/unit/integration | Vitest + Nest testing + Supertest | `pnpm --filter api test --run <path>` |
+| Expo component/adapters | Jest Expo + RNTL | `pnpm --filter client test --runInBand <pattern>` |
+| Web E2E/a11y | Playwright + axe | `pnpm exec playwright test <path>` |
+| Database/email | PostgreSQL 18 + Mailpit | `pnpm test:integration` |
+| Fast feedback | configured project selection | `pnpm test:quick` |
 
-## Sampling Rate
+Every PowerShell verification uses `&&` under PowerShell 7, or checks `$LASTEXITCODE` and throws immediately after each native command. `scripts/assert-red.ps1` first proves runner/config/test discovery, rejects infrastructure/config/import failures, then accepts failure only when the named missing-behavior marker appears.
 
-- **After every task commit:** Run `pnpm test:quick` plus the task-specific command from its plan.
-- **After every plan wave:** Run `pnpm test && pnpm test:integration`.
-- **Before `$gsd-verify-work`:** Run `pnpm test && pnpm test:integration && pnpm test:e2e:web`; Android smoke must pass.
-- **iOS release backstop:** EAS build plus real-device deep-link/SecureStore smoke is required before claiming cross-platform release readiness, but does not block the Phase 1 development loop on Windows.
-- **Max feedback latency:** 30 seconds for the quick loop; 5 minutes for a wave gate.
+## Wave 0 File Contract
+
+Every path below is created before behavior implementation. Test files may be executable skipped contracts until their owning RED plan activates them; they may not contain fake passing assertions.
+
+### Workspace and runner paths — Plans 01-02 and 01-03
+
+- `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `tsconfig.base.json`
+- `compose.yaml`, `.env.test.example`, `playwright.config.ts`
+- `scripts/assert-red.ps1`, `scripts/check-openapi-drift.ps1`
+- `apps/api/package.json`, `apps/api/tsconfig.json`, `apps/api/vitest.config.ts`
+- `apps/api/test/setup-integration.ts`, `apps/api/test/reset-database.ts`
+- `apps/client/package.json`, `apps/client/app.json`, `apps/client/tsconfig.json`
+- `apps/client/jest.config.js`, `apps/client/jest.setup.ts`
+
+### API/security contract paths — Plan 01-04
+
+- `apps/api/test/auth/register.int.test.ts`
+- `apps/api/test/auth/verify-email.int.test.ts`
+- `apps/api/test/auth/login.int.test.ts`
+- `apps/api/test/auth/refresh-rotation.int.test.ts`
+- `apps/api/test/auth/password-reset.int.test.ts`
+- `apps/api/test/auth/logout.int.test.ts`
+- `apps/api/test/users/me.int.test.ts`
+- `apps/api/test/security/asvs-v5-l1.test.ts`
+- `apps/api/src/modules/auth/data/common-passwords-top-3000.txt`
+- `apps/api/src/modules/auth/data/common-passwords-SOURCE.md`
+- `docs/security/asvs-v5.0.0-l1.md`
+
+### Client and Web contract paths — Plan 01-05
+
+- `apps/client/src/features/auth/__tests__/register-form-test.tsx`
+- `apps/client/src/features/auth/__tests__/verification-flow-test.tsx`
+- `apps/client/src/features/auth/__tests__/session-bootstrap-test.tsx`
+- `apps/client/src/features/auth/__tests__/password-reset-flow-test.tsx`
+- `apps/client/src/platform/session/__tests__/session-transport-test.ts`
+- `apps/client/src/features/profile/__tests__/profile-form-test.tsx`
+- `apps/client/src/ui/__tests__/token-static-test.ts`
+- `apps/client/src/ui/__tests__/contrast-test.ts`
+- `apps/client/src/ui/__tests__/primitive-states-test.tsx`
+- `e2e/auth/register.spec.ts`
+- `e2e/auth/verify-email.spec.ts`
+- `e2e/auth/login-session.spec.ts`
+- `e2e/auth/password-reset.spec.ts`
+- `e2e/auth/account-actions.spec.ts`
+- `e2e/auth/accessibility.spec.ts`
 
 ## Requirement Verification Map
 
-| Requirement | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|-------------|-----------------|-----------|-------------------|-------------|--------|
-| AUTH-01 | Registration is canonical-email race safe; password is Argon2id hashed; nickname is accepted | API integration + client component | `pnpm --filter api test --run test/auth/register.int.test.ts` | ❌ Wave 0 | ⬜ pending |
-| AUTH-02 | Verification handles success, expired, used, invalid and same/cross-device branches; resend is server limited | API integration + Web E2E + client | `pnpm --filter api test --run test/auth/verify-email.int.test.ts` | ❌ Wave 0 | ⬜ pending |
-| AUTH-03 | Verified login succeeds, unverified login is denied, session restores after restart, offline is distinct | API integration + client state + Web E2E | `pnpm --filter client test --runInBand session-bootstrap` | ❌ Wave 0 | ⬜ pending |
-| AUTH-04 | Reset request is enumeration safe; token is expiring/single use; reset revokes all sessions | API integration + Web E2E | `pnpm --filter api test --run test/auth/password-reset.int.test.ts` | ❌ Wave 0 | ⬜ pending |
-| AUTH-05 | Logout revokes only JWT `sid`; a second device remains authenticated | API integration | `pnpm --filter api test --run test/auth/logout.int.test.ts` | ❌ Wave 0 | ⬜ pending |
-| AUTH-06 | Duplicate nicknames are allowed; current user can update only their own nickname | API integration + client component | `pnpm --filter api test --run test/users/me.int.test.ts` | ❌ Wave 0 | ⬜ pending |
-| SAFE-03 | Native refresh uses SecureStore; Web refresh uses HttpOnly Cookie and never appears in JSON or localStorage | Adapter unit + Playwright cookie assertion | `pnpm --filter client test --runInBand session-transport` | ❌ Wave 0 | ⬜ pending |
-| SAFE-04 | Every refresh rotates; known old-token replay revokes its session; database stores token hashes only | DB integration + concurrency/property cases | `pnpm --filter api test --run test/auth/refresh-rotation.int.test.ts` | ❌ Wave 0 | ⬜ pending |
+| Requirement | Primary tests | Required behavior |
+|---|---|---|
+| AUTH-01 | `register.int.test.ts`, `register-form-test.tsx`, `register.spec.ts` | canonical-email race safety; original delivery address; Argon2id; local common-password denial; D-02 registration |
+| AUTH-02 | `verify-email.int.test.ts`, `verification-flow-test.tsx`, `verify-email.spec.ts` | valid/expired/used/invalid/superseded; registration-side proof; same/cross-device; API-issued Web pending cookie; native SecureStore proof |
+| AUTH-03 | `login.int.test.ts`, `session-bootstrap-test.tsx`, `login-session.spec.ts` | verified login; restart; splash; offline/401/5xx distinction; no-household handoff only |
+| AUTH-04 | `password-reset.int.test.ts`, `password-reset-flow-test.tsx`, `password-reset.spec.ts` | generic request; single-use expiry; common-password denial; atomic global revoke; no auto-login |
+| AUTH-05 | `logout.int.test.ts`, `account-actions.spec.ts` | exact `sid`; current-device revoke; matching cookie clear; second device remains valid |
+| AUTH-06 | `users/me.int.test.ts`, `profile-form-test.tsx`, `account-actions.spec.ts` | AppModule reachability; GET/PATCH subject isolation; duplicate display names; mass-assignment rejection |
+| SAFE-03 | `session-transport-test.ts`, `login-session.spec.ts`, `verify-email.spec.ts` | SecureStore native; API-issued HttpOnly Web cookies; no refresh/pending proof in JSON or Web storage |
+| SAFE-04 | `refresh-rotation.int.test.ts`, `asvs-v5-l1.test.ts` | rotation, retained hashes, replay revoke, concurrency, independent devices |
 
-## Required Scenario Matrix
+## UI and Accessibility Matrix
 
-| Area | Automated cases required before phase verification |
-|------|----------------------------------------------------|
-| Refresh | Success, expired, revoked, replay, unknown hash, two independent devices, simultaneous refresh, absolute expiry, password-reset global revoke |
-| Link tokens | Valid, expired, used, unknown, superseded by resend, landing GET does not consume, token removed from URL and logs |
-| Session bootstrap | No credential, valid, explicit 401, timeout, DNS/offline, 5xx, Web cookie, native SecureStore, safe intended-route restore |
-| Enumeration | Existing/non-existing reset and registration have the same status/body shape; login uses generic invalid credentials; rate limit is stable |
-| Cookie | HttpOnly, Secure outside local HTTP, SameSite=Lax, auth path, bounded Max-Age, exact-origin credentialed CORS, matching clear attributes, no refresh JSON field |
-| UI contract | Input/button states, 320/390/768/1440 widths, 200% text, keyboard/focus order, live announcements, reduced motion, contrast tokens |
+| Contract | Named assertion |
+|---|---|
+| Token-only styling | `token-static-test.ts` rejects raw color/spacing/radius/font literals outside theme-owned files |
+| Measured contrast | `contrast-test.ts` computes WCAG ratios for text, controls, status, and focus tokens |
+| Primitive states | `primitive-states-test.tsx` covers rest/focus/invalid/disabled/loading/password reveal/live status |
+| Responsive Web | `accessibility.spec.ts` runs 320, 390, 768, and 1440 widths |
+| Accessibility Web | axe at every width; keyboard order; first-invalid/status focus; live regions; 200% zoom |
+| User preferences | reduced-motion removes translation/shortens opacity; forced colors hides decoration and preserves focus |
 
-## Wave 0 Requirements
+## Applicable OWASP ASVS 5.0.0 L1 Mapping
 
-- [ ] Root `package.json`, `pnpm-workspace.yaml`, shared strict TypeScript configs and pinned `packageManager`.
-- [ ] `compose.yaml` with PostgreSQL 18 and Mailpit health checks; `.env.test` contract without committed secrets.
-- [ ] `apps/api/vitest.config.ts`, `apps/api/test/setup-integration.ts`, and deterministic database reset/migrate helper.
-- [ ] `apps/client/jest.config.js`, React Native Testing Library setup, SecureStore mock and network mock.
-- [ ] `playwright.config.ts` with Web/API server orchestration.
-- [ ] API integration test files under `apps/api/test/auth/` for registration, verification, login, refresh rotation, reset and logout.
-- [ ] `apps/api/test/users/me.int.test.ts` for nickname behavior.
-- [ ] `apps/client/src/features/auth/__tests__/session-bootstrap-test.tsx`.
-- [ ] `apps/client/src/platform/session/__tests__/session-transport-test.ts`.
-- [ ] Web E2E files under `e2e/auth/` for registration, mail verification, login, reset, cookies and accessibility.
-- [ ] OpenAPI generation drift check that fails when regeneration changes committed `packages/api-client` output.
-- [ ] Human package checkpoint for research entries marked seam-SUS before dependency installation.
+Identifiers are copied from the stable OWASP v5.0.0 CSV and use the required `v5.0.0-<id>` form. `docs/security/asvs-v5.0.0-l1.md` records exact text, applicability, owning assertion, and evidence; `asvs-v5-l1.test.ts` fails if an applicable row lacks a named test.
 
-## Threat Verification
+| Control | Phase 1 assertion |
+|---|---|
+| v5.0.0-2.2.1, v5.0.0-2.2.2 | DTO whitelist/range tests in register, reset, and users/me suites |
+| v5.0.0-2.3.1 | verification/reset sequential and single-use transaction cases |
+| v5.0.0-3.3.1 | production cookie name/prefix and Secure attribute HTTP test |
+| v5.0.0-3.4.2 | exact-origin CORS test |
+| v5.0.0-3.5.1, v5.0.0-3.5.2, v5.0.0-3.5.3 | credentialed-origin and POST-only auth mutation tests |
+| v5.0.0-6.1.1, v5.0.0-6.3.1 | documented and implemented per-IP/per-account throttle tests |
+| v5.0.0-6.2.1, v5.0.0-6.2.4, v5.0.0-6.2.5, v5.0.0-6.2.6, v5.0.0-6.2.7, v5.0.0-6.2.8 | length, top-3000 denylist, composition, mask/reveal, paste/password-manager, exact-input tests |
+| v5.0.0-6.3.2, v5.0.0-6.4.1, v5.0.0-6.4.2 | no defaults/hints/questions; CSPRNG expiring verification activation token tests |
+| v5.0.0-7.2.1..v5.0.0-7.2.4, v5.0.0-7.4.1 | backend validation, dynamic CSPRNG tokens, new generation, termination/revoke tests |
+| v5.0.0-9.1.1..v5.0.0-9.1.3, v5.0.0-9.2.1 | JWT signature, algorithm/key allowlist, expiry tests |
+| v5.0.0-10.4.5 | refresh rotation and known-replay family revoke tests |
+| v5.0.0-11.4.1 | approved SHA-256 opaque-token hash test |
+| v5.0.0-14.2.1, v5.0.0-14.3.1 | token-free post-landing URLs and client-storage clearing tests |
 
-| Threat Ref | Threat | Blocking Assertion |
-|------------|--------|--------------------|
-| T-01 | Credential stuffing / enumeration | Generic status/body behavior and server-side per-IP/per-email throttling tests |
-| T-02 | Refresh theft or replay | Atomic consume, retained generation, session-family revoke and two-device isolation tests |
-| T-03 | Cookie CSRF / transport confusion | Exact Origin, credentialed CORS, cookie-source response mode and no Web refresh JSON tests |
-| T-04 | Verification/reset token leakage | URL sanitization and structured-log redaction assertions; GET cannot consume token |
-| T-05 | Password-reset partial failure | One transaction consumes token, changes hash and revokes every session |
-| T-06 | Mass assignment | Whitelisted DTO and `/users/me` only permits `displayName` in Phase 1 |
+Source: `https://raw.githubusercontent.com/OWASP/ASVS/v5.0.0/5.0/docs_en/OWASP_Application_Security_Verification_Standard_5.0.0_en.csv`.
 
-## Manual-Only Verifications
+## Sampling and Final Gates
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| Native secret persistence | SAFE-03 | OS Keychain/Keystore behavior is not fully proven by a JS mock | On Android device/emulator: login, restart, confirm restore; inspect that AsyncStorage contains no refresh material; logout and confirm restore fails |
-| Native verification deep link | AUTH-02 | App-link handoff varies by OS and installed build | Open a Mailpit verification link on Android, confirm sanitized route and same-device continuation; repeat from another browser/device and confirm login-required result |
-| Keyboard and text scaling | AUTH-01, AUTH-04 | Layout/assistive behavior needs device observation | At 200% text scaling, exercise login/register/reset with keyboard open; confirm fields, errors and primary actions remain reachable |
-| iOS SecureStore/deep-link smoke | SAFE-03, AUTH-02 | Windows cannot run Xcode/iOS simulator | Run on an iOS real device through EAS development build before Phase 6 release readiness |
+- After each task: `pnpm test:quick` plus the focused task command.
+- After each wave: `pnpm test && pnpm test:integration`.
+- Final automated gate: `pnpm test && pnpm test:integration && pnpm test:e2e:web && pnpm openapi:check`.
+- Final manual Android gate: SecureStore restart/clear, same-device deep link, offline-vs-expired, keyboard, 200% text, screen-reader announcements, and 48px targets.
+- iOS EAS/real-device verification and production domains/SMTP/provider remain explicit Phase 6 release gates.
 
-## Validation Sign-Off
+## Sign-Off
 
-- [x] Every Phase 1 requirement has an automated command and planned Wave 0 file.
-- [x] Sampling continuity permits no task to go three commits without automated verification.
-- [x] Wave 0 covers every currently missing test/config reference.
-- [x] Commands use one-shot modes and contain no watch flags.
-- [x] Quick-loop target is under 30 seconds and wave target is under 5 minutes.
-- [x] `nyquist_compliant: true` is set in frontmatter.
-
-**Approval:** approved 2026-08-01; Wave 0 implementation pending
+- [x] Every test/config path is assigned to an explicit Wave 0 plan.
+- [x] RED verification distinguishes missing behavior from runner/config/discovery failure.
+- [x] Every requirement and UI-SPEC verification row has a named suite.
+- [x] Applicable ASVS identifiers are grounded in the official stable v5.0.0 CSV.
+- [ ] Wave 0 implementation complete.
