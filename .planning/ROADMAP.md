@@ -38,32 +38,76 @@ Muchakucha Zwei 将以“可实际使用的家庭协作闭环”为顺序推进�
 **Plans:** 27 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 01-01-PLAN.md — Approve exact official dependency pins before installation.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 01-02-PLAN.md — Install the pinned workspace and deterministic local services.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 01-03-PLAN.md — Configure API integration runners and fail-fast RED/no-placeholder audits.
 - [ ] 01-04-PLAN.md — Configure the Expo component and platform-adapter runner.
+- [ ] 01-09-PLAN.md — Create Web lifecycle and accessibility E2E contracts.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 01-05-PLAN.md — Create the seven API behavior contracts.
 - [ ] 01-06-PLAN.md — Ground the common-password fixture and ASVS audit.
 - [ ] 01-07-PLAN.md — Create six client feature and platform-adapter contracts.
 - [ ] 01-08-PLAN.md — Create typed design-system behavior contracts.
-- [ ] 01-09-PLAN.md — Create Web lifecycle and accessibility E2E contracts.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 01-10-PLAN.md — Migrate the durable authentication persistence foundation.
+- [ ] 01-14-PLAN.md — Implement the typed theme and owned accessible primitives.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 01-11-PLAN.md — Bootstrap the versioned API and provider-neutral mail boundary.
 - [ ] 01-12-PLAN.md — Establish PendingProofStore, SessionTransport, and session-state contracts.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 01-13-PLAN.md — Implement registration API and registration-side proof issuance.
-- [ ] 01-14-PLAN.md — Implement the typed theme and owned accessible primitives.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 01-15-PLAN.md — Deliver registration UI with native pending-proof persistence.
 - [ ] 01-16-PLAN.md — Implement transactional verification, resend, and proof/session issuance.
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 01-17-PLAN.md — Deliver sanitized verification with D-06 authenticated handoff.
 - [ ] 01-18-PLAN.md — Implement verified login and atomic rotating session APIs.
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 01-19-PLAN.md — Register and expose minimal GET/PATCH users/me.
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
 - [ ] 01-20-PLAN.md — Wire platform SessionTransport to generated session APIs.
-- [ ] 01-21-PLAN.md — Deliver login, restore, offline, and no-household routes.
 - [ ] 01-22-PLAN.md — Implement atomic password-reset server behavior and global revoke.
-- [ ] 01-23-PLAN.md — Deliver sanitized forgot/reset/success client flows.
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 01-21-PLAN.md — Deliver login, restore, offline, and no-household routes.
 - [ ] 01-24-PLAN.md — Implement sid-only current-device logout.
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 01-23-PLAN.md — Deliver sanitized forgot/reset/success client flows.
 - [ ] 01-25-PLAN.md — Deliver nickname editing and current-device logout UI.
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
 - [ ] 01-26-PLAN.md — Enforce no-skips, accessibility, ASVS, and full-suite gates.
+
+**Wave 15** *(blocked on Wave 14 completion)*
+
 - [ ] 01-27-PLAN.md — Accept the complete account lifecycle on a real Android target.
 
 ### Phase 2: 家庭组与成员协作
