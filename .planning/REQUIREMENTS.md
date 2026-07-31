@@ -121,20 +121,57 @@ Roadmap 创建时填充。每个 v1 需求必须且只能映射到一个阶段�
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01..06 | TBD | Pending |
-| HHLD-01..09 | TBD | Pending |
-| EVNT-01..06 | TBD | Pending |
-| TASK-01..06 | TBD | Pending |
-| NOTE-01..04 | TBD | Pending |
-| LABL-01..04 | TBD | Pending |
-| EXPR-01..05 | TBD | Pending |
-| SAFE-01..05 | TBD | Pending |
+| AUTH-01 | Phase 1 | Pending |
+| AUTH-02 | Phase 1 | Pending |
+| AUTH-03 | Phase 1 | Pending |
+| AUTH-04 | Phase 1 | Pending |
+| AUTH-05 | Phase 1 | Pending |
+| AUTH-06 | Phase 1 | Pending |
+| SAFE-03 | Phase 1 | Pending |
+| SAFE-04 | Phase 1 | Pending |
+| HHLD-01 | Phase 2 | Pending |
+| HHLD-02 | Phase 2 | Pending |
+| HHLD-03 | Phase 2 | Pending |
+| HHLD-04 | Phase 2 | Pending |
+| HHLD-05 | Phase 2 | Pending |
+| HHLD-06 | Phase 2 | Pending |
+| HHLD-07 | Phase 2 | Pending |
+| HHLD-08 | Phase 2 | Pending |
+| HHLD-09 | Phase 2 | Pending |
+| EXPR-02 | Phase 2 | Pending |
+| SAFE-01 | Phase 2 | Pending |
+| SAFE-02 | Phase 2 | Pending |
+| EVNT-01 | Phase 3 | Pending |
+| EVNT-02 | Phase 3 | Pending |
+| EVNT-03 | Phase 3 | Pending |
+| EVNT-04 | Phase 3 | Pending |
+| EVNT-05 | Phase 3 | Pending |
+| EVNT-06 | Phase 3 | Pending |
+| TASK-01 | Phase 4 | Pending |
+| TASK-02 | Phase 4 | Pending |
+| TASK-03 | Phase 4 | Pending |
+| TASK-04 | Phase 4 | Pending |
+| TASK-05 | Phase 4 | Pending |
+| TASK-06 | Phase 4 | Pending |
+| EXPR-01 | Phase 4 | Pending |
+| NOTE-01 | Phase 5 | Pending |
+| NOTE-02 | Phase 5 | Pending |
+| NOTE-03 | Phase 5 | Pending |
+| NOTE-04 | Phase 5 | Pending |
+| LABL-01 | Phase 5 | Pending |
+| LABL-02 | Phase 5 | Pending |
+| LABL-03 | Phase 5 | Pending |
+| LABL-04 | Phase 5 | Pending |
+| EXPR-03 | Phase 6 | Pending |
+| EXPR-04 | Phase 6 | Pending |
+| EXPR-05 | Phase 6 | Pending |
+| SAFE-05 | Phase 6 | Pending |
 
 **Coverage:**
 
 - v1 requirements: 45 total
-- Mapped to phases: 0
-- Unmapped: 45
+- Mapped to phases: 45
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-31*
