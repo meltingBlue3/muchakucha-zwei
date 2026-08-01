@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-08-01T03:35:34.758Z"
+stopped_at: Completed 01-07-PLAN.md
+last_updated: "2026-08-01T03:41:37.192Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 7
-  percent: 26
+  completed_plans: 8
+  percent: 30
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 8 of 27
+**Plan:** 9 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T03:35:34.752Z
-**Stopped at:** Completed 01-06-PLAN.md
+**Last session:** 2026-08-01T03:41:37.185Z
+**Stopped at:** Completed 01-07-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -74,6 +74,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P09 | 4min | 2 tasks | 6 files |
 | Phase 01 P05 | 10min | 1 tasks | 8 files |
 | Phase 01 P06 | 15min | 1 tasks | 4 files |
+| Phase 01 P07 | 16min | 1 tasks | 6 files |
 
 ## Decisions
 
@@ -94,3 +95,5 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Allow API contract discovery without Docker only while the Prisma schema is absent. — Once Plan 01-10 creates the schema, the existing Docker, migration, and reset path remains mandatory.
 - [Phase 01]: Pin SecLists 2026.1 commit 190c6f7 and derive the runtime denylist deterministically from the 12-128 code-point policy. — Immutable source identity, source/output checksums, and one runtime file prevent policy and fixture drift.
 - [Phase 01]: Pin the ASVS 5.0.0 CSV checksum and normalized applicable-requirement hash for an offline tamper-evident evidence map. — CI can detect identifier or official-text drift without depending on network availability.
+- [Phase 01]: Keep Plan 01-07 as discovery-only Wave 0 scaffolding. — Later owners activate unique missing-behavior markers against real production boundaries; this plan does not claim behavioral RED or GREEN.
+- [Phase 01]: Name D-06 as an explicit cross-suite proof-to-session pipeline. — Registration writes the native proof, verification reads and clears it, accepts the issued session, enters authenticated state, and routes no-household accounts to the Phase 2 handoff while Web remains HttpOnly-cookie-only.
