@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-18-PLAN.md
-last_updated: "2026-08-01T07:06:54.851Z"
+stopped_at: Completed 01-19-PLAN.md
+last_updated: "2026-08-01T13:23:42.859Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 18
-  percent: 67
+  completed_plans: 19
+  percent: 70
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 19 of 27
+**Plan:** 20 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T07:06:35.628Z
-**Stopped at:** Completed 01-18-PLAN.md
+**Last session:** 2026-08-01T13:23:42.853Z
+**Stopped at:** Completed 01-19-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -85,6 +85,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P16 | 10min | 2 tasks | 10 files |
 | Phase 01 P17 | 18min | 2 tasks | 8 files |
 | Phase 01 P18 | 12min | 2 tasks | 14 files |
+| Phase 01 P19 | 8min | 2 tasks | 11 files |
 
 ## Decisions
 
@@ -135,3 +136,5 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Use approved @nestjs/jwt HS256 with a mandatory 32-byte production secret and 15-minute sub/sid-only access tokens. — Keeps access credentials short-lived, minimal, and fail-closed with the approved monolith signing dependency.
 - [Phase 01]: Return refresh replay as a serializable transaction outcome before raising the API error. — Throwing inside the transaction would roll back the targeted session compromise and defeat durable replay handling.
 - [Phase 01]: Select refresh response shape from the accepted cookie or body credential source. — Rejecting ambiguous and cross-platform transport prevents browser JavaScript from requesting a readable refresh secret.
+- [Phase 01]: Nest UsersModule owns the registered AuthModule boundary for exact AccessTokenGuard reuse. — Avoids parallel JWT configuration while keeping users/me HTTP-reachable through AppModule.
+- [Phase 01]: Keep hasHousehold false as the explicit Phase 1 account handoff signal. — Household membership and Today lookup belong to Phase 2 and must not be claimed by users/me.

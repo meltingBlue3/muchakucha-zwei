@@ -156,9 +156,18 @@ Each task was committed atomically:
 - **Verification:** Strict API typecheck and complete API regression pass; generated contract publishes the PATCH operation.
 - **Committed in:** `a82f256`
 
+**4. [Rule 1 - Bug] Corrected canonical progress persistence after SDK update**
+
+- **Found during:** Plan close-out
+- **Issue:** `state.update-progress` reported 19/27 and 70% but persisted `percent: 0` in STATE frontmatter.
+- **Fix:** Applied the handler's own reported canonical percentage after all SDK-owned tracking updates completed.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** STATE records Plan 20 of 27, 19 completed plans, and 70%; ROADMAP marks 01-19 complete and reports 19/27.
+- **Committed in:** Plan tracking synchronization commit
+
 ---
 
-**Total deviations:** 3 auto-fixed (2 blocking issues, 1 missing critical functionality).
+**Total deviations:** 4 auto-fixed (1 bug, 2 blocking issues, 1 missing critical functionality).
 **Impact on plan:** All fixes were required for truthful RED evidence and cross-platform route reachability; no schema, dependency, or account scope expanded.
 
 ## Issues Encountered
@@ -185,6 +194,7 @@ None. `hasHousehold: false` is the intentional Phase 1 handoff contract; Phase 2
 - RED commit `dd75a64` precedes GREEN commit `a82f256`; both are present on master with no tracked deletion or untracked output.
 - Focused integration passes 8/8, full API regression passes 67 tests, API/generated-client strict typechecks pass, and `pnpm openapi:check` reports no drift.
 - Static scans find no RED marker, skipped users/me suite, goal-blocking stub, Prisma/auth-internal response field, or unplanned trust boundary.
+- Canonical tracking records Plan 20 of 27, 19 completed summaries, 70% progress, and AUTH-06 already complete.
 
 ---
 *Phase: 01-safe-account-entry*
