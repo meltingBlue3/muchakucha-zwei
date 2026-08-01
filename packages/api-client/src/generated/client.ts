@@ -4,6 +4,10 @@ import type {
   CompleteEmailVerificationResponseDto,
   RegisterDto,
   RegistrationAcceptedDto,
+  LoginDto,
+  LoginResponseDto,
+  RefreshDto,
+  RefreshResponseDto,
   ResendEmailVerificationDto,
   ResendEmailVerificationResponseDto,
 } from './models';
@@ -31,6 +35,14 @@ export class ApiClient {
       throw new ApiClientError(response.status, payload);
     }
     return payload as RegistrationAcceptedDto;
+  }
+
+  async login(body: LoginDto, signal?: AbortSignal): Promise<LoginResponseDto> {
+    return this.post('/api/v1/auth/login', body, signal);
+  }
+
+  async refresh(body: RefreshDto = {}, signal?: AbortSignal): Promise<RefreshResponseDto> {
+    return this.post('/api/v1/auth/refresh', body, signal);
   }
 
   async completeEmailVerification(

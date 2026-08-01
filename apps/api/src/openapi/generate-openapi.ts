@@ -20,6 +20,29 @@ export interface RegistrationAcceptedDto {
   pendingProof?: string;
 }
 
+export interface LoginDto {
+  email: string;
+  password: string;
+  platform: 'native' | 'web';
+}
+
+export interface LoginResponseDto {
+  accessToken: string;
+  /** Native-only refresh credential. Web responses omit this property. */
+  refreshToken?: string;
+}
+
+export interface RefreshDto {
+  /** Native-only refresh credential. Web requests omit this property. */
+  refreshToken?: string;
+}
+
+export interface RefreshResponseDto {
+  accessToken: string;
+  /** Native-only rotated refresh credential. Web responses omit this property. */
+  refreshToken?: string;
+}
+
 export interface CompleteEmailVerificationDto {
   token: string;
   platform?: 'native';
@@ -57,6 +80,10 @@ import type {
   CompleteEmailVerificationResponseDto,
   RegisterDto,
   RegistrationAcceptedDto,
+  LoginDto,
+  LoginResponseDto,
+  RefreshDto,
+  RefreshResponseDto,
   ResendEmailVerificationDto,
   ResendEmailVerificationResponseDto,
 } from './models';
@@ -84,6 +111,14 @@ export class ApiClient {
       throw new ApiClientError(response.status, payload);
     }
     return payload as RegistrationAcceptedDto;
+  }
+
+  async login(body: LoginDto, signal?: AbortSignal): Promise<LoginResponseDto> {
+    return this.post('/api/v1/auth/login', body, signal);
+  }
+
+  async refresh(body: RefreshDto = {}, signal?: AbortSignal): Promise<RefreshResponseDto> {
+    return this.post('/api/v1/auth/refresh', body, signal);
   }
 
   async completeEmailVerification(
@@ -141,6 +176,14 @@ async function generate(): Promise<void> {
       || document.components.schemas.ResendEmailVerificationDto === undefined
       || document.components.schemas.ResendEmailVerificationResponseDto === undefined) {
       throw new Error('OpenAPI authentication schemas are missing.');
+    }
+    if (document.components?.schemas?.LoginDto === undefined
+      || document.components.schemas.LoginResponseDto === undefined
+      || document.components.schemas.RefreshDto === undefined
+      || document.components.schemas.RefreshResponseDto === undefined
+      || document.paths['/api/v1/auth/login']?.post?.operationId !== 'login'
+      || document.paths['/api/v1/auth/refresh']?.post?.operationId !== 'refresh') {
+      throw new Error('OpenAPI login or refresh operations are missing or unstable.');
     }
     if (document.paths['/api/v1/auth/email-verifications/complete']?.post?.operationId !== 'completeEmailVerification'
       || document.paths['/api/v1/auth/email-verifications/resend']?.post?.operationId !== 'resendEmailVerification') {

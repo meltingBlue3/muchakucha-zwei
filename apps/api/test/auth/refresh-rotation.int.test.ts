@@ -65,9 +65,6 @@ async function refresh(input: { refreshToken?: string; cookie?: string; origin?:
     payload: input.refreshToken === undefined ? {} : { refreshToken: input.refreshToken },
     remoteAddress: `127.30.${Math.floor(requestAddress / 250)}.${(requestAddress++ % 250) + 1}`,
   });
-  if (response.statusCode === 404) {
-    throw new Error('IMPLEMENTATION_MISSING_SESSION_API');
-  }
   return response;
 }
 
@@ -92,7 +89,7 @@ beforeEach(async () => {
 });
 
 describe('refresh rotation API contract', () => {
-  test('rotates a valid refresh token and retains hash-only linked generations', async () => {
+  test('rotates a valid refresh token and retains only generation hashes', async () => {
     const token = 'generation-zero';
     const fixture = await insertSession(token);
     const response = await refresh({ refreshToken: token });
@@ -133,7 +130,7 @@ describe('refresh rotation API contract', () => {
     expect(response.json().error.code).toBe('INVALID_REFRESH_TOKEN');
   });
 
-  test('detects replay of a consumed generation and commits compromise for only that session', async () => {
+  test('detects replay of a consumed generation and revokes that session family', async () => {
     const token = 'replay-generation-zero';
     const fixture = await insertSession(token);
     const first = await refresh({ refreshToken: token });

@@ -12,6 +12,29 @@ export interface RegistrationAcceptedDto {
   pendingProof?: string;
 }
 
+export interface LoginDto {
+  email: string;
+  password: string;
+  platform: 'native' | 'web';
+}
+
+export interface LoginResponseDto {
+  accessToken: string;
+  /** Native-only refresh credential. Web responses omit this property. */
+  refreshToken?: string;
+}
+
+export interface RefreshDto {
+  /** Native-only refresh credential. Web requests omit this property. */
+  refreshToken?: string;
+}
+
+export interface RefreshResponseDto {
+  accessToken: string;
+  /** Native-only rotated refresh credential. Web responses omit this property. */
+  refreshToken?: string;
+}
+
 export interface CompleteEmailVerificationDto {
   token: string;
   platform?: 'native';

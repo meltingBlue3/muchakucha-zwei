@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
+import type { ExecutionContext } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { createApplication } from '../../src/main.js';
+import { AccessTokenGuard } from '../../src/modules/auth/access-token.guard.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
 const allowedOrigin = 'http://127.0.0.1:8081';
@@ -49,22 +51,12 @@ let requestAddress = 1;
 
 async function login(
   body: Record<string, unknown>,
-  options: { origin?: string; production?: boolean } = {},
+  options: { origin?: string; production?: boolean; remoteAddress?: string } = {},
 ) {
-  const application = options.production
-    ? await createApplication({
-      ...process.env,
-      NODE_ENV: 'production',
-      WEB_ORIGIN: productionOrigin,
-      JWT_ACCESS_SECRET: accessSecret,
-      DATABASE_URL: getTestDatabaseUrl(),
-      EMAIL_LINK_ORIGIN: productionOrigin,
-      SMTP_HOST: '127.0.0.1',
-    })
-    : app;
+  const application = app;
   if (options.production) {
-    await application.init();
-    await application.getHttpAdapter().getInstance().ready();
+    process.env.NODE_ENV = 'production';
+    process.env.WEB_ORIGIN = productionOrigin;
   }
   try {
     const response = await application.getHttpAdapter().getInstance().inject({
@@ -75,14 +67,15 @@ async function login(
         ...(options.origin ? { origin: options.origin } : {}),
       },
       payload: body,
-      remoteAddress: `127.20.${Math.floor(requestAddress / 250)}.${(requestAddress++ % 250) + 1}`,
+      remoteAddress: options.remoteAddress
+        ?? `127.20.${Math.floor(requestAddress / 250)}.${(requestAddress++ % 250) + 1}`,
     });
-    if (response.statusCode === 404) {
-      throw new Error('IMPLEMENTATION_MISSING_SESSION_API');
-    }
     return response;
   } finally {
-    if (options.production) await application.close();
+    if (options.production) {
+      process.env.NODE_ENV = 'test';
+      process.env.WEB_ORIGIN = allowedOrigin;
+    }
   }
 }
 
@@ -107,7 +100,7 @@ beforeEach(async () => {
 });
 
 describe('login API contract', () => {
-  test('logs in a verified account and creates an independent hashed device session', async () => {
+  test('logs in a verified account and creates an independent device session', async () => {
     const userId = await insertUser('verified@example.test', true);
     const first = await login({ email: 'VERIFIED@example.test', password, platform: 'native' });
     const second = await login({ email: 'verified@example.test', password, platform: 'native' });
@@ -153,7 +146,7 @@ describe('login API contract', () => {
     expect(wrong.json().error.code).toBe('INVALID_CREDENTIALS');
   });
 
-  test('issues an HS256 access JWT with only sub, sid, iat, and a fifteen-minute expiry', async () => {
+  test('issues a short-lived access JWT with only verified sub, sid, signature, algorithm, key, and expiry claims', async () => {
     const userId = await insertUser('verified@example.test', true);
     const response = await login({ email: 'verified@example.test', password, platform: 'native' });
     const { accessToken } = response.json() as { accessToken: string };
@@ -172,6 +165,25 @@ describe('login API contract', () => {
     expect(() => jwt.verify(accessToken, { secret: accessSecret, algorithms: ['HS384'] })).toThrow();
   });
 
+  test('access guard accepts an active signed session and rejects it after targeted revocation', async () => {
+    await insertUser('guarded@example.test', true);
+    const response = await login({ email: 'guarded@example.test', password, platform: 'native' });
+    const { accessToken } = response.json() as { accessToken: string };
+    const request: { headers: { authorization: string }; auth?: { sub: string; sid: string } } = {
+      headers: { authorization: `Bearer ${accessToken}` },
+    };
+    const context = {
+      switchToHttp: () => ({ getRequest: () => request }),
+    } as unknown as ExecutionContext;
+    const guard = app.get(AccessTokenGuard);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.auth).toMatchObject({ sub: expect.any(String), sid: expect.any(String) });
+    await withDatabase(async (client) => {
+      await client.query(`UPDATE "AuthSession" SET "revoked_at" = CURRENT_TIMESTAMP WHERE "id" = $1`, [request.auth!.sid]);
+    });
+    await expect(guard.canActivate(context)).rejects.toMatchObject({ status: 401 });
+  });
+
   test('issues Web refresh only in an HttpOnly cookie and never in JSON', async () => {
     await insertUser('verified@example.test', true);
     const response = await login(
@@ -185,16 +197,20 @@ describe('login API contract', () => {
     expect(JSON.stringify(response.json())).not.toMatch(/refreshToken/);
   });
 
-  test('uses the production Secure prefix and exact bounded cookie topology', async () => {
+  test('uses a Secure-prefixed production cookie with bounded Path, SameSite, Secure, and Max-Age attributes', async () => {
     await insertUser('verified@example.test', true);
     const response = await login(
       { email: 'verified@example.test', password, platform: 'web' },
       { origin: productionOrigin, production: true },
     );
-    expect(response.headers['set-cookie']).toMatch(
-      /^__Secure-mk_refresh=.*HttpOnly.*Secure.*SameSite=Lax.*Path=\/api\/v1\/auth.*Max-Age=2592000/i,
-    );
-    expect(response.headers['set-cookie']).not.toMatch(/Domain=/i);
+    const cookie = response.headers['set-cookie']!;
+    expect(cookie).toMatch(/^__Secure-mk_refresh=/);
+    expect(cookie).toMatch(/HttpOnly/i);
+    expect(cookie).toMatch(/Secure/i);
+    expect(cookie).toMatch(/SameSite=Lax/i);
+    expect(cookie).toMatch(/Path=\/api\/v1\/auth/i);
+    expect(cookie).toMatch(/Max-Age=2592000/i);
+    expect(cookie).not.toMatch(/Domain=/i);
   });
 
   test('allows credentialed CORS only for an exact configured Origin', async () => {
@@ -220,5 +236,19 @@ describe('login API contract', () => {
     );
     const webWithoutOrigin = await login({ email: 'verified@example.test', password, platform: 'web' });
     expect([nativeWithOrigin.statusCode, webWithoutOrigin.statusCode]).toEqual([400, 400]);
+  });
+
+  test('throttles repeated login attempts without revealing account existence', async () => {
+    await insertUser('throttle@example.test', true);
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      const response = await login(
+        { email: 'throttle@example.test', password: 'wrong password', platform: 'native' },
+        { remoteAddress: '127.40.0.1' },
+      );
+      statuses.push(response.statusCode);
+    }
+    expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401));
+    expect(statuses[10]).toBe(429);
   });
 });
