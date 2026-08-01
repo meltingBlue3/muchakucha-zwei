@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 
 const widths = [320, 390, 768, 1440] as const;
 
-test.describe.skip('Web authentication accessibility matrix', () => {
+test.describe('Web authentication accessibility matrix', () => {
   for (const width of widths) {
     test(`has no axe violations and keeps the auth shell usable at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
