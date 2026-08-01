@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-24-PLAN.md
-last_updated: "2026-08-01T14:26:38.863Z"
+stopped_at: Completed 01-23-PLAN.md
+last_updated: "2026-08-01T15:02:24.052Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 23
-  percent: 85
+  completed_plans: 24
+  percent: 89
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 24 of 27
+**Plan:** 25 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T14:26:38.849Z
-**Stopped at:** Completed 01-24-PLAN.md
+**Last session:** 2026-08-01T15:02:24.044Z
+**Stopped at:** Completed 01-23-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -90,6 +90,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P22 | 8min | 2 tasks | 9 files |
 | Phase 01 P21 | 15min | 2 tasks | 12 files |
 | Phase 01 P24 | 10min | 2 tasks | 8 files |
+| Phase 01 P23 | 20min | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -152,3 +153,6 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Route every Phase 1 authenticated profile to the no-household handoff and preserve only allowlisted internal intended routes without claiming Today or household behavior. — Keeps D-03 inside the Phase 1 boundary and blocks external redirect injection.
 - [Phase 01]: Derive logout identity exclusively from a verified access JWT sub/sid pair and expose no request-body session or user target. — Prevents caller-selected cross-device or cross-user revocation.
 - [Phase 01]: Allow a valid, unexpired, known but already revoked sid only on the logout route so repeated logout remains 204 while every other protected route still requires an active session. — Preserves required endpoint idempotency without weakening normal authorization.
+- [Phase 01]: Sanitize the token-bearing browser location synchronously and keep replacing it until the reset landing unmounts. — Expo Router can restore search parameters after its first render.
+- [Phase 01]: Keep password-reset completion entirely outside the session runtime. — Success must route only to normal login after the server-owned global revoke transaction.
+- [Phase 01]: Preserve the server's generic invalid-or-expired credential boundary while exposing accessible expired, used, and invalid recovery panels as client states. — This keeps the server security contract while completing client recovery semantics.
