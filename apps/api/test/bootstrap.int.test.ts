@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { MAIL_PORT } from '../src/infrastructure/mail/mail.port.js';
+import { SmtpMailAdapter } from '../src/infrastructure/mail/smtp-mail.adapter.js';
 import { createApplication, parseRuntimeConfig } from '../src/main.js';
 
 const allowedOrigin = 'http://127.0.0.1:8081';
@@ -25,6 +27,7 @@ describe('versioned Fastify application boundary', () => {
   test('boots Prisma, AuthModule, cookie parsing, throttling, and OpenAPI under /api/v1', async () => {
     const fastify = app.getHttpAdapter().getInstance();
     expect(fastify.hasRequestDecorator('cookies')).toBe(true);
+    expect(app.get(MAIL_PORT)).toBeInstanceOf(SmtpMailAdapter);
 
     const openApi = await fastify.inject({ method: 'GET', url: '/api/v1/openapi.json' });
     expect(openApi.statusCode).toBe(200);
