@@ -149,10 +149,19 @@ Each task was committed atomically:
 - **Verification:** Client typecheck and the full 58-test client regression pass.
 - **Committed in:** `c7131f7`
 
+**3. [Rule 1 - Bug] Corrected canonical progress persistence after SDK update**
+
+- **Found during:** Plan close-out
+- **Issue:** `state.update-progress` correctly reported 20/27 and 74% but persisted `percent: 0` in STATE frontmatter.
+- **Fix:** Applied the handler's reported canonical percentage after all SDK-owned state updates completed.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** STATE and ROADMAP both record 20 completed plans; STATE now records 74%.
+- **Committed in:** Plan tracking synchronization commit
+
 ---
 
-**Total deviations:** 2 auto-fixed (1 bug, 1 blocking issue).
-**Impact on plan:** Both fixes were required for a runtime-safe adapter boundary and complete strict verification; credential architecture and route ownership remained unchanged.
+**Total deviations:** 3 auto-fixed (2 bugs, 1 blocking issue).
+**Impact on plan:** The fixes were required for a runtime-safe adapter boundary, complete strict verification, and truthful canonical tracking; credential architecture and route ownership remained unchanged.
 
 ## Issues Encountered
 
