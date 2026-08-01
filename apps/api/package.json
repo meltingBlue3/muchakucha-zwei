@@ -11,7 +11,7 @@
     "test:quick": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "openapi:generate": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/modules/auth/data','dist/modules/auth/data',{recursive:true})\" && node dist/openapi/generate-openapi.js",
-    "openapi:check": "pwsh -NoProfile -File ../../scripts/check-openapi-drift.ps1"
+    "openapi:check": "node ../../scripts/check-openapi-drift.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.2",
