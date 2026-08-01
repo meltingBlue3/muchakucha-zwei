@@ -1,9 +1,14 @@
 [CmdletBinding(DefaultParameterSetName = 'Run')]
 param(
+    [Parameter(ParameterSetName = 'Run')]
+    [ValidateSet('api')]
+    [string]$Suite = 'api',
+
     [Parameter(Mandatory = $true, ParameterSetName = 'Run')]
     [string]$TestPath,
 
     [Parameter(Mandatory = $true, ParameterSetName = 'Run')]
+    [Alias('Marker')]
     [string]$MissingBehaviorMarker,
 
     [Parameter(Mandatory = $true, ParameterSetName = 'SelfTest')]
