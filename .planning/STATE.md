@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-09-PLAN.md
-last_updated: "2026-08-01T03:08:35.332Z"
+stopped_at: Completed 01-05-PLAN.md
+last_updated: "2026-08-01T03:20:55.220Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 5
-  percent: 19
+  completed_plans: 6
+  percent: 22
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 6 of 27
+**Plan:** 7 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T03:08:35.326Z
-**Stopped at:** Completed 01-09-PLAN.md
+**Last session:** 2026-08-01T03:20:31.871Z
+**Stopped at:** Completed 01-05-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -72,6 +72,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P03 | 8min | 1 tasks | 9 files |
 | Phase 01 P04 | 7min | 1 tasks | 6 files |
 | Phase 01 P09 | 4min | 2 tasks | 6 files |
+| Phase 01 P05 | 10min | 1 tasks | 8 files |
 
 ## Decisions
 
@@ -88,3 +89,5 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Keep production association domains empty until the Phase 6 release gate. — Phase 1 defines a local scheme without claiming unselected public domains.
 - [Phase 01]: Keep browser contracts suite-skipped until their owning client routes and forms exist; server-only plans cannot claim UI RED. — Preserves client ownership and prevents infrastructure failures from being accepted as behavior RED.
 - [Phase 01]: Skipped browser contracts use real system assertions rather than fake passes. — Mailpit, HttpOnly cookies, Web storage, multiple browser contexts, axe, focus, zoom, and media preferences remain executable when each owner activates its suite.
+- [Phase 01]: Treat Plan 01-05 as discovery evidence only; no behavioral RED is claimed before an owning plan activates its exact marker. — The 65 Wave 0 contracts are intentionally skipped and production behavior does not exist yet.
+- [Phase 01]: Allow API contract discovery without Docker only while the Prisma schema is absent. — Once Plan 01-10 creates the schema, the existing Docker, migration, and reset path remains mandatory.
