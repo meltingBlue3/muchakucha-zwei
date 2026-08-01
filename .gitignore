@@ -7,3 +7,4 @@ test-results/
 coverage/
 dist/
 .expo/
+apps/api/src/generated/prisma/

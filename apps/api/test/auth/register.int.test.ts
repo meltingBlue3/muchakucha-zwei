@@ -1,7 +1,9 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { Client } from 'pg';
 import { describe, expect, test } from 'vitest';
+import { PrismaClient } from '../../src/generated/prisma/client.js';
 import { getTestDatabaseUrl } from '../reset-database.js';
 
 const apiOrigin = process.env.API_ORIGIN ?? 'http://127.0.0.1:18025';
@@ -216,6 +218,12 @@ describe('registration persistence contract', () => {
         const userId = await insertUser(client, { email: 'constraints@example.test' });
         await expect(
           client.query(
+            `INSERT INTO "User" ("email", "email_canonical", "display_name", "password_hash")
+             VALUES ('Canonical@Example.test', 'wrong@example.test', 'Member', '$argon2id$fixture')`,
+          ),
+        ).rejects.toMatchObject({ code: '23514' });
+        await expect(
+          client.query(
             `INSERT INTO "AuthSession" ("user_id", "absolute_ends_at") VALUES ($1, now() - interval '1 second')`,
             [userId],
           ),
@@ -236,6 +244,38 @@ describe('registration persistence contract', () => {
           ),
         ).rejects.toMatchObject({ code: '23514' });
       });
+    });
+
+    test('persistence rolls back partial auth graphs through the PrismaPg transaction boundary', async () => {
+      const adapter = new PrismaPg({ connectionString: getTestDatabaseUrl() });
+      const prisma = new PrismaClient({ adapter });
+      await prisma.$connect();
+
+      try {
+        const email = 'transaction@example.test';
+        await expect(
+          prisma.$transaction(async (transaction) => {
+            const user = await transaction.user.create({
+              data: {
+                email,
+                emailCanonical: canonicalizeEmail(email),
+                displayName: 'Transactional member',
+                passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$fixture$safehash',
+              },
+            });
+            await transaction.authSession.create({
+              data: {
+                userId: user.id,
+                absoluteEndsAt: new Date(0),
+              },
+            });
+          }),
+        ).rejects.toBeDefined();
+
+        await expect(prisma.user.findUnique({ where: { emailCanonical: canonicalizeEmail(email) } })).resolves.toBeNull();
+      } finally {
+        await prisma.$disconnect();
+      }
     });
   });
 });

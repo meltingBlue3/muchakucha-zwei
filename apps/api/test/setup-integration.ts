@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { Client } from 'pg';
 import { getTestDatabaseUrl, resetDatabase } from './reset-database.js';
 
 const apiRoot = resolve(import.meta.dirname, '..');
@@ -21,6 +22,23 @@ function run(command: string, args: string[]): void {
   }
 }
 
+async function hasReadyPostgres18(databaseUrl: string): Promise<boolean> {
+  const client = new Client({ connectionString: databaseUrl, connectionTimeoutMillis: 1_000 });
+
+  try {
+    await client.connect();
+    const result = await client.query<{ version: number }>(
+      `SELECT current_setting('server_version_num')::integer AS version`,
+    );
+    const major = Math.floor(result.rows[0]!.version / 10_000);
+    return major === 18;
+  } catch {
+    return false;
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+}
+
 export default async function setupIntegration(): Promise<() => Promise<void>> {
   process.env.DATABASE_URL = getTestDatabaseUrl();
 
@@ -31,7 +49,9 @@ export default async function setupIntegration(): Promise<() => Promise<void>> {
     return async () => undefined;
   }
 
-  run('docker', ['compose', 'up', '-d', '--wait', 'postgres']);
+  if (!(await hasReadyPostgres18(process.env.DATABASE_URL))) {
+    run('docker', ['compose', 'up', '-d', '--wait', 'postgres']);
+  }
   run('pnpm', ['--filter', 'api', 'exec', 'prisma', 'migrate', 'deploy']);
   await resetDatabase();
 
