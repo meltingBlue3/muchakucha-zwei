@@ -198,7 +198,7 @@ export async function createApplication(
   app.setGlobalPrefix(API_PREFIX);
   app.enableCors({
     credentials: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'PATCH', 'POST', 'OPTIONS'],
     origin: (origin, callback) => {
       callback(null, origin === undefined || config.webOrigins.has(origin));
     },

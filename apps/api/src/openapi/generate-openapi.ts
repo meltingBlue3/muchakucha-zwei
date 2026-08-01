@@ -43,6 +43,18 @@ export interface RefreshResponseDto {
   refreshToken?: string;
 }
 
+export interface UpdateMeDto {
+  displayName: string;
+}
+
+export interface CurrentUserDto {
+  id: string;
+  email: string;
+  displayName: string;
+  emailVerified: boolean;
+  hasHousehold: false;
+}
+
 export interface CompleteEmailVerificationDto {
   token: string;
   platform?: 'native';
@@ -84,6 +96,8 @@ import type {
   LoginResponseDto,
   RefreshDto,
   RefreshResponseDto,
+  UpdateMeDto,
+  CurrentUserDto,
   ResendEmailVerificationDto,
   ResendEmailVerificationResponseDto,
 } from './models';
@@ -121,6 +135,18 @@ export class ApiClient {
     return this.post('/api/v1/auth/refresh', body, signal);
   }
 
+  async getMe(accessToken: string, signal?: AbortSignal): Promise<CurrentUserDto> {
+    return this.authenticated<CurrentUserDto>('GET', '/api/v1/users/me', accessToken, undefined, signal);
+  }
+
+  async updateMe(
+    accessToken: string,
+    body: UpdateMeDto,
+    signal?: AbortSignal,
+  ): Promise<CurrentUserDto> {
+    return this.authenticated<CurrentUserDto>('PATCH', '/api/v1/users/me', accessToken, body, signal);
+  }
+
   async completeEmailVerification(
     body: CompleteEmailVerificationDto,
     signal?: AbortSignal,
@@ -141,6 +167,30 @@ export class ApiClient {
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
+      ...(signal === undefined ? {} : { signal }),
+    });
+    const payload: unknown = await response.json();
+    if (!response.ok) {
+      throw new ApiClientError(response.status, payload);
+    }
+    return payload as T;
+  }
+
+  private async authenticated<T>(
+    method: 'GET' | 'PATCH',
+    path: string,
+    accessToken: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    const response = await fetch(\`\${this.baseUrl}\${path}\`, {
+      method,
+      credentials: 'include',
+      headers: {
+        authorization: \`Bearer \${accessToken}\`,
+        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       ...(signal === undefined ? {} : { signal }),
     });
     const payload: unknown = await response.json();
@@ -188,6 +238,12 @@ async function generate(): Promise<void> {
     if (document.paths['/api/v1/auth/email-verifications/complete']?.post?.operationId !== 'completeEmailVerification'
       || document.paths['/api/v1/auth/email-verifications/resend']?.post?.operationId !== 'resendEmailVerification') {
       throw new Error('OpenAPI email verification operations are missing or unstable.');
+    }
+    if (document.paths['/api/v1/users/me']?.get?.operationId !== 'getMe'
+      || document.paths['/api/v1/users/me']?.patch?.operationId !== 'updateMe'
+      || document.components?.schemas?.UpdateMeDto === undefined
+      || document.components.schemas.CurrentUserDto === undefined) {
+      throw new Error('OpenAPI current-user operations or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

@@ -101,7 +101,16 @@ beforeEach(async () => {
 describe('current-user API contract', () => {
   test('registers UsersModule so GET /api/v1/users/me is reachable over booted HTTP', async () => {
     const response = await me(member.accessToken);
-    expect(response.statusCode, 'IMPLEMENTATION_MISSING_USERS_ME').toBe(200);
+    expect(response.statusCode).toBe(200);
+  });
+
+  test('requires a valid active access-token session', async () => {
+    const missing = await app.getHttpAdapter().getInstance().inject({
+      method: 'GET',
+      url: '/api/v1/users/me',
+    });
+    const nonexistent = await me(await jwt.signAsync({ sub: randomUUID(), sid: randomUUID() }));
+    expect([missing.statusCode, nonexistent.statusCode]).toEqual([401, 401]);
   });
 
   test('returns only the guard-derived subject public profile', async () => {
@@ -116,7 +125,7 @@ describe('current-user API contract', () => {
   });
 
   test('makes PATCH /api/v1/users/me reachable and updates only the guard-derived subject', async () => {
-    const response = await me(member.accessToken, 'PATCH', { displayName: 'Updated member' });
+    const response = await me(member.accessToken, 'PATCH', { displayName: '  Updated member  ' });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ id: member.id, displayName: 'Updated member' });
 
@@ -140,12 +149,13 @@ describe('current-user API contract', () => {
 
   test('rejects blank display names and unexpected mass-assignment fields', async () => {
     const blank = await me(member.accessToken, 'PATCH', { displayName: '   ' });
+    const tooLong = await me(member.accessToken, 'PATCH', { displayName: 'x'.repeat(81) });
     const massAssignment = await me(member.accessToken, 'PATCH', {
       displayName: 'Updated',
       email: 'takeover@example.test',
       role: 'admin',
     });
-    expect([blank.statusCode, massAssignment.statusCode]).toEqual([400, 400]);
+    expect([blank.statusCode, tooLong.statusCode, massAssignment.statusCode]).toEqual([400, 400, 400]);
   });
 
   test('rejects cross-account targeting even when a foreign user id is supplied', async () => {

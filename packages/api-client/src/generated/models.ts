@@ -35,6 +35,18 @@ export interface RefreshResponseDto {
   refreshToken?: string;
 }
 
+export interface UpdateMeDto {
+  displayName: string;
+}
+
+export interface CurrentUserDto {
+  id: string;
+  email: string;
+  displayName: string;
+  emailVerified: boolean;
+  hasHousehold: false;
+}
+
 export interface CompleteEmailVerificationDto {
   token: string;
   platform?: 'native';
