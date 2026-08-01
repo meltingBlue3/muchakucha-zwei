@@ -455,66 +455,74 @@ export class AuthService {
       && suppliedProofHash === token.pendingProofHash;
     const refreshToken = proofMatches ? opaqueToken() : undefined;
 
-    const outcome = await this.prisma.$transaction(async (transaction) => {
-      const claimed = await transaction.emailVerificationToken.updateMany({
-        where: {
-          id: token.id,
-          consumedAt: null,
-          invalidatedAt: null,
-          expiresAt: { gt: now },
-        },
-        data: { consumedAt: now, pendingProofHash: null },
-      });
-      if (claimed.count !== 1) {
-        return { kind: 'lost_claim' } as const;
-      }
-
-      await transaction.user.update({
-        where: { id: token.userId },
-        data: { emailVerifiedAt: now },
-      });
-
-      let sessionId: string | undefined;
-      if (proofMatches && refreshToken !== undefined) {
-        const session = await transaction.authSession.create({
-          data: {
-            userId: token.userId,
-            absoluteEndsAt: new Date(now.getTime() + SESSION_ABSOLUTE_LIFETIME_MS),
-            refreshTokens: {
-              create: {
-                tokenHash: hashOpaqueToken(refreshToken),
-                expiresAt: new Date(now.getTime() + REFRESH_LIFETIME_MS),
-              },
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const outcome = await this.prisma.$transaction(async (transaction) => {
+          const claimed = await transaction.emailVerificationToken.updateMany({
+            where: {
+              id: token.id,
+              consumedAt: null,
+              invalidatedAt: null,
+              expiresAt: { gt: now },
             },
-          },
-          select: { id: true },
-        });
-        sessionId = session.id;
+            data: { consumedAt: now, pendingProofHash: null },
+          });
+          if (claimed.count !== 1) {
+            return { kind: 'lost_claim' } as const;
+          }
+
+          await transaction.user.update({
+            where: { id: token.userId },
+            data: { emailVerifiedAt: now },
+          });
+
+          let sessionId: string | undefined;
+          if (proofMatches && refreshToken !== undefined) {
+            const session = await transaction.authSession.create({
+              data: {
+                userId: token.userId,
+                absoluteEndsAt: new Date(now.getTime() + SESSION_ABSOLUTE_LIFETIME_MS),
+                refreshTokens: {
+                  create: {
+                    tokenHash: hashOpaqueToken(refreshToken),
+                    expiresAt: new Date(now.getTime() + REFRESH_LIFETIME_MS),
+                  },
+                },
+              },
+              select: { id: true },
+            });
+            sessionId = session.id;
+          }
+
+          return proofMatches && sessionId !== undefined
+            ? { kind: 'auto_login', sessionId } as const
+            : { kind: 'login_required' } as const;
+        }, { isolationLevel: 'Serializable' });
+
+        if (outcome.kind === 'lost_claim') {
+          const current = await this.prisma.emailVerificationToken.findUnique({ where: { id: token.id } });
+          if (current !== null && current.consumedAt !== null) return { outcome: 'used' };
+          if (current !== null && current.invalidatedAt !== null) return { outcome: 'superseded' };
+          if (current !== null && current.expiresAt <= new Date()) return { outcome: 'expired' };
+          return { outcome: 'invalid' };
+        }
+
+        if (outcome.kind === 'login_required') {
+          return { outcome: 'verified_login_required' };
+        }
+
+        return {
+          outcome: 'verified_auto_login',
+          accessToken: await this.signAccessToken(token.userId, outcome.sessionId),
+          ...(refreshToken === undefined ? {} : { refreshToken }),
+          ...(input.proofSource === undefined ? {} : { proofSource: input.proofSource }),
+        };
+      } catch (error) {
+        if (this.isSerializationConflict(error) && attempt < 2) continue;
+        throw error;
       }
-
-      return proofMatches && sessionId !== undefined
-        ? { kind: 'auto_login', sessionId } as const
-        : { kind: 'login_required' } as const;
-    }, { isolationLevel: 'Serializable' });
-
-    if (outcome.kind === 'lost_claim') {
-      const current = await this.prisma.emailVerificationToken.findUnique({ where: { id: token.id } });
-      if (current !== null && current.consumedAt !== null) return { outcome: 'used' };
-      if (current !== null && current.invalidatedAt !== null) return { outcome: 'superseded' };
-      if (current !== null && current.expiresAt <= new Date()) return { outcome: 'expired' };
-      return { outcome: 'invalid' };
     }
-
-    if (outcome.kind === 'login_required') {
-      return { outcome: 'verified_login_required' };
-    }
-
-    return {
-      outcome: 'verified_auto_login',
-      accessToken: await this.signAccessToken(token.userId, outcome.sessionId),
-      ...(refreshToken === undefined ? {} : { refreshToken }),
-      ...(input.proofSource === undefined ? {} : { proofSource: input.proofSource }),
-    };
+    throw new Error('Email verification retry budget exhausted.');
   }
 
   private signAccessToken(userId: string, sessionId: string): Promise<string> {

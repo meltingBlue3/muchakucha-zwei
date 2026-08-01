@@ -11,6 +11,7 @@ const apiResponse = (status: number, body: unknown) => ({
   json: jest.fn().mockResolvedValue(body),
   ok: status >= 200 && status < 300,
   status,
+  text: jest.fn().mockResolvedValue(body === undefined ? '' : JSON.stringify(body)),
 });
 
 describe('platform session transport contract', () => {

@@ -56,11 +56,11 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
+const rejectUnmockedRequest = (input: Parameters<typeof fetch>[0]) =>
+  Promise.reject(new Error(`Unmocked network request: ${String(input)}`));
+
 const unmockedFetch = jest.fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>(
-  (input) =>
-    Promise.reject(
-      new Error(`Unmocked network request: ${String(input)}`),
-    ),
+  rejectUnmockedRequest,
 );
 
 Object.defineProperty(globalThis, 'fetch', {
@@ -87,7 +87,7 @@ Object.defineProperty(window, 'matchMedia', {
 beforeEach(() => {
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
   (jest.requireMock('expo-secure-store') as MockSecureStore).__reset();
-  unmockedFetch.mockClear();
+  unmockedFetch.mockReset().mockImplementation(rejectUnmockedRequest);
   mediaPreferences.set('(forced-colors: active)', false);
   mediaPreferences.set('(prefers-reduced-motion: reduce)', false);
 });
