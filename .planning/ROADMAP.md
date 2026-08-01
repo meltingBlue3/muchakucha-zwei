@@ -35,7 +35,7 @@ Muchakucha Zwei 将以“可实际使用的家庭协作闭环”为顺序推进�
 4. 用户可修改显示昵称，重复昵称不会造成账户身份冲突。
 5. 移动端长期凭据进入系统安全存储，Web Refresh Token 使用 HttpOnly Cookie；服务端实现 Token 轮换、撤销、重放检测和哈希存储。
 
-**Plans:** 16/27 plans executed
+**Plans:** 17/27 plans executed
 
 Plans:
 **Wave 1**
@@ -80,7 +80,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 01-17-PLAN.md — Deliver sanitized verification with D-06 authenticated handoff.
+- [x] 01-17-PLAN.md — Deliver sanitized verification with D-06 authenticated handoff.
 - [ ] 01-18-PLAN.md — Implement verified login and atomic rotating session APIs.
 
 **Wave 10** *(blocked on Wave 9 completion)*
@@ -200,7 +200,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 安全账户入口 | 16/27 | In Progress|  |
+| 1. 安全账户入口 | 17/27 | In Progress|  |
 | 2. 家庭组与成员协作 | 0 / TBD | Not started | — |
 | 3. 共享家庭日历 | 0 / TBD | Not started | — |
 | 4. 任务与今日视图 | 0 / TBD | Not started | — |

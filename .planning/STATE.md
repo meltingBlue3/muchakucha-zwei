@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-16-PLAN.md
-last_updated: "2026-08-01T06:26:37.329Z"
+stopped_at: Completed 01-17-PLAN.md
+last_updated: "2026-08-01T06:51:02.952Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 16
-  percent: 59
+  completed_plans: 17
+  percent: 63
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 17 of 27
+**Plan:** 18 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T06:25:59.196Z
-**Stopped at:** Completed 01-16-PLAN.md
+**Last session:** 2026-08-01T06:50:43.052Z
+**Stopped at:** Completed 01-17-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -83,6 +83,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P13 | 12min | 2 tasks | 18 files |
 | Phase 01 P15 | 26min | 2 tasks | 18 files |
 | Phase 01 P16 | 10min | 2 tasks | 10 files |
+| Phase 01 P17 | 18min | 2 tasks | 8 files |
 
 ## Decisions
 
@@ -129,3 +130,4 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Transfer the pending-proof hash to the resend successor transactionally. — Preserves D-06 same-device continuation without exposing or duplicating plaintext proof.
 - [Phase 01]: Select verification secret transport from accepted credential source. — Web remains API-owned HttpOnly cookie-only while native receives SecureStore material.
 - [Phase 01]: Expose resend eligibility through the stable retryAfterSeconds error field. — The client countdown mirrors server authority while Nest throttling remains independent.
+- [Phase 01]: Sanitize verification links before completion, clear native proof before issued-session acceptance, and derive deliverable mail links from an exact EMAIL_LINK_ORIGIN. — This preserves token-free browser history, fail-closed SecureStore ordering, and the API-owned HttpOnly versus native SecureStore credential boundary across the real SMTP journey.
