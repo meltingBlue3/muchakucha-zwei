@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-15-PLAN.md
-last_updated: "2026-08-01T06:12:45.533Z"
+stopped_at: Completed 01-16-PLAN.md
+last_updated: "2026-08-01T06:26:37.329Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 15
-  percent: 56
+  completed_plans: 16
+  percent: 59
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 16 of 27
+**Plan:** 17 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T06:12:45.526Z
-**Stopped at:** Completed 01-15-PLAN.md
+**Last session:** 2026-08-01T06:25:59.196Z
+**Stopped at:** Completed 01-16-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -82,6 +82,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P12 | 5min | 2 tasks | 8 files |
 | Phase 01 P13 | 12min | 2 tasks | 18 files |
 | Phase 01 P15 | 26min | 2 tasks | 18 files |
+| Phase 01 P16 | 10min | 2 tasks | 10 files |
 
 ## Decisions
 
@@ -125,3 +126,6 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Match the client Web renderer to exact react-dom 19.2.3 and react-native-web 0.21.2. — Preserves the approved Expo SDK 57 React 19.2.3 compatibility line.
 - [Phase 01]: Use extensionless generated-client imports with TypeScript Bundler resolution. — Lets Expo Metro and strict typechecking consume one deterministic generated package.
 - [Phase 01]: Write native registration proof before pending navigation while Web remains HttpOnly-cookie-only. — Prevents partial native continuation state and keeps Web secrets outside JavaScript.
+- [Phase 01]: Transfer the pending-proof hash to the resend successor transactionally. — Preserves D-06 same-device continuation without exposing or duplicating plaintext proof.
+- [Phase 01]: Select verification secret transport from accepted credential source. — Web remains API-owned HttpOnly cookie-only while native receives SecureStore material.
+- [Phase 01]: Expose resend eligibility through the stable retryAfterSeconds error field. — The client countdown mirrors server authority while Nest throttling remains independent.
