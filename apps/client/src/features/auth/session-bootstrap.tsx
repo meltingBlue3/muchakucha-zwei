@@ -7,7 +7,7 @@ import { AuthShell, Button, Spinner, Stack, StatusPanel } from '../../ui/primiti
 
 export const SAFE_INTENDED_ROUTES = ['/household-handoff', '/profile'] as const;
 export type SafeIntendedRoute = (typeof SAFE_INTENDED_ROUTES)[number];
-export type SessionDestination = '/household-handoff' | '/login' | '/offline';
+export type SessionDestination = SafeIntendedRoute | '/login' | '/offline';
 
 export function sanitizeIntendedRoute(value: string | undefined): SafeIntendedRoute | undefined {
   return SAFE_INTENDED_ROUTES.find((route) => route === value);
@@ -50,7 +50,7 @@ export const SessionBootstrap = ({
     async (outcome: RestoreOutcome): Promise<void> => {
       if (outcome.kind === 'authenticated') {
         sessionStateStore.enterAuthenticated(outcome.session);
-        onRoute('/household-handoff');
+        onRoute(safeIntendedRoute ?? '/household-handoff');
         setViewState('resolved');
         return;
       }

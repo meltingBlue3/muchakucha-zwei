@@ -118,6 +118,16 @@ describe('session bootstrap contract', () => {
     expect(result.onRoute).not.toHaveBeenCalledWith(expect.stringMatching(/today|household\//i));
   });
 
+  test('restores an allowlisted protected profile route without replacing it with the handoff', async () => {
+    const result = await renderBootstrap({
+      intendedRoute: '/profile',
+      outcome: { kind: 'authenticated', session: { accessToken: 'access-secret', currentUser } },
+    });
+
+    await waitFor(() => expect(result.onRoute).toHaveBeenCalledWith('/profile'));
+    expect(result.onRoute).not.toHaveBeenCalledWith('/household-handoff');
+  });
+
   test('clears an explicitly rejected credential and enters reauthentication', async () => {
     const result = await renderBootstrap({
       intendedRoute: '/profile',

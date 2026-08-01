@@ -17,7 +17,7 @@ export default function RootLayout() {
     pathname === '/auth/reset-password' ||
     pathname === '/reset-success';
   const routeSession = useCallback(
-    (destination: '/household-handoff' | '/login' | '/offline', intendedRoute?: string) => {
+    (destination: '/household-handoff' | '/profile' | '/login' | '/offline', intendedRoute?: string) => {
       router.replace({
         pathname: destination,
         params:
