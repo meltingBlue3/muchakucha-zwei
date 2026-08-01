@@ -17,3 +17,23 @@ export interface SessionStateStore {
   enterOfflineWaiting(): void;
   enterReauthenticationRequired(reason: ReauthenticationReason): void;
 }
+
+export function createSessionStateStore(): SessionStateStore {
+  let state: SessionState = { kind: 'booting' };
+
+  return {
+    get: () => state,
+    enterAuthenticated: (session) => {
+      state = { kind: 'authenticated', session };
+    },
+    enterUnauthenticated: () => {
+      state = { kind: 'unauthenticated' };
+    },
+    enterOfflineWaiting: () => {
+      state = { kind: 'offlineWaiting', retainedCredential: true };
+    },
+    enterReauthenticationRequired: (reason) => {
+      state = { kind: 'reauthRequired', reason };
+    },
+  };
+}
