@@ -36,6 +36,9 @@ function requireOrigin(name: OriginName): string {
 const webOrigin = requireOrigin('WEB_ORIGIN');
 const apiOrigin = requireOrigin('API_ORIGIN');
 const emailLinkOrigin = requireOrigin('EMAIL_LINK_ORIGIN');
+const databaseUrl =
+  process.env.DATABASE_URL ??
+  'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test';
 
 export default defineConfig({
   testDir: './e2e',
@@ -50,11 +53,13 @@ export default defineConfig({
   webServer: [
     {
       command: 'pnpm --filter api dev',
-      url: `${apiOrigin}/api/v1/health`,
+      url: `${apiOrigin}/api/v1/openapi.json`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: {
         ...process.env,
+        DATABASE_URL: databaseUrl,
+        NODE_ENV: 'test',
         WEB_ORIGIN: webOrigin,
         API_ORIGIN: apiOrigin,
         EMAIL_LINK_ORIGIN: emailLinkOrigin,

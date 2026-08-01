@@ -1,7 +1,7 @@
 [CmdletBinding(DefaultParameterSetName = 'Run')]
 param(
     [Parameter(ParameterSetName = 'Run')]
-    [ValidateSet('api', 'client')]
+    [ValidateSet('api', 'client', 'e2e')]
     [string]$Suite = 'api',
 
     [Parameter(Mandatory = $true, ParameterSetName = 'Run')]
@@ -66,6 +66,27 @@ function Invoke-Jest([string[]]$Arguments) {
     return @{ ExitCode = $process.ExitCode; Output = "$standardOutput`n$standardError" }
 }
 
+function Invoke-Playwright([string[]]$Arguments) {
+    $pnpm = (Get-Command pnpm.cmd -ErrorAction Stop).Source
+    $quotedArguments = @('exec', 'playwright', 'test') + $Arguments | ForEach-Object {
+        '"' + $_.Replace('"', '\"') + '"'
+    }
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $pnpm
+    $startInfo.Arguments = $quotedArguments -join ' '
+    $startInfo.WorkingDirectory = $repoRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
+    $standardErrorTask = $process.StandardError.ReadToEndAsync()
+    $process.WaitForExit()
+    return @{ ExitCode = $process.ExitCode; Output = "$($standardOutputTask.Result)`n$($standardErrorTask.Result)" }
+}
+
 function Assert-RedResult([string]$RequestedPath, [string]$Marker) {
     $relativePath = $RequestedPath -replace '\\', '/'
     if ($relativePath.StartsWith("apps/$Suite/")) {
@@ -74,6 +95,9 @@ function Assert-RedResult([string]$RequestedPath, [string]$Marker) {
 
     if ($Suite -eq 'client') {
         $discovery = Invoke-Jest @('--listTests', $relativePath)
+    }
+    elseif ($Suite -eq 'e2e') {
+        $discovery = Invoke-Playwright @($relativePath, '--list')
     }
     else {
         $discovery = Invoke-Vitest @('list', $relativePath)
@@ -87,6 +111,9 @@ function Assert-RedResult([string]$RequestedPath, [string]$Marker) {
 
     if ($Suite -eq 'client') {
         $execution = Invoke-Jest @($relativePath, '--verbose')
+    }
+    elseif ($Suite -eq 'e2e') {
+        $execution = Invoke-Playwright @($relativePath, '--reporter=list')
     }
     else {
         $execution = Invoke-Vitest @('run', $relativePath, '--reporter=verbose')

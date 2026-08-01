@@ -22,6 +22,8 @@
     "app/**/*.tsx",
     "src/**/*.ts",
     "src/**/*.tsx",
-    "jest.setup.ts"
+    "jest.setup.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
   ]
 }
