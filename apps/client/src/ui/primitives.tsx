@@ -322,6 +322,7 @@ type BannerProps = PropsWithChildren<{ title?: string }>;
 export const Banner = ({ children, title }: BannerProps) => (
   <Box
     accessibilityLiveRegion="assertive"
+    accessibilityRole="alert"
     backgroundColor="destructiveSoft"
     borderColor="destructive"
     borderRadius="md"
