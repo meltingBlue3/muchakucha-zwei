@@ -7,12 +7,12 @@
 
 ### Authentication
 
-- [ ] **AUTH-01**: 访客可以使用邮箱和密码创建账户。
-- [ ] **AUTH-02**: 新用户可以通过邮件链接验证邮箱。
-- [ ] **AUTH-03**: 已验证用户可以使用邮箱和密码登录，并在应用重启后保持会话。
-- [ ] **AUTH-04**: 用户可以通过发送到注册邮箱的限时链接重置密码。
-- [ ] **AUTH-05**: 用户可以退出当前设备，退出后该设备的 Refresh Token 不再有效。
-- [ ] **AUTH-06**: 用户可以设置和修改允许重复的显示昵称。
+- [x] **AUTH-01**: 访客可以使用邮箱和密码创建账户。
+- [x] **AUTH-02**: 新用户可以通过邮件链接验证邮箱。
+- [x] **AUTH-03**: 已验证用户可以使用邮箱和密码登录，并在应用重启后保持会话。
+- [x] **AUTH-04**: 用户可以通过发送到注册邮箱的限时链接重置密码。
+- [x] **AUTH-05**: 用户可以退出当前设备，退出后该设备的 Refresh Token 不再有效。
+- [x] **AUTH-06**: 用户可以设置和修改允许重复的显示昵称。
 
 ### Households
 
@@ -70,8 +70,8 @@
 
 - [ ] **SAFE-01**: 用户无法读取或修改任何自己未加入家庭组的事件、任务、笔记、标签或成员数据。
 - [ ] **SAFE-02**: owner 转移、成员移除和邀请接受等多记录操作必须整体成功或整体失败。
-- [ ] **SAFE-03**: Android/iOS 的长期会话凭据必须存入系统安全存储，Web 的 Refresh Token 必须由 HttpOnly Cookie 承载。
-- [ ] **SAFE-04**: 服务端必须支持 Refresh Token 轮换、撤销和重放检测，并且数据库只保存 Token 哈希。
+- [x] **SAFE-03**: Android/iOS 的长期会话凭据必须存入系统安全存储，Web 的 Refresh Token 必须由 HttpOnly Cookie 承载。
+- [x] **SAFE-04**: 服务端必须支持 Refresh Token 轮换、撤销和重放检测，并且数据库只保存 Token 哈希。
 - [ ] **SAFE-05**: 已发布的 v1 移动客户端必须能够在约定兼容窗口内继续使用升级后的 `/api/v1` 服务。
 
 ## v2 Requirements
@@ -121,14 +121,14 @@ Roadmap 创建时填充。每个 v1 需求必须且只能映射到一个阶段�
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | Pending |
-| AUTH-02 | Phase 1 | Pending |
-| AUTH-03 | Phase 1 | Pending |
-| AUTH-04 | Phase 1 | Pending |
-| AUTH-05 | Phase 1 | Pending |
-| AUTH-06 | Phase 1 | Pending |
-| SAFE-03 | Phase 1 | Pending |
-| SAFE-04 | Phase 1 | Pending |
+| AUTH-01 | Phase 1 | Complete |
+| AUTH-02 | Phase 1 | Complete |
+| AUTH-03 | Phase 1 | Complete |
+| AUTH-04 | Phase 1 | Complete |
+| AUTH-05 | Phase 1 | Complete |
+| AUTH-06 | Phase 1 | Complete |
+| SAFE-03 | Phase 1 | Complete |
+| SAFE-04 | Phase 1 | Complete |
 | HHLD-01 | Phase 2 | Pending |
 | HHLD-02 | Phase 2 | Pending |
 | HHLD-03 | Phase 2 | Pending |
