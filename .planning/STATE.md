@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-20-PLAN.md
-last_updated: "2026-08-01T13:38:04.960Z"
+stopped_at: Completed 01-22-PLAN.md
+last_updated: "2026-08-01T13:50:39.719Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 20
-  percent: 74
+  completed_plans: 21
+  percent: 78
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 21 of 27
+**Plan:** 22 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T13:38:04.954Z
-**Stopped at:** Completed 01-20-PLAN.md
+**Last session:** 2026-08-01T13:50:39.710Z
+**Stopped at:** Completed 01-22-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -87,6 +87,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P18 | 12min | 2 tasks | 14 files |
 | Phase 01 P19 | 8min | 2 tasks | 11 files |
 | Phase 01 P20 | 10min | 2 tasks | 7 files |
+| Phase 01 P22 | 8min | 2 tasks | 9 files |
 
 ## Decisions
 
@@ -142,3 +143,5 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Accept and persist rotated platform credentials before users/me. — Availability failures retain the valid successor instead of stranding a committed server rotation.
 - [Phase 01]: Map explicit refresh rejection to expired, revoked, or replayed reauthentication while treating network, 408, 429, and 5xx as offline retention. — D-11 credential clearing remains distinct from D-12 availability recovery.
 - [Phase 01]: Use process single-flight on native and Web Lock with an in-tab fallback on Web. — Concurrent refresh calls cannot race one rotating generation.
+- [Phase 01]: Use 30-minute hash-only reset credentials with predecessor invalidation and post-commit mail delivery. — Keeps recovery credentials out of database dumps and prevents stale links from remaining active.
+- [Phase 01]: Complete reset in one serializable consume-password-update-global-revoke transaction and issue no session. — Makes token use atomic, reuses the resolved password policy, and requires normal login after recovery.
