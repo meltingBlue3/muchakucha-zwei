@@ -84,6 +84,19 @@ export interface ResendEmailVerificationResponseDto {
   code: 'RESEND_ACCEPTED';
   retryAfterSeconds: number;
 }
+
+export interface RequestPasswordResetDto {
+  email: string;
+}
+
+export interface PasswordResetRequestAcceptedDto {
+  code: 'PASSWORD_RESET_REQUEST_ACCEPTED';
+}
+
+export interface CompletePasswordResetDto {
+  token: string;
+  password: string;
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
@@ -100,6 +113,9 @@ import type {
   CurrentUserDto,
   ResendEmailVerificationDto,
   ResendEmailVerificationResponseDto,
+  RequestPasswordResetDto,
+  PasswordResetRequestAcceptedDto,
+  CompletePasswordResetDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -159,6 +175,30 @@ export class ApiClient {
     signal?: AbortSignal,
   ): Promise<ResendEmailVerificationResponseDto> {
     return this.post('/api/v1/auth/email-verifications/resend', body, signal);
+  }
+
+  async requestPasswordReset(
+    body: RequestPasswordResetDto,
+    signal?: AbortSignal,
+  ): Promise<PasswordResetRequestAcceptedDto> {
+    return this.post('/api/v1/auth/password-reset/request', body, signal);
+  }
+
+  async completePasswordReset(body: CompletePasswordResetDto, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(
+      \`\${this.baseUrl}/api/v1/auth/password-reset/complete\`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        ...(signal === undefined ? {} : { signal }),
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ApiClientError(response.status, text === '' ? undefined : JSON.parse(text));
+    }
   }
 
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -224,7 +264,10 @@ async function generate(): Promise<void> {
       || document.components.schemas.CompleteEmailVerificationDto === undefined
       || document.components.schemas.CompleteEmailVerificationResponseDto === undefined
       || document.components.schemas.ResendEmailVerificationDto === undefined
-      || document.components.schemas.ResendEmailVerificationResponseDto === undefined) {
+      || document.components.schemas.ResendEmailVerificationResponseDto === undefined
+      || document.components.schemas.RequestPasswordResetDto === undefined
+      || document.components.schemas.PasswordResetRequestAcceptedDto === undefined
+      || document.components.schemas.CompletePasswordResetDto === undefined) {
       throw new Error('OpenAPI authentication schemas are missing.');
     }
     if (document.components?.schemas?.LoginDto === undefined
@@ -238,6 +281,10 @@ async function generate(): Promise<void> {
     if (document.paths['/api/v1/auth/email-verifications/complete']?.post?.operationId !== 'completeEmailVerification'
       || document.paths['/api/v1/auth/email-verifications/resend']?.post?.operationId !== 'resendEmailVerification') {
       throw new Error('OpenAPI email verification operations are missing or unstable.');
+    }
+    if (document.paths['/api/v1/auth/password-reset/request']?.post?.operationId !== 'requestPasswordReset'
+      || document.paths['/api/v1/auth/password-reset/complete']?.post?.operationId !== 'completePasswordReset') {
+      throw new Error('OpenAPI password reset operations are missing or unstable.');
     }
     if (document.paths['/api/v1/users/me']?.get?.operationId !== 'getMe'
       || document.paths['/api/v1/users/me']?.patch?.operationId !== 'updateMe'

@@ -12,6 +12,9 @@ import type {
   CurrentUserDto,
   ResendEmailVerificationDto,
   ResendEmailVerificationResponseDto,
+  RequestPasswordResetDto,
+  PasswordResetRequestAcceptedDto,
+  CompletePasswordResetDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -71,6 +74,30 @@ export class ApiClient {
     signal?: AbortSignal,
   ): Promise<ResendEmailVerificationResponseDto> {
     return this.post('/api/v1/auth/email-verifications/resend', body, signal);
+  }
+
+  async requestPasswordReset(
+    body: RequestPasswordResetDto,
+    signal?: AbortSignal,
+  ): Promise<PasswordResetRequestAcceptedDto> {
+    return this.post('/api/v1/auth/password-reset/request', body, signal);
+  }
+
+  async completePasswordReset(body: CompletePasswordResetDto, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/api/v1/auth/password-reset/complete`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        ...(signal === undefined ? {} : { signal }),
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ApiClientError(response.status, text === '' ? undefined : JSON.parse(text));
+    }
   }
 
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {

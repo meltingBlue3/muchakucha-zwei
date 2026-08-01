@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Headers, HttpCode, Post, Req, Res } from '@nestjs/common';
-import { ApiAcceptedResponse, ApiBadRequestResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiAcceptedResponse, ApiBadRequestResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
@@ -13,6 +13,11 @@ import {
   ResendEmailVerificationDto,
   ResendEmailVerificationResponseDto,
 } from './dto/resend-email-verification.dto.js';
+import {
+  PasswordResetRequestAcceptedDto,
+  RequestPasswordResetDto,
+} from './dto/request-password-reset.dto.js';
+import { CompletePasswordResetDto } from './dto/complete-password-reset.dto.js';
 
 const PENDING_PROOF_MAX_AGE_SECONDS = 24 * 60 * 60;
 const PENDING_PROOF_PATH = '/api/v1/auth/email-verifications';
@@ -220,6 +225,28 @@ export class AuthController {
     @Body() input: ResendEmailVerificationDto,
   ): Promise<ResendEmailVerificationResponseDto> {
     return this.authService.resendEmailVerification(input.email);
+  }
+
+  @Post('password-reset/request')
+  @HttpCode(202)
+  @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1_000 } })
+  @ApiOperation({ operationId: 'requestPasswordReset' })
+  @ApiAcceptedResponse({ type: PasswordResetRequestAcceptedDto })
+  @ApiBadRequestResponse({ description: 'Password reset request input is invalid.' })
+  async requestPasswordReset(
+    @Body() input: RequestPasswordResetDto,
+  ): Promise<PasswordResetRequestAcceptedDto> {
+    return this.authService.requestPasswordReset(input.email);
+  }
+
+  @Post('password-reset/complete')
+  @HttpCode(204)
+  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1_000 } })
+  @ApiOperation({ operationId: 'completePasswordReset' })
+  @ApiNoContentResponse({ description: 'Password changed and all existing sessions revoked.' })
+  @ApiBadRequestResponse({ description: 'Password or reset credential is invalid.' })
+  async completePasswordReset(@Body() input: CompletePasswordResetDto): Promise<void> {
+    await this.authService.completePasswordReset(input.token, input.password);
   }
 
   private setRefreshCookie(reply: CookieReply, refreshToken: string): void {

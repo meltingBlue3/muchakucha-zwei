@@ -76,3 +76,16 @@ export interface ResendEmailVerificationResponseDto {
   code: 'RESEND_ACCEPTED';
   retryAfterSeconds: number;
 }
+
+export interface RequestPasswordResetDto {
+  email: string;
+}
+
+export interface PasswordResetRequestAcceptedDto {
+  code: 'PASSWORD_RESET_REQUEST_ACCEPTED';
+}
+
+export interface CompletePasswordResetDto {
+  token: string;
+  password: string;
+}

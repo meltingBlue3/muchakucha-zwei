@@ -12,6 +12,7 @@ import { passwordPolicyFailure } from './password-policy.js';
 
 const TOKEN_BYTES = 32;
 const VERIFICATION_LIFETIME_MS = 24 * 60 * 60 * 1_000;
+const PASSWORD_RESET_LIFETIME_MS = 30 * 60 * 1_000;
 const RESEND_COOLDOWN_MS = 60 * 1_000;
 const REFRESH_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000;
 const SESSION_ABSOLUTE_LIFETIME_MS = 90 * 24 * 60 * 60 * 1_000;
@@ -36,6 +37,10 @@ interface CompleteVerificationResult {
 interface ResendVerificationResult {
   readonly code: 'RESEND_ACCEPTED';
   readonly retryAfterSeconds: number;
+}
+
+interface RequestPasswordResetResult {
+  readonly code: 'PASSWORD_RESET_REQUEST_ACCEPTED';
 }
 
 interface SessionCredentials {
@@ -63,7 +68,7 @@ function isUniqueConflict(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
 }
 
-function verificationUrl(token: string, environment: NodeJS.ProcessEnv = process.env): string {
+function emailLink(path: string, token: string, environment: NodeJS.ProcessEnv = process.env): string {
   const configuredOrigin = environment.EMAIL_LINK_ORIGIN;
   if (environment.NODE_ENV === 'production' && !configuredOrigin) {
     throw new Error('EMAIL_LINK_ORIGIN is required in production.');
@@ -81,9 +86,17 @@ function verificationUrl(token: string, environment: NodeJS.ProcessEnv = process
   ) {
     throw new Error('EMAIL_LINK_ORIGIN must be an exact HTTP(S) origin.');
   }
-  const link = new URL('/auth/verify-email', parsed);
+  const link = new URL(path, parsed);
   link.searchParams.set('token', token);
   return link.href;
+}
+
+function verificationUrl(token: string, environment: NodeJS.ProcessEnv = process.env): string {
+  return emailLink('/auth/verify-email', token, environment);
+}
+
+function passwordResetUrl(token: string, environment: NodeJS.ProcessEnv = process.env): string {
+  return emailLink('/auth/reset-password', token, environment);
 }
 
 @Injectable()
@@ -291,6 +304,120 @@ export class AuthService {
     }
 
     return { pendingProof };
+  }
+
+  async requestPasswordReset(email: string): Promise<RequestPasswordResetResult> {
+    const emailCanonical = email.trim().normalize('NFC').toLowerCase();
+    if (!isEmail(emailCanonical)) {
+      throw validationError('email', 'isEmail');
+    }
+
+    const now = new Date();
+    const token = opaqueToken();
+    const outcome = await this.prisma.$transaction(async (transaction) => {
+      const user = await transaction.user.findUnique({ where: { emailCanonical } });
+      if (user === null) return { kind: 'generic' } as const;
+
+      await transaction.passwordResetToken.updateMany({
+        where: {
+          userId: user.id,
+          consumedAt: null,
+          invalidatedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: { invalidatedAt: now },
+      });
+      await transaction.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: hashOpaqueToken(token),
+          createdAt: now,
+          expiresAt: new Date(now.getTime() + PASSWORD_RESET_LIFETIME_MS),
+        },
+      });
+      return { kind: 'created', user } as const;
+    }, { isolationLevel: 'Serializable' });
+
+    if (outcome.kind === 'created') {
+      void this.mailPort.sendPasswordReset({
+        to: outcome.user.email.trim().normalize('NFC'),
+        recipientName: outcome.user.displayName,
+        resetUrl: passwordResetUrl(token),
+      }).catch(() => undefined);
+    }
+    return { code: 'PASSWORD_RESET_REQUEST_ACCEPTED' };
+  }
+
+  async completePasswordReset(token: string, password: string): Promise<void> {
+    const policyFailure = passwordPolicyFailure(password);
+    if (policyFailure !== undefined) {
+      throw validationError('password', policyFailure);
+    }
+
+    const passwordHash = await argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 19_456,
+      timeCost: 2,
+      parallelism: 1,
+    });
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const outcome = await this.prisma.$transaction(async (transaction) => {
+          const now = new Date();
+          const current = await transaction.passwordResetToken.findUnique({
+            where: { tokenHash: hashOpaqueToken(token) },
+            include: { user: true },
+          });
+          if (
+            current === null
+            || current.consumedAt !== null
+            || current.invalidatedAt !== null
+            || current.expiresAt <= now
+          ) {
+            return { kind: 'invalid' } as const;
+          }
+
+          const claimed = await transaction.passwordResetToken.updateMany({
+            where: {
+              id: current.id,
+              consumedAt: null,
+              invalidatedAt: null,
+              expiresAt: { gt: now },
+            },
+            data: { consumedAt: now },
+          });
+          if (claimed.count !== 1) return { kind: 'invalid' } as const;
+
+          await transaction.user.update({
+            where: { id: current.userId },
+            data: { passwordHash },
+          });
+          await transaction.authSession.updateMany({
+            where: { userId: current.userId, revokedAt: null },
+            data: { revokedAt: now },
+          });
+          return { kind: 'completed', user: current.user, changedAt: now } as const;
+        }, { isolationLevel: 'Serializable' });
+
+        if (outcome.kind === 'invalid') {
+          throw new BadRequestException({
+            code: 'INVALID_PASSWORD_RESET_TOKEN',
+            message: 'The password reset credential is invalid or expired.',
+          });
+        }
+        void this.mailPort.sendPasswordChangedNotice({
+          to: outcome.user.email.trim().normalize('NFC'),
+          recipientName: outcome.user.displayName,
+          changedAt: outcome.changedAt,
+        }).catch(() => undefined);
+        return;
+      } catch (error) {
+        if (this.isSerializationConflict(error) && attempt < 2) continue;
+        throw error;
+      }
+    }
+    throw new Error('Password reset retry budget exhausted.');
   }
 
   async completeEmailVerification(input: CompleteVerificationInput): Promise<CompleteVerificationResult> {

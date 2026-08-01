@@ -42,9 +42,12 @@ async function createUser(email = memberEmail): Promise<string> {
       emailCanonical: canonicalizeEmail(email),
       displayName: 'Reset member',
       passwordHash: await hashPassword(oldPassword),
-      emailVerifiedAt: new Date(),
     },
     select: { id: true },
+  });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { emailVerifiedAt: new Date() },
   });
   return user.id;
 }
@@ -195,7 +198,10 @@ describe('password reset API contract', () => {
         await prisma.passwordResetToken.update({
           where: { tokenHash: tokenHash(token) },
           data: kind === 'expired'
-            ? { expiresAt: new Date(Date.now() - 1_000) }
+            ? {
+              createdAt: new Date(Date.now() - 31 * 60 * 1_000),
+              expiresAt: new Date(Date.now() - 60 * 1_000),
+            }
             : kind === 'used'
               ? { consumedAt: new Date() }
               : { invalidatedAt: new Date() },
