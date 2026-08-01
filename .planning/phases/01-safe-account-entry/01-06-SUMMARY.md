@@ -114,7 +114,21 @@ The TDD task was committed atomically by gate:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Auto-fixed Issues
+
+**1. [Rule 1 - Bug] Corrected canonical progress percentage after the SDK wrote zero**
+
+- **Found during:** Plan close-out
+- **Issue:** `state.update-progress` reported 7/27 plans and 26% but persisted `percent: 0` in STATE frontmatter.
+- **Fix:** Applied the handler's own reported canonical percentage after all other SDK-owned position, metric, decision, session, roadmap, and requirement updates completed.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** STATE now records 7 completed plans, Plan 8 of 27, and 26% consistently.
+- **Committed in:** Plan tracking correction commit after `4fa9814`.
+
+---
+
+**Total deviations:** 1 auto-fixed (1 bug).
+**Impact on plan:** Production security assets were unchanged; the fix keeps execution tracking internally consistent.
 
 ## Issues Encountered
 
