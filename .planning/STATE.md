@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-17-PLAN.md
-last_updated: "2026-08-01T06:51:02.952Z"
+stopped_at: Completed 01-18-PLAN.md
+last_updated: "2026-08-01T07:06:54.851Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 17
-  percent: 63
+  completed_plans: 18
+  percent: 67
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 18 of 27
+**Plan:** 19 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T06:50:43.052Z
-**Stopped at:** Completed 01-17-PLAN.md
+**Last session:** 2026-08-01T07:06:35.628Z
+**Stopped at:** Completed 01-18-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -84,6 +84,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P15 | 26min | 2 tasks | 18 files |
 | Phase 01 P16 | 10min | 2 tasks | 10 files |
 | Phase 01 P17 | 18min | 2 tasks | 8 files |
+| Phase 01 P18 | 12min | 2 tasks | 14 files |
 
 ## Decisions
 
@@ -131,3 +132,6 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Select verification secret transport from accepted credential source. — Web remains API-owned HttpOnly cookie-only while native receives SecureStore material.
 - [Phase 01]: Expose resend eligibility through the stable retryAfterSeconds error field. — The client countdown mirrors server authority while Nest throttling remains independent.
 - [Phase 01]: Sanitize verification links before completion, clear native proof before issued-session acceptance, and derive deliverable mail links from an exact EMAIL_LINK_ORIGIN. — This preserves token-free browser history, fail-closed SecureStore ordering, and the API-owned HttpOnly versus native SecureStore credential boundary across the real SMTP journey.
+- [Phase 01]: Use approved @nestjs/jwt HS256 with a mandatory 32-byte production secret and 15-minute sub/sid-only access tokens. — Keeps access credentials short-lived, minimal, and fail-closed with the approved monolith signing dependency.
+- [Phase 01]: Return refresh replay as a serializable transaction outcome before raising the API error. — Throwing inside the transaction would roll back the targeted session compromise and defeat durable replay handling.
+- [Phase 01]: Select refresh response shape from the accepted cookie or body credential source. — Rejecting ambiguous and cross-platform transport prevents browser JavaScript from requesting a readable refresh secret.
