@@ -1,7 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-test.describe.skip('Authenticated account actions', () => {
+const missingBehavior = (marker: string): never => {
+  throw new Error(marker);
+};
+
+test.describe('Authenticated account actions', () => {
   test('updates the current nickname and accepts a nickname used by another account', async ({ page }) => {
+    missingBehavior('IMPLEMENTATION_MISSING_ACCOUNT_UI');
     await page.goto('/profile');
     const nickname = page.getByLabel('昵称');
     await expect(nickname).not.toHaveValue('');
@@ -13,6 +18,7 @@ test.describe.skip('Authenticated account actions', () => {
   });
 
   test('logs out only the current browser while a second device stays authenticated', async ({ browser, page }) => {
+    missingBehavior('IMPLEMENTATION_MISSING_ACCOUNT_UI');
     const secondDevice = await browser.newContext({ storageState: await page.context().storageState() });
     const secondPage = await secondDevice.newPage();
     await secondPage.goto('/profile');
