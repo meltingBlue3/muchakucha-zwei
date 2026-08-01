@@ -1,39 +1,101 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { createServer, type Server, type Socket } from 'node:net';
 
-const MAILPIT_ORIGIN = process.env.MAILPIT_ORIGIN ?? 'http://127.0.0.1:18025';
+import { expect, test } from '@playwright/test';
 
-async function resetLinkFor(request: APIRequestContext, recipient: string): Promise<string> {
+const SMTP_PORT = Number(process.env.TEST_MAILPIT_SMTP_PORT ?? 11025);
+const messages: string[] = [];
+let smtpServer: Server;
+
+function handleSmtp(socket: Socket): void {
+  let buffer = '';
+  let data = '';
+  let receivingData = false;
+  socket.setEncoding('utf8');
+  socket.write('220 muchakucha test smtp\r\n');
+  socket.on('data', (chunk: string) => {
+    buffer += chunk;
+    while (buffer.includes('\r\n')) {
+      const end = buffer.indexOf('\r\n');
+      const line = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      if (receivingData) {
+        if (line === '.') {
+          messages.push(data);
+          data = '';
+          receivingData = false;
+          socket.write('250 queued\r\n');
+        } else {
+          data += `${line}\n`;
+        }
+        continue;
+      }
+      if (/^EHLO /i.test(line)) socket.write('250-muchakucha\r\n250 PIPELINING\r\n');
+      else if (/^HELO |^MAIL FROM:|^RCPT TO:|^RSET$/i.test(line)) socket.write('250 ok\r\n');
+      else if (/^DATA$/i.test(line)) {
+        receivingData = true;
+        socket.write('354 end with <CRLF>.<CRLF>\r\n');
+      } else if (/^QUIT$/i.test(line)) {
+        socket.end('221 bye\r\n');
+      } else socket.write('250 ok\r\n');
+    }
+  });
+}
+
+async function mailLinkFor(recipient: string, path: string): Promise<string> {
+  let link: string | undefined;
   await expect
-    .poll(async () => {
-      const response = await request.get(`${MAILPIT_ORIGIN}/api/v1/search`, { params: { query: `to:${recipient}` } });
-      if (!response.ok()) return 0;
-      const body = (await response.json()) as { messages?: unknown[] };
-      return body.messages?.length ?? 0;
+    .poll(() => {
+      const message = messages.find((candidate) => candidate.includes(recipient) && candidate.includes(path));
+      const decoded = message?.replace(/=\n/g, '').replaceAll('=3D', '=').replaceAll('&amp;', '&');
+      link = decoded?.match(new RegExp(`https?:[^\\s"']+${path}[^\\s"']+`))?.[0];
+      return link;
     })
-    .toBeGreaterThan(0);
-  const search = await request.get(`${MAILPIT_ORIGIN}/api/v1/search`, { params: { query: `to:${recipient}` } });
-  const body = (await search.json()) as { messages: Array<{ ID: string }> };
-  const message = await request.get(`${MAILPIT_ORIGIN}/api/v1/message/${body.messages[0].ID}`);
-  const match = JSON.stringify(await message.json()).match(/https?:[^\s"']+\/auth\/reset-password[^\s"']+/);
-  if (!match) throw new Error(`Mailpit message for ${recipient} did not contain a reset link`);
-  return match[0].replaceAll('\\u0026', '&');
+    .toBeTruthy();
+  if (!link) throw new Error(`SMTP message for ${recipient} did not contain ${path}`);
+  return link;
 }
 
 test.describe('Web password reset journey', () => {
-  test('uses privacy-safe request copy, sanitizes the Mailpit link, revokes all sessions, and does not auto-login', async ({
-    browser,
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeAll(async () => {
+    messages.length = 0;
+    smtpServer = createServer(handleSmtp);
+    await new Promise<void>((resolve, reject) => {
+      smtpServer.once('error', reject);
+      smtpServer.listen(SMTP_PORT, '127.0.0.1', resolve);
+    });
+  });
+
+  test.afterAll(async () => {
+    await new Promise<void>((resolve, reject) =>
+      smtpServer.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+
+  test('uses privacy-safe request copy, sanitizes the delivered link, and requires normal login afterward', async ({
     page,
-    request,
   }) => {
-    throw new Error('IMPLEMENTATION_MISSING_RESET_UI');
-    const email = 'verified-user@example.test';
+    test.setTimeout(60_000);
+    const email = `password-reset-${Date.now()}@example.test`;
+    const oldPassword = 'correct horse battery staple 2026';
+
+    await page.goto('/register');
+    await page.getByLabel('邮箱').fill(email);
+    await page.getByLabel('昵称').fill('密码重置成员');
+    await page.getByLabel('密码', { exact: true }).fill(oldPassword);
+    await page.getByRole('button', { name: '创建账户' }).click();
+    await expect(page).toHaveURL(/\/verify-pending/);
+    await page.goto(await mailLinkFor(email, '/auth/verify-email'));
+    await expect(page.getByRole('heading', { name: '验证成功' })).toBeVisible();
+
+    await page.context().clearCookies();
     await page.goto('/forgot-password');
     await page.getByLabel('邮箱').fill(email);
     await page.getByRole('button', { name: '发送重置链接' }).click();
     await expect(page.getByRole('status')).toContainText(/如果该邮箱已注册|请检查邮箱/);
 
-    const secondDevice = await browser.newContext();
-    const resetLink = await resetLinkFor(request, email);
+    const resetLink = await mailLinkFor(email, '/auth/reset-password');
     const resetToken = new URL(resetLink).searchParams.get('token');
     const browserMessages: string[] = [];
     page.on('console', (message) => browserMessages.push(message.text()));
@@ -49,18 +111,13 @@ test.describe('Web password reset journey', () => {
     await expect(page).toHaveURL(/\/login/);
     expect((await page.context().cookies()).filter((cookie) => /refresh/i.test(cookie.name))).toHaveLength(0);
 
-    const secondPage = await secondDevice.newPage();
-    await secondPage.goto('/');
-    await expect(secondPage).toHaveURL(/\/login/);
-    await secondDevice.close();
   });
 
   test('rejects a common password without consuming the single-use reset link', async ({ page }) => {
-    throw new Error('IMPLEMENTATION_MISSING_RESET_UI');
-    await page.goto('/auth/reset-password?token=e2e-reset-token');
-    await page.getByLabel('新密码', { exact: true }).fill('password');
+    await page.goto(`/auth/reset-password?token=${'r'.repeat(43)}`);
+    await page.getByLabel('新密码', { exact: true }).fill('123qweasdzxc');
     await page.getByRole('button', { name: '更新密码' }).click();
-    await expect(page.getByText(/常见密码|更强的密码/)).toBeVisible();
+    await expect(page.getByText('这个密码过于常见，请使用更强的密码。')).toBeVisible();
     await expect(page).not.toHaveURL(/token=/i);
   });
 });

@@ -14,7 +14,8 @@ export default function RootLayout() {
     pathname === '/verify-pending' ||
     pathname === '/auth/verify-email' ||
     pathname === '/forgot-password' ||
-    pathname === '/reset-password';
+    pathname === '/auth/reset-password' ||
+    pathname === '/reset-success';
   const routeSession = useCallback(
     (destination: '/household-handoff' | '/login' | '/offline', intendedRoute?: string) => {
       router.replace({
