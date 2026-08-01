@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-23-PLAN.md
-last_updated: "2026-08-01T15:02:24.052Z"
+stopped_at: Completed 01-25-PLAN.md
+last_updated: "2026-08-01T15:20:35.739Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 24
-  percent: 89
+  completed_plans: 25
+  percent: 93
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 25 of 27
+**Plan:** 26 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T15:02:24.044Z
-**Stopped at:** Completed 01-23-PLAN.md
+**Last session:** 2026-08-01T15:20:35.733Z
+**Stopped at:** Completed 01-25-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -91,6 +91,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P21 | 15min | 2 tasks | 12 files |
 | Phase 01 P24 | 10min | 2 tasks | 8 files |
 | Phase 01 P23 | 20min | 2 tasks | 7 files |
+| Phase 01 P25 | 16min | 2 tasks | 8 files |
 
 ## Decisions
 
@@ -156,3 +157,5 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Sanitize the token-bearing browser location synchronously and keep replacing it until the reset landing unmounts. — Expo Router can restore search parameters after its first render.
 - [Phase 01]: Keep password-reset completion entirely outside the session runtime. — Success must route only to normal login after the server-owned global revoke transaction.
 - [Phase 01]: Preserve the server's generic invalid-or-expired credential boundary while exposing accessible expired, used, and invalid recovery panels as client states. — This keeps the server security contract while completing client recovery semantics.
+- [Phase 01]: Clear platform-local and in-memory session state only after the generated logout operation returns a server outcome; availability failures retain the credential for safe retry.
+- [Phase 01]: Preserve an authenticated /profile target during restoration instead of replacing every authenticated route with the Phase 1 household handoff.
