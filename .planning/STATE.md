@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-12-PLAN.md
-last_updated: "2026-08-01T04:56:43.273Z"
+stopped_at: Completed 01-13-PLAN.md
+last_updated: "2026-08-01T05:13:32.000Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 13
-  percent: 0
+  completed_plans: 14
+  percent: 52
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 13 of 27
+**Plan:** 15 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T04:56:36.810Z
-**Stopped at:** Completed 01-12-PLAN.md
+**Last session:** 2026-08-01T05:13:31.994Z
+**Stopped at:** Completed 01-13-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -80,6 +80,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P14 | 17min | 2 tasks | 10 files |
 | Phase 01 P11 | 10min | 2 tasks | 11 files |
 | Phase 01 P12 | 5min | 2 tasks | 8 files |
+| Phase 01 P13 | 12min | 2 tasks | 18 files |
 
 ## Decisions
 
@@ -116,3 +117,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Keep Web pending-proof handling capability-only with credentialed requests and no JavaScript secret API. — The API must retain exclusive HttpOnly cookie ownership.
 - [Phase 01]: Persist native refresh material before publishing memory-only access and clear both layers on acceptance failure. — Prevents partial authenticated state when SecureStore fails.
 - [Phase 01]: Distinguish offline restoration from expired, revoked, or replayed credentials. — Network failures retain credentials while explicit authentication failures require clearing and reauthentication.
+- [Phase 01]: Issue a fresh opaque pending proof on every generic registration response, but persist it only for a newly created canonical identity. — Preserves generic response shape without linking duplicate attempts to an account.
+- [Phase 01]: Require both platform web and an exact configured Origin for HttpOnly pending-proof cookie delivery; native requests must not carry a browser Origin. — Prevents caller metadata from crossing credential transport boundaries.
+- [Phase 01]: Start verification mail delivery only after commit and keep provider latency outside the generic 202 response path. — Preserves committed state ordering and reduces identity-enumeration timing differences.
+- [Phase 01]: Generate the typed API client from the live Nest OpenAPI document and enforce drift with a cross-platform Node gate. — Keeps clients independent from Prisma and makes the canonical drift command executable on supported hosts.
