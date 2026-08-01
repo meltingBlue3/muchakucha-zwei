@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-11-PLAN.md
-last_updated: "2026-08-01T04:47:57.129Z"
+stopped_at: Completed 01-12-PLAN.md
+last_updated: "2026-08-01T04:56:43.273Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 12
-  percent: 44
+  completed_plans: 13
+  percent: 0
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 12 of 27
+**Plan:** 13 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T04:47:44.231Z
-**Stopped at:** Completed 01-11-PLAN.md
+**Last session:** 2026-08-01T04:56:36.810Z
+**Stopped at:** Completed 01-12-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -79,6 +79,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P10 | 15min | 2 tasks | 11 files |
 | Phase 01 P14 | 17min | 2 tasks | 10 files |
 | Phase 01 P11 | 10min | 2 tasks | 11 files |
+| Phase 01 P12 | 5min | 2 tasks | 8 files |
 
 ## Decisions
 
@@ -112,3 +113,6 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Encode reduced-motion and forced-colors behavior as deterministic primitive helpers while rendering no distracting large illustration. — Makes preference behavior reusable and testable by downstream screens.
 - [Phase 01]: Expose raw OpenAPI JSON at /api/v1/openapi.json without adding the optional unapproved static Swagger UI dependency. — Downstream generation needs the contract while @fastify/static was outside the approved package boundary.
 - [Phase 01]: Bind AuthModule to a provider-neutral MailPort and confine verification/reset links to SMTP delivery payloads. — Keeps provider details and secret-bearing links outside auth use cases and logs.
+- [Phase 01]: Keep Web pending-proof handling capability-only with credentialed requests and no JavaScript secret API. — The API must retain exclusive HttpOnly cookie ownership.
+- [Phase 01]: Persist native refresh material before publishing memory-only access and clear both layers on acceptance failure. — Prevents partial authenticated state when SecureStore fails.
+- [Phase 01]: Distinguish offline restoration from expired, revoked, or replayed credentials. — Network failures retain credentials while explicit authentication failures require clearing and reauthentication.
