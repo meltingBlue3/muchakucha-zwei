@@ -116,7 +116,21 @@ Each task was committed atomically:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Auto-fixed Issues
+
+**1. [Rule 1 - Bug] Corrected canonical progress percentage after the SDK wrote zero**
+
+- **Found during:** Plan close-out
+- **Issue:** `state.update-progress` reported 9/27 plans and 33% but persisted `percent: 0` in STATE frontmatter.
+- **Fix:** Applied the handler's own reported canonical percentage after all SDK-owned position, metric, decision, session, roadmap, and requirement updates completed.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** STATE now records 9 completed plans, Plan 10 of 27, and 33% consistently.
+- **Committed in:** Plan tracking synchronization commit.
+
+---
+
+**Total deviations:** 1 auto-fixed (1 bug).
+**Impact on plan:** Design contracts were unchanged; the fix keeps execution tracking internally consistent.
 
 ## Issues Encountered
 
