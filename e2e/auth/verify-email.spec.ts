@@ -43,7 +43,11 @@ async function expectNoWebSecret(context: BrowserContext, page: Page): Promise<v
   expect(storage).not.toMatch(/refresh|pending.?proof|token/i);
 }
 
-test.describe.skip('Email verification journey', () => {
+test.describe('Email verification journey', () => {
+  test('verification UI implementation marker', () => {
+    throw new Error('IMPLEMENTATION_MISSING_VERIFY_UI');
+  });
+
   test('follows the real Mailpit link in the registering browser and establishes a cookie-only session', async ({
     context,
     page,

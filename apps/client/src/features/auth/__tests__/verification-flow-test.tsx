@@ -1,10 +1,10 @@
 export {};
 
 const missingBehavior = (marker: string): never => {
-  throw new Error(marker);
+  throw new Error(`IMPLEMENTATION_MISSING_VERIFY_UI:${marker}`);
 };
 
-describe.skip('email verification continuation contract', () => {
+describe('email verification continuation contract', () => {
   test('sanitizes the token-bearing landing URL before rendering or completing verification', () => {
     missingBehavior('IMPLEMENTATION_MISSING_CLIENT_VERIFICATION_LINK_SANITIZATION');
   });
