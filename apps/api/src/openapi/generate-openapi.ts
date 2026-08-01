@@ -19,10 +19,47 @@ export interface RegistrationAcceptedDto {
   /** Native-only pending proof. Web responses omit this property. */
   pendingProof?: string;
 }
+
+export interface CompleteEmailVerificationDto {
+  token: string;
+  platform?: 'native';
+  pendingProof?: string;
+}
+
+export type VerificationOutcome =
+  | 'verified_auto_login'
+  | 'verified_login_required'
+  | 'expired'
+  | 'used'
+  | 'invalid'
+  | 'superseded';
+
+export interface CompleteEmailVerificationResponseDto {
+  outcome: VerificationOutcome;
+  accessToken?: string;
+  /** Native-only refresh credential. Web responses omit this property. */
+  refreshToken?: string;
+}
+
+export interface ResendEmailVerificationDto {
+  email: string;
+}
+
+export interface ResendEmailVerificationResponseDto {
+  code: 'RESEND_ACCEPTED';
+  retryAfterSeconds: number;
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
-import type { RegisterDto, RegistrationAcceptedDto } from './models';
+import type {
+  CompleteEmailVerificationDto,
+  CompleteEmailVerificationResponseDto,
+  RegisterDto,
+  RegistrationAcceptedDto,
+  ResendEmailVerificationDto,
+  ResendEmailVerificationResponseDto,
+} from './models';
 
 export class ApiClientError extends Error {
   constructor(readonly status: number, readonly body: unknown) {
@@ -48,6 +85,35 @@ export class ApiClient {
     }
     return payload as RegistrationAcceptedDto;
   }
+
+  async completeEmailVerification(
+    body: CompleteEmailVerificationDto,
+    signal?: AbortSignal,
+  ): Promise<CompleteEmailVerificationResponseDto> {
+    return this.post('/api/v1/auth/email-verifications/complete', body, signal);
+  }
+
+  async resendEmailVerification(
+    body: ResendEmailVerificationDto,
+    signal?: AbortSignal,
+  ): Promise<ResendEmailVerificationResponseDto> {
+    return this.post('/api/v1/auth/email-verifications/resend', body, signal);
+  }
+
+  private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    const response = await fetch(\`\${this.baseUrl}\${path}\`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      ...(signal === undefined ? {} : { signal }),
+    });
+    const payload: unknown = await response.json();
+    if (!response.ok) {
+      throw new ApiClientError(response.status, payload);
+    }
+    return payload as T;
+  }
 }
 `;
 
@@ -69,8 +135,16 @@ async function generate(): Promise<void> {
       throw new Error('OpenAPI registration operation is missing or has an unstable operationId.');
     }
     if (document.components?.schemas?.RegisterDto === undefined
-      || document.components.schemas.RegistrationAcceptedDto === undefined) {
-      throw new Error('OpenAPI registration schemas are missing.');
+      || document.components.schemas.RegistrationAcceptedDto === undefined
+      || document.components.schemas.CompleteEmailVerificationDto === undefined
+      || document.components.schemas.CompleteEmailVerificationResponseDto === undefined
+      || document.components.schemas.ResendEmailVerificationDto === undefined
+      || document.components.schemas.ResendEmailVerificationResponseDto === undefined) {
+      throw new Error('OpenAPI authentication schemas are missing.');
+    }
+    if (document.paths['/api/v1/auth/email-verifications/complete']?.post?.operationId !== 'completeEmailVerification'
+      || document.paths['/api/v1/auth/email-verifications/resend']?.post?.operationId !== 'resendEmailVerification') {
+      throw new Error('OpenAPI email verification operations are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

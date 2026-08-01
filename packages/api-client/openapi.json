@@ -35,6 +35,73 @@
           "auth"
         ]
       }
+    },
+    "/api/v1/auth/email-verifications/complete": {
+      "post": {
+        "operationId": "completeEmailVerification",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteEmailVerificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteEmailVerificationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Verification input or transport is invalid."
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/email-verifications/resend": {
+      "post": {
+        "operationId": "resendEmailVerification",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendEmailVerificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResendEmailVerificationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
     }
   },
   "info": {
@@ -104,6 +171,90 @@
         },
         "required": [
           "code"
+        ]
+      },
+      "CompleteEmailVerificationDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "writeOnly": true
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "native"
+            ]
+          },
+          "pendingProof": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "CompleteEmailVerificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "verified_auto_login",
+              "verified_login_required",
+              "expired",
+              "used",
+              "invalid",
+              "superseded"
+            ]
+          },
+          "accessToken": {
+            "type": "string",
+            "description": "Short-lived access credential issued only for same-device success."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Native-only refresh credential for encrypted device storage."
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "ResendEmailVerificationDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "member@example.com",
+            "maxLength": 320
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ResendEmailVerificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "RESEND_ACCEPTED"
+            ]
+          },
+          "retryAfterSeconds": {
+            "type": "number",
+            "example": 60,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "code",
+          "retryAfterSeconds"
         ]
       }
     }

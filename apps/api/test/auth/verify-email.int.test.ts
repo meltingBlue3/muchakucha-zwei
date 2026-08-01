@@ -10,7 +10,6 @@ import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 const allowedOrigin = 'http://127.0.0.1:8081';
 const pendingCookieName = 'mk_pending_proof_dev';
 const refreshCookieName = 'mk_refresh_dev';
-const missingApiMarker = 'IMPLEMENTATION_MISSING_VERIFY_API';
 
 interface RegistrationFixture {
   email: string;
@@ -31,12 +30,6 @@ function tokenHash(value: string): string {
 function cookiePair(setCookie: string | string[] | undefined, name: string): string | undefined {
   const values = Array.isArray(setCookie) ? setCookie : setCookie === undefined ? [] : [setCookie];
   return values.map((value) => value.split(';', 1)[0]).find((value) => value?.startsWith(`${name}=`));
-}
-
-function ensureVerificationApi(response: { statusCode: number }): void {
-  if (response.statusCode === 404) {
-    throw new Error(missingApiMarker);
-  }
 }
 
 beforeAll(async () => {
@@ -96,7 +89,7 @@ async function register(platform: 'native' | 'web', email = `${platform}-${reque
     token: token!,
     ...(platform === 'native'
       ? { pendingProof: response.json<{ pendingProof: string }>().pendingProof }
-      : { pendingCookie: cookiePair(response.headers['set-cookie'], pendingCookieName) }),
+      : { pendingCookie: cookiePair(response.headers['set-cookie'], pendingCookieName)! }),
   };
 }
 
@@ -115,7 +108,6 @@ async function complete(
     payload: body,
     remoteAddress: `127.21.${Math.floor(requestAddress / 250)}.${(requestAddress++ % 250) + 1}`,
   });
-  ensureVerificationApi(response);
   return response;
 }
 
@@ -130,14 +122,13 @@ async function resend(body: Record<string, unknown>, cookie?: string) {
     payload: body,
     remoteAddress: `127.22.${Math.floor(requestAddress / 250)}.${(requestAddress++ % 250) + 1}`,
   });
-  ensureVerificationApi(response);
   return response;
 }
 
 describe('email verification API contract', () => {
   test('uses the registration-created Web pending proof for same-device verification and automatic session', async () => {
     const fixture = await register('web');
-    const response = await complete({ token: fixture.token }, { cookie: fixture.pendingCookie, origin: allowedOrigin });
+    const response = await complete({ token: fixture.token }, { cookie: fixture.pendingCookie!, origin: allowedOrigin });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ outcome: 'verified_auto_login', accessToken: expect.any(String) });
@@ -178,7 +169,10 @@ describe('email verification API contract', () => {
   test.each([
     ['expired', async (fixture: RegistrationFixture) => prisma.emailVerificationToken.update({
       where: { tokenHash: tokenHash(fixture.token) },
-      data: { expiresAt: new Date(Date.now() - 1_000) },
+      data: {
+        createdAt: new Date(Date.now() - 25 * 60 * 60 * 1_000),
+        expiresAt: new Date(Date.now() - 60 * 60 * 1_000),
+      },
     })],
     ['used', async (fixture: RegistrationFixture) => prisma.emailVerificationToken.update({
       where: { tokenHash: tokenHash(fixture.token) },
@@ -232,6 +226,7 @@ describe('email verification API contract', () => {
       data: { createdAt: new Date(Date.now() - 61_000) },
     });
     const send = vi.spyOn(mailPort, 'sendEmailVerification').mockResolvedValue(undefined);
+    send.mockClear();
     const response = await resend({ email: fixture.email });
 
     expect(response.statusCode).toBe(202);

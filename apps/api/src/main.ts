@@ -33,6 +33,7 @@ interface ErrorResponse {
     code: string;
     message: string;
     details?: unknown;
+    retryAfterSeconds?: number;
   };
   requestId: string;
 }
@@ -140,6 +141,9 @@ class StableHttpExceptionFilter implements ExceptionFilter {
     const code = typeof structured?.code === 'string' ? structured.code : codeForStatus(status);
     const message = typeof structured?.message === 'string' ? structured.message : messageForStatus(status);
     const details = structured?.details;
+    const retryAfterSeconds = typeof structured?.retryAfterSeconds === 'number'
+      ? structured.retryAfterSeconds
+      : undefined;
 
     if (status >= 500) {
       request.log.error(
@@ -153,6 +157,7 @@ class StableHttpExceptionFilter implements ExceptionFilter {
         code,
         message,
         ...(details === undefined ? {} : { details }),
+        ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
       },
       requestId: request.id,
     };

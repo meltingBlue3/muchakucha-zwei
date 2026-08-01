@@ -1,17 +1,39 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { isEmail } from 'class-validator';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { MAIL_PORT, type MailPort } from '../../infrastructure/mail/mail.port.js';
 import type { RegisterDto } from './dto/register.dto.js';
+import type { VerificationOutcome } from './dto/complete-email-verification.dto.js';
 import { passwordPolicyFailure } from './password-policy.js';
 
 const TOKEN_BYTES = 32;
 const VERIFICATION_LIFETIME_MS = 24 * 60 * 60 * 1_000;
+const RESEND_COOLDOWN_MS = 60 * 1_000;
+const REFRESH_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000;
+const SESSION_ABSOLUTE_LIFETIME_MS = 90 * 24 * 60 * 60 * 1_000;
 
 interface RegistrationResult {
   readonly pendingProof: string;
+}
+
+interface CompleteVerificationInput {
+  readonly token: string;
+  readonly pendingProof?: string;
+  readonly proofSource?: 'native' | 'web';
+}
+
+interface CompleteVerificationResult {
+  readonly outcome: VerificationOutcome;
+  readonly accessToken?: string;
+  readonly refreshToken?: string;
+  readonly proofSource?: 'native' | 'web';
+}
+
+interface ResendVerificationResult {
+  readonly code: 'RESEND_ACCEPTED';
+  readonly retryAfterSeconds: number;
 }
 
 function opaqueToken(): string {
@@ -106,5 +128,142 @@ export class AuthService {
     }
 
     return { pendingProof };
+  }
+
+  async completeEmailVerification(input: CompleteVerificationInput): Promise<CompleteVerificationResult> {
+    const now = new Date();
+    const token = await this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash: hashOpaqueToken(input.token) },
+    });
+    if (token === null) {
+      return { outcome: 'invalid' };
+    }
+    if (token.consumedAt !== null) {
+      return { outcome: 'used' };
+    }
+    if (token.invalidatedAt !== null) {
+      return { outcome: 'superseded' };
+    }
+    if (token.expiresAt <= now) {
+      return { outcome: 'expired' };
+    }
+
+    const suppliedProofHash = input.pendingProof === undefined ? undefined : hashOpaqueToken(input.pendingProof);
+    const proofMatches = suppliedProofHash !== undefined
+      && token.pendingProofHash !== null
+      && suppliedProofHash === token.pendingProofHash;
+    const refreshToken = proofMatches ? opaqueToken() : undefined;
+    const accessToken = proofMatches ? opaqueToken() : undefined;
+
+    const outcome = await this.prisma.$transaction(async (transaction) => {
+      const claimed = await transaction.emailVerificationToken.updateMany({
+        where: {
+          id: token.id,
+          consumedAt: null,
+          invalidatedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: { consumedAt: now, pendingProofHash: null },
+      });
+      if (claimed.count !== 1) {
+        return { kind: 'lost_claim' } as const;
+      }
+
+      await transaction.user.update({
+        where: { id: token.userId },
+        data: { emailVerifiedAt: now },
+      });
+
+      if (proofMatches && refreshToken !== undefined) {
+        await transaction.authSession.create({
+          data: {
+            userId: token.userId,
+            absoluteEndsAt: new Date(now.getTime() + SESSION_ABSOLUTE_LIFETIME_MS),
+            refreshTokens: {
+              create: {
+                tokenHash: hashOpaqueToken(refreshToken),
+                expiresAt: new Date(now.getTime() + REFRESH_LIFETIME_MS),
+              },
+            },
+          },
+        });
+      }
+
+      return { kind: proofMatches ? 'auto_login' : 'login_required' } as const;
+    }, { isolationLevel: 'Serializable' });
+
+    if (outcome.kind === 'lost_claim') {
+      const current = await this.prisma.emailVerificationToken.findUnique({ where: { id: token.id } });
+      if (current !== null && current.consumedAt !== null) return { outcome: 'used' };
+      if (current !== null && current.invalidatedAt !== null) return { outcome: 'superseded' };
+      if (current !== null && current.expiresAt <= new Date()) return { outcome: 'expired' };
+      return { outcome: 'invalid' };
+    }
+
+    if (outcome.kind === 'login_required') {
+      return { outcome: 'verified_login_required' };
+    }
+
+    return {
+      outcome: 'verified_auto_login',
+      ...(accessToken === undefined ? {} : { accessToken }),
+      ...(refreshToken === undefined ? {} : { refreshToken }),
+      ...(input.proofSource === undefined ? {} : { proofSource: input.proofSource }),
+    };
+  }
+
+  async resendEmailVerification(email: string): Promise<ResendVerificationResult> {
+    const emailCanonical = email.trim().normalize('NFC').toLowerCase();
+    if (!isEmail(emailCanonical)) {
+      throw validationError('email', 'isEmail');
+    }
+    const now = new Date();
+    const nextToken = opaqueToken();
+
+    const outcome = await this.prisma.$transaction(async (transaction) => {
+      const user = await transaction.user.findUnique({ where: { emailCanonical } });
+      if (user === null || user.emailVerifiedAt !== null) {
+        return { kind: 'generic' } as const;
+      }
+      const current = await transaction.emailVerificationToken.findFirst({
+        where: { userId: user.id, consumedAt: null, invalidatedAt: null },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (current !== null) {
+        const remainingMs = RESEND_COOLDOWN_MS - (now.getTime() - current.createdAt.getTime());
+        if (remainingMs > 0) {
+          return { kind: 'cooldown', retryAfterSeconds: Math.ceil(remainingMs / 1_000) } as const;
+        }
+        await transaction.emailVerificationToken.update({
+          where: { id: current.id },
+          data: { invalidatedAt: now, pendingProofHash: null },
+        });
+      }
+      await transaction.emailVerificationToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: hashOpaqueToken(nextToken),
+          ...(current === null ? {} : { pendingProofHash: current.pendingProofHash }),
+          expiresAt: new Date(now.getTime() + VERIFICATION_LIFETIME_MS),
+        },
+      });
+      return { kind: 'created', user } as const;
+    }, { isolationLevel: 'Serializable' });
+
+    if (outcome.kind === 'cooldown') {
+      throw new HttpException({
+        code: 'RESEND_NOT_ELIGIBLE',
+        message: 'Email verification cannot be resent yet.',
+        retryAfterSeconds: outcome.retryAfterSeconds,
+      }, HttpStatus.TOO_MANY_REQUESTS);
+    }
+    if (outcome.kind === 'created') {
+      void this.mailPort.sendEmailVerification({
+        to: outcome.user.email.trim().normalize('NFC'),
+        recipientName: outcome.user.displayName,
+        verificationUrl: `muchakucha://verify-email?token=${nextToken}`,
+      }).catch(() => undefined);
+    }
+    return { code: 'RESEND_ACCEPTED', retryAfterSeconds: 60 };
   }
 }

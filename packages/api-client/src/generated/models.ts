@@ -11,3 +11,33 @@ export interface RegistrationAcceptedDto {
   /** Native-only pending proof. Web responses omit this property. */
   pendingProof?: string;
 }
+
+export interface CompleteEmailVerificationDto {
+  token: string;
+  platform?: 'native';
+  pendingProof?: string;
+}
+
+export type VerificationOutcome =
+  | 'verified_auto_login'
+  | 'verified_login_required'
+  | 'expired'
+  | 'used'
+  | 'invalid'
+  | 'superseded';
+
+export interface CompleteEmailVerificationResponseDto {
+  outcome: VerificationOutcome;
+  accessToken?: string;
+  /** Native-only refresh credential. Web responses omit this property. */
+  refreshToken?: string;
+}
+
+export interface ResendEmailVerificationDto {
+  email: string;
+}
+
+export interface ResendEmailVerificationResponseDto {
+  code: 'RESEND_ACCEPTED';
+  retryAfterSeconds: number;
+}

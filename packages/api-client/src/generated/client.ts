@@ -1,5 +1,12 @@
 // Generated from openapi.json. Do not edit.
-import type { RegisterDto, RegistrationAcceptedDto } from './models';
+import type {
+  CompleteEmailVerificationDto,
+  CompleteEmailVerificationResponseDto,
+  RegisterDto,
+  RegistrationAcceptedDto,
+  ResendEmailVerificationDto,
+  ResendEmailVerificationResponseDto,
+} from './models';
 
 export class ApiClientError extends Error {
   constructor(readonly status: number, readonly body: unknown) {
@@ -24,5 +31,34 @@ export class ApiClient {
       throw new ApiClientError(response.status, payload);
     }
     return payload as RegistrationAcceptedDto;
+  }
+
+  async completeEmailVerification(
+    body: CompleteEmailVerificationDto,
+    signal?: AbortSignal,
+  ): Promise<CompleteEmailVerificationResponseDto> {
+    return this.post('/api/v1/auth/email-verifications/complete', body, signal);
+  }
+
+  async resendEmailVerification(
+    body: ResendEmailVerificationDto,
+    signal?: AbortSignal,
+  ): Promise<ResendEmailVerificationResponseDto> {
+    return this.post('/api/v1/auth/email-verifications/resend', body, signal);
+  }
+
+  private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      ...(signal === undefined ? {} : { signal }),
+    });
+    const payload: unknown = await response.json();
+    if (!response.ok) {
+      throw new ApiClientError(response.status, payload);
+    }
+    return payload as T;
   }
 }
