@@ -190,7 +190,7 @@ export async function createApplication(
     },
     requestIdHeader: false,
   });
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule.register(environment), adapter, {
     abortOnError: true,
   });
 
