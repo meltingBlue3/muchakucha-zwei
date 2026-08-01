@@ -43,6 +43,7 @@ const databaseUrl =
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
+  workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
@@ -52,6 +53,13 @@ export default defineConfig({
   },
   webServer: [
     {
+      command: 'node e2e/support/mailbox-server.mjs',
+      url: `http://127.0.0.1:${process.env.TEST_MAILPIT_HTTP_PORT ?? '18025'}/readyz`,
+      reuseExistingServer: false,
+      timeout: 30_000,
+      env: { ...process.env },
+    },
+    {
       command: 'pnpm --filter api dev',
       url: `${apiOrigin}/api/v1/openapi.json`,
       reuseExistingServer: !process.env.CI,
@@ -59,6 +67,7 @@ export default defineConfig({
       env: {
         ...process.env,
         DATABASE_URL: databaseUrl,
+        E2E_DISABLE_RATE_LIMITS: 'true',
         NODE_ENV: 'test',
         WEB_ORIGIN: webOrigin,
         API_ORIGIN: apiOrigin,

@@ -6,7 +6,8 @@ This is the authoritative Phase 1 mapping for the applicable OWASP Application S
 - **Stable CSV SHA-256:** `98c8fe911b9edb403af8ee05d3ce8201ecac2659e313b053890a62847cdcf680`
 - **ASVS release:** `v5.0.0`
 - **Mapping scope:** Phase 1 account entry; all rows below are applicable at L1.
-- **Evidence status:** Contract paths and assertion names are stable. Downstream owning plans activate behavior suites and remove their intentional Wave 0 skips.
+- **Evidence status:** Final and green. Every row below names the exact passing assertion and committed test path; `pnpm --filter api test --run test/security/asvs-v5-l1.test.ts` audits the complete map, while `pnpm test:integration` and `pnpm test:e2e:web` execute the mapped API and browser behavior.
+- **Project controls stricter than L1:** Passwords require 12 through 128 Unicode code points, the committed denylist contains the first 3000 policy-matching passwords, access tokens expire after 15 minutes, and reset credentials expire after 30 minutes. These are project policy, not additional ASVS L1 claims.
 
 | Stable ID | Level | Applicability | Official requirement text | Test path | Named assertion |
 |---|---|---|---|---|---|

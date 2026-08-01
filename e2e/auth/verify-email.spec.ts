@@ -35,26 +35,23 @@ async function forceTerminalState(link: string, state: 'expired' | 'used'): Prom
 }
 
 async function latestLinkFor(request: APIRequestContext, recipient: string, path: string): Promise<string> {
+  let source = '';
   await expect
     .poll(async () => {
-      const response = await request.get(`${MAILPIT_ORIGIN}/api/v1/search`, {
-        params: { query: `to:${recipient}` },
+      const response = await request.get(`${MAILPIT_ORIGIN}/messages`, {
+        params: { recipient, path },
       });
       if (!response.ok()) return 0;
-      const body = (await response.json()) as { messages?: unknown[] };
+      const body = (await response.json()) as { messages?: string[] };
+      source = body.messages?.at(-1) ?? '';
       return body.messages?.length ?? 0;
     })
     .toBeGreaterThan(0);
 
-  const response = await request.get(`${MAILPIT_ORIGIN}/api/v1/search`, {
-    params: { query: `to:${recipient}` },
-  });
-  const body = (await response.json()) as { messages: Array<{ ID: string }> };
-  const message = await request.get(`${MAILPIT_ORIGIN}/api/v1/message/${body.messages[0].ID}`);
-  const source = JSON.stringify(await message.json());
-  const match = source.match(new RegExp(`https?:[^\\s\"']+${path}[^\\s\"']+`));
+  const decoded = source.replace(/=\n/g, '').replaceAll('=3D', '=').replaceAll('&amp;', '&');
+  const match = decoded.match(new RegExp(`https?:[^\\s\"']+${path}[^\\s\"']+`));
   if (!match) throw new Error(`Mailpit message for ${recipient} did not contain ${path}`);
-  return match[0].replaceAll('\\u0026', '&');
+  return match[0];
 }
 
 async function register(page: Page, email: string): Promise<void> {
