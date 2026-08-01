@@ -19,12 +19,13 @@ async function resetLinkFor(request: APIRequestContext, recipient: string): Prom
   return match[0].replaceAll('\\u0026', '&');
 }
 
-test.describe.skip('Web password reset journey', () => {
+test.describe('Web password reset journey', () => {
   test('uses privacy-safe request copy, sanitizes the Mailpit link, revokes all sessions, and does not auto-login', async ({
     browser,
     page,
     request,
   }) => {
+    throw new Error('IMPLEMENTATION_MISSING_RESET_UI');
     const email = 'verified-user@example.test';
     await page.goto('/forgot-password');
     await page.getByLabel('邮箱').fill(email);
@@ -33,8 +34,13 @@ test.describe.skip('Web password reset journey', () => {
 
     const secondDevice = await browser.newContext();
     const resetLink = await resetLinkFor(request, email);
+    const resetToken = new URL(resetLink).searchParams.get('token');
+    const browserMessages: string[] = [];
+    page.on('console', (message) => browserMessages.push(message.text()));
     await page.goto(resetLink);
     await expect(page).not.toHaveURL(/token=/i);
+    expect(await page.evaluate(() => JSON.stringify(window.history.state))).not.toContain(resetToken);
+    expect(browserMessages.join('\n')).not.toContain(resetToken);
     await page.getByLabel('新密码', { exact: true }).fill('another correct horse battery staple 2026');
     await page.getByRole('button', { name: '更新密码' }).click();
     await expect(page.getByRole('heading', { name: /密码已更新|重置成功/ })).toBeVisible();
@@ -50,6 +56,7 @@ test.describe.skip('Web password reset journey', () => {
   });
 
   test('rejects a common password without consuming the single-use reset link', async ({ page }) => {
+    throw new Error('IMPLEMENTATION_MISSING_RESET_UI');
     await page.goto('/auth/reset-password?token=e2e-reset-token');
     await page.getByLabel('新密码', { exact: true }).fill('password');
     await page.getByRole('button', { name: '更新密码' }).click();
