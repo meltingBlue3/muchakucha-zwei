@@ -4,7 +4,7 @@ const missingDesignSystem = (contract: string): never => {
   throw new Error(`IMPLEMENTATION_MISSING_DESIGN_SYSTEM:${contract}`);
 };
 
-describe.skip('Restyle-owned primitive state contract', () => {
+describe('Restyle-owned primitive state contract', () => {
   test('exports the complete Screen, layout, text, control, feedback, brand, and auth-shell surface', () => {
     missingDesignSystem('COMPLETE_OWNED_PRIMITIVE_SURFACE');
   });

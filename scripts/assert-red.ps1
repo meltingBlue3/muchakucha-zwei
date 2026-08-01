@@ -1,7 +1,7 @@
 [CmdletBinding(DefaultParameterSetName = 'Run')]
 param(
     [Parameter(ParameterSetName = 'Run')]
-    [ValidateSet('api')]
+    [ValidateSet('api', 'client')]
     [string]$Suite = 'api',
 
     [Parameter(Mandatory = $true, ParameterSetName = 'Run')]
@@ -35,19 +35,49 @@ function Invoke-Vitest([string[]]$Arguments) {
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
     [void]$process.Start()
-    $standardOutput = $process.StandardOutput.ReadToEnd()
-    $standardError = $process.StandardError.ReadToEnd()
+    $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
+    $standardErrorTask = $process.StandardError.ReadToEndAsync()
     $process.WaitForExit()
+    $standardOutput = $standardOutputTask.Result
+    $standardError = $standardErrorTask.Result
+    return @{ ExitCode = $process.ExitCode; Output = "$standardOutput`n$standardError" }
+}
+
+function Invoke-Jest([string[]]$Arguments) {
+    $pnpm = (Get-Command pnpm.cmd -ErrorAction Stop).Source
+    $quotedArguments = @('--filter', 'client', 'exec', 'jest', '--runInBand') + $Arguments | ForEach-Object {
+        '"' + $_.Replace('"', '\"') + '"'
+    }
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $pnpm
+    $startInfo.Arguments = $quotedArguments -join ' '
+    $startInfo.WorkingDirectory = $repoRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
+    $standardErrorTask = $process.StandardError.ReadToEndAsync()
+    $process.WaitForExit()
+    $standardOutput = $standardOutputTask.Result
+    $standardError = $standardErrorTask.Result
     return @{ ExitCode = $process.ExitCode; Output = "$standardOutput`n$standardError" }
 }
 
 function Assert-RedResult([string]$RequestedPath, [string]$Marker) {
     $relativePath = $RequestedPath -replace '\\', '/'
-    if ($relativePath.StartsWith('apps/api/')) {
-        $relativePath = $relativePath.Substring('apps/api/'.Length)
+    if ($relativePath.StartsWith("apps/$Suite/")) {
+        $relativePath = $relativePath.Substring("apps/$Suite/".Length)
     }
 
-    $discovery = Invoke-Vitest @('list', $relativePath)
+    if ($Suite -eq 'client') {
+        $discovery = Invoke-Jest @('--listTests', $relativePath)
+    }
+    else {
+        $discovery = Invoke-Vitest @('list', $relativePath)
+    }
     if ($discovery.ExitCode -ne 0 -or $discovery.Output -match $infrastructureFailurePattern) {
         throw "RED discovery failed for '$RequestedPath'.`n$($discovery.Output)"
     }
@@ -55,7 +85,12 @@ function Assert-RedResult([string]$RequestedPath, [string]$Marker) {
         throw "RED discovery did not list '$RequestedPath'.`n$($discovery.Output)"
     }
 
-    $execution = Invoke-Vitest @('run', $relativePath, '--reporter=verbose')
+    if ($Suite -eq 'client') {
+        $execution = Invoke-Jest @($relativePath, '--verbose')
+    }
+    else {
+        $execution = Invoke-Vitest @('run', $relativePath, '--reporter=verbose')
+    }
     if ($execution.ExitCode -eq 0) {
         throw "RED test unexpectedly passed: '$RequestedPath'."
     }

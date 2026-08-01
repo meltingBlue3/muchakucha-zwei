@@ -4,7 +4,7 @@ const missingDesignSystem = (contract: string): never => {
   throw new Error(`IMPLEMENTATION_MISSING_DESIGN_SYSTEM:${contract}`);
 };
 
-describe.skip('typed design-token and composition contract', () => {
+describe('typed design-token and composition contract', () => {
   test('D-14 exposes one Restyle-owned warm, modern, restrained typed theme', () => {
     missingDesignSystem('D14_TYPED_WARM_THEME');
   });
