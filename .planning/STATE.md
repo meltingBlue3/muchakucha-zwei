@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-13-PLAN.md
-last_updated: "2026-08-01T05:13:32.000Z"
+stopped_at: Completed 01-15-PLAN.md
+last_updated: "2026-08-01T06:12:45.533Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 14
-  percent: 52
+  completed_plans: 15
+  percent: 56
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 15 of 27
+**Plan:** 16 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T05:13:31.994Z
-**Stopped at:** Completed 01-13-PLAN.md
+**Last session:** 2026-08-01T06:12:45.526Z
+**Stopped at:** Completed 01-15-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -81,6 +81,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P11 | 10min | 2 tasks | 11 files |
 | Phase 01 P12 | 5min | 2 tasks | 8 files |
 | Phase 01 P13 | 12min | 2 tasks | 18 files |
+| Phase 01 P15 | 26min | 2 tasks | 18 files |
 
 ## Decisions
 
@@ -121,3 +122,6 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Require both platform web and an exact configured Origin for HttpOnly pending-proof cookie delivery; native requests must not carry a browser Origin. — Prevents caller metadata from crossing credential transport boundaries.
 - [Phase 01]: Start verification mail delivery only after commit and keep provider latency outside the generic 202 response path. — Preserves committed state ordering and reduces identity-enumeration timing differences.
 - [Phase 01]: Generate the typed API client from the live Nest OpenAPI document and enforce drift with a cross-platform Node gate. — Keeps clients independent from Prisma and makes the canonical drift command executable on supported hosts.
+- [Phase 01]: Match the client Web renderer to exact react-dom 19.2.3 and react-native-web 0.21.2. — Preserves the approved Expo SDK 57 React 19.2.3 compatibility line.
+- [Phase 01]: Use extensionless generated-client imports with TypeScript Bundler resolution. — Lets Expo Metro and strict typechecking consume one deterministic generated package.
+- [Phase 01]: Write native registration proof before pending navigation while Web remains HttpOnly-cookie-only. — Prevents partial native continuation state and keeps Web secrets outside JavaScript.

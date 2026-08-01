@@ -192,9 +192,18 @@ Each task was committed atomically:
 - **Verification:** The password-manager, paste, reveal, action-label, and focus journey passes in Chromium.
 - **Committed in:** `3e1f81b`
 
+**5. [Rule 1 - Bug] Corrected canonical progress persistence after the SDK wrote zero**
+
+- **Found during:** Plan close-out
+- **Issue:** `state.update-progress` correctly reported 15/27 and 56% but persisted `percent: 0` in STATE frontmatter.
+- **Fix:** Applied the handler's own reported canonical percentage after all SDK-owned state, roadmap, metric, decision, requirement, and session updates completed.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** STATE records Plan 16 of 27, 15 completed plans, and 56% consistently; ROADMAP records 15/27.
+- **Committed in:** Plan tracking synchronization commit.
+
 ---
 
-**Total deviations:** 4 auto-fixed (1 bug, 3 blocking issues).
+**Total deviations:** 5 auto-fixed (2 bugs, 3 blocking issues).
 **Impact on plan:** Every change was required to make the planned generated-client Web journey executable and truthful; the authentication scope and secret ownership model did not expand.
 
 ## Issues Encountered
