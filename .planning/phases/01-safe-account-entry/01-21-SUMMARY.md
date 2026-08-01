@@ -174,9 +174,18 @@ Each task was committed atomically:
 - **Verification:** Rejected-session Playwright assertion locates and reads the alert; complete client regression passes.
 - **Committed in:** `022b4bc`
 
+**4. [Rule 1 - Bug] Corrected canonical progress persistence after SDK update**
+
+- **Found during:** Plan close-out
+- **Issue:** `state.update-progress` reported 22/27 and 81% but persisted `percent: 0` in STATE frontmatter.
+- **Fix:** Applied the handler's reported canonical percentage after all SDK-owned tracking updates completed.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** STATE and ROADMAP record 22 completed plans; STATE records 81%.
+- **Committed in:** Plan tracking commit
+
 ---
 
-**Total deviations:** 3 auto-fixed (1 bug, 2 missing critical functionality).
+**Total deviations:** 4 auto-fixed (2 bugs, 2 missing critical functionality).
 **Impact on plan:** All fixes preserve route correctness and accessibility inside the planned session UI boundary; no household or Today implementation was added.
 
 ## Issues Encountered
@@ -208,6 +217,7 @@ None. Session bootstrap and intended-route handling implement the plan-registere
 - RED commit `b2a8404` precedes GREEN commit `022b4bc`; both are present on `master` and only the intentional handoff move deleted a tracked file.
 - Focused component tests pass 9/9, focused Playwright tests pass 4/4, all active client tests pass 67/67, and strict client typecheck passes.
 - Static scans find no session UI marker, focused suite skip, goal-blocking stub, Today/household implementation, Web secret storage, or unplanned threat surface.
+- Canonical tracking records Plan 23 of 27, 22 completed summaries, and 81% progress.
 
 ---
 *Phase: 01-safe-account-entry*
