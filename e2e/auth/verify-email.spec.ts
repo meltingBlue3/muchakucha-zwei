@@ -1,6 +1,38 @@
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
+import { createHash } from 'node:crypto';
+import { Client } from 'pg';
 
 const MAILPIT_ORIGIN = process.env.MAILPIT_ORIGIN ?? 'http://127.0.0.1:18025';
+const DATABASE_URL =
+  process.env.DATABASE_URL
+  ?? 'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test';
+
+async function forceTerminalState(link: string, state: 'expired' | 'used'): Promise<void> {
+  const token = new URL(link).searchParams.get('token');
+  if (!token) throw new Error('Verification fixture link did not include a token.');
+  const tokenHash = createHash('sha256').update(token, 'utf8').digest('hex');
+  const database = new Client({ connectionString: DATABASE_URL });
+  await database.connect();
+  try {
+    if (state === 'expired') {
+      await database.query(
+        `UPDATE "EmailVerificationToken"
+         SET "created_at" = now() - interval '2 days', "expires_at" = now() - interval '1 day'
+         WHERE "token_hash" = $1`,
+        [tokenHash],
+      );
+    } else {
+      await database.query(
+        `UPDATE "EmailVerificationToken"
+         SET "consumed_at" = now(), "pending_proof_hash" = NULL
+         WHERE "token_hash" = $1`,
+        [tokenHash],
+      );
+    }
+  } finally {
+    await database.end();
+  }
+}
 
 async function latestLinkFor(request: APIRequestContext, recipient: string, path: string): Promise<string> {
   await expect
@@ -44,10 +76,6 @@ async function expectNoWebSecret(context: BrowserContext, page: Page): Promise<v
 }
 
 test.describe('Email verification journey', () => {
-  test('verification UI implementation marker', () => {
-    throw new Error('IMPLEMENTATION_MISSING_VERIFY_UI');
-  });
-
   test('follows the real Mailpit link in the registering browser and establishes a cookie-only session', async ({
     context,
     page,
@@ -79,9 +107,18 @@ test.describe('Email verification journey', () => {
     await isolated.close();
   });
 
-  test('renders expired, used, and invalid link recovery states without retaining tokens', async ({ page }) => {
+  test('renders expired, used, and invalid link recovery states without retaining tokens', async ({ page, request }) => {
     for (const state of ['expired', 'used', 'invalid'] as const) {
-      await page.goto(`/auth/verify-email?token=e2e-${state}`);
+      let link: string;
+      if (state === 'invalid') {
+        link = `/auth/verify-email?token=${'i'.repeat(43)}`;
+      } else {
+        const email = `playwright-verify-${state}-${Date.now()}@example.test`;
+        await register(page, email);
+        link = await latestLinkFor(request, email, '/auth/verify-email');
+        await forceTerminalState(link, state);
+      }
+      await page.goto(link);
       await expect(page).not.toHaveURL(/token=/i);
       await expect(page.getByRole('heading')).toContainText(
         state === 'expired' ? /过期/ : state === 'used' ? /已验证|已使用/ : /无效|无法验证/,

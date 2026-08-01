@@ -228,7 +228,9 @@ describe('registration API contract', () => {
     })).statusCode).toBe(202);
     const message = await mailObserved;
     expect(message.to).toBe('mail@example.test');
-    expect(message.verificationUrl).toMatch(/^muchakucha:\/\/verify-email\?token=[A-Za-z0-9_-]{43}$/);
+    expect(message.verificationUrl).toMatch(
+      /^http:\/\/127\.0\.0\.1:8081\/auth\/verify-email\?token=[A-Za-z0-9_-]{43}$/,
+    );
     await withDatabase(async (client) => {
       const count = await client.query<{ count: string }>(
         `SELECT count(*) FROM "EmailVerificationToken" token

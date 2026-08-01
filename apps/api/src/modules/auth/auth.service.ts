@@ -56,6 +56,29 @@ function isUniqueConflict(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
 }
 
+function verificationUrl(token: string, environment: NodeJS.ProcessEnv = process.env): string {
+  const configuredOrigin = environment.EMAIL_LINK_ORIGIN;
+  if (environment.NODE_ENV === 'production' && !configuredOrigin) {
+    throw new Error('EMAIL_LINK_ORIGIN is required in production.');
+  }
+  const origin = configuredOrigin ?? 'http://127.0.0.1:8081';
+  const parsed = new URL(origin);
+  if (
+    !['http:', 'https:'].includes(parsed.protocol)
+    || parsed.origin !== origin
+    || parsed.pathname !== '/'
+    || parsed.search !== ''
+    || parsed.hash !== ''
+    || parsed.username !== ''
+    || parsed.password !== ''
+  ) {
+    throw new Error('EMAIL_LINK_ORIGIN must be an exact HTTP(S) origin.');
+  }
+  const link = new URL('/auth/verify-email', parsed);
+  link.searchParams.set('token', token);
+  return link.href;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -123,7 +146,7 @@ export class AuthService {
       void this.mailPort.sendEmailVerification({
         to: deliveryEmail,
         recipientName: displayName,
-        verificationUrl: `muchakucha://verify-email?token=${verificationToken}`,
+        verificationUrl: verificationUrl(verificationToken),
       }).catch(() => undefined);
     }
 
@@ -261,7 +284,7 @@ export class AuthService {
       void this.mailPort.sendEmailVerification({
         to: outcome.user.email.trim().normalize('NFC'),
         recipientName: outcome.user.displayName,
-        verificationUrl: `muchakucha://verify-email?token=${nextToken}`,
+        verificationUrl: verificationUrl(nextToken),
       }).catch(() => undefined);
     }
     return { code: 'RESEND_ACCEPTED', retryAfterSeconds: 60 };

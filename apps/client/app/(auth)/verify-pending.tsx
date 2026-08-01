@@ -1,7 +1,12 @@
+import { ApiClient } from '@muchakucha/api-client';
 import { useLocalSearchParams } from 'expo-router';
 import { Linking } from 'react-native';
 
-import { AuthShell, Button, Heading, Stack, Text } from '../../src/ui/primitives';
+import { VerificationPending } from '../../src/features/auth/verification-flow';
+import { AuthShell } from '../../src/ui/primitives';
+
+const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3000';
+const apiClient = new ApiClient(apiOrigin);
 
 export default function VerifyPendingRoute() {
   const { email } = useLocalSearchParams<{ email?: string }>();
@@ -9,19 +14,11 @@ export default function VerifyPendingRoute() {
 
   return (
     <AuthShell>
-      <Stack gap={6}>
-        <Stack gap={2}>
-          <Heading>去邮箱完成验证</Heading>
-          <Text>我们已向 {deliveryAddress} 发送验证链接。打开邮件后即可继续。</Text>
-        </Stack>
-        <Button
-          label="打开邮箱"
-          onPress={() => {
-            void Linking.openURL('mailto:');
-          }}
-        />
-        <Text variant="bodySm">没有收到邮件？稍后可重新发送。</Text>
-      </Stack>
+      <VerificationPending
+        apiClient={apiClient}
+        email={deliveryAddress}
+        onOpenEmail={() => void Linking.openURL('mailto:')}
+      />
     </AuthShell>
   );
 }
