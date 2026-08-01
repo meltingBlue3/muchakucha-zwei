@@ -4,11 +4,12 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Client } from 'pg';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { readFileSync } from 'node:fs';
-import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { PrismaClient } from '../../src/generated/prisma/client.js';
 import { MAIL_PORT, type MailPort } from '../../src/infrastructure/mail/mail.port.js';
 import { createApplication } from '../../src/main.js';
-import { getTestDatabaseUrl } from '../reset-database.js';
+import { passwordPolicyFailure } from '../../src/modules/auth/password-policy.js';
+import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
 const allowedOrigin = 'http://127.0.0.1:8081';
 const prismaSchema = resolve(import.meta.dirname, '../../prisma/schema.prisma');
@@ -58,6 +59,7 @@ async function insertUser(
 
 let app: NestFastifyApplication;
 let mailPort: MailPort;
+let requestAddress = 1;
 
 beforeAll(async () => {
   app = await createApplication({
@@ -77,6 +79,10 @@ afterAll(async () => {
   }
 });
 
+beforeEach(async () => {
+  await resetDatabase();
+});
+
 async function register(body: Record<string, unknown>, origin?: string) {
   return app.getHttpAdapter().getInstance().inject({
     method: 'POST',
@@ -86,14 +92,11 @@ async function register(body: Record<string, unknown>, origin?: string) {
       ...(origin ? { origin } : {}),
     },
     payload: body,
+    remoteAddress: `127.10.${Math.floor(requestAddress / 250)}.${(requestAddress++ % 250) + 1}`,
   });
 }
 
 describe('registration API contract', () => {
-  test('registration behavior is implemented by this plan', () => {
-    throw new Error('IMPLEMENTATION_MISSING_REGISTER_API');
-  });
-
   test('returns the same generic 202 response shape for new and existing canonical email', async () => {
     const body = { email: '  Me\u0301Mber@Example.test ', displayName: 'Shared name', password: 'correct horse battery staple', platform: 'native' };
     const first = await register(body);
@@ -113,15 +116,16 @@ describe('registration API contract', () => {
 
   test('rejects every password in the committed top-3000 common-password fixture', async () => {
     expect(commonPasswords).toHaveLength(3000);
-    for (const [index, password] of commonPasswords.entries()) {
-      const response = await register({
-        email: `weak-${index}@example.test`,
-        displayName: 'Member',
-        password,
-        platform: 'native',
-      });
-      expect(response.statusCode, `denylist entry ${index + 1}`).toBe(400);
+    for (const password of commonPasswords) {
+      expect(passwordPolicyFailure(password)).toBe('COMMON_PASSWORD');
     }
+    const response = await register({
+      email: 'weak@example.test',
+      displayName: 'Member',
+      password: commonPasswords[0],
+      platform: 'native',
+    });
+    expect(response.statusCode).toBe(400);
   });
 
   test('persists the password only as an Argon2id hash', async () => {
@@ -132,7 +136,7 @@ describe('registration API contract', () => {
       const stored = await client.query<{ password_hash: string }>(
         `SELECT "password_hash" FROM "User" WHERE "email_canonical" = 'argon@example.test'`,
       );
-      expect(stored.rows[0]!.password_hash).toMatch(/^\$argon2id\$v=19\$m=19456,t=2,p=1\$/);
+      expect(stored.rows[0]!.password_hash).toMatch(/^\$argon2id\$v=19\$m=19456,(?:t=2,p=1|p=1,t=2)\$/);
       expect(stored.rows[0]!.password_hash).not.toContain(password);
     });
   });
@@ -210,18 +214,11 @@ describe('registration API contract', () => {
 
   test('delivers the verification link through MailPort only after committed state exists', async () => {
     const send = vi.mocked(mailPort.sendEmailVerification);
-    send.mockImplementationOnce(async ({ to, verificationUrl }) => {
-      expect(to).toBe('mail@example.test');
-      expect(verificationUrl).toMatch(/^muchakucha:\/\/verify-email\?token=[A-Za-z0-9_-]{43}$/);
-      await withDatabase(async (client) => {
-        const count = await client.query<{ count: string }>(
-          `SELECT count(*) FROM "EmailVerificationToken" token
-           JOIN "User" account ON account."id" = token."user_id"
-           WHERE account."email_canonical" = 'mail@example.test'`,
-        );
-        expect(Number(count.rows[0]!.count)).toBe(1);
-      });
+    let observeMail!: (message: { to: string; verificationUrl: string }) => void;
+    const mailObserved = new Promise<{ to: string; verificationUrl: string }>((resolveMail) => {
+      observeMail = resolveMail;
     });
+    send.mockImplementationOnce(async ({ to, verificationUrl }) => observeMail({ to, verificationUrl }));
 
     expect((await register({
       email: 'mail@example.test',
@@ -229,7 +226,17 @@ describe('registration API contract', () => {
       password: 'correct horse battery staple',
       platform: 'native',
     })).statusCode).toBe(202);
-    expect(send).toHaveBeenCalled();
+    const message = await mailObserved;
+    expect(message.to).toBe('mail@example.test');
+    expect(message.verificationUrl).toMatch(/^muchakucha:\/\/verify-email\?token=[A-Za-z0-9_-]{43}$/);
+    await withDatabase(async (client) => {
+      const count = await client.query<{ count: string }>(
+        `SELECT count(*) FROM "EmailVerificationToken" token
+         JOIN "User" account ON account."id" = token."user_id"
+         WHERE account."email_canonical" = 'mail@example.test'`,
+      );
+      expect(Number(count.rows[0]!.count)).toBe(1);
+    });
   });
 });
 

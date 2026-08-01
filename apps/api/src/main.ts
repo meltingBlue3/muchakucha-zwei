@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 
 const API_PREFIX = 'api/v1';
@@ -227,7 +227,17 @@ export async function createApplication(
     }
   });
 
-  const document = SwaggerModule.createDocument(
+  const document = createOpenApiDocument(app);
+  SwaggerModule.setup(`${API_PREFIX}/docs`, app, document, {
+    jsonDocumentUrl: `${API_PREFIX}/openapi.json`,
+    ui: false,
+  });
+
+  return app;
+}
+
+export function createOpenApiDocument(app: NestFastifyApplication): OpenAPIObject {
+  return SwaggerModule.createDocument(
     app,
     new DocumentBuilder()
       .setTitle('Muchakucha Zwei API')
@@ -236,12 +246,6 @@ export async function createApplication(
       .addBearerAuth()
       .build(),
   );
-  SwaggerModule.setup(`${API_PREFIX}/docs`, app, document, {
-    jsonDocumentUrl: `${API_PREFIX}/openapi.json`,
-    ui: false,
-  });
-
-  return app;
 }
 
 export async function bootstrap(environment: Environment = process.env): Promise<void> {
