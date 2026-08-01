@@ -16,6 +16,7 @@ export const theme = createTheme({
     destructive: '#B42318',
     destructiveSoft: '#FDE4E1',
     focusRing: '#7B2F25',
+    link: '#7B2F25',
     disabled: '#B7AAA4',
     transparent: 'transparent',
   },

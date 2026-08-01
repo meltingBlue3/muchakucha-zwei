@@ -52,6 +52,7 @@ export const LogoutAction = ({
       <Button label="退出登录" onPress={() => setConfirming(true)} />
       {confirming ? (
         <Stack
+          accessibilityLabel="退出这台设备？"
           accessibilityViewIsModal
           aria-modal
           gap={4}

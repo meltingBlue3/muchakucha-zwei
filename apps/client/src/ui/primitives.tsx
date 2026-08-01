@@ -1,6 +1,6 @@
 import { ThemeProvider, createBox, createText, useTheme } from '@shopify/restyle';
 import type { PropsWithChildren, ReactElement, ReactNode } from 'react';
-import React, { forwardRef, useId, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useId, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -39,6 +39,7 @@ export const Screen = ({ accessibilityLabel, children, testID }: ScreenProps) =>
   return (
     <SafeAreaView
       accessibilityLabel={accessibilityLabel}
+      accessibilityRole={'main' as never}
       style={{ backgroundColor: activeTheme.colors.canvas, flex: 1 }}
       testID={testID}
     >
@@ -95,9 +96,13 @@ export const Text = ({ variant = 'body', ...props }: OwnedTextProps) => (
   <RestyleText allowFontScaling maxFontSizeMultiplier={2} variant={variant} {...props} />
 );
 
-export const Heading = ({ variant = 'heading', ...props }: OwnedTextProps) => (
-  <Text accessibilityRole="header" variant={variant} {...props} />
+export const Heading = forwardRef<React.ElementRef<typeof RestyleText>, OwnedTextProps>(
+  ({ variant = 'heading', ...props }, ref) => (
+    <Text accessibilityRole="header" aria-level={1} ref={ref} variant={variant} {...props} />
+  ),
 );
+
+Heading.displayName = 'Heading';
 
 export const Spinner = ({ label = '正在处理' }: { label?: string }) => {
   const activeTheme = useTheme<Theme>();
@@ -208,10 +213,18 @@ type FieldProps = TextInputProps & {
 export const TextField = forwardRef<NativeTextInput, FieldProps>(
   ({ disabled, error, label, nativeID, onBlur, onFocus, style, ...props }, ref) => {
     const activeTheme = useTheme<Theme>();
+    const preferences = useAccessibilityPreferences();
     const generatedId = useId();
     const inputId = nativeID ?? `field-${generatedId}`;
     const errorId = `${inputId}-error`;
     const [focused, setFocused] = useState(false);
+    useEffect(() => {
+      if (!error || Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+      const timeout = setTimeout(() => {
+        document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+      }, 0);
+      return () => clearTimeout(timeout);
+    }, [error]);
     return (
       <Stack gap={2}>
         <Text nativeID={`${inputId}-label`} variant="label">
@@ -253,6 +266,13 @@ export const TextField = forwardRef<NativeTextInput, FieldProps>(
               lineHeight: activeTheme.typography.body.lineHeight,
               minHeight: activeTheme.controlSizes.field,
               paddingHorizontal: activeTheme.spacing[4],
+              ...(Platform.OS === 'web' && preferences.forcedColors
+                ? {
+                    outlineColor: 'CanvasText',
+                    outlineStyle: 'solid',
+                    outlineWidth: activeTheme.borderWidths.focus,
+                  }
+                : {}),
             },
             style,
           ]}
@@ -353,17 +373,6 @@ export const BrandMark = () => (
   </Inline>
 );
 
-export const AuthShell = ({ children }: PropsWithChildren) => (
-  <Screen>
-    <Box alignSelf="center" maxWidth={theme.layout.authCardMaxWidth} width="100%">
-      <Stack gap={8}>
-        <BrandMark />
-        {children}
-      </Stack>
-    </Box>
-  </Screen>
-);
-
 export const getMotionDuration = (reducedMotion: boolean): number =>
   reducedMotion ? theme.motion.reducedTransitionMs : theme.motion.transitionMs;
 
@@ -371,6 +380,80 @@ export const shouldRenderAbstractFields = (preferences: {
   forcedColors: boolean;
   reducedMotion: boolean;
 }): boolean => !preferences.forcedColors && !preferences.reducedMotion;
+
+const readWebPreference = (query: string): boolean =>
+  Platform.OS === 'web' && typeof window !== 'undefined' && window.matchMedia(query).matches;
+
+const useAccessibilityPreferences = () => {
+  const [reducedMotion, setReducedMotion] = useState(() =>
+    readWebPreference('(prefers-reduced-motion: reduce)'),
+  );
+  const [forcedColors, setForcedColors] = useState(() =>
+    readWebPreference('(forced-colors: active)'),
+  );
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return undefined;
+    const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const forcedQuery = window.matchMedia('(forced-colors: active)');
+    const sync = () => {
+      setReducedMotion(reducedQuery.matches);
+      setForcedColors(forcedQuery.matches);
+    };
+    reducedQuery.addEventListener?.('change', sync);
+    forcedQuery.addEventListener?.('change', sync);
+    sync();
+    return () => {
+      reducedQuery.removeEventListener?.('change', sync);
+      forcedQuery.removeEventListener?.('change', sync);
+    };
+  }, []);
+
+  return { forcedColors, reducedMotion };
+};
+
+export const AuthShell = ({ children }: PropsWithChildren) => {
+  const preferences = useAccessibilityPreferences();
+  const duration = getMotionDuration(preferences.reducedMotion);
+  return (
+    <Screen>
+      {shouldRenderAbstractFields(preferences) ? (
+        <Box
+          accessibilityElementsHidden
+          backgroundColor="coralSoft"
+          borderRadius="full"
+          height={theme.spacing[16]}
+          importantForAccessibility="no-hide-descendants"
+          position="absolute"
+          right={theme.spacing[6]}
+          testID="auth-decoration"
+          top={theme.spacing[6]}
+          width={theme.spacing[16]}
+        />
+      ) : null}
+      <Box
+        alignSelf="center"
+        maxWidth={theme.layout.authCardMaxWidth}
+        testID="auth-shell"
+        width="100%"
+        {...(Platform.OS === 'web'
+          ? {
+              style: {
+                transform: 'none',
+                transitionDuration: `${duration}ms`,
+                transitionProperty: 'opacity',
+              } as never,
+            }
+          : {})}
+      >
+        <Stack gap={8}>
+          <BrandMark />
+          {children}
+        </Stack>
+      </Box>
+    </Screen>
+  );
+};
 
 type LinkTextProps = Omit<PressableProps, 'children'> & { children: ReactNode };
 
@@ -389,7 +472,7 @@ export const LinkText = ({ children, style, ...props }: LinkTextProps) => {
         typeof style === 'function' ? style(state) : style,
       ]}
     >
-      <Text color="coral" variant="label">
+      <Text color="link" variant="label">
         {children}
       </Text>
     </Pressable>
@@ -406,9 +489,13 @@ type StatusPanelProps = {
 
 export const StatusPanel = ({ action, body, heading, kind }: StatusPanelProps) => {
   const activeTheme = useTheme<Theme>();
+  const headingRef = useRef<React.ElementRef<typeof RestyleText>>(null);
   const success = kind === 'success' || kind === 'resetSuccess';
   const Icon = success ? CircleCheck : kind === 'offline' ? Info : CircleAlert;
   const color = success ? activeTheme.colors.teal : kind === 'expired' ? activeTheme.colors.destructive : activeTheme.colors.ink;
+  useEffect(() => {
+    (headingRef.current as unknown as { focus?: () => void } | null)?.focus?.();
+  }, []);
   return (
     <Box
       accessibilityLiveRegion="polite"
@@ -420,7 +507,7 @@ export const StatusPanel = ({ action, body, heading, kind }: StatusPanelProps) =
     >
       <Stack gap={4}>
         <Icon color={color} size={activeTheme.spacing[6]} strokeWidth={activeTheme.controlSizes.iconStroke} />
-        <Heading>{heading}</Heading>
+        <Heading ref={headingRef} tabIndex={-1}>{heading}</Heading>
         <Text>{body}</Text>
         {action}
       </Stack>

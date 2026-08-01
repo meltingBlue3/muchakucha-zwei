@@ -1,5 +1,6 @@
 import type { ApiClient, RegisterDto, RegistrationAcceptedDto } from '@muchakucha/api-client';
 import { Controller, useForm } from 'react-hook-form';
+import { Platform } from 'react-native';
 import { z } from 'zod';
 
 import type { PendingProofStore } from '../../platform/session/pending-proof';
@@ -37,6 +38,21 @@ const fieldMessages: Record<keyof RegistrationValues, string> = {
 
 const isRegistrationField = (value: unknown): value is keyof RegistrationValues =>
   value === 'displayName' || value === 'email' || value === 'password';
+
+const focusFirstInvalidWebField = (): void => {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  let attempts = 0;
+  const focus = () => {
+    const firstInvalid = document.querySelector<HTMLElement>('[aria-invalid="true"]');
+    if (firstInvalid) {
+      firstInvalid.focus();
+    } else if (attempts < 10) {
+      attempts += 1;
+      setTimeout(focus, 16);
+    }
+  };
+  setTimeout(focus, 0);
+};
 
 const getServerFields = (error: unknown): Array<keyof RegistrationValues> => {
   if (typeof error !== 'object' || error === null || !('body' in error)) return [];
@@ -81,9 +97,14 @@ export const RegisterForm = ({
     clearErrors();
     const parsed = registrationSchema.safeParse(values);
     if (!parsed.success) {
+      const firstField = parsed.error.issues
+        .map((issue) => issue.path[0])
+        .find(isRegistrationField);
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
-        if (isRegistrationField(field)) setError(field, { message: issue.message });
+        if (isRegistrationField(field)) {
+          setError(field, { message: issue.message }, { shouldFocus: field === firstField });
+        }
       }
       return;
     }
@@ -196,7 +217,10 @@ export const RegisterForm = ({
         disabled={isSubmitting}
         label="创建账户"
         loading={isSubmitting}
-        onPress={() => void submitRegistration()}
+        onPress={() => {
+          void submitRegistration();
+          focusFirstInvalidWebField();
+        }}
       />
     </Stack>
   );

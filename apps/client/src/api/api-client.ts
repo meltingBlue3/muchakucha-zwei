@@ -57,6 +57,9 @@ function apiErrorCode(error: ApiFailure): string | undefined {
 function mapSessionFailure(error: unknown): never {
   if (error instanceof SessionRestoreError) throw error;
   if (isApiFailure(error)) {
+    if (error.status === 400 && apiErrorCode(error) === 'INVALID_REFRESH_TRANSPORT') {
+      throw new SessionRestoreError({ kind: 'unauthenticated' });
+    }
     if (error.status === 401) {
       const code = apiErrorCode(error);
       throw new SessionRestoreError({

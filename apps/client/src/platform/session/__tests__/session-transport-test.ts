@@ -403,6 +403,19 @@ describe('platform session transport contract', () => {
     ).resolves.toBeNull();
   });
 
+  test('treats an absent Web refresh cookie as an unauthenticated cold start', async () => {
+    jest.mocked(fetch).mockResolvedValueOnce(
+      apiResponse(400, {
+        error: { code: 'INVALID_REFRESH_TRANSPORT', message: 'Refresh credential transport is invalid.' },
+      }) as never,
+    );
+    const transport = createWebSessionTransport(
+      new ApiClient('https://api.example.test') as never,
+    );
+
+    await expect(transport.restore()).resolves.toEqual({ kind: 'unauthenticated' });
+  });
+
   test.each([
     ['network', new TypeError('Network request failed')],
     ['server', apiResponse(503, { error: { code: 'UNAVAILABLE' } })],

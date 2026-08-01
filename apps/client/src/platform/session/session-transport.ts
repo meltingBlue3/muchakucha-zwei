@@ -21,7 +21,7 @@ export type RestoreOutcome =
 
 export type RestoreFailureOutcome = Exclude<
   RestoreOutcome,
-  { kind: 'authenticated' } | { kind: 'unauthenticated' }
+  { kind: 'authenticated' }
 >;
 
 export interface SessionTransport {

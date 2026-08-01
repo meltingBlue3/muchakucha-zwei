@@ -5,6 +5,23 @@ const readSource = (relativePath: string): string => {
   return fs.readFileSync(relativePath, 'utf8');
 };
 
+const sourceFilesUnder = (relativeRoot: string): string[] => {
+  const fs = jest.requireActual<{
+    readdirSync(
+      directory: string,
+      options: { withFileTypes: true },
+    ): Array<{ isDirectory(): boolean; name: string }>;
+  }>('node:fs');
+  const path = jest.requireActual<{ join(...parts: string[]): string }>('node:path');
+  const visit = (directory: string): string[] =>
+    fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const candidate = path.join(directory, entry.name);
+      if (entry.isDirectory()) return visit(candidate);
+      return /\.[cm]?tsx?$/.test(entry.name) && !entry.name.includes('-test.') ? [candidate] : [];
+    });
+  return visit(relativeRoot);
+};
+
 describe('typed design-token and composition contract', () => {
   test('D-14 exposes one Restyle-owned warm, modern, restrained typed theme', () => {
     expect(theme.colors.canvas).toBe('#FFF8F2');
@@ -58,6 +75,16 @@ describe('typed design-token and composition contract', () => {
     ];
     for (const path of tests) {
       expect(readSource(path)).not.toMatch(/rawStyleAllowlist|#[0-9A-Fa-f]{3,8}\b/);
+    }
+  });
+
+  test('rejects raw visual literals across production routes and feature modules', () => {
+    const visualLiteral =
+      /#[0-9A-Fa-f]{3,8}\b|(?:fontSize|borderRadius|padding(?:Horizontal|Vertical)?|margin(?:Horizontal|Vertical)?|gap):\s*\d/;
+    for (const path of [...sourceFilesUnder('app'), ...sourceFilesUnder('src/features')]) {
+      expect({ path, source: readSource(path) }).not.toEqual(
+        expect.objectContaining({ source: expect.stringMatching(visualLiteral) }),
+      );
     }
   });
 
