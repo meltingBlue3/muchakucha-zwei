@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-10-PLAN.md
-last_updated: "2026-08-01T04:07:41.930Z"
+stopped_at: Completed 01-14-PLAN.md
+last_updated: "2026-08-01T04:26:34.286Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 10
-  percent: 37
+  completed_plans: 11
+  percent: 41
 ---
 
 # Project State
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T04:06:51.831Z
-**Stopped at:** Completed 01-10-PLAN.md
+**Last session:** 2026-08-01T04:26:11.074Z
+**Stopped at:** Completed 01-14-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -77,6 +77,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P07 | 16min | 1 tasks | 6 files |
 | Phase 01 P08 | 8min | 1 tasks | 3 files |
 | Phase 01 P10 | 15min | 2 tasks | 11 files |
+| Phase 01 P14 | 17min | 2 tasks | 10 files |
 
 ## Decisions
 
@@ -105,3 +106,6 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Enforce canonical email in PostgreSQL as lower(normalize(btrim(email), NFC)) while preserving the submitted email separately. — Identity equivalence and uniqueness are database-enforced without losing the original delivery/display value.
 - [Phase 01]: Persist only unique lowercase SHA-256 token hashes and bind pending proof validity to active verification state with database CHECK constraints. — Database dumps cannot reveal opaque credentials and invalid terminal-state combinations are rejected.
 - [Phase 01]: Reuse an integration database only after it proves PostgreSQL major 18; otherwise Compose owns deterministic startup and migration. — Fast local reruns remain truthful to the locked database major and never silently fall back to PostgreSQL 15/17.
+- [Phase 01]: Keep all visual values in the Restyle theme while owned primitives expose the D-14 through D-17 component contract. — Preserves one typed cross-platform visual boundary.
+- [Phase 01]: Use explicit Lucide icon subpath imports with a test-only CommonJS resolver. — Keeps Metro tree-shakeable and Jest executable.
+- [Phase 01]: Encode reduced-motion and forced-colors behavior as deterministic primitive helpers while rendering no distracting large illustration. — Makes preference behavior reusable and testable by downstream screens.

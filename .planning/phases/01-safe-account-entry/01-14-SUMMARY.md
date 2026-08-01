@@ -159,10 +159,19 @@ Each task was committed atomically:
 - **Verification:** Primitive tests and the complete client suite pass with the individual imports.
 - **Committed in:** `f07282f`
 
+**4. [Rule 1 - Bug] Corrected canonical progress percentage after the SDK wrote zero**
+
+- **Found during:** Plan close-out
+- **Issue:** `state.update-progress` reported 11/27 plans and 41% but persisted `percent: 0` in STATE frontmatter.
+- **Fix:** Applied the handler's own reported canonical percentage after all SDK-owned progress, metric, decision, session, roadmap, and requirement updates completed.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** STATE now records 11 completed plans, the first incomplete Plan 11, and 41% consistently.
+- **Committed in:** Plan tracking synchronization commit.
+
 ---
 
-**Total deviations:** 3 auto-fixed (3 blocking issues).
-**Impact on plan:** The fixes make the exact planned RED/GREEN commands and strict owned component layer executable without changing visual scope or substituting dependencies.
+**Total deviations:** 4 auto-fixed (1 bug, 3 blocking issues).
+**Impact on plan:** The fixes make the exact planned RED/GREEN commands, strict owned component layer, and execution tracking reliable without changing visual scope or substituting dependencies.
 
 ## Issues Encountered
 
