@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-21-PLAN.md
-last_updated: "2026-08-01T14:13:14.956Z"
+stopped_at: Completed 01-24-PLAN.md
+last_updated: "2026-08-01T14:26:38.863Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 22
-  percent: 81
+  completed_plans: 23
+  percent: 85
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 23 of 27
+**Plan:** 24 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T14:13:14.926Z
-**Stopped at:** Completed 01-21-PLAN.md
+**Last session:** 2026-08-01T14:26:38.849Z
+**Stopped at:** Completed 01-24-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -89,6 +89,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P20 | 10min | 2 tasks | 7 files |
 | Phase 01 P22 | 8min | 2 tasks | 9 files |
 | Phase 01 P21 | 15min | 2 tasks | 12 files |
+| Phase 01 P24 | 10min | 2 tasks | 8 files |
 
 ## Decisions
 
@@ -149,3 +150,5 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Share one module-scoped session transport and state store between root bootstrap and login so authenticated state is observable before protected navigation. — Prevents route-local authentication state from diverging from the root protection boundary.
 - [Phase 01]: Bypass restart restoration only for public registration and token-sanitizing continuation routes; protected and root entry remain splash-owned until restoration resolves. — Preserves deep-link and registration ownership without flashing protected or login content.
 - [Phase 01]: Route every Phase 1 authenticated profile to the no-household handoff and preserve only allowlisted internal intended routes without claiming Today or household behavior. — Keeps D-03 inside the Phase 1 boundary and blocks external redirect injection.
+- [Phase 01]: Derive logout identity exclusively from a verified access JWT sub/sid pair and expose no request-body session or user target. — Prevents caller-selected cross-device or cross-user revocation.
+- [Phase 01]: Allow a valid, unexpired, known but already revoked sid only on the logout route so repeated logout remains 204 while every other protected route still requires an active session. — Preserves required endpoint idempotency without weakening normal authorization.

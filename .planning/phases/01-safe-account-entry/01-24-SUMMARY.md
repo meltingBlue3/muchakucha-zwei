@@ -155,9 +155,18 @@ Each task was committed atomically:
 - **Verification:** Focused login/logout/ASVS run passes all 19 assertions.
 - **Committed in:** `38747f6`
 
+**4. [Rule 1 - Bug] Corrected canonical progress persistence after SDK update**
+
+- **Found during:** Plan close-out
+- **Issue:** `state.update-progress` reported 23/27 summaries and 85% but persisted `percent: 0` in STATE frontmatter.
+- **Fix:** Applied the handler's reported canonical percentage after all SDK-owned tracking updates completed.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** STATE and ROADMAP record 23 completed plans; STATE records 85%.
+- **Committed in:** Plan tracking commit
+
 ---
 
-**Total deviations:** 3 auto-fixed (1 bug, 1 missing critical functionality, 1 blocking issue).
+**Total deviations:** 4 auto-fixed (2 bugs, 1 missing critical functionality, 1 blocking issue).
 **Impact on plan:** All changes are required for truthful idempotent logout and security evidence; password-reset global revocation and other protected-route behavior remain unchanged.
 
 ## Issues Encountered
