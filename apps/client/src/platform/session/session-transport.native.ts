@@ -1,7 +1,14 @@
 import * as SecureStore from 'expo-secure-store';
 
 import {
+  createSessionApiClient,
   SessionRestoreError,
+  type GeneratedSessionClient,
+  type SessionApiClient,
+} from '../../api/api-client';
+import { createRefreshCoordinator } from '../../api/refresh-coordinator';
+
+import {
   type AccessSession,
   type IssuedSession,
   type NativeSessionRequest,
@@ -11,12 +18,20 @@ import {
 
 const REFRESH_TOKEN_KEY = 'muchakucha.session.refresh.v1';
 
-let refreshInFlight: Promise<RestoreOutcome> | null = null;
+const refreshCoordinator = createRefreshCoordinator();
+
+type NativeSessionSource = GeneratedSessionClient | NativeSessionRequest;
 
 export function createNativeSessionTransport(
-  requestSession: NativeSessionRequest,
+  source: NativeSessionSource,
 ): SessionTransport {
   let accessToken: string | null = null;
+  const sessionApi: SessionApiClient | null =
+    typeof source === 'function'
+      ? null
+      : createSessionApiClient(source, () => accessToken);
+  const requestSession: NativeSessionRequest =
+    typeof source === 'function' ? source : sessionApi!.refreshNative;
 
   const clear = async (): Promise<void> => {
     accessToken = null;
@@ -51,9 +66,13 @@ export function createNativeSessionTransport(
 
     try {
       const session = await requestSession(refreshToken);
+      const accepted = await acceptIssuedSession(session);
       return {
         kind: 'authenticated',
-        session: await acceptIssuedSession(session),
+        session:
+          sessionApi === null
+            ? accepted
+            : { ...accepted, currentUser: await sessionApi.getCurrentUser() },
       };
     } catch (error) {
       if (error instanceof SessionRestoreError) {
@@ -67,18 +86,51 @@ export function createNativeSessionTransport(
   };
 
   const refresh = (): Promise<RestoreOutcome> => {
-    if (!refreshInFlight) {
-      refreshInFlight = performRefresh().finally(() => {
-        refreshInFlight = null;
-      });
+    return refreshCoordinator.run(performRefresh);
+  };
+
+  const login = async (
+    credentials: Parameters<SessionTransport['login']>[0],
+  ): Promise<RestoreOutcome> => {
+    if (sessionApi === null) {
+      throw new Error('Login requires the generated session API client.');
     }
-    return refreshInFlight;
+    try {
+      const accepted = await acceptIssuedSession(
+        await sessionApi.login(credentials, 'native'),
+      );
+      return {
+        kind: 'authenticated',
+        session: { ...accepted, currentUser: await sessionApi.getCurrentUser() },
+      };
+    } catch (error) {
+      if (error instanceof SessionRestoreError) return error.outcome;
+      throw error;
+    }
+  };
+
+  const loadCurrentUser = async (): Promise<RestoreOutcome> => {
+    if (sessionApi === null) return refresh();
+    if (accessToken === null) return refresh();
+    try {
+      return {
+        kind: 'authenticated',
+        session: { accessToken, currentUser: await sessionApi.getCurrentUser() },
+      };
+    } catch (error) {
+      if (error instanceof SessionRestoreError) {
+        return error.outcome.kind === 'reauthRequired' ? refresh() : error.outcome;
+      }
+      throw error;
+    }
   };
 
   return {
     acceptIssuedSession,
     clear,
     getAccessToken: () => accessToken,
+    loadCurrentUser,
+    login,
     refresh,
     restore: refresh,
   };

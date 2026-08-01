@@ -1,5 +1,15 @@
 import {
+  createSessionApiClient,
   SessionRestoreError,
+  type GeneratedSessionClient,
+  type SessionApiClient,
+} from '../../api/api-client';
+import {
+  createRefreshCoordinator,
+  createWebRefreshLock,
+} from '../../api/refresh-coordinator';
+
+import {
   type AccessSession,
   type IssuedSession,
   type RestoreOutcome,
@@ -9,12 +19,24 @@ import {
 
 const REFRESH_LOCK_NAME = 'muchakucha-session-refresh';
 
-let refreshInFlight: Promise<RestoreOutcome> | null = null;
+const refreshCoordinator = createRefreshCoordinator(
+  createWebRefreshLock(REFRESH_LOCK_NAME),
+);
+
+type WebSessionSource = GeneratedSessionClient | WebSessionRequest;
 
 export function createWebSessionTransport(
-  requestSession: WebSessionRequest,
+  source: WebSessionSource,
 ): SessionTransport {
   let accessToken: string | null = null;
+  const sessionApi: SessionApiClient | null =
+    typeof source === 'function'
+      ? null
+      : createSessionApiClient(source, () => accessToken);
+  const requestSession: WebSessionRequest =
+    typeof source === 'function'
+      ? source
+      : async () => sessionApi!.refreshWeb();
 
   const clear = async (): Promise<void> => {
     accessToken = null;
@@ -34,9 +56,13 @@ export function createWebSessionTransport(
   const performRefresh = async (): Promise<RestoreOutcome> => {
     try {
       const session = await requestSession({ credentials: 'include' });
+      const accepted = await acceptIssuedSession(session);
       return {
         kind: 'authenticated',
-        session: await acceptIssuedSession(session),
+        session:
+          sessionApi === null
+            ? accepted
+            : { ...accepted, currentUser: await sessionApi.getCurrentUser() },
       };
     } catch (error) {
       if (error instanceof SessionRestoreError) {
@@ -49,26 +75,52 @@ export function createWebSessionTransport(
     }
   };
 
-  const withWebLock = async (): Promise<RestoreOutcome> => {
-    const locks = globalThis.navigator?.locks;
-    return locks
-      ? await locks.request(REFRESH_LOCK_NAME, performRefresh)
-      : performRefresh();
+  const refresh = (): Promise<RestoreOutcome> => {
+    return refreshCoordinator.run(performRefresh);
   };
 
-  const refresh = (): Promise<RestoreOutcome> => {
-    if (!refreshInFlight) {
-      refreshInFlight = withWebLock().finally(() => {
-        refreshInFlight = null;
-      });
+  const login = async (
+    credentials: Parameters<SessionTransport['login']>[0],
+  ): Promise<RestoreOutcome> => {
+    if (sessionApi === null) {
+      throw new Error('Login requires the generated session API client.');
     }
-    return refreshInFlight;
+    try {
+      const accepted = await acceptIssuedSession(
+        await sessionApi.login(credentials, 'web'),
+      );
+      return {
+        kind: 'authenticated',
+        session: { ...accepted, currentUser: await sessionApi.getCurrentUser() },
+      };
+    } catch (error) {
+      if (error instanceof SessionRestoreError) return error.outcome;
+      throw error;
+    }
+  };
+
+  const loadCurrentUser = async (): Promise<RestoreOutcome> => {
+    if (sessionApi === null) return refresh();
+    if (accessToken === null) return refresh();
+    try {
+      return {
+        kind: 'authenticated',
+        session: { accessToken, currentUser: await sessionApi.getCurrentUser() },
+      };
+    } catch (error) {
+      if (error instanceof SessionRestoreError) {
+        return error.outcome.kind === 'reauthRequired' ? refresh() : error.outcome;
+      }
+      throw error;
+    }
   };
 
   return {
     acceptIssuedSession,
     clear,
     getAccessToken: () => accessToken,
+    loadCurrentUser,
+    login,
     refresh,
     restore: refresh,
   };

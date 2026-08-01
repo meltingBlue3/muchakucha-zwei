@@ -35,6 +35,8 @@ function createDependencies(outcome: Parameters<typeof renderFlow>[0] = 'verifie
     acceptIssuedSession: jest.fn().mockResolvedValue({ accessToken: 'access-secret' }),
     clear: jest.fn().mockResolvedValue(undefined),
     getAccessToken: jest.fn().mockReturnValue(null),
+    loadCurrentUser: jest.fn(),
+    login: jest.fn(),
     refresh: jest.fn(),
     restore: jest.fn(),
   };

@@ -7,10 +7,6 @@ import { pendingProofTransport } from '../pending-proof.web';
 import { createNativeSessionTransport } from '../session-transport.native';
 import { createWebSessionTransport } from '../session-transport.web';
 
-const missingBehavior = (marker: string): never => {
-  throw new Error(marker);
-};
-
 const apiResponse = (status: number, body: unknown) => ({
   json: jest.fn().mockResolvedValue(body),
   ok: status >= 200 && status < 300,
@@ -229,7 +225,6 @@ describe('platform session transport contract', () => {
   });
 
   test('native uses generated body refresh, persists rotation, then fetches users/me', async () => {
-    missingBehavior('IMPLEMENTATION_MISSING_REFRESH_WIRING');
     await SecureStore.setItemAsync('muchakucha.session.refresh.v1', 'generation-one');
     const fetchMock = jest.mocked(fetch);
     fetchMock
@@ -279,7 +274,6 @@ describe('platform session transport contract', () => {
   });
 
   test('Web uses generated credentialed cookie refresh without a readable secret', async () => {
-    missingBehavior('IMPLEMENTATION_MISSING_REFRESH_WIRING');
     const fetchMock = jest.mocked(fetch);
     fetchMock
       .mockResolvedValueOnce(apiResponse(200, { accessToken: 'web-access' }) as never)
@@ -312,8 +306,83 @@ describe('platform session transport contract', () => {
     );
   });
 
+  test('login uses the generated platform operation and loads users/me after acceptance', async () => {
+    const fetchMock = jest.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(
+        apiResponse(200, {
+          accessToken: 'login-access',
+          refreshToken: 'login-refresh',
+        }) as never,
+      )
+      .mockResolvedValueOnce(
+        apiResponse(200, {
+          id: 'user-1',
+          email: 'member@example.test',
+          displayName: 'Member',
+          emailVerified: true,
+          hasHousehold: false,
+        }) as never,
+      );
+    const transport = createNativeSessionTransport(
+      new ApiClient('https://api.example.test'),
+    );
+
+    await expect(
+      transport.login({ email: 'member@example.test', password: 'correct horse' }),
+    ).resolves.toMatchObject({
+      kind: 'authenticated',
+      session: { accessToken: 'login-access', currentUser: { id: 'user-1' } },
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'https://api.example.test/api/v1/auth/login',
+    );
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(
+      JSON.stringify({
+        email: 'member@example.test',
+        password: 'correct horse',
+        platform: 'native',
+      }),
+    );
+  });
+
+  test('users/me rejection permits exactly one serialized refresh retry', async () => {
+    const fetchMock = jest.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(
+        apiResponse(401, { error: { code: 'INVALID_ACCESS_TOKEN' } }) as never,
+      )
+      .mockResolvedValueOnce(
+        apiResponse(200, {
+          accessToken: 'retry-access',
+          refreshToken: 'retry-refresh',
+        }) as never,
+      )
+      .mockResolvedValueOnce(
+        apiResponse(200, {
+          id: 'user-1',
+          email: 'member@example.test',
+          displayName: 'Member',
+          emailVerified: true,
+          hasHousehold: false,
+        }) as never,
+      );
+    const transport = createNativeSessionTransport(
+      new ApiClient('https://api.example.test'),
+    );
+    await transport.acceptIssuedSession({
+      accessToken: 'stale-access',
+      refreshToken: 'current-refresh',
+    });
+
+    await expect(transport.loadCurrentUser()).resolves.toMatchObject({
+      kind: 'authenticated',
+      session: { accessToken: 'retry-access', currentUser: { id: 'user-1' } },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   test('maps replay rejection to reauthentication and clears the native credential', async () => {
-    missingBehavior('IMPLEMENTATION_MISSING_REFRESH_WIRING');
     await SecureStore.setItemAsync('muchakucha.session.refresh.v1', 'replayed-token');
     jest.mocked(fetch).mockResolvedValueOnce(
       apiResponse(401, {
@@ -337,7 +406,6 @@ describe('platform session transport contract', () => {
     ['network', new TypeError('Network request failed')],
     ['server', apiResponse(503, { error: { code: 'UNAVAILABLE' } })],
   ])('retains native refresh on %s failure', async (_case, failure) => {
-    missingBehavior('IMPLEMENTATION_MISSING_REFRESH_WIRING');
     await SecureStore.setItemAsync('muchakucha.session.refresh.v1', 'retained-token');
     if (failure instanceof Error) jest.mocked(fetch).mockRejectedValueOnce(failure);
     else jest.mocked(fetch).mockResolvedValueOnce(failure as never);

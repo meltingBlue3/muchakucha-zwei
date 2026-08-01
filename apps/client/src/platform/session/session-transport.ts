@@ -1,7 +1,12 @@
+import type { CurrentUserDto, LoginDto } from '@muchakucha/api-client';
+
+export { SessionRestoreError } from '../../api/api-client';
+
 export type ReauthenticationReason = 'expired' | 'revoked' | 'replayed';
 
 export interface AccessSession {
   accessToken: string;
+  currentUser?: CurrentUserDto;
 }
 
 export interface IssuedSession extends AccessSession {
@@ -19,17 +24,12 @@ export type RestoreFailureOutcome = Exclude<
   { kind: 'authenticated' } | { kind: 'unauthenticated' }
 >;
 
-export class SessionRestoreError extends Error {
-  constructor(readonly outcome: RestoreFailureOutcome) {
-    super(`Session restoration failed: ${outcome.kind}`);
-    this.name = 'SessionRestoreError';
-  }
-}
-
 export interface SessionTransport {
   acceptIssuedSession(session: IssuedSession): Promise<AccessSession>;
   clear(): Promise<void>;
   getAccessToken(): string | null;
+  login(credentials: Omit<LoginDto, 'platform'>): Promise<RestoreOutcome>;
+  loadCurrentUser(): Promise<RestoreOutcome>;
   refresh(): Promise<RestoreOutcome>;
   restore(): Promise<RestoreOutcome>;
 }
