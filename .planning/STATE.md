@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-08-01T03:35:06.599Z"
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-08-01T03:35:34.758Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T03:35:06.593Z
-**Stopped at:** Completed 01-05-PLAN.md
+**Last session:** 2026-08-01T03:35:34.752Z
+**Stopped at:** Completed 01-06-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -73,6 +73,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P04 | 7min | 1 tasks | 6 files |
 | Phase 01 P09 | 4min | 2 tasks | 6 files |
 | Phase 01 P05 | 10min | 1 tasks | 8 files |
+| Phase 01 P06 | 15min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -91,3 +92,5 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Skipped browser contracts use real system assertions rather than fake passes. — Mailpit, HttpOnly cookies, Web storage, multiple browser contexts, axe, focus, zoom, and media preferences remain executable when each owner activates its suite.
 - [Phase 01]: Treat Plan 01-05 as discovery evidence only; no behavioral RED is claimed before an owning plan activates its exact marker. — The 65 Wave 0 contracts are intentionally skipped and production behavior does not exist yet.
 - [Phase 01]: Allow API contract discovery without Docker only while the Prisma schema is absent. — Once Plan 01-10 creates the schema, the existing Docker, migration, and reset path remains mandatory.
+- [Phase 01]: Pin SecLists 2026.1 commit 190c6f7 and derive the runtime denylist deterministically from the 12-128 code-point policy. — Immutable source identity, source/output checksums, and one runtime file prevent policy and fixture drift.
+- [Phase 01]: Pin the ASVS 5.0.0 CSV checksum and normalized applicable-requirement hash for an offline tamper-evident evidence map. — CI can detect identifier or official-text drift without depending on network availability.
