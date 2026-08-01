@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "prisma:generate": "prisma generate",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "pretest": "prisma generate",
     "test": "vitest run",
     "test:quick": "vitest run --project unit",
@@ -13,9 +14,16 @@
     "openapi:check": "pwsh -NoProfile -File ../../scripts/check-openapi-drift.ps1"
   },
   "dependencies": {
+    "@fastify/cookie": "11.1.2",
     "@nestjs/common": "11.1.28",
+    "@nestjs/core": "11.1.28",
+    "@nestjs/platform-fastify": "11.1.28",
+    "@nestjs/swagger": "11.4.6",
+    "@nestjs/throttler": "6.5.0",
     "@prisma/adapter-pg": "7.9.1",
     "@prisma/client": "7.9.1",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.15.1",
     "pg": "8.22.0"
   },
   "devDependencies": {
