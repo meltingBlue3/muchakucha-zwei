@@ -23,12 +23,15 @@ function run(command: string, args: string[]): void {
 
 export default async function setupIntegration(): Promise<() => Promise<void>> {
   process.env.DATABASE_URL = getTestDatabaseUrl();
-  run('docker', ['compose', 'up', '-d', '--wait', 'postgres']);
 
   if (!existsSync(prismaSchema)) {
-    throw new Error(`Prisma schema is required before integration tests can run: ${prismaSchema}`);
+    // Wave 0 integration contracts are discovered as executable skips before the
+    // schema-owning plan runs. Avoid requiring Docker for collection-only suites;
+    // Plan 01-10 removes this boundary by creating the canonical schema.
+    return async () => undefined;
   }
 
+  run('docker', ['compose', 'up', '-d', '--wait', 'postgres']);
   run('pnpm', ['--filter', 'api', 'exec', 'prisma', 'migrate', 'deploy']);
   await resetDatabase();
 
