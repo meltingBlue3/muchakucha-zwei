@@ -167,9 +167,18 @@ Each task was committed atomically:
 - **Verification:** All four Mailpit E2E journeys pass; the temporary process was stopped after verification.
 - **Committed in:** No file change
 
+**4. [Rule 1 - Bug] Corrected canonical progress persistence after SDK update**
+
+- **Found during:** Plan close-out
+- **Issue:** `state.update-progress` correctly reported 17/27 and 63% but persisted `percent: 0` in STATE frontmatter.
+- **Fix:** Applied the handler's own reported canonical percentage after all SDK-owned tracking updates completed.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** STATE records Plan 18 of 27, 17 completed plans, and 63%; ROADMAP records 17/27.
+- **Committed in:** Plan tracking synchronization commit
+
 ---
 
-**Total deviations:** 3 auto-fixed (1 bug, 2 blocking issues).
+**Total deviations:** 4 auto-fixed (2 bugs, 2 blocking issues).
 **Impact on plan:** All fixes were required for truthful end-to-end verification and retained the approved dependency versions, API shape, and platform secret ownership.
 
 ## Issues Encountered
