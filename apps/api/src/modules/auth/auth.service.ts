@@ -239,6 +239,17 @@ export class AuthService {
     throw new Error('Refresh rotation retry budget exhausted.');
   }
 
+  async logout(userId: string, sessionId: string): Promise<void> {
+    await this.prisma.authSession.updateMany({
+      where: {
+        id: sessionId,
+        userId,
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
+    });
+  }
+
   async register(input: RegisterDto): Promise<RegistrationResult> {
     const emailCanonical = input.email.trim().normalize('NFC').toLowerCase();
     const deliveryEmail = input.email.trim().normalize('NFC');

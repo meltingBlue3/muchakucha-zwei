@@ -1,6 +1,9 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+
+export const ALLOW_REVOKED_SESSION = 'auth:allow-revoked-session';
 
 export interface AccessTokenClaims {
   readonly sub: string;
@@ -17,6 +20,7 @@ export class AccessTokenGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -28,11 +32,15 @@ export class AccessTokenGuard implements CanActivate {
     try {
       const claims = await this.jwt.verifyAsync<Record<string, unknown>>(token, { algorithms: ['HS256'] });
       if (typeof claims.sub !== 'string' || typeof claims.sid !== 'string') throw this.unauthorized();
+      const allowRevokedSession = this.reflector.getAllAndOverride<boolean>(ALLOW_REVOKED_SESSION, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? false;
       const session = await this.prisma.authSession.findFirst({
         where: {
           id: claims.sid,
           userId: claims.sub,
-          revokedAt: null,
+          ...(allowRevokedSession ? {} : { revokedAt: null }),
           absoluteEndsAt: { gt: new Date() },
         },
         select: { id: true },

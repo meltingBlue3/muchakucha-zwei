@@ -172,8 +172,12 @@ describe('login API contract', () => {
     const request: { headers: { authorization: string }; auth?: { sub: string; sid: string } } = {
       headers: { authorization: `Bearer ${accessToken}` },
     };
+    class GuardTestController {}
+    const guardTestHandler = (): void => undefined;
     const context = {
       switchToHttp: () => ({ getRequest: () => request }),
+      getClass: () => GuardTestController,
+      getHandler: () => guardTestHandler,
     } as unknown as ExecutionContext;
     const guard = app.get(AccessTokenGuard);
     await expect(guard.canActivate(context)).resolves.toBe(true);

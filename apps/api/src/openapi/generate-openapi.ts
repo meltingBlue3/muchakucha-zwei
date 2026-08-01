@@ -151,6 +151,10 @@ export class ApiClient {
     return this.post('/api/v1/auth/refresh', body, signal);
   }
 
+  async logout(accessToken: string, signal?: AbortSignal): Promise<void> {
+    await this.authenticated<void>('POST', '/api/v1/auth/logout', accessToken, undefined, signal);
+  }
+
   async getMe(accessToken: string, signal?: AbortSignal): Promise<CurrentUserDto> {
     return this.authenticated<CurrentUserDto>('GET', '/api/v1/users/me', accessToken, undefined, signal);
   }
@@ -217,7 +221,7 @@ export class ApiClient {
   }
 
   private async authenticated<T>(
-    method: 'GET' | 'PATCH',
+    method: 'GET' | 'PATCH' | 'POST',
     path: string,
     accessToken: string,
     body?: unknown,
@@ -233,7 +237,8 @@ export class ApiClient {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       ...(signal === undefined ? {} : { signal }),
     });
-    const payload: unknown = await response.json();
+    const text = await response.text();
+    const payload: unknown = text === '' ? undefined : JSON.parse(text);
     if (!response.ok) {
       throw new ApiClientError(response.status, payload);
     }
@@ -275,8 +280,9 @@ async function generate(): Promise<void> {
       || document.components.schemas.RefreshDto === undefined
       || document.components.schemas.RefreshResponseDto === undefined
       || document.paths['/api/v1/auth/login']?.post?.operationId !== 'login'
-      || document.paths['/api/v1/auth/refresh']?.post?.operationId !== 'refresh') {
-      throw new Error('OpenAPI login or refresh operations are missing or unstable.');
+      || document.paths['/api/v1/auth/refresh']?.post?.operationId !== 'refresh'
+      || document.paths['/api/v1/auth/logout']?.post?.operationId !== 'logout') {
+      throw new Error('OpenAPI login, refresh, or logout operations are missing or unstable.');
     }
     if (document.paths['/api/v1/auth/email-verifications/complete']?.post?.operationId !== 'completeEmailVerification'
       || document.paths['/api/v1/auth/email-verifications/resend']?.post?.operationId !== 'resendEmailVerification') {

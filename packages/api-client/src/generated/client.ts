@@ -50,6 +50,10 @@ export class ApiClient {
     return this.post('/api/v1/auth/refresh', body, signal);
   }
 
+  async logout(accessToken: string, signal?: AbortSignal): Promise<void> {
+    await this.authenticated<void>('POST', '/api/v1/auth/logout', accessToken, undefined, signal);
+  }
+
   async getMe(accessToken: string, signal?: AbortSignal): Promise<CurrentUserDto> {
     return this.authenticated<CurrentUserDto>('GET', '/api/v1/users/me', accessToken, undefined, signal);
   }
@@ -116,7 +120,7 @@ export class ApiClient {
   }
 
   private async authenticated<T>(
-    method: 'GET' | 'PATCH',
+    method: 'GET' | 'PATCH' | 'POST',
     path: string,
     accessToken: string,
     body?: unknown,
@@ -132,7 +136,8 @@ export class ApiClient {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       ...(signal === undefined ? {} : { signal }),
     });
-    const payload: unknown = await response.json();
+    const text = await response.text();
+    const payload: unknown = text === '' ? undefined : JSON.parse(text);
     if (!response.ok) {
       throw new ApiClientError(response.status, payload);
     }

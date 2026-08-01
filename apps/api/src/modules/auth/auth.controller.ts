@@ -1,5 +1,5 @@
-import { BadRequestException, Body, Controller, Headers, HttpCode, Post, Req, Res } from '@nestjs/common';
-import { ApiAcceptedResponse, ApiBadRequestResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Headers, HttpCode, Post, Req, Res, SetMetadata, UseGuards } from '@nestjs/common';
+import { ApiAcceptedResponse, ApiBadRequestResponse, ApiBearerAuth, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
@@ -18,6 +18,7 @@ import {
   RequestPasswordResetDto,
 } from './dto/request-password-reset.dto.js';
 import { CompletePasswordResetDto } from './dto/complete-password-reset.dto.js';
+import { AccessTokenGuard, ALLOW_REVOKED_SESSION, type AccessTokenClaims } from './access-token.guard.js';
 
 const PENDING_PROOF_MAX_AGE_SECONDS = 24 * 60 * 60;
 const PENDING_PROOF_PATH = '/api/v1/auth/email-verifications';
@@ -36,6 +37,11 @@ interface CookieReply {
 
 interface CookieRequest {
   cookies: Record<string, string | undefined>;
+}
+
+interface LogoutRequest extends CookieRequest {
+  auth?: AccessTokenClaims;
+  body?: unknown;
 }
 
 function cookieNames(): { pending: string; refresh: string } {
@@ -119,6 +125,35 @@ export class AuthController {
       return { accessToken: result.accessToken };
     }
     return result;
+  }
+
+  @Post('logout')
+  @HttpCode(204)
+  @UseGuards(AccessTokenGuard)
+  @SetMetadata(ALLOW_REVOKED_SESSION, true)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'logout' })
+  @ApiNoContentResponse({ description: 'Current device session revoked and Web refresh cookie cleared.' })
+  @ApiBadRequestResponse({ description: 'Logout does not accept a user or session target.' })
+  async logout(
+    @Req() request: LogoutRequest,
+    @Res({ passthrough: true }) reply: CookieReply,
+  ): Promise<void> {
+    if (
+      request.body !== undefined
+      && (typeof request.body !== 'object' || request.body === null || Object.keys(request.body).length > 0)
+    ) {
+      throw new BadRequestException({
+        code: 'INVALID_LOGOUT_TARGET',
+        message: 'Logout does not accept a user or session target.',
+      });
+    }
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+
+    await this.authService.logout(request.auth.sub, request.auth.sid);
+    this.clearRefreshCookie(reply);
   }
 
   @Post('register')
@@ -257,6 +292,17 @@ export class AuthController {
       sameSite: 'lax',
       path: REFRESH_COOKIE_PATH,
       maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
+    });
+  }
+
+  private clearRefreshCookie(reply: CookieReply): void {
+    const production = process.env.NODE_ENV === 'production';
+    reply.setCookie(cookieNames().refresh, '', {
+      httpOnly: true,
+      secure: production,
+      sameSite: 'lax',
+      path: REFRESH_COOKIE_PATH,
+      maxAge: 0,
     });
   }
 }

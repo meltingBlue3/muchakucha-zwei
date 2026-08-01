@@ -40,20 +40,25 @@ async function insertVerifiedUser(): Promise<string> {
 let app: NestFastifyApplication;
 let requestAddress = 1;
 
-async function login(platform: 'native' | 'web') {
+async function login(platform: 'native' | 'web', origin = allowedOrigin) {
   return app.getHttpAdapter().getInstance().inject({
     method: 'POST',
     url: '/api/v1/auth/login',
     headers: {
       'content-type': 'application/json',
-      ...(platform === 'web' ? { origin: allowedOrigin } : {}),
+      ...(platform === 'web' ? { origin } : {}),
     },
     payload: { email: 'logout@example.test', password, platform },
     remoteAddress: `127.60.${Math.floor(requestAddress / 250)}.${(requestAddress++ % 250) + 1}`,
   });
 }
 
-async function logout(accessToken: string, body?: Record<string, unknown>, cookie?: string) {
+async function logout(
+  accessToken: string,
+  body?: Record<string, unknown>,
+  cookie?: string,
+  origin = allowedOrigin,
+) {
   return app.getHttpAdapter().getInstance().inject({
     method: 'POST',
     url: '/api/v1/auth/logout',
@@ -61,7 +66,7 @@ async function logout(accessToken: string, body?: Record<string, unknown>, cooki
       authorization: `Bearer ${accessToken}`,
       'content-type': 'application/json',
       ...(cookie ? { cookie } : {}),
-      ...(cookie ? { origin: allowedOrigin } : {}),
+      ...(cookie ? { origin } : {}),
     },
     payload: body ?? {},
   });
@@ -135,22 +140,32 @@ describe('current-device logout API contract', () => {
   });
 
   test('clears the Web refresh cookie with matching name, path, SameSite, HttpOnly, and Secure topology', async () => {
-    await insertVerifiedUser();
-    const deviceA = await login('web');
-    const { accessToken } = deviceA.json() as { accessToken: string };
-    const issuedCookie = deviceA.headers['set-cookie'] as string;
-    const response = await logout(accessToken, undefined, issuedCookie.split(';')[0]);
-    const clearedCookie = response.headers['set-cookie'] as string;
-    expect(response.statusCode).toBe(204);
-    expect(clearedCookie).toContain('mk_refresh_dev=;');
-    expect(clearedCookie).toContain('Max-Age=0');
-    expect(clearedCookie).toContain('Path=/api/v1/auth');
-    expect(clearedCookie).toMatch(/HttpOnly/i);
-    expect(clearedCookie).toMatch(/SameSite=Lax/i);
-    expect(clearedCookie).not.toMatch(/; Secure/i);
+    const productionOrigin = 'https://app.example.test';
+    process.env.NODE_ENV = 'production';
+    process.env.WEB_ORIGIN = productionOrigin;
+    try {
+      await insertVerifiedUser();
+      const deviceA = await login('web', productionOrigin);
+      const { accessToken } = deviceA.json() as { accessToken: string };
+      const issuedCookie = deviceA.headers['set-cookie'] as string;
+      const response = await logout(accessToken, undefined, issuedCookie.split(';')[0], productionOrigin);
+      const clearedCookie = response.headers['set-cookie'] as string;
+      expect(response.statusCode).toBe(204);
+      for (const cookie of [issuedCookie, clearedCookie]) {
+        expect(cookie).toContain('__Secure-mk_refresh=');
+        expect(cookie).toContain('Path=/api/v1/auth');
+        expect(cookie).toMatch(/HttpOnly/i);
+        expect(cookie).toMatch(/SameSite=Lax/i);
+        expect(cookie).toMatch(/; Secure/i);
+      }
+      expect(clearedCookie).toContain('Max-Age=0');
+    } finally {
+      process.env.NODE_ENV = 'test';
+      process.env.WEB_ORIGIN = allowedOrigin;
+    }
   });
 
-  test('leaves a second device session valid while the logged-out device cannot refresh', async () => {
+  test('prevents the logged-out device refresh token from being used again', async () => {
     const userId = await insertVerifiedUser();
     const deviceA = await login('native');
     const deviceB = await login('native');
