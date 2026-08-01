@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-08-01T01:53:42.522Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-08-01T02:35:49.319Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 1
-  percent: 0
+  completed_plans: 2
+  percent: 7
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 2 of 27
+**Plan:** 3 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T01:53:42.516Z
-**Stopped at:** Completed 01-01-PLAN.md
+**Last session:** 2026-08-01T02:35:49.312Z
+**Stopped at:** Completed 01-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -68,8 +68,12 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
 | Phase 01 P01 | 2min | 1 tasks | 1 files |
+| Phase 01 P02 | 40min | 2 tasks | 9 files |
 
 ## Decisions
 
 - [Phase 01]: Use expo@57.0.9 with react@19.2.3 and react-native@0.86.2. — Expo SDK 57 official compatibility and template override the research draft react@19.2.8 pin.
 - [Phase 01]: Install only the audited official package pins in Plan 01-02; no substitutions or preview packages. — The blocking supply-chain review approved the complete set before any package-manager mutation.
+- [Phase 01]: Pin pnpm at 10.34.5 and TypeScript at stable 5.x version 5.9.3. — TypeScript 7 is outside the project-locked stable 5.x stack.
+- [Phase 01]: Use isolated local test ports 55432, 11025, and 18025. — Avoid collisions with developer PostgreSQL and mail services while keeping tests deterministic.
+- [Phase 01]: Keep production origins and SMTP provider credentials deferred to Phase 6 release gates. — Phase 1 needs explicit local origins without prematurely choosing deployment providers.
