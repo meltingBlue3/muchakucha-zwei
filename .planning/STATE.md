@@ -5,16 +5,15 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-25-PLAN.md
-last_updated: "2026-08-01T15:20:35.739Z"
+stopped_at: Completed 01-26-PLAN.md
+last_updated: "2026-08-01T17:54:02.383Z"
 last_activity: 2026-08-01
-last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 25
-  percent: 93
+  completed_plans: 26
+  percent: 96
 ---
 
 # Project State
@@ -22,9 +21,9 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 26 of 27
+**Plan:** 27 of 27
 **Status:** Ready to execute
-**Last activity:** 2026-08-01 — Phase 01 execution started
+**Last activity:** 2026-08-01
 
 ## Project Reference
 
@@ -59,8 +58,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T15:20:35.733Z
-**Stopped at:** Completed 01-25-PLAN.md
+**Last session:** 2026-08-01T17:53:56.519Z
+**Stopped at:** Completed 01-26-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -92,6 +91,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P24 | 10min | 2 tasks | 8 files |
 | Phase 01 P23 | 20min | 2 tasks | 7 files |
 | Phase 01 P25 | 16min | 2 tasks | 8 files |
+| Phase 01 P26 | 11min | 2 tasks | 16 files |
 
 ## Decisions
 
@@ -159,3 +159,6 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Preserve the server's generic invalid-or-expired credential boundary while exposing accessible expired, used, and invalid recovery panels as client states. — This keeps the server security contract while completing client recovery semantics.
 - [Phase 01]: Clear platform-local and in-memory session state only after the generated logout operation returns a server outcome; availability failures retain the credential for safe retry.
 - [Phase 01]: Preserve an authenticated /profile target during restoration instead of replacing every authenticated route with the Phase 1 household handoff.
+- [Phase 01]: Use one deterministic SMTP/HTTP mailbox process for the complete Playwright run when the pinned Mailpit image is unavailable.
+- [Phase 01]: Bypass throttling only when NODE_ENV=test and Playwright explicitly sets E2E_DISABLE_RATE_LIMITS=true; production and integration security tests retain real limits.
+- [Phase 01]: Use a disposable tmpfs-backed PostgreSQL 18 fallback for verification without changing the committed Compose image pin.
