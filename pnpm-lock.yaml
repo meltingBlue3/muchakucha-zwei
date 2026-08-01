@@ -143,6 +143,55 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@26.1.2)(jsdom@20.0.3)(vite@8.2.0(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))
 
+  apps/client:
+    dependencies:
+      '@shopify/restyle':
+        specifier: 2.4.5
+        version: 2.4.5(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      '@tanstack/react-query':
+        specifier: 5.101.4
+        version: 5.101.4(react@19.2.3)
+      expo:
+        specifier: 57.0.9
+        version: 57.0.9(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.8)(expo-router@57.0.9)(react-dom@19.2.8(react@19.2.3))(react-native-worklets@0.11.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
+      expo-router:
+        specifier: 57.0.9
+        version: 57.0.9(faa32fbf496f0fcb99fbc0e2f89a8268)
+      expo-secure-store:
+        specifier: 57.0.1
+        version: 57.0.1(expo@57.0.9)
+      lucide-react-native:
+        specifier: 1.28.0
+        version: 1.28.0(react-native-svg@15.15.5(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      react:
+        specifier: 19.2.3
+        version: 19.2.3
+      react-hook-form:
+        specifier: 7.83.0
+        version: 7.83.0(react@19.2.3)
+      react-native:
+        specifier: 0.86.2
+        version: 0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@testing-library/react-native':
+        specifier: 14.0.1
+        version: 14.0.1(jest@30.4.2(@types/node@26.1.2))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)(test-renderer@1.2.0(@types/react@19.2.18)(react@19.2.3))
+      '@types/jest':
+        specifier: 30.0.0
+        version: 30.0.0
+      jest:
+        specifier: 30.4.2
+        version: 30.4.2(@types/node@26.1.2)
+      jest-expo:
+        specifier: 57.0.3
+        version: 57.0.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(expo@57.0.9)(jest@30.4.2(@types/node@26.1.2))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
 packages:
 
   '@adobe/css-tools@4.5.0':

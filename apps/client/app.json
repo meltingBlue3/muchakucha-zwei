@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Muchakucha Zwei",
+    "slug": "muchakucha-zwei",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "muchakucha-zwei",
+    "userInterfaceStyle": "automatic",
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "android": {
+      "package": "app.muchakucha.zwei"
+    },
+    "ios": {
+      "bundleIdentifier": "app.muchakucha.zwei",
+      "associatedDomains": []
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
