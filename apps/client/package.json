@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@muchakucha/api-client": "workspace:*",
     "@shopify/restyle": "2.4.5",
     "@tanstack/react-query": "5.101.4",
     "expo": "57.0.9",
@@ -19,6 +20,7 @@
     "expo-secure-store": "57.0.1",
     "lucide-react-native": "1.28.0",
     "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-hook-form": "7.83.0",
     "react-native": "0.86.2",
     "react-native-web": "0.21.2",

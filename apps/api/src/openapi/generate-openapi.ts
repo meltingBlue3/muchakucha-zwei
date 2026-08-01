@@ -22,7 +22,7 @@ export interface RegistrationAcceptedDto {
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
-import type { RegisterDto, RegistrationAcceptedDto } from './models.js';
+import type { RegisterDto, RegistrationAcceptedDto } from './models';
 
 export class ApiClientError extends Error {
   constructor(readonly status: number, readonly body: unknown) {
@@ -52,8 +52,8 @@ export class ApiClient {
 `;
 
 const indexSource = `// Generated from openapi.json. Do not edit.
-export * from './client.js';
-export * from './models.js';
+export * from './client';
+export * from './models';
 `;
 
 async function generate(): Promise<void> {

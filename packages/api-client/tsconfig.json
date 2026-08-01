@@ -3,8 +3,8 @@
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023", "DOM"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "noEmit": true
   },
   "include": ["src/**/*.ts"]

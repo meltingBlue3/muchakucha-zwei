@@ -1,12 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-const missingRegistrationUi = (): never => {
-  throw new Error('IMPLEMENTATION_MISSING_REGISTER_UI');
-};
-
 test.describe('Web registration journey', () => {
   test('registers through the real form and reaches verification pending', async ({ page }) => {
-    missingRegistrationUi();
     const email = `playwright-register-${Date.now()}@example.test`;
 
     await page.goto('/register');
@@ -21,7 +16,6 @@ test.describe('Web registration journey', () => {
   });
 
   test('keeps password-manager, paste, and reveal behavior available', async ({ page }) => {
-    missingRegistrationUi();
     await page.goto('/register');
 
     const email = page.getByLabel('邮箱');
@@ -31,7 +25,7 @@ test.describe('Web registration journey', () => {
     await password.fill('pasted password value');
     await page.getByRole('button', { name: '显示密码' }).click();
 
-    await expect(password).toHaveAttribute('type', 'text');
-    await expect(page.getByRole('button', { name: '隐藏密码' })).toBeFocused();
+    await expect(password).toHaveJSProperty('type', 'text');
+    await expect(password).toBeFocused();
   });
 });

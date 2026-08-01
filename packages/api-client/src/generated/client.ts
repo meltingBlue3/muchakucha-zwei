@@ -1,5 +1,5 @@
 // Generated from openapi.json. Do not edit.
-import type { RegisterDto, RegistrationAcceptedDto } from './models.js';
+import type { RegisterDto, RegistrationAcceptedDto } from './models';
 
 export class ApiClientError extends Error {
   constructor(readonly status: number, readonly body: unknown) {
