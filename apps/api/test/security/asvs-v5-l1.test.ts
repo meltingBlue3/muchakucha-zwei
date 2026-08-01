@@ -57,6 +57,7 @@ const EXPECTED_IDS = [
 type AsvsRow = {
   id: string;
   level: string;
+  applicability: string;
   requirement: string;
   testPath: string;
   assertion: string;
@@ -86,9 +87,23 @@ function parseAsvsRows(markdown: string): AsvsRow[] {
         .slice(1, -1)
         .split('|')
         .map((cell) => cell.trim().replaceAll('\\|', '|'));
-      expect(cells, `Malformed ASVS mapping row: ${line}`).toHaveLength(5);
-      const [id, level, requirement, testPath, assertion] = cells as [string, string, string, string, string];
-      return { id, level, requirement, testPath: testPath.replaceAll('`', ''), assertion: assertion.replaceAll('`', '') };
+      expect(cells, `Malformed ASVS mapping row: ${line}`).toHaveLength(6);
+      const [id, level, applicability, requirement, testPath, assertion] = cells as [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ];
+      return {
+        id,
+        level,
+        applicability,
+        requirement,
+        testPath: testPath.replaceAll('`', ''),
+        assertion: assertion.replaceAll('`', ''),
+      };
     });
 }
 
@@ -130,6 +145,7 @@ describe('OWASP ASVS 5.0.0 L1 security evidence', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(new Set(ids)).toEqual(new Set(EXPECTED_IDS));
     expect(rows.every(({ level }) => level === 'L1')).toBe(true);
+    expect(rows.every(({ applicability }) => applicability === 'Applicable')).toBe(true);
 
     const byId = new Map(rows.map((row) => [row.id, row]));
     const normalizedRequirements = EXPECTED_IDS.map((id) => `${id}\t${byId.get(id)!.requirement}\n`).join('');
