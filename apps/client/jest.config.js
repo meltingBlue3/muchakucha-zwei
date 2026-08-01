@@ -31,6 +31,9 @@ module.exports = {
   clearMocks: true,
   restoreMocks: true,
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  moduleNameMapper: {
+    '^lucide-react-native/icons/(.*)$': '<rootDir>/node_modules/lucide-react-native/dist/cjs/icons/$1.js',
+  },
   // React Native 0.86's environment uses Jest 29's ModuleMocker. Jest 30 calls
   // this scoped cleanup hook, so add the forward-compatible no-secret shim.
   testEnvironment: reactNativeEnvironment,

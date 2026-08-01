@@ -191,6 +191,9 @@ importers:
       '@types/jest':
         specifier: 30.0.0
         version: 30.0.0
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
       jest:
         specifier: 30.4.2
         version: 30.4.2(@types/node@26.1.2)
@@ -7499,7 +7502,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.86.2': {}
 
