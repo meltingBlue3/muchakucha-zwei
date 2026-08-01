@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 01
 current_phase_name: safe-account-entry
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-08-01T02:48:32.700Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-08-01T03:00:19.417Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 27
-  completed_plans: 3
-  percent: 11
+  completed_plans: 4
+  percent: 15
 ---
 
 # Project State
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 **Phase:** 01 (safe-account-entry) — EXECUTING
-**Plan:** 4 of 27
+**Plan:** 5 of 27
 **Status:** Ready to execute
 **Last activity:** 2026-08-01 — Phase 01 execution started
 
@@ -59,8 +59,8 @@ Approve this roadmap, then discuss and plan Phase 1.
 
 ## Session
 
-**Last session:** 2026-08-01T02:48:19.896Z
-**Stopped at:** Completed 01-03-PLAN.md
+**Last session:** 2026-08-01T03:00:19.411Z
+**Stopped at:** Completed 01-04-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -70,6 +70,7 @@ Approve this roadmap, then discuss and plan Phase 1.
 | Phase 01 P01 | 2min | 1 tasks | 1 files |
 | Phase 01 P02 | 40min | 2 tasks | 9 files |
 | Phase 01 P03 | 8min | 1 tasks | 9 files |
+| Phase 01 P04 | 7min | 1 tasks | 6 files |
 
 ## Decisions
 
@@ -81,3 +82,6 @@ Approve this roadmap, then discuss and plan Phase 1.
 - [Phase 01]: Split API tests into named unit and integration Vitest projects. — Quick tests avoid PostgreSQL while integration tests remain serial and migrated.
 - [Phase 01]: Guard destructive database resets with loopback and test-name checks. — Preserves migration history and prevents accidental non-test database truncation.
 - [Phase 01]: Require discovery and an exact caller marker for valid RED evidence. — Arbitrary nonzero exits cannot be misreported as expected missing behavior.
+- [Phase 01]: Keep the approved Expo 57.0.9, React 19.2.3, and React Native 0.86.2 trio in the client workspace. — Preserves the human-approved compatibility and supply-chain boundary.
+- [Phase 01]: Bridge the React Native Jest 29 environment to the approved Jest 30 runner in configuration. — Enables executable client tests without substituting approved packages.
+- [Phase 01]: Keep production association domains empty until the Phase 6 release gate. — Phase 1 defines a local scheme without claiming unselected public domains.
