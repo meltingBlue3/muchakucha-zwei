@@ -8,6 +8,7 @@ test.describe('Web authentication accessibility matrix', () => {
     test(`has no axe violations and keeps the auth shell usable at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/login');
+      await expect(page.getByRole('main')).toBeVisible();
       await expect(page.getByRole('button', { name: '登录' })).toBeVisible();
       const results = await new AxeBuilder({ page }).analyze();
       expect(results.violations).toEqual([]);

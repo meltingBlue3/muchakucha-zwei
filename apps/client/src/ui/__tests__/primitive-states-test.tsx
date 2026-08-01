@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 import * as primitives from '../primitives';
 import {
@@ -11,6 +11,7 @@ import {
   IconButton,
   MuchakuchaThemeProvider,
   PasswordField,
+  Screen,
   Spinner,
   StatusPanel,
   Text,
@@ -36,6 +37,19 @@ describe('Restyle-owned primitive state contract', () => {
         'AuthShell', 'LinkText', 'StatusPanel',
       ]),
     );
+  });
+
+  test('Screen does not send Web landmark roles to native views', async () => {
+    expect(Platform.OS).not.toBe('web');
+    const view = await renderOwned(
+      <Screen testID="screen">
+        <Text>内容</Text>
+      </Screen>,
+    );
+    const screen = view.getByTestId('screen');
+
+    expect(screen.props.accessibilityRole).toBeUndefined();
+    expect(screen.props.role).toBeUndefined();
   });
 
   test('TextField owns rest, focus, filled, invalid, and disabled states with a persistent associated label', async () => {

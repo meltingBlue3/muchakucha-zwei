@@ -39,7 +39,7 @@ export const Screen = ({ accessibilityLabel, children, testID }: ScreenProps) =>
   return (
     <SafeAreaView
       accessibilityLabel={accessibilityLabel}
-      accessibilityRole={'main' as never}
+      role={Platform.OS === 'web' ? 'main' : undefined}
       style={{ backgroundColor: activeTheme.colors.canvas, flex: 1 }}
       testID={testID}
     >
