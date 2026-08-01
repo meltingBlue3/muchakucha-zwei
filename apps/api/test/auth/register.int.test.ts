@@ -2,13 +2,21 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Client } from 'pg';
-import { describe, expect, test } from 'vitest';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { readFileSync } from 'node:fs';
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { PrismaClient } from '../../src/generated/prisma/client.js';
+import { MAIL_PORT, type MailPort } from '../../src/infrastructure/mail/mail.port.js';
+import { createApplication } from '../../src/main.js';
 import { getTestDatabaseUrl } from '../reset-database.js';
 
-const apiOrigin = process.env.API_ORIGIN ?? 'http://127.0.0.1:18025';
+const allowedOrigin = 'http://127.0.0.1:8081';
 const prismaSchema = resolve(import.meta.dirname, '../../prisma/schema.prisma');
 const authSchemaExists = existsSync(prismaSchema);
+const commonPasswords = readFileSync(
+  resolve(import.meta.dirname, '../../src/modules/auth/data/common-passwords-top-3000.txt'),
+  'utf8',
+).trimEnd().split('\n');
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -48,49 +56,114 @@ async function insertUser(
   return result.rows[0]!.id;
 }
 
+let app: NestFastifyApplication;
+let mailPort: MailPort;
+
+beforeAll(async () => {
+  app = await createApplication({
+    ...process.env,
+    NODE_ENV: 'test',
+    WEB_ORIGIN: allowedOrigin,
+  });
+  await app.init();
+  await app.getHttpAdapter().getInstance().ready();
+  mailPort = app.get<MailPort>(MAIL_PORT);
+  vi.spyOn(mailPort, 'sendEmailVerification').mockResolvedValue(undefined);
+});
+
+afterAll(async () => {
+  if (app !== undefined) {
+    await app.close();
+  }
+});
+
 async function register(body: Record<string, unknown>, origin?: string) {
-  return fetch(`${apiOrigin}/api/v1/auth/register`, {
+  return app.getHttpAdapter().getInstance().inject({
     method: 'POST',
+    url: '/api/v1/auth/register',
     headers: {
       'content-type': 'application/json',
       ...(origin ? { origin } : {}),
     },
-    body: JSON.stringify(body),
+    payload: body,
   });
 }
 
-describe.skip('registration API contract', () => {
+describe('registration API contract', () => {
+  test('registration behavior is implemented by this plan', () => {
+    throw new Error('IMPLEMENTATION_MISSING_REGISTER_API');
+  });
+
   test('returns the same generic 202 response shape for new and existing canonical email', async () => {
-    const body = { email: 'Member@Example.test', displayName: 'Member', password: 'correct horse battery staple' };
+    const body = { email: '  Me\u0301Mber@Example.test ', displayName: 'Shared name', password: 'correct horse battery staple', platform: 'native' };
     const first = await register(body);
-    const duplicate = await register(body);
-    expect([first.status, duplicate.status]).toEqual([202, 202]);
-    expect(await duplicate.json()).toEqual(await first.json());
+    const duplicate = await register({ ...body, email: 'm\u00e9mber@example.test' });
+    expect([first.statusCode, duplicate.statusCode]).toEqual([202, 202]);
+    expect(duplicate.json()).toMatchObject({ code: 'REGISTRATION_ACCEPTED', pendingProof: expect.any(String) });
+    expect(first.json()).toMatchObject({ code: 'REGISTRATION_ACCEPTED', pendingProof: expect.any(String) });
+
+    await withDatabase(async (client) => {
+      const users = await client.query<{ email: string; email_canonical: string; display_name: string }>(
+        `SELECT "email", "email_canonical", "display_name" FROM "User" WHERE "email_canonical" = $1`,
+        [canonicalizeEmail(body.email)],
+      );
+      expect(users.rows).toEqual([{ email: body.email, email_canonical: canonicalizeEmail(body.email), display_name: 'Shared name' }]);
+    });
   });
 
   test('rejects every password in the committed top-3000 common-password fixture', async () => {
-    const response = await register({ email: 'weak@example.test', displayName: 'Member', password: 'password' });
-    expect(response.status).toBe(400);
+    expect(commonPasswords).toHaveLength(3000);
+    for (const [index, password] of commonPasswords.entries()) {
+      const response = await register({
+        email: `weak-${index}@example.test`,
+        displayName: 'Member',
+        password,
+        platform: 'native',
+      });
+      expect(response.statusCode, `denylist entry ${index + 1}`).toBe(400);
+    }
   });
 
   test('persists the password only as an Argon2id hash', async () => {
-    const response = await register({ email: 'argon@example.test', displayName: 'Member', password: 'correct horse battery staple' });
-    expect(response.status).toBe(202);
-    // The owning schema/API plan replaces this HTTP-only probe with a direct migrated-DB assertion.
+    const password = 'correct horse battery staple';
+    const response = await register({ email: 'argon@example.test', displayName: 'Member', password, platform: 'native' });
+    expect(response.statusCode).toBe(202);
+    await withDatabase(async (client) => {
+      const stored = await client.query<{ password_hash: string }>(
+        `SELECT "password_hash" FROM "User" WHERE "email_canonical" = 'argon@example.test'`,
+      );
+      expect(stored.rows[0]!.password_hash).toMatch(/^\$argon2id\$v=19\$m=19456,t=2,p=1\$/);
+      expect(stored.rows[0]!.password_hash).not.toContain(password);
+    });
   });
 
   test('rejects blank, overlong, and unexpected registration fields', async () => {
-    const response = await register({ email: '', displayName: '', password: '', role: 'admin' });
-    expect(response.status).toBe(400);
+    const invalidBodies = [
+      { email: '', displayName: '', password: '', platform: 'native' },
+      { email: 'long@example.test', displayName: 'Member', password: 'x'.repeat(129), platform: 'native' },
+      { email: 'role@example.test', displayName: 'Member', password: 'correct horse battery staple', platform: 'native', role: 'admin' },
+    ];
+    for (const body of invalidBodies) {
+      expect((await register(body)).statusCode).toBe(400);
+    }
   });
 
   test('issues Web pending proof only as a bounded HttpOnly cookie and omits it from JSON', async () => {
     const response = await register(
       { email: 'web@example.test', displayName: 'Member', password: 'correct horse battery staple', platform: 'web' },
-      'http://127.0.0.1:8081',
+      allowedOrigin,
     );
-    expect(response.headers.get('set-cookie')).toMatch(/HttpOnly/i);
-    expect(JSON.stringify(await response.json())).not.toMatch(/pending.*proof/i);
+    expect(response.statusCode).toBe(202);
+    expect(response.headers['set-cookie']).toMatch(/mk_pending_proof_dev=.*HttpOnly.*SameSite=Lax/i);
+    expect(response.headers['set-cookie']).toContain('Path=/api/v1/auth/email-verifications');
+    expect(response.headers['set-cookie']).toMatch(/Max-Age=86400/i);
+    expect(JSON.stringify(response.json())).not.toMatch(/pending.*proof/i);
+
+    const invalidOrigin = await register(
+      { email: 'evil@example.test', displayName: 'Member', password: 'correct horse battery staple', platform: 'web' },
+      'http://evil.example',
+    );
+    expect(invalidOrigin.statusCode).toBe(400);
   });
 
   test('returns native pending proof for secure storage without exposing persisted plaintext', async () => {
@@ -100,7 +173,63 @@ describe.skip('registration API contract', () => {
       password: 'correct horse battery staple',
       platform: 'native',
     });
-    expect(await response.json()).toMatchObject({ pendingProof: expect.any(String) });
+    expect(response.statusCode).toBe(202);
+    const payload = response.json<{ pendingProof: string }>();
+    expect(payload).toMatchObject({ pendingProof: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) });
+    await withDatabase(async (client) => {
+      const stored = await client.query<{ token_hash: string; pending_proof_hash: string }>(
+        `SELECT "token_hash", "pending_proof_hash" FROM "EmailVerificationToken" token
+         JOIN "User" account ON account."id" = token."user_id"
+         WHERE account."email_canonical" = 'native@example.test'`,
+      );
+      expect(stored.rows[0]!.token_hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(stored.rows[0]!.pending_proof_hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(stored.rows[0]!.pending_proof_hash).not.toBe(payload.pendingProof);
+    });
+  });
+
+  test('keeps concurrent canonical registrations atomic while allowing duplicate display names', async () => {
+    const base = { displayName: 'Duplicate nickname', password: 'correct horse battery staple', platform: 'native' };
+    const [first, equivalent, other] = await Promise.all([
+      register({ ...base, email: '  Race@Example.test ' }),
+      register({ ...base, email: 'race@example.test' }),
+      register({ ...base, email: 'other-race@example.test' }),
+    ]);
+    expect([first.statusCode, equivalent.statusCode, other.statusCode]).toEqual([202, 202, 202]);
+    await withDatabase(async (client) => {
+      const canonicalCount = await client.query<{ count: string }>(
+        `SELECT count(*) FROM "User" WHERE "email_canonical" = 'race@example.test'`,
+      );
+      const nicknameCount = await client.query<{ count: string }>(
+        `SELECT count(*) FROM "User" WHERE "display_name" = 'Duplicate nickname'`,
+      );
+      expect(Number(canonicalCount.rows[0]!.count)).toBe(1);
+      expect(Number(nicknameCount.rows[0]!.count)).toBe(2);
+    });
+  });
+
+  test('delivers the verification link through MailPort only after committed state exists', async () => {
+    const send = vi.mocked(mailPort.sendEmailVerification);
+    send.mockImplementationOnce(async ({ to, verificationUrl }) => {
+      expect(to).toBe('mail@example.test');
+      expect(verificationUrl).toMatch(/^muchakucha:\/\/verify-email\?token=[A-Za-z0-9_-]{43}$/);
+      await withDatabase(async (client) => {
+        const count = await client.query<{ count: string }>(
+          `SELECT count(*) FROM "EmailVerificationToken" token
+           JOIN "User" account ON account."id" = token."user_id"
+           WHERE account."email_canonical" = 'mail@example.test'`,
+        );
+        expect(Number(count.rows[0]!.count)).toBe(1);
+      });
+    });
+
+    expect((await register({
+      email: 'mail@example.test',
+      displayName: 'Mail member',
+      password: 'correct horse battery staple',
+      platform: 'native',
+    })).statusCode).toBe(202);
+    expect(send).toHaveBeenCalled();
   });
 });
 
