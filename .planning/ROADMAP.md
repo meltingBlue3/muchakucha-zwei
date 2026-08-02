@@ -129,20 +129,61 @@ Plans:
 **Plans:** 13 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 02-01-PLAN.md — Create a household from the D-01 handoff and display its authoritative owner result inside `/households/new`.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 02-02-PLAN.md — Produce and consume guarded household listing, device restore/switch, shared cards, and explicit accessChanged recovery.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 02-03-PLAN.md — Enter a concrete household destination and view its isolated, totally ordered roster.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 02-04-PLAN.md — Rename the explicitly identified current household without an unnecessary confirmation.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 02-05-PLAN.md — Send a privacy-preserving invitation from the real settings UI through API, PostgreSQL, and mail.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 02-06-PLAN.md — Preview, authenticate back to, and explicitly accept an invitation atomically.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 02-07-PLAN.md — Manage invitation statuses, resend, and confirmed revocation.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 02-08-PLAN.md — Promote and demote non-owner members under the D-09 permission matrix.
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 02-09-PLAN.md — Remove non-owner members with D-10 confirmation and D-12 recovery.
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 02-10-PLAN.md — Transfer the database owner pointer with safe-default final confirmation.
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
 - [ ] 02-11-PLAN.md — Hand ownership to a successor and leave atomically.
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
 - [ ] 02-12-PLAN.md — Close responsive accessibility, exact-level ASVS, migration, and full-regression gates.
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
 - [ ] 02-13-PLAN.md — Accept the complete household collaboration journey on a real Android target.
+
+**Cross-cutting constraints:**
+
+- Per D-12, membership loss freezes household actions, clears the lost household cache and device persistence, renders the explicit accessChanged explanation first, and only an explicit user action continues to /households when memberships remain or to the equal D-01 create/accept handoff when none remain; it never automatically selects or enters another household.
 
 ### Phase 3: 共享家庭日历
 
