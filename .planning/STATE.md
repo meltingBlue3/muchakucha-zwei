@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 2
 current_phase_name: 家庭组与成员协作
 status: planning
-stopped_at: Phase 2 context gathered
-last_updated: "2026-08-02T01:31:55.164Z"
+stopped_at: Phase 2 UI-SPEC approved
+last_updated: "2026-08-02T02:01:24.383Z"
 last_activity: 2026-08-02
 progress:
   total_phases: 6
@@ -58,9 +58,9 @@ Discuss and plan Phase 2: 家庭组与成员协作.
 
 ## Session
 
-**Last session:** 2026-08-02T01:31:55.159Z
-**Stopped at:** Phase 2 context gathered
-**Resume file:** .planning/phases/02-household-member-collaboration/02-CONTEXT.md
+**Last session:** 2026-08-02T02:01:24.376Z
+**Stopped at:** Phase 2 UI-SPEC approved
+**Resume file:** .planning/phases/02-household-member-collaboration/02-UI-SPEC.md
 
 ## Performance Metrics
 
