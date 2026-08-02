@@ -130,11 +130,11 @@ Plans:
 
 Plans:
 
-- [ ] 02-01-PLAN.md — Harden exact RED selection, then create a routed household and become its pointer-designated owner.
-- [ ] 02-02-PLAN.md — List, restore, switch, and invalidate device-local household context through authenticated startup.
-- [ ] 02-03-PLAN.md — View a totally ordered current-household roster and rename an explicitly identified destination.
-- [ ] 02-04-PLAN.md — Expose privacy-preserving seven-day invitation sending through the migrated REST/mail boundary.
-- [ ] 02-05-PLAN.md — Complete the visible current-household invitation-send journey.
+- [ ] 02-01-PLAN.md — Create a household from the D-01 handoff and display its authoritative owner result inside `/households/new`.
+- [ ] 02-02-PLAN.md — Produce and consume guarded household listing, device restore/switch, shared cards, and explicit accessChanged recovery.
+- [ ] 02-03-PLAN.md — Enter a concrete household destination and view its isolated, totally ordered roster.
+- [ ] 02-04-PLAN.md — Rename the explicitly identified current household without an unnecessary confirmation.
+- [ ] 02-05-PLAN.md — Send a privacy-preserving invitation from the real settings UI through API, PostgreSQL, and mail.
 - [ ] 02-06-PLAN.md — Preview, authenticate back to, and explicitly accept an invitation atomically.
 - [ ] 02-07-PLAN.md — Manage invitation statuses, resend, and confirmed revocation.
 - [ ] 02-08-PLAN.md — Promote and demote non-owner members under the D-09 permission matrix.
