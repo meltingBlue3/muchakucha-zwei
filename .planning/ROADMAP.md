@@ -126,22 +126,23 @@ Plans:
 4. 客户端始终清楚显示当前家庭，并在创建或编辑家庭数据前保持上下文明确。
 5. 跨家庭访问被拒绝；邀请接受、成员移除和所有权转移具备事务一致性，任何操作都不会留下无 owner 家庭。
 
-**Plans:** 12 plans
+**Plans:** 13 plans
 
 Plans:
 
-- [ ] 02-01-PLAN.md — Create a household, become its pointer-designated owner, and enter the isolated member view.
-- [ ] 02-02-PLAN.md — Restore, switch, and invalidate device-local household context through authenticated startup.
-- [ ] 02-03-PLAN.md — View the current household roster and rename an explicitly identified destination.
-- [ ] 02-04-PLAN.md — Send privacy-preserving seven-day member invitations through the migrated mail boundary.
-- [ ] 02-05-PLAN.md — Preview, authenticate back to, and explicitly accept an invitation atomically.
-- [ ] 02-06-PLAN.md — Manage invitation statuses, resend, and confirmed revocation.
-- [ ] 02-07-PLAN.md — Promote and demote non-owner members under the D-09 permission matrix.
-- [ ] 02-08-PLAN.md — Remove non-owner members with D-10 confirmation and D-12 recovery.
-- [ ] 02-09-PLAN.md — Transfer the database owner pointer with safe-default final confirmation.
-- [ ] 02-10-PLAN.md — Hand ownership to a successor and leave atomically.
-- [ ] 02-11-PLAN.md — Close responsive accessibility, ASVS, migration, and full-regression gates.
-- [ ] 02-12-PLAN.md — Accept the complete household collaboration journey on a real Android target.
+- [ ] 02-01-PLAN.md — Harden exact RED selection, then create a routed household and become its pointer-designated owner.
+- [ ] 02-02-PLAN.md — List, restore, switch, and invalidate device-local household context through authenticated startup.
+- [ ] 02-03-PLAN.md — View a totally ordered current-household roster and rename an explicitly identified destination.
+- [ ] 02-04-PLAN.md — Expose privacy-preserving seven-day invitation sending through the migrated REST/mail boundary.
+- [ ] 02-05-PLAN.md — Complete the visible current-household invitation-send journey.
+- [ ] 02-06-PLAN.md — Preview, authenticate back to, and explicitly accept an invitation atomically.
+- [ ] 02-07-PLAN.md — Manage invitation statuses, resend, and confirmed revocation.
+- [ ] 02-08-PLAN.md — Promote and demote non-owner members under the D-09 permission matrix.
+- [ ] 02-09-PLAN.md — Remove non-owner members with D-10 confirmation and D-12 recovery.
+- [ ] 02-10-PLAN.md — Transfer the database owner pointer with safe-default final confirmation.
+- [ ] 02-11-PLAN.md — Hand ownership to a successor and leave atomically.
+- [ ] 02-12-PLAN.md — Close responsive accessibility, exact-level ASVS, migration, and full-regression gates.
+- [ ] 02-13-PLAN.md — Accept the complete household collaboration journey on a real Android target.
 
 ### Phase 3: 共享家庭日历
 
