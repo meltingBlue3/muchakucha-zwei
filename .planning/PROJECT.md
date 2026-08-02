@@ -14,11 +14,10 @@ Muchakucha Zwei 是一个面向家庭成员的共享协作应用，用于共同�
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] 用户可以通过邮箱和密码注册、验证邮箱、登录、重置密码并安全地保持会话。— Validated in Phase 1: Safe Account Entry（Android 核心流程通过；离线与无障碍设备检查为已接受风险）。
 
 ### Active
 
-- [ ] 用户可以通过邮箱和密码注册、验证邮箱、登录、重置密码并安全地保持会话。
 - [ ] 任意已注册用户可以创建家庭组，或通过邀请加入其他家庭组。
 - [ ] 用户可以属于多个家庭组，家庭数据按家庭组严格隔离。
 - [ ] 家庭组支持 owner、admin 和 member 角色以及安全的所有权管理。
@@ -93,5 +92,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-31 after initialization*
-
+*Last updated: 2026-08-02 after Phase 1 completion*
