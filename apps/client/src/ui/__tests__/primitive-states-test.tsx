@@ -1,6 +1,7 @@
 import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
+import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 import * as primitives from '../primitives';
 import {
@@ -22,8 +23,17 @@ import {
 } from '../primitives';
 import { theme } from '../theme';
 
+const testSafeAreaMetrics: Metrics = {
+  frame: { height: 640, width: 320, x: 0, y: 0 },
+  insets: { bottom: 0, left: 0, right: 0, top: 24 },
+};
+
 const renderOwned = (node: React.ReactElement) =>
-  render(<MuchakuchaThemeProvider>{node}</MuchakuchaThemeProvider>);
+  render(
+    <SafeAreaProvider initialMetrics={testSafeAreaMetrics}>
+      <MuchakuchaThemeProvider>{node}</MuchakuchaThemeProvider>
+    </SafeAreaProvider>,
+  );
 
 const flattenedStyle = (node: { props: { style?: unknown } }) =>
   StyleSheet.flatten(node.props.style) as Record<string, unknown>;
@@ -48,6 +58,7 @@ describe('Restyle-owned primitive state contract', () => {
     );
     const screen = view.getByTestId('screen');
 
+    expect(screen.type).toBe('RNCSafeAreaView');
     expect(screen.props.accessibilityRole).toBeUndefined();
     expect(screen.props.role).toBeUndefined();
   });

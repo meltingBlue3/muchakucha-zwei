@@ -6,7 +6,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   TextInput as NativeTextInput,
   View,
@@ -14,6 +13,7 @@ import {
   type TextInputProps,
   type ViewProps,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import CircleAlert from 'lucide-react-native/icons/circle-alert';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
 import Eye from 'lucide-react-native/icons/eye';
