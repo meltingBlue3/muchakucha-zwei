@@ -1,4 +1,5 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { useCallback, useState } from 'react';
 
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import {
@@ -91,6 +92,38 @@ describe('password reset flow contract', () => {
     expect(replaceTokenBearingLocation.mock.invocationCallOrder[0]).toBeLessThan(
       (apiClient.completePasswordReset as jest.Mock).mock.invocationCallOrder[0]!,
     );
+  });
+
+  test('sanitizes the native route after render without updating navigation during render', async () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    function NavigationHarness() {
+      const [, setSanitized] = useState(false);
+      const replaceTokenBearingLocation = useCallback(() => {
+        setSanitized(true);
+      }, []);
+
+      return (
+        <MuchakuchaThemeProvider>
+          <ResetPasswordLanding
+            apiClient={createApi()}
+            onInvalidLink={jest.fn()}
+            onRequestNew={jest.fn()}
+            onSuccess={jest.fn()}
+            replaceTokenBearingLocation={replaceTokenBearingLocation}
+            token={token}
+          />
+        </MuchakuchaThemeProvider>
+      );
+    }
+
+    try {
+      await render(<NavigationHarness />);
+      const consoleMessages = consoleError.mock.calls.flat().join(' ');
+      expect(consoleMessages).not.toContain('Cannot update a component');
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   test('validates the new password on blur and rejects the common-password error safely', async () => {

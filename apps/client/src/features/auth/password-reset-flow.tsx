@@ -1,6 +1,6 @@
 import type { ApiClient } from '@muchakucha/api-client';
 import { Controller, useForm } from 'react-hook-form';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
 import {
@@ -286,16 +286,12 @@ export const ResetPasswordLanding = ({
   replaceTokenBearingLocation,
   ...formProps
 }: ResetPasswordLandingProps) => {
-  const sanitized = useRef(false);
-  const stopSanitizing = useRef<(() => void) | undefined>(undefined);
   const [outcome, setOutcome] = useState<ResetLinkOutcome>();
 
-  if (!sanitized.current) {
-    stopSanitizing.current = replaceTokenBearingLocation() ?? undefined;
-    sanitized.current = true;
-  }
-
-  useEffect(() => () => stopSanitizing.current?.(), []);
+  useEffect(() => {
+    const stopSanitizing = replaceTokenBearingLocation() ?? undefined;
+    return () => stopSanitizing?.();
+  }, [replaceTokenBearingLocation]);
 
   if (outcome) return <ResetOutcomePanel onAction={onRequestNew} outcome={outcome} />;
 
