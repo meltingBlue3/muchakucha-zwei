@@ -622,6 +622,64 @@
         ]
       }
     },
+    "/api/v1/households/{id}/ownership/transfer": {
+      "post": {
+        "operationId": "transferOwnership",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferOwnershipDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ownership successfully transferred. Returns the authoritative household projection with the new owner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Successor is the current owner (self-transfer) or the request is malformed."
+          },
+          "403": {
+            "description": "Actor is not the current owner."
+          },
+          "409": {
+            "description": "Stale ownership state or a concurrent transfer changed the owner pointer."
+          },
+          "404": {
+            "description": "Household or successor membership not found, or actor is not a member."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login",
@@ -1323,6 +1381,20 @@
         },
         "required": [
           "role"
+        ]
+      },
+      "TransferOwnershipDto": {
+        "type": "object",
+        "properties": {
+          "successorMembershipId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Membership ID of the successor who will become the new owner. Must be a different existing member in the same household.",
+            "example": "00000000-0000-0000-0000-000000000000"
+          }
+        },
+        "required": [
+          "successorMembershipId"
         ]
       },
       "LoginDto": {

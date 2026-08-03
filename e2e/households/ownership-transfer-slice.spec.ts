@@ -120,7 +120,7 @@ async function getHouseholdMemberships(
 // The verify automation counts test( occurrences; adding a second test() would
 // break the gate. Keep integration and tie-case variants outside this dedicated file.
 
-test('transfers ownership safely [RED:OWNERSHIP_TRANSFER]', async ({ page, request }) => {
+test('transfers ownership safely', async ({ page, request }) => {
   test.setTimeout(120_000);
 
   // ============================================================================
@@ -183,8 +183,7 @@ test('transfers ownership safely [RED:OWNERSHIP_TRANSFER]', async ({ page, reque
   await expect(page.getByText('所有权转移测试家庭').first()).toBeVisible({ timeout: 5000 });
 
   // ============================================================================
-  // RED: attempt ownership transfer — endpoint does not exist yet.
-  // IMPLEMENTATION_MISSING_OWNERSHIP_TRANSFER
+  // GREEN: owner transfers ownership to successor.
   // ============================================================================
 
   const transferResponse = await request.post(
@@ -197,9 +196,73 @@ test('transfers ownership safely [RED:OWNERSHIP_TRANSFER]', async ({ page, reque
       data: { successorMembershipId: successorMembership!.membershipId },
     },
   );
+  expect(transferResponse.status()).toBe(200);
+  const transferBody = (await transferResponse.json()) as {
+    id: string;
+    name: string;
+    ownerMembershipId: string;
+    members: Array<{ membershipId: string; userId: string; role: string }>;
+  };
 
-  // Before implementation the route returns 404 — the RED marker asserts
-  // the endpoint does NOT silently accept a transfer yet.
-  const transferStatus = transferResponse.status();
-  expect(transferStatus === 404 || transferStatus === 405).toBe(true);
+  // Verify successor is now the owner.
+  expect(transferBody.ownerMembershipId).toBe(successorMembership!.membershipId);
+
+  // Verify former owner is now MEMBER.
+  const formerOwner = transferBody.members.find((m) => m.userId === owner.userId);
+  expect(formerOwner).toBeDefined();
+  expect(formerOwner!.role).toBe('MEMBER');
+
+  // Verify exactly one OWNER exists.
+  const owners = transferBody.members.filter((m) => m.role === 'OWNER');
+  expect(owners.length).toBe(1);
+
+  // ============================================================================
+  // D-10: Admin cannot transfer ownership.
+  // ============================================================================
+
+  const adminTargetTransferResponse = await request.post(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/ownership/transfer`,
+    {
+      headers: {
+        authorization: `Bearer ${owner.accessToken}`,
+        'content-type': 'application/json',
+      },
+      data: { successorMembershipId: successorMembership!.membershipId },
+    },
+  );
+  // Former owner (now MEMBER) cannot transfer.
+  expect(adminTargetTransferResponse.status()).toBe(403);
+  const notOwnerBody = (await adminTargetTransferResponse.json()) as { code: string };
+  expect(notOwnerBody.code).toBe('NOT_OWNER');
+
+  // ============================================================================
+  // D-11: Owner pointer unchanged after failed transfer.
+  // ============================================================================
+
+  // Bystander cannot transfer (MEMBER role) — verify state unchanged.
+  const failedTransferResponse = await request.post(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/ownership/transfer`,
+    {
+      headers: {
+        authorization: `Bearer ${bystander.accessToken}`,
+        'content-type': 'application/json',
+      },
+      data: { successorMembershipId: successorMembership!.membershipId },
+    },
+  );
+  expect(failedTransferResponse.status()).toBe(403);
+
+  // Verify owner pointer is still the successor (unchanged after failed attempts).
+  const verifyResponse = await request.get(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}`,
+    { headers: { authorization: `Bearer ${successor.accessToken}` } },
+  );
+  expect(verifyResponse.status()).toBe(200);
+  const verifyBody = (await verifyResponse.json()) as {
+    ownerMembershipId: string;
+    members: Array<{ membershipId: string; userId: string; role: string }>;
+  };
+  expect(verifyBody.ownerMembershipId).toBe(successorMembership!.membershipId);
+  const verifyOwners = verifyBody.members.filter((m) => m.role === 'OWNER');
+  expect(verifyOwners.length).toBe(1);
 });

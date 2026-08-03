@@ -27,7 +27,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsIn, IsString } from 'class-validator';
+import { IsEmail, IsIn, IsString, IsUUID } from 'class-validator';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import {
   CreateHouseholdDto,
@@ -150,6 +150,18 @@ export class ChangeMemberRoleDto {
   })
   @IsIn(['ADMIN', 'MEMBER'], { message: 'role must be ADMIN or MEMBER' })
   role!: 'ADMIN' | 'MEMBER';
+}
+
+// ---- Ownership Transfer DTO (D-10, D-11) ----
+
+export class TransferOwnershipDto {
+  @ApiProperty({
+    format: 'uuid',
+    description: 'Membership ID of the successor who will become the new owner. Must be a different existing member in the same household.',
+    example: '00000000-0000-0000-0000-000000000000',
+  })
+  @IsUUID()
+  successorMembershipId!: string;
 }
 
 interface AuthenticatedRequest {
@@ -442,6 +454,40 @@ export class HouseholdsController {
       request.auth.sub,
       id,
       targetMembershipId,
+    );
+    if (result === null) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+    return result;
+  }
+
+  // ---- Ownership transfer (D-10, D-11) ----
+
+  @Post(':id/ownership/transfer')
+  @HttpCode(200)
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'transferOwnership' })
+  @ApiOkResponse({ type: GetHouseholdResponseDto, description: 'Ownership successfully transferred. Returns the authoritative household projection with the new owner.' })
+  @ApiBadRequestResponse({ description: 'Successor is the current owner (self-transfer) or the request is malformed.' })
+  @ApiForbiddenResponse({ description: 'Actor is not the current owner.' })
+  @ApiConflictResponse({ description: 'Stale ownership state or a concurrent transfer changed the owner pointer.' })
+  @ApiNotFoundResponse({ description: 'Household or successor membership not found, or actor is not a member.' })
+  async transferOwnership(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: TransferOwnershipDto,
+  ): Promise<GetHouseholdResponseDto> {
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+    const result = await this.householdsService.transferOwnership(
+      request.auth.sub,
+      id,
+      input.successorMembershipId,
     );
     if (result === null) {
       throw new NotFoundException({

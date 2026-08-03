@@ -27,6 +27,7 @@ import type {
   ResendInvitationResponseDto,
   RevokeInvitationResponseDto,
   ChangeMemberRoleDto,
+  TransferOwnershipDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -288,6 +289,21 @@ export class ApiClient {
       `/api/v1/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}`,
       accessToken,
       undefined,
+      signal,
+    );
+  }
+
+  async transferOwnership(
+    accessToken: string,
+    householdId: string,
+    body: TransferOwnershipDto,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/ownership/transfer`,
+      accessToken,
+      body,
       signal,
     );
   }

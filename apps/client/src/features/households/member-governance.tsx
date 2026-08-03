@@ -1,4 +1,4 @@
-import type { ApiClient, ChangeMemberRoleDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
+import type { ApiClient, ChangeMemberRoleDto, GetHouseholdMemberDto, TransferOwnershipDto } from '@muchakucha/api-client';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
@@ -6,7 +6,7 @@ import { useCallback } from 'react';
  * Minimal API surface required by member governance operations.
  * Testable with a fake client supplying only the required methods.
  */
-export type GovernanceApi = Pick<ApiClient, 'changeMemberRole' | 'removeMember'>;
+export type GovernanceApi = Pick<ApiClient, 'changeMemberRole' | 'removeMember' | 'transferOwnership'>;
 
 export interface ChangeRoleParams {
   accessToken: string;
@@ -121,17 +121,58 @@ export function governanceAction(
 }
 
 /**
+ * D-10 / D-11: returns whether the current actor can transfer ownership
+ * to the given successor. Only the current owner can initiate a transfer,
+ * and only to a different same-household member (not themselves).
+ */
+export function canTransferOwnership(
+  actorRole: 'OWNER' | 'ADMIN' | 'MEMBER',
+  actorIsOwner: boolean,
+  successorIsSelf: boolean,
+): boolean {
+  // Only the owner can transfer.
+  if (!actorIsOwner || actorRole !== 'OWNER') return false;
+  // Cannot transfer to self.
+  if (successorIsSelf) return false;
+  return true;
+}
+
+export interface TransferOwnershipParams {
+  accessToken: string;
+  householdId: string;
+  successorMembershipId: string;
+}
+
+/**
+ * Calls the server-authoritative ownership transfer endpoint.
+ * Returns the updated household projection on success.
+ * Throws ApiClientError on failure — callers handle error display.
+ */
+export async function transferOwnershipApi(
+  apiClient: GovernanceApi,
+  params: TransferOwnershipParams,
+): Promise<{ members: GetHouseholdMemberDto[] }> {
+  return apiClient.transferOwnership(
+    params.accessToken,
+    params.householdId,
+    { successorMembershipId: params.successorMembershipId },
+  );
+}
+
+/**
  * Hook that provides governance action callbacks for the member list.
  *
  * Promotion (MEMBER->ADMIN) returns a direct API call handler.
  * Demotion (ADMIN->MEMBER) navigates to the dedicated confirmation page
  * per D-10 safe-action-first contract.
  * Removal navigates to the dedicated D-10 consequence confirmation page.
+ * Transfer navigates to the D-10 ownership transfer page.
  */
 export interface UseMemberGovernanceResult {
   promote: ((membershipId: string) => void) | undefined;
   demote: ((membershipId: string) => void) | undefined;
   remove: ((membershipId: string) => void) | undefined;
+  transfer: ((membershipId: string) => void) | undefined;
   /** Whether any governance mutation is pending. */
   isBusy: boolean;
 }
@@ -175,10 +216,21 @@ export function useMemberGovernance(
     [router, householdId],
   );
 
+  const transfer = useCallback(
+    (membershipId: string) => {
+      void router.push(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        `/households/${encodeURIComponent(householdId)}/ownership/transfer?successorMembershipId=${encodeURIComponent(membershipId)}` as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      );
+    },
+    [router, householdId],
+  );
+
   // When actor role is MEMBER, return undefined callbacks.
   if (actorRole === 'MEMBER') {
-    return { promote: undefined, demote: undefined, remove: undefined, isBusy: false };
+    return { promote: undefined, demote: undefined, remove: undefined, transfer: undefined, isBusy: false };
   }
 
-  return { promote, demote, remove, isBusy: false };
+  return { promote, demote, remove, transfer, isBusy: false };
 }

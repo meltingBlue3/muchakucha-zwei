@@ -187,3 +187,8 @@ export interface RevokeInvitationResponseDto {
 export interface ChangeMemberRoleDto {
   role: 'ADMIN' | 'MEMBER';
 }
+
+export interface TransferOwnershipDto {
+  /** Membership ID of the successor who will become the new owner. */
+  successorMembershipId: string;
+}

@@ -195,6 +195,11 @@ export interface RevokeInvitationResponseDto {
 export interface ChangeMemberRoleDto {
   role: 'ADMIN' | 'MEMBER';
 }
+
+export interface TransferOwnershipDto {
+  /** Membership ID of the successor who will become the new owner. */
+  successorMembershipId: string;
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
@@ -226,6 +231,7 @@ import type {
   ResendInvitationResponseDto,
   RevokeInvitationResponseDto,
   ChangeMemberRoleDto,
+  TransferOwnershipDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -491,6 +497,21 @@ export class ApiClient {
     );
   }
 
+  async transferOwnership(
+    accessToken: string,
+    householdId: string,
+    body: TransferOwnershipDto,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'POST',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/ownership/transfer\`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(\`\${this.baseUrl}\${path}\`, {
       method: 'POST',
@@ -662,6 +683,13 @@ async function generate(): Promise<void> {
     if (removeMemberPath?.operationId !== 'removeMember'
       || removeMemberPath?.security === undefined) {
       throw new Error('OpenAPI removeMember operation is missing or unstable.');
+    }
+
+    const transferOwnershipPath = document.paths['/api/v1/households/{id}/ownership/transfer']?.post;
+    if (transferOwnershipPath?.operationId !== 'transferOwnership'
+      || transferOwnershipPath?.security === undefined
+      || document.components?.schemas?.TransferOwnershipDto === undefined) {
+      throw new Error('OpenAPI transferOwnership operation or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

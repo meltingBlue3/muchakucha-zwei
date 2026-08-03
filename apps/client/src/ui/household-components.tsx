@@ -719,6 +719,88 @@ export const ConfirmationPage = ({
   </View>
 );
 
+// ---- FinalConfirmation (D-10 ownership transfer) ----
+
+export interface FinalConfirmationProps {
+  heading: string;
+  body: string;
+  safeActionLabel: string;
+  destructiveActionLabel: string;
+  onSafeAction: () => void;
+  onDestructiveAction: () => void;
+  busy?: boolean;
+}
+
+/**
+ * D-10 three-stage final confirmation for ownership transfer.
+ *
+ * First stage: the caller renders a summary/consequence view.
+ * Second stage (this component): a dedicated final confirmation
+ * with safe-default focus and safe-first DOM ordering.
+ *
+ * The safe action is visually primary (top, no destructive styling),
+ * the destructive action is second and styled as a destructive button.
+ */
+export const FinalConfirmation = ({
+  heading,
+  body,
+  safeActionLabel,
+  destructiveActionLabel,
+  onSafeAction,
+  onDestructiveAction,
+  busy = false,
+}: FinalConfirmationProps) => (
+  <View
+    accessibilityLabel={heading}
+    accessibilityLiveRegion="assertive"
+    accessibilityRole="alert"
+    style={{
+      alignItems: 'center',
+      flex: 1,
+      justifyContent: 'center',
+      padding: theme.spacing[6],
+    }}
+  >
+    <Stack gap={6} style={{ alignItems: 'stretch', maxWidth: 480, width: '100%' }}>
+      <Stack gap={4}>
+        <Heading>{heading}</Heading>
+        <Text>{body}</Text>
+      </Stack>
+      <Stack gap={3}>
+        <Button
+          disabled={busy}
+          label={safeActionLabel}
+          onPress={onSafeAction}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={destructiveActionLabel}
+          disabled={busy}
+          onPress={onDestructiveAction}
+          style={({ pressed }) => ({
+            alignItems: 'center',
+            backgroundColor: busy
+              ? theme.colors.disabled
+              : pressed
+                ? '#8B1A12'
+                : theme.colors.destructive,
+            borderRadius: theme.borderRadii.lg,
+            flexDirection: 'row',
+            gap: theme.spacing[2],
+            justifyContent: 'center',
+            minHeight: theme.controlSizes.primary,
+            minWidth: theme.controlSizes.touchTarget,
+            opacity: busy ? 0.5 : 1,
+            paddingHorizontal: theme.spacing[4],
+          })}
+        >
+          <Text variant="button">{destructiveActionLabel}</Text>
+        </Pressable>
+      </Stack>
+    </Stack>
+  </View>
+);
+
 // ---- SwitchErrorBanner ----
 
 interface SwitchErrorBannerProps {

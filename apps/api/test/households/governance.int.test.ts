@@ -501,4 +501,274 @@ describe('changes roles', () => {
       expect(response.statusCode).toBe(404);
     });
   });
+
+  // ---- Ownership transfer helpers ----
+
+  function transferOwnership(
+    accessToken: string,
+    householdId: string,
+    successorMembershipId: string,
+  ) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(householdId)}/ownership/transfer`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+      },
+      payload: { successorMembershipId },
+    });
+  }
+
+  describe('transfers ownership', () => {
+    test('owner transfers ownership to a member', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const successor = await insertVerifiedUser('successor@example.test', '继任者');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, successor.id, 'MEMBER');
+
+      // Get the successor's membership ID via the household roster.
+      const roster = await getHousehold(owner.accessToken, household.id);
+      const successorMembership = roster.json().members.find(
+        (m: { userId: string }) => m.userId === successor.id,
+      );
+      expect(successorMembership).toBeDefined();
+      expect(successorMembership.role).toBe('MEMBER');
+
+      const response = await transferOwnership(
+        owner.accessToken,
+        household.id,
+        successorMembership.membershipId,
+      );
+      expect(response.statusCode).toBe(200);
+
+      const body = response.json();
+
+      // Verify successor is now the owner.
+      const newOwnerMember = body.members.find(
+        (m: { membershipId: string }) => m.membershipId === successorMembership.membershipId,
+      );
+      expect(newOwnerMember.role).toBe('OWNER');
+
+      // Verify former owner is now MEMBER.
+      const formerOwnerMember = body.members.find(
+        (m: { userId: string }) => m.userId === owner.id,
+      );
+      expect(formerOwnerMember.role).toBe('MEMBER');
+
+      // Verify ownerMembershipId pointer changed.
+      expect(body.ownerMembershipId).toBe(successorMembership.membershipId);
+    });
+
+    test('owner transfers ownership to an admin', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, admin.id, 'ADMIN');
+
+      const roster = await getHousehold(owner.accessToken, household.id);
+      const adminMembership = roster.json().members.find(
+        (m: { userId: string }) => m.userId === admin.id,
+      );
+      expect(adminMembership.role).toBe('ADMIN');
+
+      const response = await transferOwnership(
+        owner.accessToken,
+        household.id,
+        adminMembership.membershipId,
+      );
+      expect(response.statusCode).toBe(200);
+
+      const body = response.json();
+
+      // Verify admin is now the owner.
+      const newOwnerMember = body.members.find(
+        (m: { membershipId: string }) => m.membershipId === adminMembership.membershipId,
+      );
+      expect(newOwnerMember.role).toBe('OWNER');
+
+      // Verify former owner is now MEMBER.
+      const formerOwnerMember = body.members.find(
+        (m: { userId: string }) => m.userId === owner.id,
+      );
+      expect(formerOwnerMember.role).toBe('MEMBER');
+
+      // Verify ownerMembershipId pointer changed.
+      expect(body.ownerMembershipId).toBe(adminMembership.membershipId);
+    });
+
+    test('admin cannot transfer ownership', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+      const member = await insertVerifiedUser('member@example.test', '成员');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, admin.id, 'ADMIN');
+      await addMemberViaDb(household.id, member.id, 'MEMBER');
+
+      const roster = await getHousehold(admin.accessToken, household.id);
+      const targetMembership = roster.json().members.find(
+        (m: { userId: string }) => m.userId === member.id,
+      );
+
+      const response = await transferOwnership(
+        admin.accessToken,
+        household.id,
+        targetMembership.membershipId,
+      );
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('NOT_OWNER');
+    });
+
+    test('member cannot transfer ownership', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const member = await insertVerifiedUser('member@example.test', '成员');
+      const other = await insertVerifiedUser('other@example.test', '其他');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, member.id, 'MEMBER');
+      await addMemberViaDb(household.id, other.id, 'MEMBER');
+
+      const roster = await getHousehold(member.accessToken, household.id);
+      const targetMembership = roster.json().members.find(
+        (m: { userId: string }) => m.userId === other.id,
+      );
+
+      const response = await transferOwnership(
+        member.accessToken,
+        household.id,
+        targetMembership.membershipId,
+      );
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('NOT_OWNER');
+    });
+
+    test('cannot transfer to self', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+
+      const roster = await getHousehold(owner.accessToken, household.id);
+      const selfMembership = roster.json().members.find(
+        (m: { userId: string }) => m.userId === owner.id,
+      );
+      expect(selfMembership.role).toBe('OWNER');
+
+      const response = await transferOwnership(
+        owner.accessToken,
+        household.id,
+        selfMembership.membershipId,
+      );
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('SUCCESSOR_IS_OWNER');
+    });
+
+    test('cross-household successor returns 404', async () => {
+      const ownerA = await insertVerifiedUser('ownera@example.test', '家主A');
+      const ownerB = await insertVerifiedUser('ownerb@example.test', '家主B');
+      const memberB = await insertVerifiedUser('memberb@example.test', '成员B');
+
+      const h1 = await createHouseholdWithRole(app, ownerA.id, ownerA.accessToken, '家庭A');
+      const h2 = await createHouseholdWithRole(app, ownerB.id, ownerB.accessToken, '家庭B');
+      await addMemberViaDb(h2.id, memberB.id, 'MEMBER');
+
+      // Get memberB's membership from h2.
+      const rosterB = await getHousehold(ownerB.accessToken, h2.id);
+      const targetB = rosterB.json().members.find(
+        (m: { userId: string }) => m.userId === memberB.id,
+      );
+
+      // ownerA tries to transfer h1 ownership to a member from h2.
+      const response = await transferOwnership(
+        ownerA.accessToken,
+        h1.id,
+        targetB.membershipId,
+      );
+      expect(response.statusCode).toBe(404);
+    });
+
+    test('outsider returns 404 on unknown household', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const outsider = await insertVerifiedUser('outsider@example.test', '外人');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+
+      const response = await transferOwnership(
+        outsider.accessToken,
+        household.id,
+        randomUUID(),
+      );
+      expect(response.statusCode).toBe(404);
+    });
+
+    test('stale owner pointer rollback on concurrent transfer', async () => {
+      const owner = await insertVerifiedUser('owner3@example.test', '家主');
+      const successor = await insertVerifiedUser('successor3@example.test', '继任者');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭3');
+      await addMemberViaDb(household.id, successor.id, 'MEMBER');
+
+      const roster = await getHousehold(owner.accessToken, household.id);
+      const successorMembership = roster.json().members.find(
+        (m: { userId: string }) => m.userId === successor.id,
+      );
+
+      // Simulate a concurrent transfer by directly updating the owner pointer in DB.
+      await withDatabase(async (client) => {
+        await client.query(
+          `UPDATE "households" SET "owner_membership_id" = $1 WHERE "id" = $2`,
+          [successorMembership.membershipId, household.id],
+        );
+      });
+
+      // Now the owner tries to transfer — the compare-and-set should fail
+      // because ownerMembershipId no longer matches the actor's membership.
+      const response = await transferOwnership(
+        owner.accessToken,
+        household.id,
+        successorMembership.membershipId,
+      );
+      expect(response.statusCode).toBe(409);
+      expect(response.json().code).toBe('HOUSEHOLD_OWNER_CHANGED');
+    });
+
+    test('former owner role is MEMBER after transfer', async () => {
+      const owner = await insertVerifiedUser('owner4@example.test', '家主');
+      const successor = await insertVerifiedUser('successor4@example.test', '继任者');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭4');
+      await addMemberViaDb(household.id, successor.id, 'MEMBER');
+
+      const roster = await getHousehold(owner.accessToken, household.id);
+      const successorMembership = roster.json().members.find(
+        (m: { userId: string }) => m.userId === successor.id,
+      );
+
+      const response = await transferOwnership(
+        owner.accessToken,
+        household.id,
+        successorMembership.membershipId,
+      );
+      expect(response.statusCode).toBe(200);
+
+      const body = response.json();
+
+      // Former owner's role is explicitly MEMBER.
+      const formerOwner = body.members.find(
+        (m: { userId: string }) => m.userId === owner.id,
+      );
+      expect(formerOwner.role).toBe('MEMBER');
+
+      // Owner pointer is correct.
+      expect(body.ownerMembershipId).toBe(successorMembership.membershipId);
+
+      // Exactly one OWNER exists.
+      const owners = body.members.filter(
+        (m: { role: string }) => m.role === 'OWNER',
+      );
+      expect(owners.length).toBe(1);
+    });
+  });
 });

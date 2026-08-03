@@ -9,7 +9,7 @@ import type {
   MembershipResponseDto,
 } from './dto/create-household.dto.js';
 import type { GetHouseholdMemberDto, GetHouseholdResponseDto } from './dto/membership.dto.js';
-import { removalFailure, roleChangeFailure, type Role } from './household-policy.js';
+import { removalFailure, roleChangeFailure, transferFailure, type Role } from './household-policy.js';
 
 interface HouseholdMemberRow {
   membershipId: string;
@@ -1029,6 +1029,122 @@ export class HouseholdsService {
     }
 
     throw new Error('Unreachable: removeMember retry loop exhausted.');
+  }
+
+  // ---- Ownership transfer (D-10, D-11) ----
+
+  async transferOwnership(
+    actorId: string,
+    householdId: string,
+    successorMembershipId: string,
+  ): Promise<GetHouseholdResponseDto | null> {
+    // Load household with fresh membership rows.
+    const household = await this.prisma.household.findUnique({
+      where: { id: householdId },
+      include: {
+        memberships: {
+          include: { user: true },
+        },
+      },
+    });
+
+    if (household === null || household.ownerMembershipId === null) return null;
+
+    // Resolve actor.
+    const actorMembership = household.memberships.find((m) => m.userId === actorId);
+    if (actorMembership === undefined) return null;
+
+    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
+
+    // Resolve successor — must belong to the same household.
+    const successorMembership = household.memberships.find((m) => m.id === successorMembershipId);
+    if (successorMembership === undefined) return null;
+
+    // Pure policy check (no DB access).
+    const successorIsActor = successorMembership.id === actorMembership.id;
+    const policyFailure = transferFailure(actorIsOwner, successorIsActor);
+    if (policyFailure === 'NOT_OWNER') {
+      throw new ForbiddenException({
+        code: 'NOT_OWNER',
+        message: '只有家庭所有者可以转移所有权。',
+      });
+    }
+    if (policyFailure === 'SUCCESSOR_IS_OWNER') {
+      throw new BadRequestException({
+        code: 'SUCCESSOR_IS_OWNER',
+        message: '不能将所有权转移给自己。',
+      });
+    }
+
+    const formerOwnerMembershipId = actorMembership.id;
+
+    // Guarded, stale-proof ownership transfer inside a Serializable transaction.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.prisma.$transaction(async (transaction) => {
+          // Lock the household row to prevent concurrent transfers.
+          const locked = await transaction.household.findUnique({
+            where: { id: householdId },
+            select: { ownerMembershipId: true },
+          });
+          if (locked === null || locked.ownerMembershipId === null) {
+            throw new NotFoundException({
+              code: 'HOUSEHOLD_NOT_FOUND',
+              message: 'Household not found or access denied.',
+            });
+          }
+
+          // Re-verify owner pointer hasn't changed under us.
+          if (locked.ownerMembershipId !== household.ownerMembershipId) {
+            throw new ConflictException({
+              code: 'HOUSEHOLD_OWNER_CHANGED',
+              message: '家庭所有权已变更，请刷新后重试。',
+            });
+          }
+
+          // Reset former owner's role to MEMBER (D-10 / D-11).
+          const demoted = await transaction.membership.updateMany({
+            where: {
+              id: formerOwnerMembershipId,
+              householdId,
+            },
+            data: { role: 'MEMBER' },
+          });
+
+          if (demoted.count !== 1) {
+            throw new ConflictException({
+              code: 'STALE_MEMBERSHIP',
+              message: '成员信息已过期，请刷新后重试。',
+            });
+          }
+
+          // Conditionally update the owner pointer: only if it still points
+          // to the former owner's membership (compare-and-set).
+          const transferred = await transaction.household.updateMany({
+            where: {
+              id: householdId,
+              ownerMembershipId: formerOwnerMembershipId,
+            },
+            data: { ownerMembershipId: successorMembershipId },
+          });
+
+          if (transferred.count !== 1) {
+            throw new ConflictException({
+              code: 'HOUSEHOLD_OWNER_CHANGED',
+              message: '家庭所有权已变更，请刷新后重试。',
+            });
+          }
+        }, { isolationLevel: 'Serializable' });
+
+        // Success — return the authoritative household projection.
+        return this.getHousehold(actorId, householdId);
+      } catch (error) {
+        if (this.isSerializationConflict(error) && attempt < 2) continue;
+        throw error;
+      }
+    }
+
+    throw new Error('Unreachable: transferOwnership retry loop exhausted.');
   }
 
   private isSerializationConflict(error: unknown): boolean {

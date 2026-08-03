@@ -81,3 +81,31 @@ export function removalFailure(
   // Both OWNER and ADMIN may remove any non-owner.
   return undefined;
 }
+
+export type TransferFailure =
+  | 'NOT_OWNER'
+  | 'SUCCESSOR_IS_OWNER';
+
+/**
+ * D-10 / D-11: only the current owner can transfer the household
+ * owner pointer, and only to a different existing same-household
+ * member.  Transferring to oneself is rejected because it would
+ * leave the owner graph unchanged.
+ *
+ * Returns a failure code when transfer is forbidden, or `undefined`
+ * when transfer is allowed.  This function is pure — it does not
+ * access the database.  Staleness, cross-household, and composite-FK
+ * checks belong in the service layer.
+ */
+export function transferFailure(
+  actorIsOwner: boolean,
+  successorIsActor: boolean,
+): TransferFailure | undefined {
+  // Only the current owner may transfer ownership.
+  if (!actorIsOwner) return 'NOT_OWNER';
+
+  // Transferring to oneself is a no-op — reject explicitly.
+  if (successorIsActor) return 'SUCCESSOR_IS_OWNER';
+
+  return undefined;
+}
