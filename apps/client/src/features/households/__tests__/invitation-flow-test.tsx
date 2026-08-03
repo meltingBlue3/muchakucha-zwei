@@ -170,7 +170,7 @@ describe('InvitationFlow', () => {
     );
 
     // Click accept
-    fireEvent.press(view.getAllByText('接受邀请')[0]!);
+    fireEvent.press(view.getAllByText('接受邀请').pop()!);
 
     // Verify API was called
     await waitFor(() =>
@@ -217,7 +217,7 @@ describe('InvitationFlow', () => {
     );
 
     // Click accept (will trigger 403)
-    fireEvent.press(view.getAllByText('接受邀请')[0]!);
+    fireEvent.press(view.getAllByText('接受邀请').pop()!);
 
     // Should show mismatch state (D-08)
     await waitFor(() =>
