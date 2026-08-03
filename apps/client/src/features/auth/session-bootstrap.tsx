@@ -17,6 +17,9 @@ export interface SessionBootstrapProps extends PropsWithChildren {
   fontsReady: boolean;
   intendedRoute?: string | undefined;
   onRoute(destination: SessionDestination, intendedRoute?: SafeIntendedRoute): void;
+  /** When true, the bootstrap remains visible until household context is also resolved.
+   *  Clients observing household resolution should set this to true once it is safe to show children. */
+  householdReady?: boolean | undefined;
   restorationRequired?: boolean | undefined;
   sessionStateStore: SessionStateStore;
   sessionTransport: SessionTransport;
@@ -45,6 +48,7 @@ export const SessionBootstrap = ({
         : 'resolved',
   );
   const [safeIntendedRoute] = useState(() => sanitizeIntendedRoute(intendedRoute));
+  const householdReady = props.householdReady ?? true;
 
   const applyOutcome = useCallback(
     async (outcome: RestoreOutcome): Promise<void> => {
@@ -106,6 +110,17 @@ export const SessionBootstrap = ({
       <AuthShell>
         <Stack accessibilityLabel="正在恢复登录状态" gap={6}>
           <Spinner label="正在恢复登录状态" />
+        </Stack>
+      </AuthShell>
+    );
+  }
+
+  // Session is resolved but household context is still loading — stay on the brand shell.
+  if (viewState === 'resolved' && !householdReady) {
+    return (
+      <AuthShell>
+        <Stack accessibilityLabel="正在加载" gap={6}>
+          <Spinner label="正在加载" />
         </Stack>
       </AuthShell>
     );

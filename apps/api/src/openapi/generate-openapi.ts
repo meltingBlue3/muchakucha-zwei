@@ -117,14 +117,23 @@ export interface CreateHouseholdResponseDto {
   createdAt: string;
   membership: MembershipResponseDto;
 }
+
+export interface ListMyHouseholdsItemDto {
+  id: string;
+  name: string;
+  role: 'ADMIN' | 'MEMBER';
+  memberCount: number;
+  ownerMembershipId: string;
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
 import type {
   CompleteEmailVerificationDto,
   CompleteEmailVerificationResponseDto,
-  RegisterDto,
-  RegistrationAcceptedDto,
+  CreateHouseholdDto,
+  CreateHouseholdResponseDto,
+  ListMyHouseholdsItemDto,
   LoginDto,
   LoginResponseDto,
   RefreshDto,
@@ -136,8 +145,6 @@ import type {
   RequestPasswordResetDto,
   PasswordResetRequestAcceptedDto,
   CompletePasswordResetDto,
-  CreateHouseholdDto,
-  CreateHouseholdResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -241,6 +248,19 @@ export class ApiClient {
     );
   }
 
+  async listMyHouseholds(
+    accessToken: string,
+    signal?: AbortSignal,
+  ): Promise<ListMyHouseholdsItemDto[]> {
+    return this.authenticated<ListMyHouseholdsItemDto[]>(
+      'GET',
+      '/api/v1/households',
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(\`\${this.baseUrl}\${path}\`, {
       method: 'POST',
@@ -339,6 +359,10 @@ async function generate(): Promise<void> {
       || document.components.schemas.CreateHouseholdResponseDto === undefined
       || document.components.schemas.MembershipResponseDto === undefined) {
       throw new Error('OpenAPI household creation operation or schemas are missing or unstable.');
+    }
+    if (document.paths['/api/v1/households']?.get?.operationId !== 'listMyHouseholds'
+      || document.components?.schemas?.ListMyHouseholdsItemDto === undefined) {
+      throw new Error('OpenAPI household list operation or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

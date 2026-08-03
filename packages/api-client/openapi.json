@@ -322,6 +322,34 @@
       }
     },
     "/api/v1/households": {
+      "get": {
+        "operationId": "listMyHouseholds",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Returns the authenticated actor's household memberships.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ListMyHouseholdsItemDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      },
       "post": {
         "operationId": "createHousehold",
         "parameters": [],
@@ -747,6 +775,41 @@
           "ownerMembershipId",
           "createdAt",
           "membership"
+        ]
+      },
+      "ListMyHouseholdsItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "My Family"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MEMBER"
+            ]
+          },
+          "memberCount": {
+            "type": "integer",
+            "example": 3
+          },
+          "ownerMembershipId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "memberCount",
+          "ownerMembershipId"
         ]
       }
     }

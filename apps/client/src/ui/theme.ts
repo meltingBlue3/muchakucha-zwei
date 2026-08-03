@@ -19,6 +19,7 @@ export const theme = createTheme({
     link: '#7B2F25',
     disabled: '#B7AAA4',
     transparent: 'transparent',
+    overlay: 'rgba(45,39,37,0.60)',
   },
   spacing: {
     0: 0,
@@ -135,11 +136,18 @@ export const theme = createTheme({
     softWeb: '0 8px 28px rgba(45,39,37,0.08)',
     native: 0,
   },
+  shadow: {
+    soft: '0 8px 28px rgba(45,39,37,0.08)',
+  },
   layout: {
     authCardMaxWidth: 440,
     compactInset: 20,
     mobileInset: 24,
     webCardPadding: 32,
+    householdMaxWidth: 960,
+    switcherWidth: 360,
+    switcherMaxHeight: 480,
+    settingsNavWidth: 280,
   },
   motion: {
     transitionMs: 180,

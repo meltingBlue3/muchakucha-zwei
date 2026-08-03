@@ -41,3 +41,20 @@ export class CreateHouseholdResponseDto {
   @ApiProperty()
   membership!: MembershipResponseDto;
 }
+
+export class ListMyHouseholdsItemDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ example: 'My Family' })
+  name!: string;
+
+  @ApiProperty({ enum: ['ADMIN', 'MEMBER'] })
+  role!: 'ADMIN' | 'MEMBER';
+
+  @ApiProperty({ example: 3 })
+  memberCount!: number;
+
+  @ApiProperty({ format: 'uuid' })
+  ownerMembershipId!: string;
+}

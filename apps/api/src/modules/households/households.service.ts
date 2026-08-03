@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
-import type { CreateHouseholdResponseDto, MembershipResponseDto } from './dto/create-household.dto.js';
+import type {
+  CreateHouseholdResponseDto,
+  ListMyHouseholdsItemDto,
+  MembershipResponseDto,
+} from './dto/create-household.dto.js';
 
 const NAME_MIN_CODE_POINTS = 1;
 const NAME_MAX_CODE_POINTS = 40;
@@ -60,6 +64,28 @@ export class HouseholdsService {
       createdAt: outcome.household.createdAt.toISOString(),
       membership: this.toMembershipResponse(outcome.membership),
     };
+  }
+
+  async listMyHouseholds(userId: string): Promise<ListMyHouseholdsItemDto[]> {
+    const memberships = await this.prisma.membership.findMany({
+      where: { userId },
+      include: {
+        household: {
+          include: {
+            _count: { select: { memberships: true } },
+          },
+        },
+      },
+      orderBy: { household: { name: 'asc' } },
+    });
+
+    return memberships.map((m) => ({
+      id: m.household.id,
+      name: m.household.name,
+      role: m.role as 'ADMIN' | 'MEMBER',
+      memberCount: m.household._count.memberships,
+      ownerMembershipId: m.household.ownerMembershipId!,
+    }));
   }
 
   private toMembershipResponse(membership: {

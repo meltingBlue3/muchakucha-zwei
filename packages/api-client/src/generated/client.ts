@@ -17,6 +17,7 @@ import type {
   CompletePasswordResetDto,
   CreateHouseholdDto,
   CreateHouseholdResponseDto,
+  ListMyHouseholdsItemDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -116,6 +117,19 @@ export class ApiClient {
       '/api/v1/households',
       accessToken,
       body,
+      signal,
+    );
+  }
+
+  async listMyHouseholds(
+    accessToken: string,
+    signal?: AbortSignal,
+  ): Promise<ListMyHouseholdsItemDto[]> {
+    return this.authenticated<ListMyHouseholdsItemDto[]>(
+      'GET',
+      '/api/v1/households',
+      accessToken,
+      undefined,
       signal,
     );
   }

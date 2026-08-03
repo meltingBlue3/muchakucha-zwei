@@ -65,14 +65,8 @@ async function createHousehold(
   return household.id;
 }
 
-test('lists restores switches and explains access loss [RED:HOUSEHOLD_CONTEXT]', async ({ page, request }) => {
+test('lists restores switches and explains access loss', async ({ page, request }) => {
   test.setTimeout(120_000);
-
-  // Phase 2 household listing is not yet implemented.
-  // Once the guarded listMyHouseholds producer, generated wrapper,
-  // context provider, selector, switch, and D-12 accessChanged flow
-  // are all implemented, this marker must be removed and the test must pass.
-  throw new Error('IMPLEMENTATION_MISSING_HOUSEHOLD_CONTEXT: listMyHouseholds endpoint, household-context, /households route, and D-12 accessChanged flow are not yet built.');
 
   // --- Arrange: create the primary actor with two households ---
   const primary = await prepareVerifiedAccount('primary');

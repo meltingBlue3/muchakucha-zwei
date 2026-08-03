@@ -1,8 +1,9 @@
-import { Body, Controller, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
@@ -10,6 +11,7 @@ import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.g
 import {
   CreateHouseholdDto,
   CreateHouseholdResponseDto,
+  ListMyHouseholdsItemDto,
 } from './dto/create-household.dto.js';
 import { HouseholdsService } from './households.service.js';
 
@@ -37,5 +39,18 @@ export class HouseholdsController {
       throw new Error('AccessTokenGuard did not attach verified session claims.');
     }
     return this.householdsService.createHousehold(request.auth.sub, input.name);
+  }
+
+  @Get()
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'listMyHouseholds' })
+  @ApiOkResponse({ type: ListMyHouseholdsItemDto, isArray: true })
+  async listMyHouseholds(
+    @Req() request: AuthenticatedRequest,
+  ): Promise<ListMyHouseholdsItemDto[]> {
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+    return this.householdsService.listMyHouseholds(request.auth.sub);
   }
 }

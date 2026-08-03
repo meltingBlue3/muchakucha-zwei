@@ -109,3 +109,11 @@ export interface CreateHouseholdResponseDto {
   createdAt: string;
   membership: MembershipResponseDto;
 }
+
+export interface ListMyHouseholdsItemDto {
+  id: string;
+  name: string;
+  role: 'ADMIN' | 'MEMBER';
+  memberCount: number;
+  ownerMembershipId: string;
+}
