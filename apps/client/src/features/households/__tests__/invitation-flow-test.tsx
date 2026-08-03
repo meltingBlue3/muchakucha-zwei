@@ -42,7 +42,7 @@ describe('InvitationFlow', () => {
       () => new Promise(() => {}),
     );
 
-    const { getByText, queryByText } = render(
+    const view = await render(
       <MuchakuchaThemeProvider>
         <InvitationFlow
           apiClient={apiClient}
@@ -57,14 +57,14 @@ describe('InvitationFlow', () => {
     );
 
     await waitFor(() =>
-      expect(getByText('正在加载邀请')).toBeTruthy(),
+      expect(view.getByText('正在加载邀请')).toBeTruthy(),
     );
   });
 
   test('shows public preview when unauthenticated and invitation is valid', async () => {
     const apiClient = createInvitationApi({ previewResult: validPreview });
 
-    const { getByText, queryByText } = render(
+    const view = await render(
       <MuchakuchaThemeProvider>
         <InvitationFlow
           apiClient={apiClient}
@@ -79,22 +79,22 @@ describe('InvitationFlow', () => {
     );
 
     await waitFor(() =>
-      expect(getByText('加入家庭')).toBeTruthy(),
+      expect(view.getByText('加入家庭')).toBeTruthy(),
     );
 
     // Household name and inviter are visible (D-07)
-    expect(getByText('温暖小家')).toBeTruthy();
-    expect(getByText('家主')).toBeTruthy();
+    expect(view.getByText('温暖小家')).toBeTruthy();
+    expect(view.getByText('家主')).toBeTruthy();
 
     // Login and register buttons are present
-    expect(getByText('登录并继续')).toBeTruthy();
-    expect(getByText('创建账户并继续')).toBeTruthy();
+    expect(view.getByText('登录并继续')).toBeTruthy();
+    expect(view.getByText('创建账户并继续')).toBeTruthy();
   });
 
   test('shows accept button when authenticated and invitation is valid', async () => {
     const apiClient = createInvitationApi({ previewResult: validPreview });
 
-    const { getByText, queryByText } = render(
+    const view = await render(
       <MuchakuchaThemeProvider>
         <InvitationFlow
           apiClient={apiClient}
@@ -110,19 +110,19 @@ describe('InvitationFlow', () => {
     );
 
     await waitFor(() =>
-      expect(getByText('接受邀请')).toBeTruthy(),
+      expect(view.getAllByText('接受邀请').length).toBeGreaterThanOrEqual(1),
     );
 
     // Household name and inviter are visible
-    expect(getByText('温暖小家')).toBeTruthy();
-    expect(getByText('家主')).toBeTruthy();
+    expect(view.getByText('温暖小家')).toBeTruthy();
+    expect(view.getByText('家主')).toBeTruthy();
 
     // Accept button is present (no auto-accept)
-    expect(getByText('接受邀请')).toBeTruthy();
+    expect(view.getAllByText('接受邀请').length).toBeGreaterThanOrEqual(1);
 
     // Login/register buttons are NOT present (already authenticated)
-    expect(queryByText('登录并继续')).toBeNull();
-    expect(queryByText('创建账户并继续')).toBeNull();
+    expect(view.queryByText('登录并继续')).toBeNull();
+    expect(view.queryByText('创建账户并继续')).toBeNull();
   });
 
   test('triggers accept and calls onEnterHousehold on success', async () => {
@@ -149,7 +149,7 @@ describe('InvitationFlow', () => {
     });
     const onEnterHousehold = jest.fn();
 
-    const { getByText, queryByText } = render(
+    const view = await render(
       <MuchakuchaThemeProvider>
         <InvitationFlow
           apiClient={apiClient}
@@ -166,11 +166,11 @@ describe('InvitationFlow', () => {
 
     // Wait for the accept button to appear
     await waitFor(() =>
-      expect(getByText('接受邀请')).toBeTruthy(),
+      expect(view.getAllByText('接受邀请').length).toBeGreaterThanOrEqual(1),
     );
 
     // Click accept
-    fireEvent.press(getByText('接受邀请'));
+    fireEvent.press(view.getAllByText('接受邀请')[0]!);
 
     // Verify API was called
     await waitFor(() =>
@@ -181,11 +181,11 @@ describe('InvitationFlow', () => {
 
     // Verify success state
     await waitFor(() =>
-      expect(getByText('邀请已接受')).toBeTruthy(),
+      expect(view.getByText('邀请已接受')).toBeTruthy(),
     );
 
     // Click "进入家庭"
-    fireEvent.press(getByText('进入家庭'));
+    fireEvent.press(view.getByText('进入家庭'));
     expect(onEnterHousehold).toHaveBeenCalledWith(household);
   });
 
@@ -196,7 +196,7 @@ describe('InvitationFlow', () => {
       acceptError: error as unknown as Error,
     });
 
-    const { getByText, queryByText } = render(
+    const view = await render(
       <MuchakuchaThemeProvider>
         <InvitationFlow
           apiClient={apiClient}
@@ -213,23 +213,23 @@ describe('InvitationFlow', () => {
 
     // Wait for accept button
     await waitFor(() =>
-      expect(getByText('接受邀请')).toBeTruthy(),
+      expect(view.getAllByText('接受邀请').length).toBeGreaterThanOrEqual(1),
     );
 
     // Click accept (will trigger 403)
-    fireEvent.press(getByText('接受邀请'));
+    fireEvent.press(view.getAllByText('接受邀请')[0]!);
 
     // Should show mismatch state (D-08)
     await waitFor(() =>
-      expect(getByText('此邀请发给了另一个邮箱')).toBeTruthy(),
+      expect(view.getByText('此邀请发给了另一个邮箱')).toBeTruthy(),
     );
 
     // Switch account button is present
-    expect(getByText('切换账户')).toBeTruthy();
+    expect(view.getByText('切换账户')).toBeTruthy();
 
     // Household name and inviter are hidden
-    expect(queryByText('温暖小家')).toBeNull();
-    expect(queryByText('家主')).toBeNull();
+    expect(view.queryByText('温暖小家')).toBeNull();
+    expect(view.queryByText('家主')).toBeNull();
   });
 
   test('shows terminal state for invalid invitation', async () => {
@@ -237,7 +237,7 @@ describe('InvitationFlow', () => {
       previewResult: { kind: 'invalid' },
     });
 
-    const { getByText, queryByText } = render(
+    const view = await render(
       <MuchakuchaThemeProvider>
         <InvitationFlow
           apiClient={apiClient}
@@ -252,10 +252,10 @@ describe('InvitationFlow', () => {
     );
 
     await waitFor(() =>
-      expect(getByText('无效的邀请链接')).toBeTruthy(),
+      expect(view.getByText('无效的邀请链接')).toBeTruthy(),
     );
 
-    expect(getByText('这个邀请无效或已失效。请联系家庭管理员重新发送。')).toBeTruthy();
+    expect(view.getByText('这个邀请无效或已失效。请联系家庭管理员重新发送。')).toBeTruthy();
   });
 
   test('shows terminal state for expired invitation', async () => {
@@ -263,7 +263,7 @@ describe('InvitationFlow', () => {
       previewResult: { kind: 'expired' },
     });
 
-    const { getByText, queryByText } = render(
+    const view = await render(
       <MuchakuchaThemeProvider>
         <InvitationFlow
           apiClient={apiClient}
@@ -278,7 +278,7 @@ describe('InvitationFlow', () => {
     );
 
     await waitFor(() =>
-      expect(getByText('邀请链接已过期')).toBeTruthy(),
+      expect(view.getByText('邀请链接已过期')).toBeTruthy(),
     );
   });
 
@@ -287,7 +287,7 @@ describe('InvitationFlow', () => {
       previewResult: { kind: 'used' },
     });
 
-    const { getByText, queryByText } = render(
+    const view = await render(
       <MuchakuchaThemeProvider>
         <InvitationFlow
           apiClient={apiClient}
@@ -302,7 +302,7 @@ describe('InvitationFlow', () => {
     );
 
     await waitFor(() =>
-      expect(getByText('邀请已经接受')).toBeTruthy(),
+      expect(view.getByText('邀请已经接受')).toBeTruthy(),
     );
   });
 });
