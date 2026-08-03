@@ -192,3 +192,8 @@ export interface TransferOwnershipDto {
   /** Membership ID of the successor who will become the new owner. */
   successorMembershipId: string;
 }
+
+export interface LeaveHouseholdDto {
+  /** Membership ID of the successor who will become the new owner after the current owner leaves. */
+  successorMembershipId: string;
+}

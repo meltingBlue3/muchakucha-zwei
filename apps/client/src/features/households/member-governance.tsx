@@ -1,4 +1,4 @@
-import type { ApiClient, ChangeMemberRoleDto, GetHouseholdMemberDto, TransferOwnershipDto } from '@muchakucha/api-client';
+import type { ApiClient, ChangeMemberRoleDto, GetHouseholdMemberDto, LeaveHouseholdDto, TransferOwnershipDto } from '@muchakucha/api-client';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
@@ -6,7 +6,7 @@ import { useCallback } from 'react';
  * Minimal API surface required by member governance operations.
  * Testable with a fake client supplying only the required methods.
  */
-export type GovernanceApi = Pick<ApiClient, 'changeMemberRole' | 'removeMember' | 'transferOwnership'>;
+export type GovernanceApi = Pick<ApiClient, 'changeMemberRole' | 'removeMember' | 'transferOwnership' | 'leaveHousehold'>;
 
 export interface ChangeRoleParams {
   accessToken: string;
@@ -160,6 +160,46 @@ export async function transferOwnershipApi(
 }
 
 /**
+ * D-11: returns whether the current actor can leave the household.
+ * Only the current owner can initiate a leave, and only if other
+ * members exist in the household (policy check on member count
+ * happens server-side, but client guards for UI).
+ */
+export function canLeave(
+  actorRole: 'OWNER' | 'ADMIN' | 'MEMBER',
+  actorIsOwner: boolean,
+  otherMemberCount: number,
+): boolean {
+  // Only the owner can leave through the handoff flow.
+  if (!actorIsOwner || actorRole !== 'OWNER') return false;
+  // Must have at least one other member to select as successor.
+  if (otherMemberCount < 1) return false;
+  return true;
+}
+
+export interface LeaveHouseholdParams {
+  accessToken: string;
+  householdId: string;
+  successorMembershipId: string;
+}
+
+/**
+ * Calls the server-authoritative owner-leave endpoint.
+ * Returns void on 204 success — the caller's membership no longer exists.
+ * Throws ApiClientError on failure — callers handle error display.
+ */
+export async function leaveHouseholdApi(
+  apiClient: GovernanceApi,
+  params: LeaveHouseholdParams,
+): Promise<void> {
+  return apiClient.leaveHousehold(
+    params.accessToken,
+    params.householdId,
+    { successorMembershipId: params.successorMembershipId },
+  );
+}
+
+/**
  * Hook that provides governance action callbacks for the member list.
  *
  * Promotion (MEMBER->ADMIN) returns a direct API call handler.
@@ -167,12 +207,15 @@ export async function transferOwnershipApi(
  * per D-10 safe-action-first contract.
  * Removal navigates to the dedicated D-10 consequence confirmation page.
  * Transfer navigates to the D-10 ownership transfer page.
+ * Leave navigates to the D-11 owner-leave page.
  */
 export interface UseMemberGovernanceResult {
   promote: ((membershipId: string) => void) | undefined;
   demote: ((membershipId: string) => void) | undefined;
   remove: ((membershipId: string) => void) | undefined;
   transfer: ((membershipId: string) => void) | undefined;
+  /** Navigate to the owner-leave confirmation page. Only available for the current owner. */
+  leave: ((successorMembershipId: string) => void) | undefined;
   /** Whether any governance mutation is pending. */
   isBusy: boolean;
 }
@@ -227,10 +270,21 @@ export function useMemberGovernance(
     [router, householdId],
   );
 
+  const leave = useCallback(
+    (successorMembershipId: string) => {
+      void router.push(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        `/households/${encodeURIComponent(householdId)}/ownership/leave?successorMembershipId=${encodeURIComponent(successorMembershipId)}` as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      );
+    },
+    [router, householdId],
+  );
+
   // When actor role is MEMBER, return undefined callbacks.
   if (actorRole === 'MEMBER') {
-    return { promote: undefined, demote: undefined, remove: undefined, transfer: undefined, isBusy: false };
+    return { promote: undefined, demote: undefined, remove: undefined, transfer: undefined, leave: undefined, isBusy: false };
   }
 
-  return { promote, demote, remove, transfer, isBusy: false };
+  return { promote, demote, remove, transfer, leave, isBusy: false };
 }

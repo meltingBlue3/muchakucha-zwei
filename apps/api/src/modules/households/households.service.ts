@@ -9,7 +9,7 @@ import type {
   MembershipResponseDto,
 } from './dto/create-household.dto.js';
 import type { GetHouseholdMemberDto, GetHouseholdResponseDto } from './dto/membership.dto.js';
-import { removalFailure, roleChangeFailure, transferFailure, type Role } from './household-policy.js';
+import { leaveFailure, removalFailure, roleChangeFailure, transferFailure, type Role } from './household-policy.js';
 
 interface HouseholdMemberRow {
   membershipId: string;
@@ -1145,6 +1145,131 @@ export class HouseholdsService {
     }
 
     throw new Error('Unreachable: transferOwnership retry loop exhausted.');
+  }
+
+  // ---- Owner leave (D-11, D-12) ----
+
+  /**
+   * D-11 atomic owner-leave handoff: selects a successor, moves the owner
+   * pointer, deletes the former membership in one Serializable transaction.
+   *
+   * On success, returns `{ kind: 'completed' }` — the caller was already
+   * removed from the household and must not query the household projection.
+   * The response status code is 204 (no content).
+   *
+   * D-12 recovery: the former owner's membership no longer exists in the DB.
+   * The client must freeze household actions, clear any cached household
+   * state and device persistence for this household, and render the
+   * AccessChangedPanel before any further routing.
+   */
+  async leaveHousehold(
+    actorId: string,
+    householdId: string,
+    successorMembershipId: string,
+  ): Promise<{ kind: 'completed' } | { kind: 'not_found' }> {
+    // Load household with fresh membership rows.
+    const household = await this.prisma.household.findUnique({
+      where: { id: householdId },
+      include: {
+        memberships: {
+          include: { user: true },
+        },
+      },
+    });
+
+    if (household === null || household.ownerMembershipId === null) return { kind: 'not_found' };
+
+    // Resolve actor.
+    const actorMembership = household.memberships.find((m) => m.userId === actorId);
+    if (actorMembership === undefined) return { kind: 'not_found' };
+
+    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
+
+    // Resolve successor — must belong to the same household.
+    const successorMembership = household.memberships.find((m) => m.id === successorMembershipId);
+    if (successorMembership === undefined) return { kind: 'not_found' };
+
+    const successorIsActor = successorMembership.id === actorMembership.id;
+    const otherMemberCount = household.memberships.length - 1;
+    const hasOtherMembers = otherMemberCount > 0;
+
+    // Pure policy check (no DB access).
+    const policyFailure = leaveFailure(actorIsOwner, successorIsActor, hasOtherMembers);
+    if (policyFailure === 'NOT_OWNER') {
+      throw new ForbiddenException({
+        code: 'NOT_OWNER',
+        message: '只有家庭所有者可以离开家庭。',
+      });
+    }
+    if (policyFailure === 'SUCCESSOR_IS_OWNER') {
+      throw new BadRequestException({
+        code: 'SUCCESSOR_IS_OWNER',
+        message: '不能将所有权转移给自己后离开。',
+      });
+    }
+    if (policyFailure === 'LAST_MEMBER') {
+      throw new BadRequestException({
+        code: 'LAST_MEMBER',
+        message: '不能离开家庭，因为你是唯一的成员。',
+      });
+    }
+
+    // Guarded, stale-proof owner leave inside a Serializable transaction.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.prisma.$transaction(async (transaction) => {
+          // Lock the household row to prevent concurrent transfers/leaves.
+          const locked = await transaction.household.findUnique({
+            where: { id: householdId },
+            select: { ownerMembershipId: true },
+          });
+          if (locked === null || locked.ownerMembershipId === null) {
+            throw new NotFoundException({
+              code: 'HOUSEHOLD_NOT_FOUND',
+              message: 'Household not found or access denied.',
+            });
+          }
+
+          // Re-verify owner pointer hasn't changed under us.
+          if (locked.ownerMembershipId !== household.ownerMembershipId) {
+            throw new ConflictException({
+              code: 'HOUSEHOLD_OWNER_CHANGED',
+              message: '家庭所有权已变更，请刷新后重试。',
+            });
+          }
+
+          // Move owner pointer to successor atomically (compare-and-set).
+          const transferred = await transaction.household.updateMany({
+            where: {
+              id: householdId,
+              ownerMembershipId: actorMembership.id,
+            },
+            data: { ownerMembershipId: successorMembershipId },
+          });
+
+          if (transferred.count !== 1) {
+            throw new ConflictException({
+              code: 'HOUSEHOLD_OWNER_CHANGED',
+              message: '家庭所有权已变更，请刷新后重试。',
+            });
+          }
+
+          // Delete the former owner's membership.
+          // The deferred composite FK and non-null pointer validate at commit.
+          await transaction.membership.delete({
+            where: { id: actorMembership.id },
+          });
+        }, { isolationLevel: 'Serializable' });
+
+        // Success — former owner membership is deleted, owner pointer moved.
+        return { kind: 'completed' };
+      } catch (error) {
+        if (this.isSerializationConflict(error) && attempt < 2) continue;
+        throw error;
+      }
+    }
+
+    throw new Error('Unreachable: leaveHousehold retry loop exhausted.');
   }
 
   private isSerializationConflict(error: unknown): boolean {

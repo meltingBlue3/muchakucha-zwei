@@ -183,7 +183,7 @@ test('owner hands off and leaves', async ({ page, request }) => {
   await expect(page.getByText('所有权交接测试家庭').first()).toBeVisible({ timeout: 5000 });
 
   // ============================================================================
-  // RED: D-11 owner-leave endpoint does not exist yet.
+  // GREEN: D-11 owner leaves and hands off to successor.
   // ============================================================================
 
   const leaveResponse = await request.post(
@@ -196,29 +196,74 @@ test('owner hands off and leaves', async ({ page, request }) => {
       data: { successorMembershipId: successorMembership!.membershipId },
     },
   );
-
-  // RED gate: the endpoint is not implemented yet.
-  expect([404, 405]).toContain(leaveResponse.status());
+  expect(leaveResponse.status()).toBe(204);
 
   // ============================================================================
-  // PRECONDITION: state is unchanged after the missing endpoint.
+  // D-11: Verify successor is now the owner.
   // ============================================================================
 
-  // Owner still has access to the household.
   const verifyResponse = await request.get(
     `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}`,
-    { headers: { authorization: `Bearer ${owner.accessToken}` } },
+    { headers: { authorization: `Bearer ${successor.accessToken}` } },
   );
   expect(verifyResponse.status()).toBe(200);
   const verifyBody = (await verifyResponse.json()) as {
     ownerMembershipId: string;
     members: Array<{ membershipId: string; userId: string; role: string }>;
   };
-  // Owner pointer is unchanged.
-  expect(verifyBody.ownerMembershipId).toBe(ownerMembership!.membershipId);
-  // Exactly one OWNER exists.
+  // Owner pointer now points to successor.
+  expect(verifyBody.ownerMembershipId).toBe(successorMembership!.membershipId);
+  // Exactly one OWNER exists (the successor).
   const owners = verifyBody.members.filter((m) => m.role === 'OWNER');
   expect(owners.length).toBe(1);
+  expect(owners[0].userId).toBe(successor.userId);
 
-  throw new Error('IMPLEMENTATION_MISSING_OWNER_LEAVE');
+  // ============================================================================
+  // D-11/D-12: Former owner (now non-member) cannot access the household.
+  // ============================================================================
+
+  const formerOwnerResponse = await request.get(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}`,
+    { headers: { authorization: `Bearer ${owner.accessToken}` } },
+  );
+  expect(formerOwnerResponse.status()).toBe(404);
+
+  // ============================================================================
+  // D-11: Non-owner cannot leave as owner.
+  // ============================================================================
+
+  // Bystander (MEMBER) cannot leave as owner.
+  const bystanderLeaveResponse = await request.post(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/ownership/leave`,
+    {
+      headers: {
+        authorization: `Bearer ${bystander.accessToken}`,
+        'content-type': 'application/json',
+      },
+      data: { successorMembershipId: successorMembership!.membershipId },
+    },
+  );
+  expect(bystanderLeaveResponse.status()).toBe(403);
+  const bystanderBody = (await bystanderLeaveResponse.json()) as { code: string };
+  expect(bystanderBody.code).toBe('NOT_OWNER');
+
+  // ============================================================================
+  // D-11: Owner pointer unchanged after failed leave attempt by non-owner.
+  // ============================================================================
+
+  // Verify the household state is unchanged after bystander's failed attempt.
+  const finalVerifyResponse = await request.get(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}`,
+    { headers: { authorization: `Bearer ${successor.accessToken}` } },
+  );
+  expect(finalVerifyResponse.status()).toBe(200);
+  const finalBody = (await finalVerifyResponse.json()) as {
+    ownerMembershipId: string;
+    members: Array<{ membershipId: string; userId: string; role: string }>;
+  };
+  // Owner pointer still points to successor.
+  expect(finalBody.ownerMembershipId).toBe(successorMembership!.membershipId);
+  // Exactly one OWNER exists.
+  const finalOwners = finalBody.members.filter((m) => m.role === 'OWNER');
+  expect(finalOwners.length).toBe(1);
 });

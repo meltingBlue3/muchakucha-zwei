@@ -164,6 +164,18 @@ export class TransferOwnershipDto {
   successorMembershipId!: string;
 }
 
+// ---- Owner-Leave DTO (D-11) ----
+
+export class LeaveHouseholdDto {
+  @ApiProperty({
+    format: 'uuid',
+    description: 'Membership ID of the successor who will become the new owner after the current owner leaves. Must be a different existing member in the same household.',
+    example: '00000000-0000-0000-0000-000000000000',
+  })
+  @IsUUID()
+  successorMembershipId!: string;
+}
+
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
 }
@@ -496,5 +508,38 @@ export class HouseholdsController {
       });
     }
     return result;
+  }
+
+  // ---- Owner leave (D-11, D-12) ----
+
+  @Post(':id/ownership/leave')
+  @HttpCode(204)
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'leaveHousehold' })
+  @ApiBadRequestResponse({ description: 'Successor is the current owner (self-leave) or the last member cannot leave.' })
+  @ApiForbiddenResponse({ description: 'Actor is not the current owner.' })
+  @ApiConflictResponse({ description: 'Stale ownership state or a concurrent transfer/leave changed the owner pointer.' })
+  @ApiNotFoundResponse({ description: 'Household or successor membership not found, or actor is not a member.' })
+  async leaveHousehold(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: LeaveHouseholdDto,
+  ): Promise<void> {
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+    const outcome = await this.householdsService.leaveHousehold(
+      request.auth.sub,
+      id,
+      input.successorMembershipId,
+    );
+    if (outcome.kind === 'not_found') {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+    // outcome.kind === 'completed' — 204 No Content
   }
 }

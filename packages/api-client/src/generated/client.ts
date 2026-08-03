@@ -28,6 +28,7 @@ import type {
   RevokeInvitationResponseDto,
   ChangeMemberRoleDto,
   TransferOwnershipDto,
+  LeaveHouseholdDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -302,6 +303,21 @@ export class ApiClient {
     return this.authenticated<GetHouseholdResponseDto>(
       'POST',
       `/api/v1/households/${encodeURIComponent(householdId)}/ownership/transfer`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async leaveHousehold(
+    accessToken: string,
+    householdId: string,
+    body: LeaveHouseholdDto,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/ownership/leave`,
       accessToken,
       body,
       signal,

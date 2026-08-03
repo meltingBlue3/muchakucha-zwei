@@ -109,3 +109,35 @@ export function transferFailure(
 
   return undefined;
 }
+
+export type LeaveFailure =
+  | 'NOT_OWNER'
+  | 'SUCCESSOR_IS_OWNER'
+  | 'LAST_MEMBER';
+
+/**
+ * D-11: only the current owner can leave the household, and must
+ * select a different existing same-household member as successor.
+ * The owner cannot leave if no successor exists (last member).
+ *
+ * Returns a failure code when leave is forbidden, or `undefined`
+ * when leave is allowed.  This function is pure — it does not
+ * access the database.  Staleness, cross-household, and composite-FK
+ * checks belong in the service layer.
+ */
+export function leaveFailure(
+  actorIsOwner: boolean,
+  successorIsActor: boolean,
+  hasOtherMembers: boolean,
+): LeaveFailure | undefined {
+  // Only the current owner may leave through the handoff flow.
+  if (!actorIsOwner) return 'NOT_OWNER';
+
+  // Leaving requires a successor — self-transfer makes no sense.
+  if (successorIsActor) return 'SUCCESSOR_IS_OWNER';
+
+  // Cannot leave if no one else is in the household.
+  if (!hasOtherMembers) return 'LAST_MEMBER';
+
+  return undefined;
+}
