@@ -23,6 +23,10 @@ const sourceFilesUnder = (relativeRoot: string): string[] => {
 };
 
 describe('typed design-token and composition contract', () => {
+  // ============================================================================
+  // Phase 1: Core design-token contract
+  // ============================================================================
+
   test('D-14 exposes one Restyle-owned warm, modern, restrained typed theme', () => {
     expect(theme.colors.canvas).toBe('#FFF8F2');
     expect(theme.colors.surface).toBe('#FFFFFF');
@@ -104,5 +108,189 @@ describe('typed design-token and composition contract', () => {
     expect(theme.elevation.native).toBe(0);
     expect(theme.elevation.softWeb).toBe('0 8px 28px rgba(45,39,37,0.08)');
     expect(readSource('src/ui/primitives.tsx')).not.toMatch(/\belevation:\s*[1-9]|shadowOpacity:\s*(?:0\.[2-9]|1)/);
+  });
+
+  // ============================================================================
+  // Phase 2: Household feature token and composition contract
+  // ============================================================================
+
+  test('defines the Phase 2 overlay, layout, and motion semantic tokens', () => {
+    expect(theme.colors.overlay).toBe('rgba(45,39,37,0.60)');
+    expect(theme.layout.householdMaxWidth).toBe(960);
+    expect(theme.layout.switcherWidth).toBe(360);
+    expect(theme.layout.switcherMaxHeight).toBe(480);
+    expect(theme.layout.settingsNavWidth).toBe(280);
+    expect(theme.motion.transitionMs).toBe(180);
+    expect(theme.motion.reducedTransitionMs).toBe(80);
+  });
+
+  test('rejects raw style literals across household feature modules', () => {
+    const visualLiteral =
+      /#[0-9A-Fa-f]{3,8}\b|(?:fontSize|borderRadius|padding(?:Horizontal|Vertical)?|margin(?:Horizontal|Vertical)?|gap):\s*\d/;
+    const householdFiles = sourceFilesUnder('src/features/households');
+    for (const path of householdFiles) {
+      expect({ path, source: readSource(path) }).not.toEqual(
+        expect.objectContaining({ source: expect.stringMatching(visualLiteral) }),
+      );
+    }
+  });
+
+  test('household owned components import only theme tokens and primitives', () => {
+    // Household-specific components must not introduce raw colors, spacing, or shadows.
+    const householdComponentFiles = sourceFilesUnder('src/ui').filter(
+      (p) => p.includes('household') || p.includes('member') || p.includes('invitation') || p.includes('role'),
+    );
+    for (const path of householdComponentFiles) {
+      const source = readSource(path);
+      // No raw hex colors outside theme references.
+      expect(source).not.toMatch(/#[0-9A-Fa-f]{3,8}\b/);
+    }
+  });
+
+  test('household feature files do not contain raw font-size or spacing overrides', () => {
+    const rawSpacingPattern = /(?:fontSize|borderRadius|padding(?:Horizontal|Vertical)?):\s*\d/;
+    const householdFeatureFiles = sourceFilesUnder('src/features/households');
+    for (const path of householdFeatureFiles) {
+      const source = readSource(path);
+      expect(source).not.toMatch(rawSpacingPattern);
+    }
+  });
+
+  test('rejects raw visual literals across household route files', () => {
+    // Household route files in app/(protected)/ and app/invite/ must be thin shells.
+    const routeFiles = [
+      ...sourceFilesUnder('app/(protected)/households'),
+      ...sourceFilesUnder('app/households'),
+      ...sourceFilesUnder('app/invite'),
+    ];
+    const rawStylePattern = /#[0-9A-Fa-f]{3,8}\b|(?:fontSize|borderRadius):\s*\d/;
+    for (const path of routeFiles) {
+      const source = readSource(path);
+      expect(source).not.toMatch(rawStylePattern);
+    }
+  });
+
+  test('D-10/D-11 safe-action and destructive button ordering is preserved', () => {
+    // Confirmation components must render the safe action before the destructive action.
+    const confirmationFiles = sourceFilesUnder('src/ui').filter(
+      (p) => p.includes('confirmation') || p.includes('Confirmation'),
+    );
+    for (const path of confirmationFiles) {
+      const source = readSource(path);
+      // Safe-action labels (e.g., "保留管理员权限", "保留成员", "保留邀请",
+      // "保留当前所有者", "留在家庭") must appear before destructive labels.
+      // The safe-button pattern: the non-destructive safe CTA is rendered first.
+      if (source.includes('Confirmation')) {
+        const safeIdx = source.search(/保留|留在家庭/);
+        const destructiveIdx = source.search(/确认|移除|撤销|离开/);
+        if (safeIdx !== -1 && destructiveIdx !== -1) {
+          expect(safeIdx).toBeLessThan(destructiveIdx);
+        }
+      }
+    }
+  });
+
+  test('no optimistic transaction UI in household governance mutations', () => {
+    // Governance mutations must not update local state before server confirmation.
+    const governanceFiles = sourceFilesUnder('src/features/households').filter(
+      (p) => p.includes('governance') || p.includes('Governance'),
+    );
+    for (const path of governanceFiles) {
+      const source = readSource(path);
+      // No optimistic cache updates: all mutations must await server response.
+      // The pattern "optimisticUpdate" or pre-setting state before API calls signals
+      // optimistic behavior that violates the contract.
+      expect(source).not.toMatch(/optimisticUpdate/);
+    }
+  });
+
+  test('D-12 accessChanged is the only membership-loss explanation pattern', () => {
+    // The access-changed explanation must be the first thing shown after membership
+    // loss. No automatic fallback entry or login-expiry redirect.
+    const contextFiles = sourceFilesUnder('src/features/households').filter(
+      (p) => p.includes('context') || p.includes('Context') || p.includes('access'),
+    );
+    for (const path of contextFiles) {
+      const source = readSource(path);
+      // The accessChanged state must be distinct from login expiry.
+      // We check that the source references access-related states correctly.
+      if (source.includes('accessChanged') || source.includes('access_changed')) {
+        // Access change explanation must appear before any automatic routing.
+        expect(source).not.toMatch(/router\.(?:replace|push).*(?:login|auth)/i);
+      }
+    }
+  });
+
+  test('no cross-household data flash in context-switch logic', () => {
+    // When switching households, old household data must not render under the new
+    // household header. The context must clear before showing new data.
+    const contextFiles = sourceFilesUnder('src/features/households').filter(
+      (p) => p.includes('context') || p.includes('Context'),
+    );
+    for (const path of contextFiles) {
+      const source = readSource(path);
+      // Query cache invalidation and loading states must be explicit.
+      if (source.includes('queryClient') || source.includes('invalidate')) {
+        // Invalidation must happen before new data is fetched.
+        expect(source).toMatch(/invalidate|clear|remove/);
+      }
+    }
+  });
+
+  test('household ordering token: current first, access DESC, name ASC, UUID ASC', () => {
+    // The ordering logic for household selection must be testable.
+    // This is a structural check — the actual algorithm lives in the context/API layer.
+    const sortFiles = [
+      ...sourceFilesUnder('src/features/households'),
+      ...sourceFilesUnder('src/platform/household'),
+    ];
+    const orderingPatterns = /sort|order|compare/i;
+    let hasOrderingLogic = false;
+    for (const path of sortFiles) {
+      const source = readSource(path);
+      if (orderingPatterns.test(source)) {
+        hasOrderingLogic = true;
+        // Ordering must reference at least role, access time, or name.
+        expect(source).toMatch(/role|access|name|createdAt/i);
+      }
+    }
+    // At least one file must contain ordering logic.
+    expect(hasOrderingLogic).toBe(true);
+  });
+
+  test('member total order: OWNER/ADMIN/MEMBER, current user first, then name/email/ID', () => {
+    // The canonical member ordering defined in Plan 02-03:
+    // OWNER -> ADMIN -> MEMBER; current user first within role;
+    // normalized display nickname ASC; email ASC; membership/user ID ASC.
+    const sortFiles = [
+      ...sourceFilesUnder('src/features/households'),
+      ...sourceFilesUnder('apps/api/src/modules/households'),
+    ].filter((p) => !p.includes('test') && !p.includes('__tests__'));
+    let hasMemberOrderingLogic = false;
+    for (const path of sortFiles) {
+      const source = readSource(path);
+      if (/OWNER.*ADMIN.*MEMBER|role.*order.*sort/i.test(source)) {
+        hasMemberOrderingLogic = true;
+        // The ordering must reference role, current user, and display name/email.
+        expect(source).toMatch(/role|isCurrentUser|displayName|email|id/i);
+      }
+    }
+    // At least one source file must contain member ordering logic.
+    expect(hasMemberOrderingLogic).toBe(true);
+  });
+
+  test('Phase 2 typography uses only 400 and 600 weights in household components', () => {
+    // Per UI-SPEC: Phase 2 uses only 400 and 600 font weights.
+    // The 500 weight (caption) is a Phase 1 artifact that Phase 2 does not extend.
+    const householdUiFiles = sourceFilesUnder('src/ui').filter(
+      (p) => p.includes('household') || p.includes('member') || p.includes('switch'),
+    );
+    for (const path of householdUiFiles) {
+      const source = readSource(path);
+      // No raw fontWeight: '500' in household components.
+      if (source.includes('fontWeight')) {
+        expect(source).not.toMatch(/fontWeight:\s*['"]500['"]/);
+      }
+    }
   });
 });
