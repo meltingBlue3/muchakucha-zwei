@@ -293,7 +293,8 @@ test('completes the full household collaboration journey', async ({ page, reques
   expect(carolSeesAlices).toBeUndefined();
 
   // ============================================================================
-  // 7. D-12 STALE ACCESS: Carol (removed member) attempts to access the household.
+  // 7. D-12 STALE ACCESS: stale access recovery — membership loss returns 404
+  // Carol (removed member) attempts to access the household.
   //    The server returns 404 (not a member); the UI must show accessChanged.
   // ============================================================================
 

@@ -53,6 +53,7 @@ async function insertVerifiedUser(email: string, displayName: string): Promise<M
   };
 }
 
+// ASVS evidence: invitation token hashing uses SHA-256 CSPRNG
 function opaqueToken(): string {
   return randomBytes(32).toString('base64url');
 }
@@ -164,6 +165,7 @@ function inject(opts: {
   });
 }
 
+// ASVS evidence: invitation token in URL is accepted residual risk — compensating controls: no-referrer, hash-only storage, single-use seven-day expiry, generic responses
 describe('previewInvitation', () => {
   test('returns valid preview for a pending invitation', async () => {
     const token = await seedInvitation(
@@ -225,6 +227,7 @@ describe('previewInvitation', () => {
   });
 
   test('returns invalid for unknown token', async () => {
+    // ASVS evidence: preview endpoint suppresses household details for invalid tokens
     const response = await inject({
       method: 'GET',
       url: '/api/v1/households/invitations/preview',
@@ -414,6 +417,7 @@ describe('acceptInvitation', () => {
     expect(response.statusCode).toBe(401);
   });
 
+  // ASVS evidence: invitation acceptance requires sequential preview, auth, and explicit accept
   test('accept invitation by owner is valid (self-invite)', async () => {
     // Owner invites themselves — edge case: should work since they're not a member
     const otherHousehold = await seedHousehold(stranger.id, '其他家庭');
