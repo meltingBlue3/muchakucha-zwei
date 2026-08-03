@@ -191,6 +191,10 @@ export interface RevokeInvitationResponseDto {
   code: 'INVITATION_REVOKED';
   message: string;
 }
+
+export interface ChangeMemberRoleDto {
+  role: 'ADMIN' | 'MEMBER';
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
@@ -221,6 +225,7 @@ import type {
   ListInvitationsResponseDto,
   ResendInvitationResponseDto,
   RevokeInvitationResponseDto,
+  ChangeMemberRoleDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -455,6 +460,22 @@ export class ApiClient {
     );
   }
 
+  async changeMemberRole(
+    accessToken: string,
+    householdId: string,
+    membershipId: string,
+    body: ChangeMemberRoleDto,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'PATCH',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/members/\${encodeURIComponent(membershipId)}/role\`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(\`\${this.baseUrl}\${path}\`, {
       method: 'POST',
@@ -613,6 +634,13 @@ async function generate(): Promise<void> {
       || revokeInvitationPath?.security === undefined
       || document.components?.schemas?.RevokeInvitationResponseDto === undefined) {
       throw new Error('OpenAPI invitation revoke operation or schemas are missing or unstable.');
+    }
+
+    const changeMemberRolePath = document.paths['/api/v1/households/{id}/members/{membershipId}/role']?.patch;
+    if (changeMemberRolePath?.operationId !== 'changeMemberRole'
+      || changeMemberRolePath?.security === undefined
+      || document.components?.schemas?.ChangeMemberRoleDto === undefined) {
+      throw new Error('OpenAPI changeMemberRole operation or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

@@ -26,7 +26,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString } from 'class-validator';
+import { IsEmail, IsIn, IsString } from 'class-validator';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import {
   CreateHouseholdDto,
@@ -137,6 +137,18 @@ export class RevokeInvitationResponseDto {
 
   @ApiProperty({ example: '邀请已撤销。' })
   message!: string;
+}
+
+// ---- Role Governance DTOs (D-09, D-10) ----
+
+export class ChangeMemberRoleDto {
+  @ApiProperty({
+    enum: ['ADMIN', 'MEMBER'],
+    description: 'Target role. OWNER is never a valid DTO value — ownership transfer uses a separate endpoint.',
+    example: 'ADMIN',
+  })
+  @IsIn(['ADMIN', 'MEMBER'], { message: 'role must be ADMIN or MEMBER' })
+  role!: 'ADMIN' | 'MEMBER';
 }
 
 interface AuthenticatedRequest {
@@ -367,5 +379,41 @@ export class HouseholdsController {
       throw new Error('AccessTokenGuard did not attach verified session claims.');
     }
     return this.householdsService.revokeInvitation(request.auth.sub, id, invitationId);
+  }
+
+  // ---- Role governance (D-09, D-10) ----
+
+  @Patch(':id/members/:membershipId/role')
+  @HttpCode(200)
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'changeMemberRole' })
+  @ApiOkResponse({ type: GetHouseholdResponseDto })
+  @ApiBadRequestResponse({ description: 'Requested role is invalid or target already holds that role.' })
+  @ApiForbiddenResponse({ description: 'Actor lacks governance rights or is attempting to target the owner.' })
+  @ApiConflictResponse({ description: 'Stale membership state or ownership changed during the request.' })
+  @ApiNotFoundResponse({ description: 'Household or target membership not found, or actor is not a member.' })
+  async changeMemberRole(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('membershipId') targetMembershipId: string,
+    @Body() input: ChangeMemberRoleDto,
+  ): Promise<GetHouseholdResponseDto> {
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+    const result = await this.householdsService.changeMemberRole(
+      request.auth.sub,
+      id,
+      targetMembershipId,
+      input.role,
+    );
+    if (result === null) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+    return result;
   }
 }

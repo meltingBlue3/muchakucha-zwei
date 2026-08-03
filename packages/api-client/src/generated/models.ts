@@ -183,3 +183,7 @@ export interface RevokeInvitationResponseDto {
   code: 'INVITATION_REVOKED';
   message: string;
 }
+
+export interface ChangeMemberRoleDto {
+  role: 'ADMIN' | 'MEMBER';
+}

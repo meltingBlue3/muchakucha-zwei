@@ -9,6 +9,7 @@ import type {
   MembershipResponseDto,
 } from './dto/create-household.dto.js';
 import type { GetHouseholdMemberDto, GetHouseholdResponseDto } from './dto/membership.dto.js';
+import { roleChangeFailure, type Role } from './household-policy.js';
 
 interface HouseholdMemberRow {
   membershipId: string;
@@ -808,6 +809,118 @@ export class HouseholdsService {
 
     // If no rows updated (race condition), still return success.
     return { code: 'INVITATION_REVOKED', message: '邀请已撤销。' };
+  }
+
+  // ---- Role governance (D-09, D-10) ----
+
+  async changeMemberRole(
+    actorId: string,
+    householdId: string,
+    targetMembershipId: string,
+    newRole: 'ADMIN' | 'MEMBER',
+  ): Promise<GetHouseholdResponseDto | null> {
+    // Load household with fresh membership rows.
+    const household = await this.prisma.household.findUnique({
+      where: { id: householdId },
+      include: {
+        memberships: {
+          include: { user: true },
+        },
+      },
+    });
+
+    if (household === null || household.ownerMembershipId === null) return null;
+
+    // Resolve actor.
+    const actorMembership = household.memberships.find((m) => m.userId === actorId);
+    if (actorMembership === undefined) return null;
+
+    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
+    const actorRole: Role = actorIsOwner ? 'OWNER' : (actorMembership.role as Role);
+
+    // Resolve target — must belong to the same household.
+    const targetMembership = household.memberships.find((m) => m.id === targetMembershipId);
+    if (targetMembership === undefined) return null;
+
+    // D-09: owner is never a valid target for role change.
+    const targetIsOwner = targetMembership.id === household.ownerMembershipId;
+    const targetRole: Role = targetIsOwner ? 'OWNER' : (targetMembership.role as Role);
+
+    // Pure policy check (no DB access).
+    const policyFailure = roleChangeFailure(targetIsOwner, actorRole, targetRole, newRole);
+    if (policyFailure === 'TARGET_IS_OWNER') {
+      // Owner is untouchable — this leaks no household membership info
+      // since the caller already knows the target is in this household.
+      throw new ForbiddenException({
+        code: 'OWNER_UNTOUCHABLE',
+        message: '所有者的角色不能变更。',
+      });
+    }
+    if (policyFailure === 'INSUFFICIENT_ROLE') {
+      throw new ForbiddenException({
+        code: 'INSUFFICIENT_ROLE',
+        message: '只有所有者和管理员可以变更成员角色。',
+      });
+    }
+    if (policyFailure === 'SAME_ROLE') {
+      throw new BadRequestException({
+        code: 'ROLE_UNCHANGED',
+        message: '目标成员已经是该角色。',
+      });
+    }
+
+    // Guarded, stale-proof role update inside a Serializable transaction.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.prisma.$transaction(async (transaction) => {
+          // Lock the household row to prevent concurrent ownership changes.
+          const locked = await transaction.household.findUnique({
+            where: { id: householdId },
+            select: { ownerMembershipId: true },
+          });
+          if (locked === null || locked.ownerMembershipId === null) {
+            throw new NotFoundException({
+              code: 'HOUSEHOLD_NOT_FOUND',
+              message: 'Household not found or access denied.',
+            });
+          }
+
+          // Re-verify owner pointer hasn't changed under us.
+          if (locked.ownerMembershipId !== household.ownerMembershipId) {
+            throw new ConflictException({
+              code: 'HOUSEHOLD_OWNER_CHANGED',
+              message: '家庭所有权已变更，请刷新后重试。',
+            });
+          }
+
+          // Conditional update: only change if the target membership still has
+          // the role we loaded and is not the owner pointer.
+          const updated = await transaction.membership.updateMany({
+            where: {
+              id: targetMembershipId,
+              householdId,
+              role: targetMembership.role,
+            },
+            data: { role: newRole },
+          });
+
+          if (updated.count !== 1) {
+            throw new ConflictException({
+              code: 'STALE_MEMBERSHIP',
+              message: '成员信息已过期，请刷新后重试。',
+            });
+          }
+        }, { isolationLevel: 'Serializable' });
+
+        // Success — return the authoritative household projection.
+        return this.getHousehold(actorId, householdId);
+      } catch (error) {
+        if (this.isSerializationConflict(error) && attempt < 2) continue;
+        throw error;
+      }
+    }
+
+    throw new Error('Unreachable: changeMemberRole retry loop exhausted.');
   }
 
   private isSerializationConflict(error: unknown): boolean {

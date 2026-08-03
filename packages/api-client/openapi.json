@@ -500,6 +500,72 @@
         ]
       }
     },
+    "/api/v1/households/{id}/members/{membershipId}/role": {
+      "patch": {
+        "operationId": "changeMemberRole",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "membershipId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeMemberRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requested role is invalid or target already holds that role."
+          },
+          "403": {
+            "description": "Actor lacks governance rights or is attempting to target the owner."
+          },
+          "409": {
+            "description": "Stale membership state or ownership changed during the request."
+          },
+          "404": {
+            "description": "Household or target membership not found, or actor is not a member."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login",
@@ -1184,6 +1250,23 @@
         "required": [
           "code",
           "message"
+        ]
+      },
+      "ChangeMemberRoleDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MEMBER"
+            ],
+            "description": "Target role. OWNER is never a valid DTO value - ownership transfer uses a separate endpoint.",
+            "example": "ADMIN"
+          }
+        },
+        "required": [
+          "role"
         ]
       },
       "LoginDto": {

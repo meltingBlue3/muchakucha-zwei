@@ -26,6 +26,7 @@ import type {
   ListInvitationsResponseDto,
   ResendInvitationResponseDto,
   RevokeInvitationResponseDto,
+  ChangeMemberRoleDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -256,6 +257,22 @@ export class ApiClient {
       `/api/v1/households/${encodeURIComponent(householdId)}/invitations/${encodeURIComponent(invitationId)}/revoke`,
       accessToken,
       undefined,
+      signal,
+    );
+  }
+
+  async changeMemberRole(
+    accessToken: string,
+    householdId: string,
+    membershipId: string,
+    body: ChangeMemberRoleDto,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'PATCH',
+      `/api/v1/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/role`,
+      accessToken,
+      body,
       signal,
     );
   }

@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
-import { createHash, randomBytes } from 'node:crypto';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -10,10 +9,6 @@ const DATABASE_URL =
 const password = 'correct horse battery staple 2026';
 
 // ---- Database helpers ----
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token, 'utf8').digest('hex');
-}
 
 async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({ connectionString: DATABASE_URL });
@@ -125,7 +120,7 @@ async function getHouseholdMemberships(
 // The verify automation counts test( occurrences; adding a second test() would
 // break the gate. Keep integration and tie-case variants outside this dedicated file.
 
-test('changes a non-owner role [RED:ROLE_GOVERNANCE]', async ({ page, request }) => {
+test('changes a non-owner role', async ({ page, request }) => {
   test.setTimeout(120_000);
 
   // ============================================================================
@@ -169,12 +164,167 @@ test('changes a non-owner role [RED:ROLE_GOVERNANCE]', async ({ page, request })
   await expect(page.getByText('角色治理测试家庭').first()).toBeVisible({ timeout: 5000 });
 
   // ============================================================================
-  // RED: role-governance behavior does not exist yet.
+  // D-09: ROLE CHANGE MATRIX — authorized actors can promote and demote.
   // ============================================================================
 
-  throw new Error(
-    'IMPLEMENTATION_MISSING_ROLE_GOVERNANCE: the role governance endpoint, ' +
-    'policy module, client governance component, role-confirmation route, ' +
-    'and e2e assertions for D-09/D-10 are not yet implemented.',
+  // Find membership IDs from the authoritative roster.
+  const getMember = (members: Array<{ membershipId: string; userId: string; role: string }>, userId: string) =>
+    members.find((m) => m.userId === userId);
+
+  let freshRoster = await getHouseholdMemberships(owner.accessToken, household.id);
+
+  const adminMembership = getMember(freshRoster, admin.userId);
+  const memberAMembership = getMember(freshRoster, memberA.userId);
+  const memberBMembership = getMember(freshRoster, memberB.userId);
+
+  expect(adminMembership).toBeDefined();
+  expect(memberAMembership).toBeDefined();
+  expect(memberBMembership).toBeDefined();
+  expect(adminMembership!.role).toBe('ADMIN');
+  expect(memberAMembership!.role).toBe('MEMBER');
+
+  // ---- Owner promotes MEMBER to ADMIN ----
+  const promoteResponse = await request.patch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(memberAMembership!.membershipId)}/role`,
+    {
+      headers: { authorization: `Bearer ${owner.accessToken}`, 'content-type': 'application/json' },
+      data: { role: 'ADMIN' },
+    },
   );
+  expect(promoteResponse.status()).toBe(200);
+  const promoteBody = (await promoteResponse.json()) as { members: Array<{ membershipId: string; role: string }> };
+  const promotedMember = promoteBody.members.find((m) => m.membershipId === memberAMembership!.membershipId);
+  expect(promotedMember!.role).toBe('ADMIN');
+
+  // ---- Owner demotes the same member back to MEMBER ----
+  const demoteResponse = await request.patch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(memberAMembership!.membershipId)}/role`,
+    {
+      headers: { authorization: `Bearer ${owner.accessToken}`, 'content-type': 'application/json' },
+      data: { role: 'MEMBER' },
+    },
+  );
+  expect(demoteResponse.status()).toBe(200);
+  const demoteBody = (await demoteResponse.json()) as { members: Array<{ membershipId: string; role: string }> };
+  const demotedMember = demoteBody.members.find((m) => m.membershipId === memberAMembership!.membershipId);
+  expect(demotedMember!.role).toBe('MEMBER');
+
+  // ---- Admin promotes MEMBER to ADMIN ----
+  const adminPromoteResponse = await request.patch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(memberBMembership!.membershipId)}/role`,
+    {
+      headers: { authorization: `Bearer ${admin.accessToken}`, 'content-type': 'application/json' },
+      data: { role: 'ADMIN' },
+    },
+  );
+  expect(adminPromoteResponse.status()).toBe(200);
+
+  // Verify memberB is now ADMIN.
+  const postAdminPromoteRoster = await getHouseholdMemberships(owner.accessToken, household.id);
+  const promotedMemberB = getMember(postAdminPromoteRoster, memberB.userId);
+  expect(promotedMemberB!.role).toBe('ADMIN');
+
+  // ---- Admin demotes another admin (D-09: admin can target other admins) ----
+  const adminDemotesAdminResponse = await request.patch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(promotedMemberB!.membershipId)}/role`,
+    {
+      headers: { authorization: `Bearer ${admin.accessToken}`, 'content-type': 'application/json' },
+      data: { role: 'MEMBER' },
+    },
+  );
+  expect(adminDemotesAdminResponse.status()).toBe(200);
+
+  // ============================================================================
+  // D-09: FORBIDDEN — admin cannot target owner.
+  // ============================================================================
+
+  const ownerMembershipId = freshRoster.find((m) => m.role === 'OWNER')!.membershipId;
+
+  const adminTargetingOwner = await request.patch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(ownerMembershipId)}/role`,
+    {
+      headers: { authorization: `Bearer ${admin.accessToken}`, 'content-type': 'application/json' },
+      data: { role: 'MEMBER' },
+    },
+  );
+  expect(adminTargetingOwner.status()).toBe(403);
+  const adminTargetBody = (await adminTargetingOwner.json()) as { code: string };
+  expect(adminTargetBody.code).toBe('OWNER_UNTOUCHABLE');
+
+  // ============================================================================
+  // D-09: FORBIDDEN — member cannot govern.
+  // ============================================================================
+
+  freshRoster = await getHouseholdMemberships(owner.accessToken, household.id);
+  const someNonOwnerMembership = freshRoster.find((m) => m.role !== 'OWNER')!;
+
+  const memberGoverning = await request.patch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(someNonOwnerMembership.membershipId)}/role`,
+    {
+      headers: { authorization: `Bearer ${memberA.accessToken}`, 'content-type': 'application/json' },
+      data: { role: 'ADMIN' },
+    },
+  );
+  expect(memberGoverning.status()).toBe(403);
+  const memberGovBody = (await memberGoverning.json()) as { code: string };
+  expect(memberGovBody.code).toBe('INSUFFICIENT_ROLE');
+
+  // ============================================================================
+  // CROSS-HOUSEHOLD: outsider cannot access.
+  // ============================================================================
+
+  const outsiderResponse = await request.patch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(someNonOwnerMembership.membershipId)}/role`,
+    {
+      headers: { authorization: `Bearer ${outsider.accessToken}`, 'content-type': 'application/json' },
+      data: { role: 'ADMIN' },
+    },
+  );
+  expect(outsiderResponse.status()).toBe(404);
+
+  // ============================================================================
+  // SAME-ROLE: changing to the same role returns 400.
+  // ============================================================================
+
+  const sameRoleResponse = await request.patch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(someNonOwnerMembership.membershipId)}/role`,
+    {
+      headers: { authorization: `Bearer ${owner.accessToken}`, 'content-type': 'application/json' },
+      data: { role: someNonOwnerMembership.role as 'ADMIN' | 'MEMBER' },
+    },
+  );
+  expect(sameRoleResponse.status()).toBe(400);
+  const sameRoleBody = (await sameRoleResponse.json()) as { code: string };
+  expect(sameRoleBody.code).toBe('ROLE_UNCHANGED');
+
+  // ============================================================================
+  // STALE ROLE: direct DB manipulation should cause 409 rejection.
+  // ============================================================================
+
+  freshRoster = await getHouseholdMemberships(owner.accessToken, household.id);
+  const targetForStale = freshRoster.find((m) => m.role === 'ADMIN' && m.userId !== owner.userId)!;
+
+  // Directly demote in DB to simulate stale client state.
+  await withDatabase(async (db) => {
+    await db.query(
+      `UPDATE "memberships" SET "role" = 'MEMBER' WHERE "id" = $1`,
+      [targetForStale.membershipId],
+    );
+  });
+
+  // Try to demote the member using stale role data (loaded as ADMIN, actual is MEMBER).
+  // The service's conditional updateMany (where role='ADMIN') should find 0 rows → 409.
+  // But wait — the policy check runs first: targetRole='ADMIN' (stale), newRole='MEMBER' → allowed.
+  // Then the transaction: updateMany where id=X AND role='ADMIN'. In DB it's 'MEMBER', so count=0.
+  // This triggers STALE_MEMBERSHIP 409.
+  const staleResponse = await request.patch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(targetForStale.membershipId)}/role`,
+    {
+      headers: { authorization: `Bearer ${owner.accessToken}`, 'content-type': 'application/json' },
+      data: { role: 'MEMBER' },
+    },
+  );
+  expect(staleResponse.status()).toBe(409);
+  const staleBody = (await staleResponse.json()) as { code: string };
+  expect(staleBody.code).toBe('STALE_MEMBERSHIP');
 });
