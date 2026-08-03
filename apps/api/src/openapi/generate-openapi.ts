@@ -97,6 +97,26 @@ export interface CompletePasswordResetDto {
   token: string;
   password: string;
 }
+
+export interface CreateHouseholdDto {
+  /** 1–40 Unicode code points after trim and NFC normalization. */
+  name: string;
+}
+
+export interface MembershipResponseDto {
+  id: string;
+  userId: string;
+  householdId: string;
+  role: 'ADMIN' | 'MEMBER';
+}
+
+export interface CreateHouseholdResponseDto {
+  id: string;
+  name: string;
+  ownerMembershipId: string;
+  createdAt: string;
+  membership: MembershipResponseDto;
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
@@ -116,6 +136,8 @@ import type {
   RequestPasswordResetDto,
   PasswordResetRequestAcceptedDto,
   CompletePasswordResetDto,
+  CreateHouseholdDto,
+  CreateHouseholdResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -203,6 +225,20 @@ export class ApiClient {
       const text = await response.text();
       throw new ApiClientError(response.status, text === '' ? undefined : JSON.parse(text));
     }
+  }
+
+  async createHousehold(
+    accessToken: string,
+    body: CreateHouseholdDto,
+    signal?: AbortSignal,
+  ): Promise<CreateHouseholdResponseDto> {
+    return this.authenticated<CreateHouseholdResponseDto>(
+      'POST',
+      '/api/v1/households',
+      accessToken,
+      body,
+      signal,
+    );
   }
 
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -297,6 +333,12 @@ async function generate(): Promise<void> {
       || document.components?.schemas?.UpdateMeDto === undefined
       || document.components.schemas.CurrentUserDto === undefined) {
       throw new Error('OpenAPI current-user operations or schemas are missing or unstable.');
+    }
+    if (document.paths['/api/v1/households']?.post?.operationId !== 'createHousehold'
+      || document.components?.schemas?.CreateHouseholdDto === undefined
+      || document.components.schemas.CreateHouseholdResponseDto === undefined
+      || document.components.schemas.MembershipResponseDto === undefined) {
+      throw new Error('OpenAPI household creation operation or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

@@ -320,6 +320,46 @@
           "auth"
         ]
       }
+    },
+    "/api/v1/households": {
+      "post": {
+        "operationId": "createHousehold",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHouseholdDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Household and creator membership created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Household name is invalid or the request is malformed."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
     }
   },
   "info": {
@@ -633,6 +673,80 @@
         "required": [
           "token",
           "password"
+        ]
+      },
+      "CreateHouseholdDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "1–40 Unicode code points after trim and NFC normalization."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "MembershipResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "householdId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MEMBER"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "householdId",
+          "role"
+        ]
+      },
+      "CreateHouseholdResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "My Family"
+          },
+          "ownerMembershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "membership": {
+            "$ref": "#/components/schemas/MembershipResponseDto"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ownerMembershipId",
+          "createdAt",
+          "membership"
         ]
       }
     }

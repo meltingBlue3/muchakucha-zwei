@@ -2,6 +2,7 @@ import { DynamicModule, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
+import { HouseholdsModule } from './modules/households/households.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
 @Module({})
@@ -25,6 +26,7 @@ export class AppModule {
           ],
         }),
         UsersModule.register(environment),
+        HouseholdsModule.register(environment),
       ],
       providers: [
         {

@@ -47,24 +47,30 @@ async function prepareVerifiedAccount(): Promise<{ email: string; accessToken: s
   }
 }
 
-test('creates and displays the authoritative household [RED:HOUSEHOLD_CREATE]', async ({ page, request }) => {
+test('creates and displays the authoritative household', async ({ page, request }) => {
   test.setTimeout(60_000);
 
   const { accessToken } = await prepareVerifiedAccount();
 
-  // Navigate to the Phase 1 no-household handoff
+  // Navigate to the no-household handoff and verify the heading is visible.
   await page.goto('/household-handoff');
-  await expect(page.getByRole('heading')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
-  // Attempt to create a household through the not-yet-implemented API endpoint.
-  // NestJS returns a 404 for the unknown route; the test expects the
-  // dedicated marker that the Phase 2 implementation will remove.
-  const createResponse = await request.post(`${API_ORIGIN}/api/v1/households`, {
-    data: { name: '我的家' },
-    headers: { authorization: `Bearer ${accessToken}` },
-  });
-  const createBody: unknown = await createResponse.json();
-  expect(createBody).toMatchObject({
-    code: 'IMPLEMENTATION_MISSING_HOUSEHOLD_CREATE',
-  });
+  // Click the create household button to navigate to /households/new.
+  await page.getByRole('button', { name: '创建家庭' }).click();
+  await expect(page).toHaveURL(/\/households\/new/);
+
+  // Fill in the household name and submit.
+  const nameField = page.getByLabel('家庭名称');
+  await expect(nameField).toBeVisible();
+  await nameField.fill('我的家');
+  await page.getByRole('button', { name: '创建家庭' }).click();
+
+  // Assert the authoritative result is displayed on the same route.
+  await expect(page.getByRole('heading', { name: '我的家' })).toBeVisible();
+  await expect(page.getByText('家庭已创建。你现在是这个家庭的所有者。')).toBeVisible();
+  await expect(page.getByText('角色：所有者')).toBeVisible();
+
+  // The app stays on /households/new — it does not navigate to an unowned route.
+  await expect(page).toHaveURL(/\/households\/new/);
 });
