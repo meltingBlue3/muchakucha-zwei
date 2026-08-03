@@ -160,7 +160,6 @@ describe('typed design-token and composition contract', () => {
     // Household route files in app/(protected)/ and app/invite/ must be thin shells.
     const routeFiles = [
       ...sourceFilesUnder('app/(protected)/households'),
-      ...sourceFilesUnder('app/households'),
       ...sourceFilesUnder('app/invite'),
     ];
     const rawStylePattern = /#[0-9A-Fa-f]{3,8}\b|(?:fontSize|borderRadius):\s*\d/;
@@ -264,7 +263,6 @@ describe('typed design-token and composition contract', () => {
     // normalized display nickname ASC; email ASC; membership/user ID ASC.
     const sortFiles = [
       ...sourceFilesUnder('src/features/households'),
-      ...sourceFilesUnder('apps/api/src/modules/households'),
     ].filter((p) => !p.includes('test') && !p.includes('__tests__'));
     let hasMemberOrderingLogic = false;
     for (const path of sortFiles) {

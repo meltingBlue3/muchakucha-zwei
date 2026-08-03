@@ -699,14 +699,13 @@ export const ConfirmationPage = ({
             alignItems: 'center',
             backgroundColor: busy
               ? theme.colors.disabled
-              : pressed
-                ? '#8B1A12'
-                : theme.colors.destructive,
+              : theme.colors.destructive,
             borderRadius: theme.borderRadii.lg,
             flexDirection: 'row',
             gap: theme.spacing[2],
             justifyContent: 'center',
             minHeight: theme.controlSizes.primary,
+            opacity: busy ? 1 : pressed ? 0.85 : 1,
             minWidth: theme.controlSizes.touchTarget,
             opacity: busy ? 0.5 : 1,
             paddingHorizontal: theme.spacing[4],
@@ -781,14 +780,13 @@ export const FinalConfirmation = ({
             alignItems: 'center',
             backgroundColor: busy
               ? theme.colors.disabled
-              : pressed
-                ? '#8B1A12'
-                : theme.colors.destructive,
+              : theme.colors.destructive,
             borderRadius: theme.borderRadii.lg,
             flexDirection: 'row',
             gap: theme.spacing[2],
             justifyContent: 'center',
             minHeight: theme.controlSizes.primary,
+            opacity: busy ? 1 : pressed ? 0.85 : 1,
             minWidth: theme.controlSizes.touchTarget,
             opacity: busy ? 0.5 : 1,
             paddingHorizontal: theme.spacing[4],
