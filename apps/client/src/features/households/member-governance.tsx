@@ -4,9 +4,9 @@ import { useCallback } from 'react';
 
 /**
  * Minimal API surface required by member governance operations.
- * Testable with a fake client supplying only `changeMemberRole`.
+ * Testable with a fake client supplying only the required methods.
  */
-export type GovernanceApi = Pick<ApiClient, 'changeMemberRole'>;
+export type GovernanceApi = Pick<ApiClient, 'changeMemberRole' | 'removeMember'>;
 
 export interface ChangeRoleParams {
   accessToken: string;
@@ -29,6 +29,28 @@ export async function changeMemberRole(
     params.householdId,
     params.targetMembershipId,
     { role: params.newRole },
+  );
+}
+
+export interface RemoveMemberParams {
+  accessToken: string;
+  householdId: string;
+  targetMembershipId: string;
+}
+
+/**
+ * Calls the server-authoritative member-removal endpoint.
+ * Returns the updated household projection on success.
+ * Throws ApiClientError on failure — callers handle error display.
+ */
+export async function removeMemberApi(
+  apiClient: GovernanceApi,
+  params: RemoveMemberParams,
+): Promise<{ members: GetHouseholdMemberDto[] }> {
+  return apiClient.removeMember(
+    params.accessToken,
+    params.householdId,
+    params.targetMembershipId,
   );
 }
 
@@ -60,6 +82,23 @@ export function canGovern(
   return actorRole === 'OWNER' || actorRole === 'ADMIN';
 }
 
+/**
+ * D-09: returns whether the current actor can remove the given member.
+ * Owner/admin can remove any non-owner (including other admins).
+ * Owner is never a valid removal target. Cannot remove yourself.
+ */
+export function canRemove(
+  actorRole: 'OWNER' | 'ADMIN' | 'MEMBER',
+  targetRole: 'OWNER' | 'ADMIN' | 'MEMBER',
+  targetIsOwner: boolean,
+  targetIsSelf: boolean,
+): boolean {
+  if (targetIsOwner) return false;
+  if (targetIsSelf) return false;
+  if (actorRole === 'MEMBER') return false;
+  return actorRole === 'OWNER' || actorRole === 'ADMIN';
+}
+
 export type GovernanceAction = 'none' | 'promote' | 'demote';
 
 /**
@@ -87,10 +126,12 @@ export function governanceAction(
  * Promotion (MEMBER->ADMIN) returns a direct API call handler.
  * Demotion (ADMIN->MEMBER) navigates to the dedicated confirmation page
  * per D-10 safe-action-first contract.
+ * Removal navigates to the dedicated D-10 consequence confirmation page.
  */
 export interface UseMemberGovernanceResult {
   promote: ((membershipId: string) => void) | undefined;
   demote: ((membershipId: string) => void) | undefined;
+  remove: ((membershipId: string) => void) | undefined;
   /** Whether any governance mutation is pending. */
   isBusy: boolean;
 }
@@ -123,10 +164,21 @@ export function useMemberGovernance(
     [router, householdId],
   );
 
+  const remove = useCallback(
+    (membershipId: string) => {
+      void router.push(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        `/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/remove` as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      );
+    },
+    [router, householdId],
+  );
+
   // When actor role is MEMBER, return undefined callbacks.
   if (actorRole === 'MEMBER') {
-    return { promote: undefined, demote: undefined, isBusy: false };
+    return { promote: undefined, demote: undefined, remove: undefined, isBusy: false };
   }
 
-  return { promote, demote, isBusy: false };
+  return { promote, demote, remove, isBusy: false };
 }

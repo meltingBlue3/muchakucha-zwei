@@ -48,3 +48,36 @@ export function roleChangeFailure(
 export function isPromotion(oldRole: Role, newRole: 'ADMIN' | 'MEMBER'): boolean {
   return oldRole === 'MEMBER' && newRole === 'ADMIN';
 }
+
+export type RemovalFailure =
+  | 'TARGET_IS_OWNER'
+  | 'INSUFFICIENT_ROLE'
+  | 'TARGET_IS_SELF';
+
+/**
+ * D-09: owner/admin can remove any non-owner member, including
+ * another admin, but never the owner.  An actor can never remove
+ * their own membership (use owner-leave for that).
+ *
+ * Returns a failure code when removal is forbidden, or `undefined`
+ * when removal is allowed.  This function is pure — it does not
+ * access the database.  Staleness and cross-household checks belong
+ * in the service layer.
+ */
+export function removalFailure(
+  targetIsOwner: boolean,
+  actorRole: Role,
+  targetIsActor: boolean,
+): RemovalFailure | undefined {
+  // Owner is never a valid removal target (D-09).
+  if (targetIsOwner) return 'TARGET_IS_OWNER';
+
+  // Members have no governance authority.
+  if (actorRole === 'MEMBER') return 'INSUFFICIENT_ROLE';
+
+  // Actors cannot remove themselves (use owner-leave for that flow).
+  if (targetIsActor) return 'TARGET_IS_SELF';
+
+  // Both OWNER and ADMIN may remove any non-owner.
+  return undefined;
+}

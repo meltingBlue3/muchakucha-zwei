@@ -322,4 +322,183 @@ describe('changes roles', () => {
       expect(response.json().code).toBe('STALE_MEMBERSHIP');
     });
   });
+
+  // ---- Member removal helpers ----
+
+  function removeMember(
+    accessToken: string,
+    householdId: string,
+    membershipId: string,
+  ) {
+    return app.inject({
+      method: 'DELETE',
+      url: `/api/v1/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+  }
+
+  describe('removes a member', () => {
+    test('owner removes a member', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const member = await insertVerifiedUser('member@example.test', '成员');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, member.id, 'MEMBER');
+
+      const roster = await getHousehold(owner.accessToken, household.id);
+      const target = roster.json().members.find((m: { userId: string }) => m.userId === member.id);
+      expect(target).toBeDefined();
+      expect(target.role).toBe('MEMBER');
+
+      const response = await removeMember(owner.accessToken, household.id, target.membershipId);
+      expect(response.statusCode).toBe(200);
+
+      // Verify member is removed from the roster.
+      const updatedRoster = await getHousehold(owner.accessToken, household.id);
+      const removedMember = updatedRoster.json().members.find(
+        (m: { userId: string }) => m.userId === member.id,
+      );
+      expect(removedMember).toBeUndefined();
+    });
+
+    test('owner removes another admin', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, admin.id, 'ADMIN');
+
+      const roster = await getHousehold(owner.accessToken, household.id);
+      const target = roster.json().members.find((m: { userId: string }) => m.userId === admin.id);
+      expect(target.role).toBe('ADMIN');
+
+      const response = await removeMember(owner.accessToken, household.id, target.membershipId);
+      expect(response.statusCode).toBe(200);
+
+      const updatedRoster = await getHousehold(owner.accessToken, household.id);
+      const removedAdmin = updatedRoster.json().members.find(
+        (m: { userId: string }) => m.userId === admin.id,
+      );
+      expect(removedAdmin).toBeUndefined();
+    });
+
+    test('admin removes a member', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+      const member = await insertVerifiedUser('member@example.test', '成员');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, admin.id, 'ADMIN');
+      await addMemberViaDb(household.id, member.id, 'MEMBER');
+
+      const roster = await getHousehold(admin.accessToken, household.id);
+      const target = roster.json().members.find((m: { userId: string }) => m.userId === member.id);
+      expect(target.role).toBe('MEMBER');
+
+      const response = await removeMember(admin.accessToken, household.id, target.membershipId);
+      expect(response.statusCode).toBe(200);
+
+      const updatedRoster = await getHousehold(admin.accessToken, household.id);
+      const removedMember = updatedRoster.json().members.find(
+        (m: { userId: string }) => m.userId === member.id,
+      );
+      expect(removedMember).toBeUndefined();
+    });
+
+    test('admin removes another admin', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const admin1 = await insertVerifiedUser('admin1@example.test', '管理员甲');
+      const admin2 = await insertVerifiedUser('admin2@example.test', '管理员乙');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, admin1.id, 'ADMIN');
+      await addMemberViaDb(household.id, admin2.id, 'ADMIN');
+
+      const roster = await getHousehold(admin1.accessToken, household.id);
+      const target = roster.json().members.find((m: { userId: string }) => m.userId === admin2.id);
+      expect(target.role).toBe('ADMIN');
+
+      const response = await removeMember(admin1.accessToken, household.id, target.membershipId);
+      expect(response.statusCode).toBe(200);
+
+      const updatedRoster = await getHousehold(admin1.accessToken, household.id);
+      const removedAdmin = updatedRoster.json().members.find(
+        (m: { userId: string }) => m.userId === admin2.id,
+      );
+      expect(removedAdmin).toBeUndefined();
+    });
+
+    test('admin cannot remove owner', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, admin.id, 'ADMIN');
+
+      const roster = await getHousehold(admin.accessToken, household.id);
+      const ownerMembership = roster.json().members.find((m: { userId: string }) => m.userId === owner.id);
+      expect(ownerMembership.role).toBe('OWNER');
+
+      const response = await removeMember(admin.accessToken, household.id, ownerMembership.membershipId);
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('OWNER_UNTOUCHABLE');
+    });
+
+    test('member cannot remove anyone', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const member = await insertVerifiedUser('member@example.test', '成员');
+      const other = await insertVerifiedUser('other@example.test', '其他');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, member.id, 'MEMBER');
+      await addMemberViaDb(household.id, other.id, 'MEMBER');
+
+      const roster = await getHousehold(member.accessToken, household.id);
+      const target = roster.json().members.find((m: { userId: string }) => m.userId === other.id);
+
+      const response = await removeMember(member.accessToken, household.id, target.membershipId);
+      expect(response.statusCode).toBe(403);
+      expect(response.json().code).toBe('INSUFFICIENT_ROLE');
+    });
+
+    test('cannot remove own membership', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+
+      const roster = await getHousehold(owner.accessToken, household.id);
+      const selfMembership = roster.json().members.find((m: { userId: string }) => m.userId === owner.id);
+      expect(selfMembership.role).toBe('OWNER');
+
+      const response = await removeMember(owner.accessToken, household.id, selfMembership.membershipId);
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe('CANNOT_REMOVE_SELF');
+    });
+
+    test('cross-household target membership returns 404', async () => {
+      const ownerA = await insertVerifiedUser('ownera@example.test', '家主A');
+      const ownerB = await insertVerifiedUser('ownerb@example.test', '家主B');
+      const memberB = await insertVerifiedUser('memberb@example.test', '成员B');
+
+      const h1 = await createHouseholdWithRole(app, ownerA.id, ownerA.accessToken, '家庭A');
+      const h2 = await createHouseholdWithRole(app, ownerB.id, ownerB.accessToken, '家庭B');
+      await addMemberViaDb(h2.id, memberB.id, 'MEMBER');
+
+      const rosterB = await getHousehold(ownerB.accessToken, h2.id);
+      const targetB = rosterB.json().members.find((m: { userId: string }) => m.userId === memberB.id);
+
+      const response = await removeMember(ownerA.accessToken, h1.id, targetB.membershipId);
+      expect(response.statusCode).toBe(404);
+    });
+
+    test('outsider returns 404 on unknown household', async () => {
+      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const outsider = await insertVerifiedUser('outsider@example.test', '外人');
+
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+
+      const response = await removeMember(outsider.accessToken, household.id, randomUUID());
+      expect(response.statusCode).toBe(404);
+    });
+  });
 });

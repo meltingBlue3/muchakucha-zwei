@@ -277,6 +277,21 @@ export class ApiClient {
     );
   }
 
+  async removeMember(
+    accessToken: string,
+    householdId: string,
+    membershipId: string,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'DELETE',
+      `/api/v1/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
@@ -293,7 +308,7 @@ export class ApiClient {
   }
 
   private async authenticated<T>(
-    method: 'GET' | 'PATCH' | 'POST',
+    method: 'GET' | 'PATCH' | 'POST' | 'DELETE',
     path: string,
     accessToken: string,
     body?: unknown,

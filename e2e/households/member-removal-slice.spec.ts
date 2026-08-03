@@ -120,7 +120,7 @@ async function getHouseholdMemberships(
 // The verify automation counts test( occurrences; adding a second test() would
 // break the gate. Keep integration and tie-case variants outside this dedicated file.
 
-test('removes a non-owner member [RED:MEMBER_REMOVAL]', async ({ page }) => {
+test('removes a non-owner member', async ({ page, request }) => {
   test.setTimeout(120_000);
 
   // ============================================================================
@@ -140,12 +140,16 @@ test('removes a non-owner member [RED:MEMBER_REMOVAL]', async ({ page }) => {
   await addMembershipViaDb(household.id, removedIdentity.userId, 'MEMBER');
 
   // Verify roster is authoritative.
-  const roster = await getHouseholdMemberships(owner.accessToken, household.id);
+  let roster = await getHouseholdMemberships(owner.accessToken, household.id);
   expect(roster.length).toBe(4); // owner + admin + memberA + removedIdentity
 
   const removedMember = roster.find((m) => m.userId === removedIdentity.userId);
   expect(removedMember).toBeDefined();
   expect(removedMember!.role).toBe('MEMBER');
+
+  const adminMembership = roster.find((m) => m.userId === admin.userId);
+  expect(adminMembership).toBeDefined();
+  expect(adminMembership!.role).toBe('ADMIN');
 
   // ============================================================================
   // PRECONDITIONS: settings page is reachable
@@ -167,44 +171,68 @@ test('removes a non-owner member [RED:MEMBER_REMOVAL]', async ({ page }) => {
   await expect(page.getByText('移除测试家庭').first()).toBeVisible({ timeout: 5000 });
 
   // ============================================================================
-  // D-09: REMOVAL — owner can remove a non-owner member (RED phase).
+  // D-09: REMOVAL — owner removes a non-owner member.
   // ============================================================================
 
-  // Attempt to remove the member via DELETE (this endpoint does not exist yet).
-  const removeResponse = await page.request.delete(
+  const removeResponse = await request.delete(
     `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(removedMember!.membershipId)}`,
     {
       headers: { authorization: `Bearer ${owner.accessToken}` },
     },
   );
+  expect(removeResponse.status()).toBe(200);
 
-  // RED: the endpoint is not yet implemented — the response status should
-  // indicate a missing end-point (404) or method-not-allowed (405).
-  // When the implementation lands this assertion is replaced with 200
-  // and the IMPLEMENTATION_MISSING_MEMBER_REMOVAL marker is removed.
-  if (removeResponse.status() === 200) {
-    // Implementation already exists — verify member is actually removed.
-    const postRemovalRoster = await getHouseholdMemberships(owner.accessToken, household.id);
-    const stillPresent = postRemovalRoster.find((m) => m.userId === removedIdentity.userId);
-    if (stillPresent === undefined) {
-      // Member was successfully removed, but the RED marker is still in place.
-      throw new Error('IMPLEMENTATION_MISSING_MEMBER_REMOVAL: removal endpoint returned 200 but the RED marker is still present. Remove the RED marker to GREEN this test.');
-    }
-    throw new Error('IMPLEMENTATION_MISSING_MEMBER_REMOVAL: removal endpoint exists (200) but the member is still in the roster. The removal service may be incomplete.');
-  }
+  // Verify member is removed from the roster.
+  const postRemovalRoster = await getHouseholdMemberships(owner.accessToken, household.id);
+  expect(postRemovalRoster.length).toBe(3); // owner + admin + memberA
+  const stillPresent = postRemovalRoster.find((m) => m.userId === removedIdentity.userId);
+  expect(stillPresent).toBeUndefined();
 
-  // RED phase: the endpoint should return 404 (not found) because it has
-  // not been implemented yet, or 405 (method not allowed) if the DELETE
-  // method is not registered for this route.
-  expect([404, 405]).toContain(removeResponse.status());
+  // ============================================================================
+  // D-09: OWNER CANNOT BE REMOVED — forbidden.
+  // ============================================================================
 
-  // IMPORTANT: member MUST still be in the roster — confirming no partial
-  // implementation or accidental deletion during the RED phase.
-  const postAttemptRoster = await getHouseholdMemberships(owner.accessToken, household.id);
-  const stillInRoster = postAttemptRoster.find((m) => m.userId === removedIdentity.userId);
-  expect(stillInRoster).toBeDefined();
-  expect(stillInRoster!.role).toBe('MEMBER');
+  const ownerMembership = postRemovalRoster.find((m) => m.role === 'OWNER')!;
+  const adminTargetOwner = await request.delete(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(ownerMembership.membershipId)}`,
+    {
+      headers: { authorization: `Bearer ${admin.accessToken}` },
+    },
+  );
+  expect(adminTargetOwner.status()).toBe(403);
+  const adminOwnerBody = (await adminTargetOwner.json()) as { code: string };
+  expect(adminOwnerBody.code).toBe('OWNER_UNTOUCHABLE');
 
-  // RED confirmation: the endpoint is not yet implemented.
-  throw new Error('IMPLEMENTATION_MISSING_MEMBER_REMOVAL');
+  // ============================================================================
+  // D-09: MEMBER CANNOT REMOVE — forbidden.
+  // ============================================================================
+
+  const someNonOwnerMember = postRemovalRoster.find((m) => m.role !== 'OWNER')!;
+  const memberRemoving = await request.delete(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(someNonOwnerMember.membershipId)}`,
+    {
+      headers: { authorization: `Bearer ${memberA.accessToken}` },
+    },
+  );
+  expect(memberRemoving.status()).toBe(403);
+  const memberBody = (await memberRemoving.json()) as { code: string };
+  expect(memberBody.code).toBe('INSUFFICIENT_ROLE');
+
+  // ============================================================================
+  // D-09: ADMIN REMOVES ANOTHER ADMIN — works.
+  // ============================================================================
+
+  // The admin is still present. Owner removes admin via API as another admin removal test.
+  const adminRemoveResponse = await request.delete(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(adminMembership!.membershipId)}`,
+    {
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    },
+  );
+  expect(adminRemoveResponse.status()).toBe(200);
+
+  const postAdminRemovalRoster = await getHouseholdMemberships(owner.accessToken, household.id);
+  expect(postAdminRemovalRoster.length).toBe(2); // owner + memberA
+  const adminStillPresent = postAdminRemovalRoster.find((m) => m.userId === admin.userId);
+  expect(adminStillPresent).toBeUndefined();
 });

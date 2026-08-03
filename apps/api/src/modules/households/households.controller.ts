@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
@@ -407,6 +408,40 @@ export class HouseholdsController {
       id,
       targetMembershipId,
       input.role,
+    );
+    if (result === null) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+    return result;
+  }
+
+  // ---- Member removal (D-09, D-10) ----
+
+  @Delete(':id/members/:membershipId')
+  @HttpCode(200)
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'removeMember' })
+  @ApiOkResponse({ type: GetHouseholdResponseDto, description: 'Member successfully removed. Returns the authoritative household projection.' })
+  @ApiBadRequestResponse({ description: 'Actor is attempting to remove their own membership or the request is malformed.' })
+  @ApiForbiddenResponse({ description: 'Actor lacks governance rights or is attempting to target the owner.' })
+  @ApiConflictResponse({ description: 'Stale membership state or ownership changed during the request.' })
+  @ApiNotFoundResponse({ description: 'Household or target membership not found, or actor is not a member.' })
+  async removeMember(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('membershipId') targetMembershipId: string,
+  ): Promise<GetHouseholdResponseDto> {
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+    const result = await this.householdsService.removeMember(
+      request.auth.sub,
+      id,
+      targetMembershipId,
     );
     if (result === null) {
       throw new NotFoundException({

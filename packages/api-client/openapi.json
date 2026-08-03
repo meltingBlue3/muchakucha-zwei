@@ -566,6 +566,62 @@
         ]
       }
     },
+    "/api/v1/households/{id}/members/{membershipId}": {
+      "delete": {
+        "operationId": "removeMember",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "membershipId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member successfully removed. Returns the authoritative household projection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Actor is attempting to remove their own membership or the request is malformed."
+          },
+          "403": {
+            "description": "Actor lacks governance rights or is attempting to target the owner."
+          },
+          "409": {
+            "description": "Stale membership state or ownership changed during the request."
+          },
+          "404": {
+            "description": "Household or target membership not found, or actor is not a member."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login",

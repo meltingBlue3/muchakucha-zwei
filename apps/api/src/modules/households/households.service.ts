@@ -9,7 +9,7 @@ import type {
   MembershipResponseDto,
 } from './dto/create-household.dto.js';
 import type { GetHouseholdMemberDto, GetHouseholdResponseDto } from './dto/membership.dto.js';
-import { roleChangeFailure, type Role } from './household-policy.js';
+import { removalFailure, roleChangeFailure, type Role } from './household-policy.js';
 
 interface HouseholdMemberRow {
   membershipId: string;
@@ -921,6 +921,114 @@ export class HouseholdsService {
     }
 
     throw new Error('Unreachable: changeMemberRole retry loop exhausted.');
+  }
+
+  // ---- Member removal (D-09, D-10) ----
+
+  async removeMember(
+    actorId: string,
+    householdId: string,
+    targetMembershipId: string,
+  ): Promise<GetHouseholdResponseDto | null> {
+    // Load household with fresh membership rows.
+    const household = await this.prisma.household.findUnique({
+      where: { id: householdId },
+      include: {
+        memberships: {
+          include: { user: true },
+        },
+      },
+    });
+
+    if (household === null || household.ownerMembershipId === null) return null;
+
+    // Resolve actor.
+    const actorMembership = household.memberships.find((m) => m.userId === actorId);
+    if (actorMembership === undefined) return null;
+
+    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
+    const actorRole: Role = actorIsOwner ? 'OWNER' : (actorMembership.role as Role);
+
+    // Resolve target — must belong to the same household.
+    const targetMembership = household.memberships.find((m) => m.id === targetMembershipId);
+    if (targetMembership === undefined) return null;
+
+    // D-09: owner is never a valid removal target.
+    const targetIsOwner = targetMembership.id === household.ownerMembershipId;
+    const targetIsActor = targetMembership.userId === actorId;
+
+    // Pure policy check (no DB access).
+    const policyFailure = removalFailure(targetIsOwner, actorRole, targetIsActor);
+    if (policyFailure === 'TARGET_IS_OWNER') {
+      throw new ForbiddenException({
+        code: 'OWNER_UNTOUCHABLE',
+        message: '所有者的成员关系不能移除。',
+      });
+    }
+    if (policyFailure === 'INSUFFICIENT_ROLE') {
+      throw new ForbiddenException({
+        code: 'INSUFFICIENT_ROLE',
+        message: '只有所有者和管理员可以移除成员。',
+      });
+    }
+    if (policyFailure === 'TARGET_IS_SELF') {
+      throw new BadRequestException({
+        code: 'CANNOT_REMOVE_SELF',
+        message: '不能移除自己的成员关系，请使用离开家庭流程。',
+      });
+    }
+
+    // Guarded, stale-proof removal inside a Serializable transaction.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.prisma.$transaction(async (transaction) => {
+          // Lock the household row to prevent concurrent ownership changes.
+          const locked = await transaction.household.findUnique({
+            where: { id: householdId },
+            select: { ownerMembershipId: true },
+          });
+          if (locked === null || locked.ownerMembershipId === null) {
+            throw new NotFoundException({
+              code: 'HOUSEHOLD_NOT_FOUND',
+              message: 'Household not found or access denied.',
+            });
+          }
+
+          // Re-verify owner pointer hasn't changed under us.
+          if (locked.ownerMembershipId !== household.ownerMembershipId) {
+            throw new ConflictException({
+              code: 'HOUSEHOLD_OWNER_CHANGED',
+              message: '家庭所有权已变更，请刷新后重试。',
+            });
+          }
+
+          // Conditional delete: only remove if the target membership still
+          // has the role we loaded (stale detection) and is NOT the owner.
+          const deleted = await transaction.membership.deleteMany({
+            where: {
+              id: targetMembershipId,
+              householdId,
+              role: targetMembership.role,
+            },
+          });
+
+          if (deleted.count !== 1) {
+            throw new ConflictException({
+              code: 'STALE_MEMBERSHIP',
+              message: '成员信息已过期，请刷新后重试。',
+            });
+          }
+        }, { isolationLevel: 'Serializable' });
+
+        // Success — return the authoritative household projection.
+        return this.getHousehold(actorId, householdId);
+      } catch (error) {
+        if (this.isSerializationConflict(error) && attempt < 2) continue;
+        throw error;
+      }
+    }
+
+    throw new Error('Unreachable: removeMember retry loop exhausted.');
   }
 
   private isSerializationConflict(error: unknown): boolean {
