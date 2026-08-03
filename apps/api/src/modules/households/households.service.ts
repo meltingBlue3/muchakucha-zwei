@@ -561,6 +561,255 @@ export class HouseholdsService {
     throw new Error('Unreachable: invitation accept retry loop exhausted.');
   }
 
+  // ---- Invitation lifecycle: list, resend, revoke ----
+
+  async listInvitations(
+    actorId: string,
+    householdId: string,
+  ): Promise<{
+    invitations: Array<{
+      id: string;
+      emailCanonical: string;
+      status: 'pending' | 'expired' | 'accepted' | 'revoked';
+      expiresAt: string;
+      role: string;
+      createdAt: string;
+    }>;
+  }> {
+    const household = await this.prisma.household.findUnique({
+      where: { id: householdId },
+      include: { memberships: true },
+    });
+
+    if (household === null || household.ownerMembershipId === null) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+
+    const actorMembership = household.memberships.find((m) => m.userId === actorId);
+    if (actorMembership === undefined) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+
+    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
+    const actorRole = actorIsOwner ? 'OWNER' : actorMembership.role;
+    if (actorRole !== 'OWNER' && actorRole !== 'ADMIN') {
+      throw new ForbiddenException({
+        code: 'INSUFFICIENT_ROLE',
+        message: '只有所有者和管理员可以查看邀请列表。',
+      });
+    }
+
+    const now = new Date();
+    const invitations = await this.prisma.invitation.findMany({
+      where: { householdId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      invitations: invitations.map((inv) => ({
+        id: inv.id,
+        emailCanonical: inv.emailCanonical,
+        status: inv.consumedAt !== null
+          ? 'accepted' as const
+          : inv.invalidatedAt !== null
+            ? 'revoked' as const
+            : inv.expiresAt <= now
+              ? 'expired' as const
+              : 'pending' as const,
+        expiresAt: inv.expiresAt.toISOString(),
+        role: inv.role,
+        createdAt: inv.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async resendInvitation(
+    actorId: string,
+    householdId: string,
+    invitationId: string,
+  ): Promise<{ code: 'INVITATION_RESENT'; message: string }> {
+    const household = await this.prisma.household.findUnique({
+      where: { id: householdId },
+      include: {
+        memberships: {
+          include: { user: true },
+        },
+      },
+    });
+
+    if (household === null || household.ownerMembershipId === null) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+
+    const actorMembership = household.memberships.find((m) => m.userId === actorId);
+    if (actorMembership === undefined) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+
+    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
+    const actorRole = actorIsOwner ? 'OWNER' : actorMembership.role;
+    if (actorRole !== 'OWNER' && actorRole !== 'ADMIN') {
+      throw new ForbiddenException({
+        code: 'INSUFFICIENT_ROLE',
+        message: '只有所有者和管理员可以重新发送邀请。',
+      });
+    }
+
+    const invitation = await this.prisma.invitation.findFirst({
+      where: { id: invitationId, householdId },
+      include: { household: true, inviterUser: true },
+    });
+
+    if (invitation === null) {
+      throw new NotFoundException({
+        code: 'INVITATION_NOT_FOUND',
+        message: 'Invitation not found in this household.',
+      });
+    }
+
+    // Check if invitation is already in a terminal state
+    if (invitation.consumedAt !== null) {
+      throw new BadRequestException({
+        code: 'INVITATION_ALREADY_ACCEPTED',
+        message: '这个邀请已经接受过，不能重新发送。',
+      });
+    }
+
+    // For resend eligibility: pending or expired are both valid
+    if (invitation.invalidatedAt !== null) {
+      throw new BadRequestException({
+        code: 'INVITATION_ALREADY_REVOKED',
+        message: '这个邀请已经撤销，不能重新发送。',
+      });
+    }
+
+    // Generate new token, invalidate old, create new
+    const rawToken = opaqueToken();
+    const tokenHash = hashOpaqueToken(rawToken);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + INVITE_LIFETIME_MS);
+
+    const householdName = invitation.household.name;
+    const inviterDisplayName = invitation.inviterUser.displayName;
+    const deliveryEmail = invitation.emailCanonical;
+
+    await this.prisma.$transaction(async (transaction) => {
+      // Invalidate the current invitation.
+      await transaction.invitation.updateMany({
+        where: {
+          id: invitationId,
+          invalidatedAt: null,
+          consumedAt: null,
+        },
+        data: { invalidatedAt: now },
+      });
+
+      // Create a new invitation with rotated token and refreshed expiry.
+      await transaction.invitation.create({
+        data: {
+          inviterUserId: actorId,
+          inviterMembershipId: actorMembership.id,
+          householdId,
+          emailCanonical: invitation.emailCanonical,
+          hash: tokenHash,
+          role: 'MEMBER',
+          expiresAt,
+        },
+      });
+    }, { isolationLevel: 'Serializable' });
+
+    // Send email after successful commit.
+    void this.mailPort.sendHouseholdInvitation({
+      to: deliveryEmail,
+      invitationUrl: invitationUrl(rawToken),
+      inviterDisplayName,
+      householdDisplayName: householdName,
+      expiresAt,
+    });
+
+    return { code: 'INVITATION_RESENT', message: '邀请已重新发送。' };
+  }
+
+  async revokeInvitation(
+    actorId: string,
+    householdId: string,
+    invitationId: string,
+  ): Promise<{ code: 'INVITATION_REVOKED'; message: string }> {
+    const household = await this.prisma.household.findUnique({
+      where: { id: householdId },
+      include: { memberships: true },
+    });
+
+    if (household === null || household.ownerMembershipId === null) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+
+    const actorMembership = household.memberships.find((m) => m.userId === actorId);
+    if (actorMembership === undefined) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+
+    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
+    const actorRole = actorIsOwner ? 'OWNER' : actorMembership.role;
+    if (actorRole !== 'OWNER' && actorRole !== 'ADMIN') {
+      throw new ForbiddenException({
+        code: 'INSUFFICIENT_ROLE',
+        message: '只有所有者和管理员可以撤销邀请。',
+      });
+    }
+
+    const invitation = await this.prisma.invitation.findFirst({
+      where: { id: invitationId, householdId },
+    });
+
+    if (invitation === null) {
+      throw new NotFoundException({
+        code: 'INVITATION_NOT_FOUND',
+        message: 'Invitation not found in this household.',
+      });
+    }
+
+    // Safe revoke: only pending invitations can be revoked.
+    // Already terminal (consumed, expired, or previously revoked) succeed silently
+    // to satisfy the "safe action has no effect" contract.
+    if (invitation.consumedAt !== null || invitation.invalidatedAt !== null) {
+      return { code: 'INVITATION_REVOKED', message: '邀请已撤销。' };
+    }
+
+    const now = new Date();
+
+    // Conditional revoke: only revoke if still pending.
+    await this.prisma.invitation.updateMany({
+      where: {
+        id: invitationId,
+        consumedAt: null,
+        invalidatedAt: null,
+      },
+      data: { invalidatedAt: now },
+    });
+
+    // If no rows updated (race condition), still return success.
+    return { code: 'INVITATION_REVOKED', message: '邀请已撤销。' };
+  }
+
   private isSerializationConflict(error: unknown): boolean {
     return (
       typeof error === 'object' &&

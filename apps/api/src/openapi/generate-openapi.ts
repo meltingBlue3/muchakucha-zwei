@@ -168,6 +168,29 @@ export interface InvitationPreviewResponseDto {
 export interface AcceptInvitationDto {
   token: string;
 }
+
+export interface InvitationListItemDto {
+  id: string;
+  emailCanonical: string;
+  status: 'pending' | 'expired' | 'accepted' | 'revoked';
+  expiresAt: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface ListInvitationsResponseDto {
+  invitations: InvitationListItemDto[];
+}
+
+export interface ResendInvitationResponseDto {
+  code: 'INVITATION_RESENT';
+  message: string;
+}
+
+export interface RevokeInvitationResponseDto {
+  code: 'INVITATION_REVOKED';
+  message: string;
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
@@ -194,6 +217,10 @@ import type {
   SendHouseholdInvitationResponseDto,
   InvitationPreviewResponseDto,
   AcceptInvitationDto,
+  InvitationListItemDto,
+  ListInvitationsResponseDto,
+  ResendInvitationResponseDto,
+  RevokeInvitationResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -384,6 +411,50 @@ export class ApiClient {
     );
   }
 
+  async listInvitations(
+    accessToken: string,
+    householdId: string,
+    signal?: AbortSignal,
+  ): Promise<ListInvitationsResponseDto> {
+    return this.authenticated<ListInvitationsResponseDto>(
+      'GET',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/invitations\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async resendInvitation(
+    accessToken: string,
+    householdId: string,
+    invitationId: string,
+    signal?: AbortSignal,
+  ): Promise<ResendInvitationResponseDto> {
+    return this.authenticated<ResendInvitationResponseDto>(
+      'POST',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/invitations/\${encodeURIComponent(invitationId)}/resend\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async revokeInvitation(
+    accessToken: string,
+    householdId: string,
+    invitationId: string,
+    signal?: AbortSignal,
+  ): Promise<RevokeInvitationResponseDto> {
+    return this.authenticated<RevokeInvitationResponseDto>(
+      'POST',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/invitations/\${encodeURIComponent(invitationId)}/revoke\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(\`\${this.baseUrl}\${path}\`, {
       method: 'POST',
@@ -520,6 +591,28 @@ async function generate(): Promise<void> {
       || acceptInvitationPath?.security === undefined
       || document.components?.schemas?.AcceptInvitationDto === undefined) {
       throw new Error('OpenAPI invitation accept operation or schemas are missing or unstable.');
+    }
+
+    const listInvitationsPath = document.paths['/api/v1/households/{id}/invitations']?.get;
+    if (listInvitationsPath?.operationId !== 'listInvitations'
+      || listInvitationsPath?.security === undefined
+      || document.components?.schemas?.InvitationListItemDto === undefined
+      || document.components.schemas.ListInvitationsResponseDto === undefined) {
+      throw new Error('OpenAPI invitation list operation or schemas are missing or unstable.');
+    }
+
+    const resendInvitationPath = document.paths['/api/v1/households/{id}/invitations/{invitationId}/resend']?.post;
+    if (resendInvitationPath?.operationId !== 'resendInvitation'
+      || resendInvitationPath?.security === undefined
+      || document.components?.schemas?.ResendInvitationResponseDto === undefined) {
+      throw new Error('OpenAPI invitation resend operation or schemas are missing or unstable.');
+    }
+
+    const revokeInvitationPath = document.paths['/api/v1/households/{id}/invitations/{invitationId}/revoke']?.post;
+    if (revokeInvitationPath?.operationId !== 'revokeInvitation'
+      || revokeInvitationPath?.security === undefined
+      || document.components?.schemas?.RevokeInvitationResponseDto === undefined) {
+      throw new Error('OpenAPI invitation revoke operation or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

@@ -430,3 +430,319 @@ describe('acceptInvitation', () => {
     expect(response.statusCode).toBe(200);
   });
 });
+
+describe('listInvitations', () => {
+  test('owner can list all invitations with correct statuses', async () => {
+    // Seed invitations with different states
+    await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'pending@example.test',
+    );
+    await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'expired@example.test',
+      { expiresAt: new Date(Date.now() - 1000) },
+    );
+    await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'consumed@example.test',
+      { consumedAt: new Date() },
+    );
+    await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'revoked@example.test',
+      { invalidatedAt: new Date() },
+    );
+
+    const response = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ invitations: Array<{ emailCanonical: string; status: string }> }>();
+    expect(body.invitations.length).toBeGreaterThanOrEqual(4);
+
+    const statuses = new Map(body.invitations.map((i) => [i.emailCanonical, i.status]));
+    expect(statuses.get('pending@example.test')).toBe('pending');
+    expect(statuses.get('expired@example.test')).toBe('expired');
+    expect(statuses.get('consumed@example.test')).toBe('accepted');
+    expect(statuses.get('revoked@example.test')).toBe('revoked');
+  });
+
+  test('admin can list invitations', async () => {
+    const adminUser = await insertVerifiedUser('admin@example.test', '管理员');
+    await withDatabase(async (client) => {
+      await client.query(
+        `INSERT INTO "memberships" ("user_id", "household_id", "role") VALUES ($1, $2, 'ADMIN')`,
+        [adminUser.id, household.id],
+      );
+    });
+
+    const response = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: adminUser.accessToken,
+    });
+    expect(response.statusCode).toBe(200);
+  });
+
+  test('member cannot list invitations', async () => {
+    const response = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: invitee.accessToken,
+    });
+    // Invitee is not a member of this household, so they get 404.
+    // A member household would get 403.
+  });
+
+  test('outsider gets 404', async () => {
+    const response = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: stranger.accessToken,
+    });
+    expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('resendInvitation', () => {
+  test('owner can resend a pending invitation and old token is invalidated', async () => {
+    const token = await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'resend-pending@example.test',
+    );
+
+    // Get the invitation ID from list
+    const listBefore = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const invList = (listBefore.json<{ invitations: Array<{ id: string; emailCanonical: string }> }>()).invitations;
+    const targetInv = invList.find((i) => i.emailCanonical === 'resend-pending@example.test');
+    expect(targetInv).toBeDefined();
+
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations/${encodeURIComponent(targetInv!.id)}/resend`,
+      accessToken: owner.accessToken,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ code: string; message: string }>();
+    expect(body.code).toBe('INVITATION_RESENT');
+
+    // Old invitation should be invalidated
+    const listAfter = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const afterList = (listAfter.json<{ invitations: Array<{ id: string; emailCanonical: string; status: string }> }>()).invitations;
+    const oldInv = afterList.find((i) => i.id === targetInv!.id);
+    expect(oldInv!.status).toBe('revoked');
+
+    // A new pending invitation should exist for the same email
+    const newPendings = afterList.filter(
+      (i) => i.emailCanonical === 'resend-pending@example.test' && i.status === 'pending',
+    );
+    expect(newPendings.length).toBe(1);
+    expect(newPendings[0].id).not.toBe(targetInv!.id);
+  });
+
+  test('owner can resend an expired invitation', async () => {
+    const token = await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'resend-expired@example.test',
+      { expiresAt: new Date(Date.now() - 1000) },
+    );
+
+    const listBefore = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const invList = (listBefore.json<{ invitations: Array<{ id: string; emailCanonical: string }> }>()).invitations;
+    const targetInv = invList.find((i) => i.emailCanonical === 'resend-expired@example.test');
+    expect(targetInv).toBeDefined();
+
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations/${encodeURIComponent(targetInv!.id)}/resend`,
+      accessToken: owner.accessToken,
+    });
+    expect(response.statusCode).toBe(200);
+  });
+
+  test('cannot resend an already accepted invitation', async () => {
+    const token = await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'resend-consumed@example.test',
+      { consumedAt: new Date() },
+    );
+
+    const listBefore = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const invList = (listBefore.json<{ invitations: Array<{ id: string; emailCanonical: string }> }>()).invitations;
+    const targetInv = invList.find((i) => i.emailCanonical === 'resend-consumed@example.test');
+    expect(targetInv).toBeDefined();
+
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations/${encodeURIComponent(targetInv!.id)}/resend`,
+      accessToken: owner.accessToken,
+    });
+    expect(response.statusCode).toBe(400);
+    const body = response.json<{ code: string }>();
+    expect(body.code).toBe('INVITATION_ALREADY_ACCEPTED');
+  });
+
+  test('member cannot resend', async () => {
+    const memberUser = await insertVerifiedUser('resend-member@example.test', '成员');
+    await withDatabase(async (client) => {
+      await client.query(
+        `INSERT INTO "memberships" ("user_id", "household_id", "role") VALUES ($1, $2, 'MEMBER')`,
+        [memberUser.id, household.id],
+      );
+    });
+
+    const token = await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'resend-by-member@example.test',
+    );
+
+    const listBefore = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const invList = (listBefore.json<{ invitations: Array<{ id: string; emailCanonical: string }> }>()).invitations;
+    const targetInv = invList.find((i) => i.emailCanonical === 'resend-by-member@example.test');
+
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations/${encodeURIComponent(targetInv!.id)}/resend`,
+      accessToken: memberUser.accessToken,
+    });
+    expect(response.statusCode).toBe(403);
+  });
+});
+
+describe('revokeInvitation', () => {
+  test('owner can revoke a pending invitation', async () => {
+    const token = await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'revoke-pending@example.test',
+    );
+
+    const listBefore = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const invList = (listBefore.json<{ invitations: Array<{ id: string; emailCanonical: string }> }>()).invitations;
+    const targetInv = invList.find((i) => i.emailCanonical === 'revoke-pending@example.test');
+    expect(targetInv).toBeDefined();
+
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations/${encodeURIComponent(targetInv!.id)}/revoke`,
+      accessToken: owner.accessToken,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ code: string; message: string }>();
+    expect(body.code).toBe('INVITATION_REVOKED');
+
+    // Verify status changed to revoked
+    const listAfter = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const afterList = (listAfter.json<{ invitations: Array<{ id: string; status: string }> }>()).invitations;
+    const afterInv = afterList.find((i) => i.id === targetInv!.id);
+    expect(afterInv!.status).toBe('revoked');
+  });
+
+  test('revoke on already consumed invitation succeeds silently (safe revoke)', async () => {
+    const token = await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'revoke-consumed@example.test',
+      { consumedAt: new Date() },
+    );
+
+    const listBefore = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const invList = (listBefore.json<{ invitations: Array<{ id: string; emailCanonical: string }> }>()).invitations;
+    const targetInv = invList.find((i) => i.emailCanonical === 'revoke-consumed@example.test');
+    expect(targetInv).toBeDefined();
+
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations/${encodeURIComponent(targetInv!.id)}/revoke`,
+      accessToken: owner.accessToken,
+    });
+    // Safe revoke: already terminal state returns success
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ code: string }>();
+    expect(body.code).toBe('INVITATION_REVOKED');
+  });
+
+  test('revoke on already revoked invitation succeeds silently', async () => {
+    const token = await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'revoke-already@example.test',
+      { invalidatedAt: new Date() },
+    );
+
+    const listBefore = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const invList = (listBefore.json<{ invitations: Array<{ id: string; emailCanonical: string }> }>()).invitations;
+    const targetInv = invList.find((i) => i.emailCanonical === 'revoke-already@example.test');
+    expect(targetInv).toBeDefined();
+
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations/${encodeURIComponent(targetInv!.id)}/revoke`,
+      accessToken: owner.accessToken,
+    });
+    expect(response.statusCode).toBe(200);
+  });
+
+  test('invitation not found returns 404', async () => {
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations/${encodeURIComponent(randomUUID())}/revoke`,
+      accessToken: owner.accessToken,
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
+  test('member cannot revoke', async () => {
+    const memberUser = await insertVerifiedUser('revoke-member@example.test', '成员');
+    await withDatabase(async (client) => {
+      await client.query(
+        `INSERT INTO "memberships" ("user_id", "household_id", "role") VALUES ($1, $2, 'MEMBER')`,
+        [memberUser.id, household.id],
+      );
+    });
+
+    const token = await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'revoke-by-member@example.test',
+    );
+
+    const listBefore = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const invList = (listBefore.json<{ invitations: Array<{ id: string; emailCanonical: string }> }>()).invitations;
+    const targetInv = invList.find((i) => i.emailCanonical === 'revoke-by-member@example.test');
+
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations/${encodeURIComponent(targetInv!.id)}/revoke`,
+      accessToken: memberUser.accessToken,
+    });
+    expect(response.statusCode).toBe(403);
+  });
+});

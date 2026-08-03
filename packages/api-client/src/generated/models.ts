@@ -160,3 +160,26 @@ export interface InvitationPreviewResponseDto {
 export interface AcceptInvitationDto {
   token: string;
 }
+
+export interface InvitationListItemDto {
+  id: string;
+  emailCanonical: string;
+  status: 'pending' | 'expired' | 'accepted' | 'revoked';
+  expiresAt: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface ListInvitationsResponseDto {
+  invitations: InvitationListItemDto[];
+}
+
+export interface ResendInvitationResponseDto {
+  code: 'INVITATION_RESENT';
+  message: string;
+}
+
+export interface RevokeInvitationResponseDto {
+  code: 'INVITATION_REVOKED';
+  message: string;
+}

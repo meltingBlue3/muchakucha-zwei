@@ -1,6 +1,5 @@
 import {
   Body,
-  ConflictException,
   Controller,
   ForbiddenException,
   Get,
@@ -95,6 +94,49 @@ export class InvitationPreviewResponseDto {
     description: 'ISO 8601 expiry. Only present when kind is "valid".',
   })
   expiresAt?: string;
+}
+
+// ---- Invitation Lifecycle DTOs ----
+
+export class InvitationListItemDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ format: 'email', example: 'pending@example.test' })
+  emailCanonical!: string;
+
+  @ApiProperty({ enum: ['pending', 'expired', 'accepted', 'revoked'] })
+  status!: 'pending' | 'expired' | 'accepted' | 'revoked';
+
+  @ApiProperty({ description: 'ISO 8601 expiry timestamp.' })
+  expiresAt!: string;
+
+  @ApiProperty({ example: 'MEMBER' })
+  role!: string;
+
+  @ApiProperty({ description: 'ISO 8601 creation timestamp.' })
+  createdAt!: string;
+}
+
+export class ListInvitationsResponseDto {
+  @ApiProperty({ type: [InvitationListItemDto] })
+  invitations!: InvitationListItemDto[];
+}
+
+export class ResendInvitationResponseDto {
+  @ApiProperty({ example: 'INVITATION_RESENT' })
+  code!: 'INVITATION_RESENT';
+
+  @ApiProperty({ example: '邀请已重新发送。' })
+  message!: string;
+}
+
+export class RevokeInvitationResponseDto {
+  @ApiProperty({ example: 'INVITATION_REVOKED' })
+  code!: 'INVITATION_REVOKED';
+
+  @ApiProperty({ example: '邀请已撤销。' })
+  message!: string;
 }
 
 interface AuthenticatedRequest {
@@ -266,5 +308,64 @@ export class HouseholdsController {
       id,
       input.email,
     );
+  }
+
+  // ---- Invitation lifecycle: list, resend, revoke ----
+
+  @Get(':id/invitations')
+  @HttpCode(200)
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'listInvitations' })
+  @ApiOkResponse({ type: ListInvitationsResponseDto })
+  @ApiForbiddenResponse({ description: 'Actor is not an owner or admin of this household.' })
+  @ApiNotFoundResponse({ description: 'Household not found or actor is not a member.' })
+  async listInvitations(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<ListInvitationsResponseDto> {
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+    return this.householdsService.listInvitations(request.auth.sub, id);
+  }
+
+  @Post(':id/invitations/:invitationId/resend')
+  @HttpCode(200)
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'resendInvitation' })
+  @ApiOkResponse({ type: ResendInvitationResponseDto })
+  @ApiBadRequestResponse({ description: 'Invitation is already accepted, revoked, or cannot be resent.' })
+  @ApiForbiddenResponse({ description: 'Actor is not an owner or admin of this household.' })
+  @ApiNotFoundResponse({ description: 'Household or invitation not found.' })
+  async resendInvitation(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('invitationId') invitationId: string,
+  ): Promise<ResendInvitationResponseDto> {
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+    return this.householdsService.resendInvitation(request.auth.sub, id, invitationId);
+  }
+
+  @Post(':id/invitations/:invitationId/revoke')
+  @HttpCode(200)
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'revokeInvitation' })
+  @ApiOkResponse({ type: RevokeInvitationResponseDto })
+  @ApiForbiddenResponse({ description: 'Actor is not an owner or admin of this household.' })
+  @ApiNotFoundResponse({ description: 'Household or invitation not found.' })
+  async revokeInvitation(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('invitationId') invitationId: string,
+  ): Promise<RevokeInvitationResponseDto> {
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+    return this.householdsService.revokeInvitation(request.auth.sub, id, invitationId);
   }
 }

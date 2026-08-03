@@ -2,8 +2,10 @@
 import type {
   CompleteEmailVerificationDto,
   CompleteEmailVerificationResponseDto,
-  RegisterDto,
-  RegistrationAcceptedDto,
+  CreateHouseholdDto,
+  CreateHouseholdResponseDto,
+  GetHouseholdResponseDto,
+  ListMyHouseholdsItemDto,
   LoginDto,
   LoginResponseDto,
   RefreshDto,
@@ -15,15 +17,15 @@ import type {
   RequestPasswordResetDto,
   PasswordResetRequestAcceptedDto,
   CompletePasswordResetDto,
-  CreateHouseholdDto,
-  CreateHouseholdResponseDto,
-  GetHouseholdResponseDto,
-  ListMyHouseholdsItemDto,
   UpdateHouseholdDto,
   SendHouseholdInvitationDto,
   SendHouseholdInvitationResponseDto,
   InvitationPreviewResponseDto,
   AcceptInvitationDto,
+  InvitationListItemDto,
+  ListInvitationsResponseDto,
+  ResendInvitationResponseDto,
+  RevokeInvitationResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -210,6 +212,50 @@ export class ApiClient {
       '/api/v1/households/invitations/accept',
       accessToken,
       body,
+      signal,
+    );
+  }
+
+  async listInvitations(
+    accessToken: string,
+    householdId: string,
+    signal?: AbortSignal,
+  ): Promise<ListInvitationsResponseDto> {
+    return this.authenticated<ListInvitationsResponseDto>(
+      'GET',
+      `/api/v1/households/${encodeURIComponent(householdId)}/invitations`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async resendInvitation(
+    accessToken: string,
+    householdId: string,
+    invitationId: string,
+    signal?: AbortSignal,
+  ): Promise<ResendInvitationResponseDto> {
+    return this.authenticated<ResendInvitationResponseDto>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/invitations/${encodeURIComponent(invitationId)}/resend`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async revokeInvitation(
+    accessToken: string,
+    householdId: string,
+    invitationId: string,
+    signal?: AbortSignal,
+  ): Promise<RevokeInvitationResponseDto> {
+    return this.authenticated<RevokeInvitationResponseDto>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/invitations/${encodeURIComponent(invitationId)}/revoke`,
+      accessToken,
+      undefined,
       signal,
     );
   }

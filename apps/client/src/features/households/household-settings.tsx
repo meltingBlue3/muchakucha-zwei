@@ -1,13 +1,13 @@
-import type { GetHouseholdResponseDto } from '@muchakucha/api-client';
+import type { GetHouseholdResponseDto, InvitationListItemDto } from '@muchakucha/api-client';
 import { ApiClientError } from '@muchakucha/api-client';
 import { useEffect, useRef, useState } from 'react';
 
 import type { HouseholdApi } from './household-api';
-import { fetchHousehold } from './household-api';
 import {
   AppShell,
   HouseholdContextNote,
   HouseholdHeader,
+  InvitationRow,
   MemberRow,
 } from '../../ui/household-components';
 import {
@@ -26,7 +26,7 @@ const RENAME_SUCCESS = '家庭名称已更新。';
 const INVITE_SUCCESS = '邀请已发送。';
 const INVITE_ALREADY_MEMBER = '这个邮箱已经是该家庭的成员。';
 
-export type HouseholdSettingsApi = Pick<HouseholdApi, 'getHousehold' | 'updateHousehold' | 'sendHouseholdInvitation'>;
+export type HouseholdSettingsApi = Pick<HouseholdApi, 'getHousehold' | 'updateHousehold' | 'sendHouseholdInvitation' | 'listInvitations' | 'resendInvitation' | 'revokeInvitation'>;
 
 export interface HouseholdSettingsDeps {
   householdApi: HouseholdSettingsApi;
@@ -46,6 +46,8 @@ export interface HouseholdSettingsProps {
   showInvite?: boolean;
   /** Called when membership loss is detected after an invitation attempt. */
   onInviteAccessChanged?: (lostHouseholdName: string) => void;
+  /** Called to navigate to the revoke confirmation page. */
+  onRevokeNavigate?: (householdId: string, invitationId: string) => void;
 }
 
 type ViewState =
@@ -63,6 +65,7 @@ export function HouseholdSettings({
   onRenameAccessChanged,
   showInvite = false,
   onInviteAccessChanged,
+  onRevokeNavigate,
 }: HouseholdSettingsProps) {
   const [viewState, setViewState] = useState<ViewState>({ kind: 'loading' });
   const abortRef = useRef<AbortController | null>(null);
@@ -79,6 +82,12 @@ export function HouseholdSettings({
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState<string | undefined>(undefined);
   const [inviteError, setInviteError] = useState<string | undefined>(undefined);
+
+  // ---- Invitation list state ----
+  const [invitationList, setInvitationList] = useState<InvitationListItemDto[]>([]);
+  const [invitationListLoading, setInvitationListLoading] = useState(false);
+  const [invitationListError, setInvitationListError] = useState<string | undefined>(undefined);
+  const [resendingId, setResendingId] = useState<string | undefined>(undefined);
 
   // Populate the rename input when data loads.
   const renameInitialized = useRef(false);
@@ -248,6 +257,71 @@ export function HouseholdSettings({
     };
   }, [deps, householdId]);
 
+  // ---- Load invitation list when data is ready and showInvite is enabled ----
+  useEffect(() => {
+    if (!showInvite || viewState.kind !== 'ready') return;
+
+    const loadInvitations = async () => {
+      setInvitationListLoading(true);
+      setInvitationListError(undefined);
+
+      const accessToken = deps.getAccessToken();
+      if (accessToken === null) {
+        setInvitationListLoading(false);
+        return;
+      }
+
+      try {
+        const result = await deps.householdApi.listInvitations(accessToken, householdId);
+        if (!mountedRef.current) return;
+        setInvitationList(result.invitations);
+      } catch {
+        if (!mountedRef.current) return;
+        setInvitationListError(GENERIC_ERROR);
+      }
+
+      setInvitationListLoading(false);
+    };
+
+    void loadInvitations();
+  }, [showInvite, viewState.kind === 'ready' ? (viewState as { kind: 'ready'; data: GetHouseholdResponseDto }).data.members.length : 0, deps, householdId]);
+
+  // ---- Resend handler ----
+  const handleResend = async (invitationId: string) => {
+    const accessToken = deps.getAccessToken();
+    if (accessToken === null) return;
+
+    setResendingId(invitationId);
+    setInvitationListError(undefined);
+
+    try {
+      await deps.householdApi.resendInvitation(accessToken, householdId, invitationId);
+
+      if (!mountedRef.current) return;
+
+      // Refetch the invitation list to get updated states.
+      try {
+        const result = await deps.householdApi.listInvitations(accessToken, householdId);
+        if (!mountedRef.current) return;
+        setInvitationList(result.invitations);
+      } catch {
+        if (!mountedRef.current) return;
+      }
+    } catch {
+      if (!mountedRef.current) return;
+      setInvitationListError(GENERIC_ERROR);
+    }
+
+    setResendingId(undefined);
+  };
+
+  // ---- Revoke handler (navigate to confirmation page) ----
+  const handleRevoke = (invitationId: string) => {
+    if (onRevokeNavigate !== undefined) {
+      onRevokeNavigate(householdId, invitationId);
+    }
+  };
+
   if (viewState.kind === 'loading') {
     return (
       <AppShell accessibilityLabel="正在加载成员">
@@ -414,7 +488,47 @@ export function HouseholdSettings({
             <MemberRow key={member.membershipId} member={member} />
           ))}
         </Stack>
-      </Stack>
+
+        {/* Invitation list — visible to owner/admin when showInvite is enabled */}
+        {(() => {
+          const currentMember = data.members.find((m) => m.isCurrentUser);
+          const canManage = currentMember !== undefined && (currentMember.role === 'OWNER' || currentMember.role === 'ADMIN');
+          if (!showInvite || !canManage) return null;
+
+          return (
+            <Stack gap={2}>
+              <Heading>邀请</Heading>
+
+              {invitationListError !== undefined ? (
+                <Banner title="邀请列表加载失败">{invitationListError}</Banner>
+              ) : null}
+
+              {invitationListLoading ? (
+                <Stack gap={4} style={{ paddingVertical: 16 }}>
+                  {[1, 2].map((i) => (
+                    <Spinner key={i} label={`加载邀请 ${i}`} />
+                  ))}
+                </Stack>
+              ) : invitationList.length === 0 ? (
+                <Text variant="bodySm">还没有待处理的邀请。</Text>
+              ) : (
+                <Stack>
+                  {invitationList.map((inv) => (
+                    <InvitationRow
+                      key={inv.id}
+                      invitation={inv}
+                      canManage={canManage}
+                      onResend={handleResend}
+                      onRevoke={handleRevoke}
+                      resendBusy={resendingId === inv.id}
+                    />
+                  ))}
+                </Stack>
+              )}
+            </Stack>
+          );
+        })()}
+    </Stack>
     </AppShell>
   );
 }

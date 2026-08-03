@@ -3,23 +3,24 @@ import Home from 'lucide-react-native/icons/home';
 import X from 'lucide-react-native/icons/x';
 import Check from 'lucide-react-native/icons/check';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
-import Users from 'lucide-react-native/icons/users';
 import Crown from 'lucide-react-native/icons/crown';
 import Shield from 'lucide-react-native/icons/shield';
 import AlertTriangle from 'lucide-react-native/icons/alert-triangle';
+import Clock from 'lucide-react-native/icons/clock';
+import RefreshCw from 'lucide-react-native/icons/refresh-cw';
+import Ban from 'lucide-react-native/icons/ban';
+import Mail from 'lucide-react-native/icons/mail';
 
-import React, { forwardRef, useCallback, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useRef } from 'react';
 import {
   Modal,
   Platform,
   Pressable,
   ScrollView,
-  TextInput as NativeTextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { Theme } from './theme';
 import {
   Button,
   Heading,
@@ -483,6 +484,240 @@ export const MemberRow = ({ member }: MemberRowProps) => {
     </View>
   );
 };
+
+// ---- InvitationRow ----
+
+const INVITATION_STATUS_LABELS: Record<string, string> = Object.freeze({
+  pending: '待接受',
+  expired: '已过期',
+  accepted: '已接受',
+  revoked: '已撤销',
+});
+
+export interface InvitationRowProps {
+  invitation: {
+    id: string;
+    emailCanonical: string;
+    status: 'pending' | 'expired' | 'accepted' | 'revoked';
+    expiresAt: string;
+    role: string;
+    createdAt: string;
+  };
+  /** Whether the current user can manage invitations (owner/admin). */
+  canManage: boolean;
+  onResend?: (invitationId: string) => void;
+  onRevoke?: (invitationId: string) => void;
+  resendBusy?: boolean;
+  revokeBusy?: boolean;
+}
+
+export const InvitationRow = ({
+  invitation,
+  canManage,
+  onResend,
+  onRevoke,
+  resendBusy = false,
+  revokeBusy = false,
+}: InvitationRowProps) => {
+  const statusLabel = INVITATION_STATUS_LABELS[invitation.status] ?? invitation.status;
+  const isPending = invitation.status === 'pending';
+  const isExpired = invitation.status === 'expired';
+  const canResend = (isPending || isExpired) && canManage && onResend !== undefined;
+  const canRevoke = isPending && canManage && onRevoke !== undefined;
+
+  const expiresDate = new Date(invitation.expiresAt);
+  const expiryText = expiresDate.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  return (
+    <View
+      accessibilityLabel={`邀请：${invitation.emailCanonical}，${statusLabel}`}
+      style={{
+        alignItems: 'center',
+        borderBottomColor: theme.colors.border,
+        borderBottomWidth: theme.borderWidths.default,
+        flexDirection: 'row',
+        gap: theme.spacing[3],
+        minHeight: 72,
+        paddingVertical: theme.spacing[2],
+      }}
+    >
+      {/* Email icon placeholder */}
+      <View
+        accessibilityLabel={`${invitation.emailCanonical}的邀请`}
+        style={{
+          alignItems: 'center',
+          backgroundColor: theme.colors.surfaceMuted,
+          borderRadius: theme.borderRadii.full,
+          height: theme.controlSizes.touchTarget,
+          justifyContent: 'center',
+          width: theme.controlSizes.touchTarget,
+        }}
+      >
+        <Mail color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+      </View>
+
+      {/* Email, status, expiry */}
+      <Stack gap={1} style={{ flex: 1 }}>
+        <Text
+          numberOfLines={1}
+          variant="body"
+        >
+          {invitation.emailCanonical}
+        </Text>
+        <Inline gap={2}>
+          <View
+            accessibilityLabel={`状态：${statusLabel}`}
+            style={{
+              alignItems: 'center',
+              backgroundColor: theme.colors.surfaceMuted,
+              borderRadius: theme.borderRadii.sm,
+              flexDirection: 'row',
+              gap: theme.spacing[1],
+              paddingHorizontal: theme.spacing[2],
+              paddingVertical: theme.spacing[1] / 2,
+            }}
+          >
+            <Clock color={theme.colors.inkMuted} size={theme.controlSizes.icon - 4} strokeWidth={theme.controlSizes.iconStroke} />
+            <Text variant="bodySm">{statusLabel}</Text>
+          </View>
+          <Text variant="caption" numberOfLines={1}>
+            失效：{expiryText}
+          </Text>
+        </Inline>
+      </Stack>
+
+      {/* Actions */}
+      {canResend || canRevoke ? (
+        <Inline gap={1}>
+          {canResend ? (
+            <Pressable
+              accessibilityLabel={`重新发送邀请给 ${invitation.emailCanonical}`}
+              accessibilityRole="button"
+              disabled={resendBusy || revokeBusy}
+              onPress={() => onResend?.(invitation.id)}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
+                borderRadius: theme.borderRadii.md,
+                justifyContent: 'center',
+                minHeight: theme.controlSizes.touchTarget,
+                minWidth: theme.controlSizes.touchTarget,
+                opacity: resendBusy || revokeBusy ? 0.5 : 1,
+              })}
+            >
+              {resendBusy ? (
+                <Spinner label="重新发送中" />
+              ) : (
+                <RefreshCw color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+              )}
+            </Pressable>
+          ) : null}
+          {canRevoke ? (
+            <Pressable
+              accessibilityLabel={`撤销邀请 ${invitation.emailCanonical}`}
+              accessibilityRole="button"
+              disabled={resendBusy || revokeBusy}
+              onPress={() => onRevoke?.(invitation.id)}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
+                borderRadius: theme.borderRadii.md,
+                justifyContent: 'center',
+                minHeight: theme.controlSizes.touchTarget,
+                minWidth: theme.controlSizes.touchTarget,
+                opacity: resendBusy || revokeBusy ? 0.5 : 1,
+              })}
+            >
+              {revokeBusy ? (
+                <Spinner label="撤销中" />
+              ) : (
+                <Ban color={theme.colors.destructive} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+              )}
+            </Pressable>
+          ) : null}
+        </Inline>
+      ) : null}
+    </View>
+  );
+};
+
+// ---- ConfirmationPage ----
+
+export interface ConfirmationPageProps {
+  heading: string;
+  body: string;
+  safeActionLabel: string;
+  safeActionOnPress: () => void;
+  destructiveActionLabel: string;
+  destructiveActionOnPress: () => void;
+  busy?: boolean;
+}
+
+export const ConfirmationPage = ({
+  heading,
+  body,
+  safeActionLabel,
+  safeActionOnPress,
+  destructiveActionLabel,
+  destructiveActionOnPress,
+  busy = false,
+}: ConfirmationPageProps) => (
+  <View
+    accessibilityLabel={heading}
+    accessibilityLiveRegion="assertive"
+    accessibilityRole="alert"
+    style={{
+      alignItems: 'center',
+      flex: 1,
+      justifyContent: 'center',
+      padding: theme.spacing[6],
+    }}
+  >
+    <Stack gap={6} style={{ alignItems: 'stretch', maxWidth: 480, width: '100%' }}>
+      <Stack gap={4}>
+        <Heading>{heading}</Heading>
+        <Text>{body}</Text>
+      </Stack>
+      <Stack gap={3}>
+        <Button
+          disabled={busy}
+          label={safeActionLabel}
+          onPress={safeActionOnPress}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={destructiveActionLabel}
+          disabled={busy}
+          onPress={destructiveActionOnPress}
+          style={({ pressed }) => ({
+            alignItems: 'center',
+            backgroundColor: busy
+              ? theme.colors.disabled
+              : pressed
+                ? '#8B1A12'
+                : theme.colors.destructive,
+            borderRadius: theme.borderRadii.lg,
+            flexDirection: 'row',
+            gap: theme.spacing[2],
+            justifyContent: 'center',
+            minHeight: theme.controlSizes.primary,
+            minWidth: theme.controlSizes.touchTarget,
+            opacity: busy ? 0.5 : 1,
+            paddingHorizontal: theme.spacing[4],
+          })}
+        >
+          <Text variant="button">{destructiveActionLabel}</Text>
+        </Pressable>
+      </Stack>
+    </Stack>
+  </View>
+);
 
 // ---- SwitchErrorBanner ----
 

@@ -63,6 +63,443 @@
         ]
       }
     },
+    "/api/v1/households/invitations/preview": {
+      "get": {
+        "operationId": "previewInvitation",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "query",
+            "description": "Raw invitation token from the URL.",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreviewResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
+    "/api/v1/households/invitations/accept": {
+      "post": {
+        "operationId": "acceptInvitation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invitation is invalid, expired, or already used."
+          },
+          "403": {
+            "description": "The authenticated email does not match the invitation recipient."
+          },
+          "409": {
+            "description": "The invitation was already claimed by a concurrent request."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
+    "/api/v1/households": {
+      "post": {
+        "operationId": "createHousehold",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHouseholdDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Household name is invalid or the request is malformed."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      },
+      "get": {
+        "operationId": "listMyHouseholds",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ListMyHouseholdsItemDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
+    "/api/v1/households/{id}": {
+      "get": {
+        "operationId": "getHousehold",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Household not found or the actor is not a member."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      },
+      "patch": {
+        "operationId": "updateHousehold",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateHouseholdDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Household name is invalid or the request is malformed."
+          },
+          "403": {
+            "description": "The actor is a member but not the current owner."
+          },
+          "404": {
+            "description": "Household not found or the actor is not a member."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
+    "/api/v1/households/{id}/invitations": {
+      "post": {
+        "operationId": "sendHouseholdInvitation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendHouseholdInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendHouseholdInvitationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email is invalid or the request is malformed."
+          },
+          "403": {
+            "description": "Actor is a member but not authorized to send invitations."
+          },
+          "404": {
+            "description": "Household not found or actor is not a member."
+          },
+          "409": {
+            "description": "The email already belongs to a current member of this household."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      },
+      "get": {
+        "operationId": "listInvitations",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListInvitationsResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Actor is not an owner or admin of this household."
+          },
+          "404": {
+            "description": "Household not found or actor is not a member."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
+    "/api/v1/households/{id}/invitations/{invitationId}/resend": {
+      "post": {
+        "operationId": "resendInvitation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "invitationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResendInvitationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invitation is already accepted, revoked, or cannot be resent."
+          },
+          "403": {
+            "description": "Actor is not an owner or admin of this household."
+          },
+          "404": {
+            "description": "Household or invitation not found."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
+    "/api/v1/households/{id}/invitations/{invitationId}/revoke": {
+      "post": {
+        "operationId": "revokeInvitation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "invitationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeInvitationResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Actor is not an owner or admin of this household."
+          },
+          "404": {
+            "description": "Household or invitation not found."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login",
@@ -320,168 +757,6 @@
           "auth"
         ]
       }
-    },
-    "/api/v1/households": {
-      "get": {
-        "operationId": "listMyHouseholds",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Returns the authenticated actor's household memberships.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ListMyHouseholdsItemDto"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "households"
-        ]
-      },
-      "post": {
-        "operationId": "createHousehold",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateHouseholdDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Household and creator membership created.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateHouseholdResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Household name is invalid or the request is malformed."
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "households"
-        ]
-      }
-    },
-    "/api/v1/households/{id}": {
-      "get": {
-        "operationId": "getHousehold",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Returns the household roster with totally ordered members.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Household not found or the actor is not a member."
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "households"
-        ]
-      },
-      "patch": {
-        "operationId": "updateHousehold",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateHouseholdDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Household renamed successfully. Returns the authoritative household projection.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Household name is invalid or the request is malformed."
-          },
-          "403": {
-            "description": "The actor is a member but not the current owner."
-          },
-          "404": {
-            "description": "Household not found or the actor is not a member."
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "households"
-        ]
-      }
     }
   },
   "info": {
@@ -492,137 +767,6 @@
   },
   "tags": [],
   "servers": [],
-    "/api/v1/households/{id}/invitations": {
-      "post": {
-        "operationId": "sendHouseholdInvitation",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SendHouseholdInvitationResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Email is invalid or the request is malformed."
-          },
-          "403": {
-            "description": "Actor is a member but not authorized to send invitations."
-          },
-          "409": {
-            "description": "The email already belongs to a current member of this household."
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SendHouseholdInvitationDto"
-              }
-            }
-          }
-        },
-        "tags": [
-          "households"
-        ]
-      }
-    },
-    "/api/v1/households/invitations/preview": {
-      "get": {
-        "operationId": "previewInvitation",
-        "parameters": [
-          {
-            "name": "token",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Raw invitation token from the URL."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvitationPreviewResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "households"
-        ]
-      }
-    },
-    "/api/v1/households/invitations/accept": {
-      "post": {
-        "operationId": "acceptInvitation",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invitation is invalid, expired, or already used."
-          },
-          "403": {
-            "description": "The authenticated email does not match the invitation recipient."
-          },
-          "409": {
-            "description": "The invitation was already claimed by a concurrent request."
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AcceptInvitationDto"
-              }
-            }
-          }
-        },
-        "tags": [
-          "households"
-        ]
-      }
-    }
-  },
   "components": {
     "securitySchemes": {
       "bearer": {
@@ -675,6 +819,371 @@
         },
         "required": [
           "displayName"
+        ]
+      },
+      "InvitationPreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "invalid",
+              "expired",
+              "used"
+            ]
+          },
+          "householdName": {
+            "type": "string",
+            "example": "温暖小家",
+            "description": "Only present when kind is \"valid\"."
+          },
+          "inviterDisplayName": {
+            "type": "string",
+            "example": "家主",
+            "description": "Only present when kind is \"valid\"."
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "ISO 8601 expiry. Only present when kind is \"valid\"."
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "AcceptInvitationDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The raw invitation token from the URL query parameter.",
+            "example": "abc123def456"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "GetHouseholdMemberDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "example": "家主"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "owner@example.test"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "OWNER",
+              "ADMIN",
+              "MEMBER"
+            ]
+          },
+          "isCurrentUser": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "membershipId",
+          "userId",
+          "displayName",
+          "email",
+          "role",
+          "isCurrentUser"
+        ]
+      },
+      "GetHouseholdResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "温暖小家"
+          },
+          "ownerMembershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GetHouseholdMemberDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ownerMembershipId",
+          "createdAt",
+          "members"
+        ]
+      },
+      "CreateHouseholdDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "My Family",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "1–40 Unicode code points after trim and NFC normalization."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "MembershipResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "householdId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MEMBER"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "householdId",
+          "role"
+        ]
+      },
+      "CreateHouseholdResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "My Family"
+          },
+          "ownerMembershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "membership": {
+            "$ref": "#/components/schemas/MembershipResponseDto"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ownerMembershipId",
+          "createdAt",
+          "membership"
+        ]
+      },
+      "ListMyHouseholdsItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "My Family"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MEMBER"
+            ]
+          },
+          "memberCount": {
+            "type": "number",
+            "example": 3
+          },
+          "ownerMembershipId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "memberCount",
+          "ownerMembershipId"
+        ]
+      },
+      "UpdateHouseholdDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "我们的家",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "1–40 Unicode code points after trim and NFC normalization."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "SendHouseholdInvitationDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "friend@example.test",
+            "description": "Canonical invited email address. Role is server-fixed to MEMBER per D-05."
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "SendHouseholdInvitationResponseDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INVITATION_SENT"
+          },
+          "message": {
+            "type": "string",
+            "example": "邀请已发送。"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "InvitationListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "emailCanonical": {
+            "type": "string",
+            "format": "email",
+            "example": "pending@example.test"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "expired",
+              "accepted",
+              "revoked"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "ISO 8601 expiry timestamp."
+          },
+          "role": {
+            "type": "string",
+            "example": "MEMBER"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 creation timestamp."
+          }
+        },
+        "required": [
+          "id",
+          "emailCanonical",
+          "status",
+          "expiresAt",
+          "role",
+          "createdAt"
+        ]
+      },
+      "ListInvitationsResponseDto": {
+        "type": "object",
+        "properties": {
+          "invitations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvitationListItemDto"
+            }
+          }
+        },
+        "required": [
+          "invitations"
+        ]
+      },
+      "ResendInvitationResponseDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INVITATION_RESENT"
+          },
+          "message": {
+            "type": "string",
+            "example": "邀请已重新发送。"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "RevokeInvitationResponseDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INVITATION_REVOKED"
+          },
+          "message": {
+            "type": "string",
+            "example": "邀请已撤销。"
+          }
+        },
+        "required": [
+          "code",
+          "message"
         ]
       },
       "LoginDto": {
@@ -926,278 +1435,6 @@
         "required": [
           "token",
           "password"
-        ]
-      },
-      "CreateHouseholdDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 40,
-            "description": "1–40 Unicode code points after trim and NFC normalization."
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
-      "MembershipResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "userId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "householdId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "ADMIN",
-              "MEMBER"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "userId",
-          "householdId",
-          "role"
-        ]
-      },
-      "CreateHouseholdResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string",
-            "example": "My Family"
-          },
-          "ownerMembershipId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "membership": {
-            "$ref": "#/components/schemas/MembershipResponseDto"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "ownerMembershipId",
-          "createdAt",
-          "membership"
-        ]
-      },
-      "ListMyHouseholdsItemDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string",
-            "example": "My Family"
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "ADMIN",
-              "MEMBER"
-            ]
-          },
-          "memberCount": {
-            "type": "integer",
-            "example": 3
-          },
-          "ownerMembershipId": {
-            "type": "string",
-            "format": "uuid"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "role",
-          "memberCount",
-          "ownerMembershipId"
-        ]
-      },
-      "GetHouseholdMemberDto": {
-        "type": "object",
-        "properties": {
-          "membershipId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "userId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "displayName": {
-            "type": "string",
-            "example": "家主"
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "example": "owner@example.test"
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "OWNER",
-              "ADMIN",
-              "MEMBER"
-            ]
-          },
-          "isCurrentUser": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "membershipId",
-          "userId",
-          "displayName",
-          "email",
-          "role",
-          "isCurrentUser"
-        ]
-      },
-      "UpdateHouseholdDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 40,
-            "description": "1–40 Unicode code points after trim and NFC normalization."
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
-      "GetHouseholdResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string",
-            "example": "温暖小家"
-          },
-          "ownerMembershipId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "members": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/GetHouseholdMemberDto"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "ownerMembershipId",
-          "createdAt",
-          "members"
-        ]
-      },
-      "SendHouseholdInvitationDto": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "example": "friend@example.test",
-            "description": "Canonical invited email address. Role is server-fixed to MEMBER per D-05."
-          }
-        },
-        "required": [
-          "email"
-        ]
-      },
-      "SendHouseholdInvitationResponseDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "example": "INVITATION_SENT"
-          },
-          "message": {
-            "type": "string",
-            "example": "邀请已发送。"
-          }
-        },
-        "required": [
-          "code",
-          "message"
-        ]
-      },
-      "InvitationPreviewResponseDto": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "valid",
-              "invalid",
-              "expired",
-              "used"
-            ]
-          },
-          "householdName": {
-            "type": "string",
-            "example": "温暖小家",
-            "description": "Only present when kind is 'valid'."
-          },
-          "inviterDisplayName": {
-            "type": "string",
-            "example": "家主",
-            "description": "Only present when kind is 'valid'."
-          },
-          "expiresAt": {
-            "type": "string",
-            "description": "ISO 8601 expiry. Only present when kind is 'valid'."
-          }
-        },
-        "required": [
-          "kind"
-        ]
-      },
-      "AcceptInvitationDto": {
-        "type": "object",
-        "properties": {
-          "token": {
-            "type": "string",
-            "example": "abc123def456",
-            "description": "The raw invitation token from the URL query parameter."
-          }
-        },
-        "required": [
-          "token"
         ]
       }
     }
