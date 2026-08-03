@@ -11,14 +11,33 @@ const password = 'correct horse battery staple 2026';
 
 // ---- Mailpit helpers ----
 
-async function fetchMailpitMessages(recipient: string): Promise<unknown[]> {
-  const response = await fetch(`${MAILPIT_HTTP}/api/v1/search?kind=to&query=${encodeURIComponent(recipient)}`);
-  const body: unknown = await response.json();
-  return (body as { messages?: unknown[] }).messages ?? [];
-}
-
 async function deleteAllMailpitMessages(): Promise<void> {
   await fetch(`${MAILPIT_HTTP}/api/v1/messages`, { method: 'DELETE' });
+}
+
+interface MailpitMessageSummary {
+  ID: string;
+  To: Array<{ Address: string }>;
+}
+
+interface MailpitMessageDetail {
+  ID: string;
+  To: Array<{ Address: string }>;
+  Text: string;
+  HTML: string;
+}
+
+async function fetchLatestMailpitMessage(recipient: string): Promise<MailpitMessageDetail | null> {
+  const searchResponse = await fetch(
+    `${MAILPIT_HTTP}/api/v1/search?kind=to&query=${encodeURIComponent(recipient)}`,
+  );
+  const searchBody = (await searchResponse.json()) as { messages?: MailpitMessageSummary[] };
+  const messages = searchBody.messages ?? [];
+  if (messages.length === 0) return null;
+
+  // Fetch the most recent message detail.
+  const detailResponse = await fetch(`${MAILPIT_HTTP}/api/v1/message/${encodeURIComponent(messages[0].ID)}`);
+  return (await detailResponse.json()) as MailpitMessageDetail;
 }
 
 // ---- Account helpers ----
@@ -122,14 +141,14 @@ test('sends a privacy-preserving invitation from settings [RED:INVITATION_SEND]'
   const owner = await prepareVerifiedAccount('owner', '家主');
   const member = await prepareVerifiedAccount('member', '普通成员');
   const outsider = await prepareVerifiedAccount('outsider', '无关人员');
-  const existingMember = await prepareVerifiedAccount('existing', '现有成员');
+  const existingAdmin = await prepareVerifiedAccount('existing', '现有管理员');
 
   // --- Precondition: household creation works ---
   const household = await createHousehold(owner.accessToken, '温暖小家');
 
-  // Add members via DB — the existing member joins directly, the member gets MEMBER role.
+  // Add members via DB — the admin joins directly, the member gets MEMBER role.
   await addMembershipViaDb(household.id, member.userId, 'MEMBER');
-  await addMembershipViaDb(household.id, existingMember.userId, 'ADMIN');
+  await addMembershipViaDb(household.id, existingAdmin.userId, 'ADMIN');
 
   // --- Precondition: roster endpoint is healthy ---
   const rosterResponse = await request.get(
@@ -162,6 +181,167 @@ test('sends a privacy-preserving invitation from settings [RED:INVITATION_SEND]'
   // --- Precondition: roster loads on settings ---
   await expect(page.getByText('温暖小家').first()).toBeVisible({ timeout: 5000 });
 
-  // --- RED marker: invitation form and endpoint do not exist yet ---
-  expect.fail('IMPLEMENTATION_MISSING_INVITATION_SEND');
+  // === CORE INVITATION FLOW ===
+
+  // --- Owner sends invitation to outsider (unregistered) ---
+  const inviteFormLabel = page.getByLabel('邮箱地址');
+  await expect(inviteFormLabel).toBeVisible({ timeout: 5000 });
+  await inviteFormLabel.fill(outsider.email);
+  await page.getByRole('button', { name: '发送邀请' }).click();
+
+  // --- Verify success feedback ---
+  await expect(page.getByText('邀请已发送。')).toBeVisible({ timeout: 5000 });
+
+  // --- Verify email field was cleared ---
+  await expect(page.getByLabel('邮箱地址')).toHaveValue('');
+
+  // --- Verify mailpit received the email ---
+  const outsiderMail = await fetchLatestMailpitMessage(outsider.email);
+  expect(outsiderMail).not.toBeNull();
+  expect(outsiderMail!.To[0]?.Address).toBe(outsider.email);
+
+  // Recipient mapping
+  const outsiderText = outsiderMail!.Text;
+  const outsiderHtml = outsiderMail!.HTML;
+
+  // Inviter display name
+  expect(outsiderText).toContain('家主');
+
+  // Household display name
+  expect(outsiderText).toContain('温暖小家');
+
+  // Invitation URL with raw token
+  expect(outsiderText).toMatch(/\/invite\?token=/);
+
+  // Expiry mapping
+  expect(outsiderText).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+
+  // HTML contains same details
+  expect(outsiderHtml).toContain('家主');
+  expect(outsiderHtml).toContain('温暖小家');
+
+  // --- Verify database state: hash is lowercase SHA-256, no raw token ---
+  const database = new Client({ connectionString: DATABASE_URL });
+  await database.connect();
+  try {
+    const invitations = await database.query(
+      `SELECT "hash", "email_canonical", "role", "expires_at", "invalidated_at", "consumed_at", "created_at"
+       FROM "invitations" WHERE "household_id" = $1 ORDER BY "created_at" DESC`,
+      [household.id],
+    );
+    expect(invitations.rows.length).toBeGreaterThanOrEqual(1);
+    const latestInvitation = invitations.rows[0] as Record<string, unknown>;
+    // Hash is lowercase hex (64 hex chars after '0x' prefix removed from bytea)
+    const hashStr = String(latestInvitation.hash);
+    expect(hashStr).toMatch(/^[0-9a-f]{64}$/i);
+    expect(hashStr).toBe(hashStr.toLowerCase());
+
+    // Role is always MEMBER
+    expect(latestInvitation.role).toBe('MEMBER');
+
+    // Not consumed, not invalidated
+    expect(latestInvitation.consumed_at).toBeNull();
+    expect(latestInvitation.invalidated_at).toBeNull();
+
+    // Expiry is in the future
+    const expiry = new Date(latestInvitation.expires_at as string);
+    expect(expiry.getTime()).toBeGreaterThan(Date.now());
+
+    // Raw token is NOT in database
+    const dbJson = JSON.stringify(invitations.rows);
+    // Extract the token from the mailpit text for safety check
+    const tokenMatch = /\/invite\?token=([^\s\n]+)/.exec(outsiderText);
+    expect(tokenMatch).not.toBeNull();
+    const rawToken = tokenMatch![1];
+    expect(dbJson).not.toContain(rawToken);
+
+    // === REPEAT INVITATION (rotation) ===
+
+    // Clear field and send again to same recipient
+    await inviteFormLabel.fill(outsider.email);
+    await page.getByRole('button', { name: '发送邀请' }).click();
+    await expect(page.getByText('邀请已发送。')).toBeVisible({ timeout: 5000 });
+
+    // Verify old invitation was invalidated
+    const afterRepeat = await database.query(
+      `SELECT "id", "invalidated_at", "created_at"
+       FROM "invitations" WHERE "household_id" = $1 ORDER BY "created_at" DESC`,
+      [household.id],
+    );
+    expect(afterRepeat.rows.length).toBeGreaterThanOrEqual(2);
+    const olderMatch = afterRepeat.rows.find(
+      (r: Record<string, unknown>) => r.id === latestInvitation.id,
+    );
+    expect(olderMatch).toBeDefined();
+    expect((olderMatch as Record<string, unknown>).invalidated_at).not.toBeNull();
+
+    // === ALREADY-MEMBER REJECTION ===
+
+    // Try to invite someone who is already a member
+    await inviteFormLabel.fill(member.email);
+    await page.getByRole('button', { name: '发送邀请' }).click();
+    await expect(page.getByText('这个邮箱已经是该家庭的成员。')).toBeVisible({ timeout: 5000 });
+
+    // === IDENTICAL RESPONSE FOR UNREGISTERED, REGISTERED, AND REPEAT ===
+
+    // Registered but not a member: owner sends to outsider (who is already registered)
+    // This tests the D-06 invariant: same success for registered non-members
+    await inviteFormLabel.fill(outsider.email);
+    await page.getByRole('button', { name: '发送邀请' }).click();
+    await expect(page.getByText('邀请已发送。')).toBeVisible({ timeout: 5000 });
+    // No "already registered" or account-existence distinction in UI
+
+    // === MEMBER CANNOT SEND (API-level) ===
+
+    // Member tries to send via API directly
+    const memberInviteResponse = await request.fetch(
+      `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${member.accessToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ email: 'someone@example.test' }),
+      },
+    );
+    expect(memberInviteResponse.status()).toBe(403);
+
+    // === OUTSIDER CANNOT SEND (API-level) ===
+
+    const outsiderInviteResponse = await request.fetch(
+      `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${outsider.accessToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ email: 'someone@example.test' }),
+      },
+    );
+    expect(outsiderInviteResponse.status()).toBe(404);
+
+    // === ADMIN CAN SEND ===
+
+    // Admin sends invitation
+    const adminInviteResponse = await request.fetch(
+      `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${existingAdmin.accessToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ email: 'admin-invited@example.test' }),
+      },
+    );
+    expect(adminInviteResponse.status()).toBe(201);
+    const adminBody = await adminInviteResponse.json();
+    expect(adminBody.code).toBe('INVITATION_SENT');
+    expect(adminBody.message).toBe('邀请已发送。');
+
+  } finally {
+    await database.end();
+  }
 });

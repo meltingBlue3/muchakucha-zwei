@@ -139,3 +139,13 @@ export interface GetHouseholdResponseDto {
   createdAt: string;
   members: GetHouseholdMemberDto[];
 }
+
+export interface SendHouseholdInvitationDto {
+  /** Canonical invited email address. Role is server-fixed to MEMBER per D-05. */
+  email: string;
+}
+
+export interface SendHouseholdInvitationResponseDto {
+  code: 'INVITATION_SENT';
+  message: string;
+}

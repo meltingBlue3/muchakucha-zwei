@@ -20,6 +20,8 @@ import type {
   GetHouseholdResponseDto,
   ListMyHouseholdsItemDto,
   UpdateHouseholdDto,
+  SendHouseholdInvitationDto,
+  SendHouseholdInvitationResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -159,6 +161,21 @@ export class ApiClient {
     return this.authenticated<GetHouseholdResponseDto>(
       'PATCH',
       `/api/v1/households/${encodeURIComponent(householdId)}`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async sendHouseholdInvitation(
+    accessToken: string,
+    householdId: string,
+    body: SendHouseholdInvitationDto,
+    signal?: AbortSignal,
+  ): Promise<SendHouseholdInvitationResponseDto> {
+    return this.authenticated<SendHouseholdInvitationResponseDto>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/invitations`,
       accessToken,
       body,
       signal,

@@ -23,8 +23,10 @@ import {
 const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
 const PERMISSION_DENIED = '你没有重命名此家庭的权限。';
 const RENAME_SUCCESS = '家庭名称已更新。';
+const INVITE_SUCCESS = '邀请已发送。';
+const INVITE_ALREADY_MEMBER = '这个邮箱已经是该家庭的成员。';
 
-export type HouseholdSettingsApi = Pick<HouseholdApi, 'getHousehold' | 'updateHousehold'>;
+export type HouseholdSettingsApi = Pick<HouseholdApi, 'getHousehold' | 'updateHousehold' | 'sendHouseholdInvitation'>;
 
 export interface HouseholdSettingsDeps {
   householdApi: HouseholdSettingsApi;
@@ -40,6 +42,10 @@ export interface HouseholdSettingsProps {
   showRename?: boolean;
   /** Called when membership loss is detected after a rename attempt. */
   onRenameAccessChanged?: (lostHouseholdName: string) => void;
+  /** When true, show the invitation form. Only visible to owner/admin. Default false. */
+  showInvite?: boolean;
+  /** Called when membership loss is detected after an invitation attempt. */
+  onInviteAccessChanged?: (lostHouseholdName: string) => void;
 }
 
 type ViewState =
@@ -55,6 +61,8 @@ export function HouseholdSettings({
   deps,
   showRename = false,
   onRenameAccessChanged,
+  showInvite = false,
+  onInviteAccessChanged,
 }: HouseholdSettingsProps) {
   const [viewState, setViewState] = useState<ViewState>({ kind: 'loading' });
   const abortRef = useRef<AbortController | null>(null);
@@ -65,6 +73,12 @@ export function HouseholdSettings({
   const [renameSubmitting, setRenameSubmitting] = useState(false);
   const [renameSuccess, setRenameSuccess] = useState<string | undefined>(undefined);
   const [renameError, setRenameError] = useState<string | undefined>(undefined);
+
+  // ---- Invitation form state ----
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  const [inviteSuccess, setInviteSuccess] = useState<string | undefined>(undefined);
+  const [inviteError, setInviteError] = useState<string | undefined>(undefined);
 
   // Populate the rename input when data loads.
   const renameInitialized = useRef(false);
@@ -131,6 +145,60 @@ export function HouseholdSettings({
     }
 
     setRenameSubmitting(false);
+  };
+
+  const handleInvite = async () => {
+    const trimmed = inviteEmail.trim().normalize('NFC');
+    if (trimmed === '' || !trimmed.includes('@')) return;
+
+    setInviteSubmitting(true);
+    setInviteSuccess(undefined);
+    setInviteError(undefined);
+
+    const accessToken = deps.getAccessToken();
+    if (accessToken === null) {
+      setInviteError(GENERIC_ERROR);
+      setInviteSubmitting(false);
+      return;
+    }
+
+    try {
+      await deps.householdApi.sendHouseholdInvitation(
+        accessToken,
+        householdId,
+        { email: trimmed },
+      );
+
+      if (!mountedRef.current) return;
+
+      setInviteEmail('');
+      setInviteSuccess(INVITE_SUCCESS);
+    } catch (error: unknown) {
+      if (!mountedRef.current) return;
+
+      if (error instanceof ApiClientError) {
+        if (error.status === 409) {
+          setInviteError(INVITE_ALREADY_MEMBER);
+        } else if (error.status === 403) {
+          setInviteError(PERMISSION_DENIED);
+        } else if (error.status === 404) {
+          if (onInviteAccessChanged !== undefined) {
+            onInviteAccessChanged(householdName);
+            setInviteSubmitting(false);
+            return;
+          }
+          setInviteError(GENERIC_ERROR);
+        } else if (error.status === 401) {
+          setInviteError(GENERIC_ERROR);
+        } else {
+          setInviteError(GENERIC_ERROR);
+        }
+      } else {
+        setInviteError(GENERIC_ERROR);
+      }
+    }
+
+    setInviteSubmitting(false);
   };
 
   useEffect(() => {
@@ -277,6 +345,58 @@ export function HouseholdSettings({
                 label="保存"
                 loading={renameSubmitting}
                 onPress={() => { void handleRename(); }}
+              />
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {/* Invitation form — only shown on the settings route for owner/admin */}
+        {(() => {
+          const currentMember = data.members.find((m) => m.isCurrentUser);
+          const canInvite = currentMember !== undefined && (currentMember.role === 'OWNER' || currentMember.role === 'ADMIN');
+          return showInvite && canInvite;
+        })() ? (
+          <Stack gap={4}>
+            <HouseholdContextNote householdName={authoritativeName} />
+
+            {inviteError !== undefined ? (
+              <Banner title="邀请失败">{inviteError}</Banner>
+            ) : null}
+
+            {inviteSuccess !== undefined ? (
+              <Stack
+                accessibilityLiveRegion="polite"
+                accessibilityRole={'status' as never}
+                gap={1}
+              >
+                <Text>{inviteSuccess}</Text>
+              </Stack>
+            ) : null}
+
+            <Stack gap={2}>
+              <TextField
+                label="邮箱地址"
+                keyboardType="email-address"
+                autoComplete="email"
+                value={inviteEmail}
+                onChangeText={(text) => {
+                  setInviteEmail(text);
+                  setInviteError(undefined);
+                  setInviteSuccess(undefined);
+                }}
+              />
+              <Text variant="bodySm">
+                对方可通过邮件登录或创建账户后接受邀请。
+              </Text>
+              <Button
+                disabled={
+                  inviteSubmitting ||
+                  inviteEmail.trim().normalize('NFC') === '' ||
+                  !inviteEmail.trim().normalize('NFC').includes('@')
+                }
+                label="发送邀请"
+                loading={inviteSubmitting}
+                onPress={() => { void handleInvite(); }}
               />
             </Stack>
           </Stack>

@@ -492,6 +492,61 @@
   },
   "tags": [],
   "servers": [],
+    "/api/v1/households/{id}/invitations": {
+      "post": {
+        "operationId": "sendHouseholdInvitation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendHouseholdInvitationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email is invalid or the request is malformed."
+          },
+          "403": {
+            "description": "Actor is a member but not authorized to send invitations."
+          },
+          "409": {
+            "description": "The email already belongs to a current member of this household."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendHouseholdInvitationDto"
+              }
+            }
+          }
+        },
+        "tags": [
+          "households"
+        ]
+      }
+    },
+  },
   "components": {
     "securitySchemes": {
       "bearer": {
@@ -992,6 +1047,37 @@
           "ownerMembershipId",
           "createdAt",
           "members"
+        ]
+      },
+      "SendHouseholdInvitationDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "friend@example.test",
+            "description": "Canonical invited email address. Role is server-fixed to MEMBER per D-05."
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "SendHouseholdInvitationResponseDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INVITATION_SENT"
+          },
+          "message": {
+            "type": "string",
+            "example": "邀请已发送。"
+          }
+        },
+        "required": [
+          "code",
+          "message"
         ]
       }
     }

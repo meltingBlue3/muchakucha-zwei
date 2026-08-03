@@ -17,8 +17,16 @@ export interface PasswordChangedMail extends RecipientMail {
   readonly changedAt: Date;
 }
 
+export interface HouseholdInvitationMail extends RecipientMail {
+  readonly invitationUrl: string;
+  readonly inviterDisplayName: string;
+  readonly householdDisplayName: string;
+  readonly expiresAt: Date;
+}
+
 export interface MailPort {
   sendEmailVerification(message: VerificationMail): Promise<void>;
   sendPasswordReset(message: PasswordResetMail): Promise<void>;
   sendPasswordChangedNotice(message: PasswordChangedMail): Promise<void>;
+  sendHouseholdInvitation(message: HouseholdInvitationMail): Promise<void>;
 }

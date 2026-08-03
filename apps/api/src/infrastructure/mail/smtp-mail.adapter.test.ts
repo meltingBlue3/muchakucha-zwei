@@ -55,4 +55,45 @@ describe('provider-neutral SMTP mail adapter', () => {
     expect(sent[1]?.text).toContain('reset-secret');
     expect(JSON.stringify(sent[2])).not.toMatch(/verification-secret|reset-secret/);
   });
+
+  test('maps invitation recipient, URL, inviter, household, and expiry in text and escaped HTML', async () => {
+    const { adapter, sent } = captureAdapter();
+    await adapter.sendHouseholdInvitation({
+      to: 'friend@example.test',
+      recipientName: '我的朋友',
+      invitationUrl: 'http://127.0.0.1:8081/invite/test?token=invite-token-secret',
+      inviterDisplayName: '家主',
+      householdDisplayName: '温暖小家',
+      expiresAt: new Date('2026-08-10T00:00:00.000Z'),
+    });
+
+    expect(sent).toHaveLength(1);
+    const message = sent[0]!;
+
+    // Recipient mapping
+    expect(message.to).toBe('friend@example.test');
+
+    // Subject contains inviter and household
+    expect(message.subject).toContain('家主');
+    expect(message.subject).toContain('温暖小家');
+
+    // Plain text: inviter display, household display, raw invitation URL, expiry
+    expect(message.text).toContain('我的朋友');
+    expect(message.text).toContain('家主');
+    expect(message.text).toContain('温暖小家');
+    expect(message.text).toContain('invite-token-secret');
+    expect(message.text).toContain('http://127.0.0.1:8081/invite/test?token=invite-token-secret');
+    expect(message.text).toContain('2026-08-10T00:00:00.000Z');
+
+    // HTML: escaped inviter display, escaped household display, escaped invitation URL, escaped expiry
+    expect(message.html).toContain('我的朋友');
+    expect(message.html).toContain('家主');
+    expect(message.html).toContain('温暖小家');
+    expect(message.html).toContain('invite-token-secret');
+    expect(message.html).toContain('http://127.0.0.1:8081/invite/test?token=invite-token-secret');
+    expect(message.html).toContain('2026-08-10T00:00:00.000Z');
+
+    // Token is not leaked across messages
+    expect(JSON.stringify(sent)).not.toMatch(/invite-token-secret/);
+  });
 });

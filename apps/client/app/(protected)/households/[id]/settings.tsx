@@ -51,6 +51,10 @@ export default function HouseholdSettingsRoute() {
     enterAccessChanged(lostHouseholdName);
   }, [enterAccessChanged]);
 
+  const handleInviteAccessChanged = useCallback((lostHouseholdName: string) => {
+    enterAccessChanged(lostHouseholdName);
+  }, [enterAccessChanged]);
+
   // ---- AccessChanged or member lost access ----
   if (viewState === 'accessChanged') {
     const hasOtherHouseholds = households.length > 0;
@@ -90,6 +94,8 @@ export default function HouseholdSettingsRoute() {
         onOpenSwitcher={() => setSwitcherOpen(true)}
         onRenameAccessChanged={handleRenameAccessChanged}
         showRename
+        onInviteAccessChanged={handleInviteAccessChanged}
+        showInvite
       />
       <HouseholdSwitcher
         currentHouseholdId={currentHouseholdId}

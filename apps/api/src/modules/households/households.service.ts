@@ -1,4 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { createHash, randomBytes } from 'node:crypto';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { isEmail } from 'class-validator';
+import { MAIL_PORT, type MailPort } from '../../infrastructure/mail/mail.port.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type {
   CreateHouseholdResponseDto,
@@ -21,10 +24,54 @@ const ROLE_ORDER: Record<string, number> = Object.freeze({ OWNER: 0, ADMIN: 1, M
 
 const NAME_MIN_CODE_POINTS = 1;
 const NAME_MAX_CODE_POINTS = 40;
+const INVITE_TOKEN_BYTES = 32;
+const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1_000;
+
+function validationError(field: string, code: string): BadRequestException {
+  return new BadRequestException({
+    code: 'VALIDATION_FAILED',
+    message: 'Request validation failed.',
+    details: [{ field, codes: [code] }],
+  });
+}
+
+function opaqueToken(): string {
+  return randomBytes(INVITE_TOKEN_BYTES).toString('base64url');
+}
+
+function hashOpaqueToken(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
+function invitationUrl(token: string, environment: NodeJS.ProcessEnv = process.env): string {
+  const configuredOrigin = environment.EMAIL_LINK_ORIGIN;
+  if (environment.NODE_ENV === 'production' && !configuredOrigin) {
+    throw new Error('EMAIL_LINK_ORIGIN is required in production.');
+  }
+  const origin = configuredOrigin ?? 'http://127.0.0.1:8081';
+  const parsed = new URL(origin);
+  if (
+    !['http:', 'https:'].includes(parsed.protocol)
+    || parsed.origin !== origin
+    || parsed.pathname !== '/'
+    || parsed.search !== ''
+    || parsed.hash !== ''
+    || parsed.username !== ''
+    || parsed.password !== ''
+  ) {
+    throw new Error('EMAIL_LINK_ORIGIN must be an exact HTTP(S) origin.');
+  }
+  const link = new URL('/invite', parsed);
+  link.searchParams.set('token', token);
+  return link.href;
+}
 
 @Injectable()
 export class HouseholdsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(MAIL_PORT) private readonly mailPort: MailPort,
+  ) {}
 
   async createHousehold(
     creatorId: string,
@@ -234,6 +281,119 @@ export class HouseholdsService {
 
     // Return authoritative household projection.
     return this.getHousehold(actorId, householdId);
+  }
+
+  async sendHouseholdInvitation(
+    actorId: string,
+    householdId: string,
+    email: string,
+  ): Promise<{ code: 'INVITATION_SENT'; message: string }> {
+    const emailCanonical = email.trim().normalize('NFC').toLowerCase();
+    if (!isEmail(emailCanonical)) {
+      throw validationError('email', 'isEmail');
+    }
+
+    const household = await this.prisma.household.findUnique({
+      where: { id: householdId },
+      include: {
+        memberships: {
+          include: { user: true },
+        },
+      },
+    });
+
+    if (household === null) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+
+    if (household.ownerMembershipId === null) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+
+    // Verify actor is a member.
+    const actorMembership = household.memberships.find((m) => m.userId === actorId);
+    if (actorMembership === undefined) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+
+    // Only owner and admin can invite.
+    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
+    const actorRole = actorIsOwner ? 'OWNER' : actorMembership.role;
+    if (actorRole !== 'OWNER' && actorRole !== 'ADMIN') {
+      throw new ForbiddenException({
+        code: 'INSUFFICIENT_ROLE',
+        message: '只有所有者和管理员可以发送邀请。',
+      });
+    }
+
+    // Check if email is already a current member.
+    const existingMember = household.memberships.find(
+      (m) => m.user.emailCanonical === emailCanonical,
+    );
+    if (existingMember !== undefined) {
+      throw new ConflictException({
+        code: 'ALREADY_MEMBER',
+        message: '这个邮箱已经是该家庭的成员。',
+      });
+    }
+
+    // Generate opaque token and hash.
+    const rawToken = opaqueToken();
+    const tokenHash = hashOpaqueToken(rawToken);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + INVITE_LIFETIME_MS);
+
+    // Transactionally rotate predecessor and create new invitation.
+    const inviterDisplayName = actorMembership.user.displayName;
+    const householdName = household.name;
+    const deliveryEmail = email.trim().normalize('NFC');
+
+    await this.prisma.$transaction(async (transaction) => {
+      // Invalidate any pending active invitation for this household+email.
+      await transaction.invitation.updateMany({
+        where: {
+          householdId,
+          emailCanonical,
+          invalidatedAt: null,
+          consumedAt: null,
+        },
+        data: { invalidatedAt: now },
+      });
+
+      // Create the new invitation.
+      await transaction.invitation.create({
+        data: {
+          inviterUserId: actorId,
+          inviterMembershipId: actorMembership.id,
+          householdId,
+          emailCanonical,
+          hash: tokenHash,
+          role: 'MEMBER',
+          expiresAt,
+        },
+      });
+    }, { isolationLevel: 'Serializable' });
+
+    // Send email after successful commit.
+    void this.mailPort.sendHouseholdInvitation({
+      to: deliveryEmail,
+      invitationUrl: invitationUrl(rawToken),
+      inviterDisplayName,
+      householdDisplayName: householdName,
+      expiresAt,
+    });
+
+    // Identical response for registered, absent, and repeated non-members (D-06).
+    return { code: 'INVITATION_SENT', message: '邀请已发送。' };
   }
 
   private toMembershipResponse(membership: {

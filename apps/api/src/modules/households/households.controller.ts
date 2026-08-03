@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   ForbiddenException,
   Get,
@@ -14,13 +15,17 @@ import {
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiProperty,
   ApiTags,
 } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { IsEmail } from 'class-validator';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import {
   CreateHouseholdDto,
@@ -30,6 +35,29 @@ import {
 import { GetHouseholdResponseDto } from './dto/membership.dto.js';
 import { UpdateHouseholdDto } from './dto/update-household.dto.js';
 import { HouseholdsService } from './households.service.js';
+
+// ---- Invitation DTOs (exported from controller per Plan 02-05 scope exception) ----
+
+export class SendHouseholdInvitationDto {
+  @ApiProperty({
+    format: 'email',
+    example: 'friend@example.test',
+    description: 'Canonical invited email address. Role is server-fixed to MEMBER per D-05.',
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().normalize('NFC').toLowerCase() : value,
+  )
+  @IsEmail()
+  email!: string;
+}
+
+export class SendHouseholdInvitationResponseDto {
+  @ApiProperty({ example: 'INVITATION_SENT' })
+  code!: 'INVITATION_SENT';
+
+  @ApiProperty({ example: '邀请已发送。' })
+  message!: string;
+}
 
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
@@ -130,5 +158,28 @@ export class HouseholdsController {
       });
     }
     return result;
+  }
+
+  @Post(':id/invitations')
+  @HttpCode(201)
+  @ApiOperation({ operationId: 'sendHouseholdInvitation' })
+  @ApiCreatedResponse({ type: SendHouseholdInvitationResponseDto })
+  @ApiBadRequestResponse({ description: 'Email is invalid or the request is malformed.' })
+  @ApiConflictResponse({ description: 'The email already belongs to a current member of this household.' })
+  @ApiForbiddenResponse({ description: 'Actor is a member but not authorized to send invitations.' })
+  @ApiNotFoundResponse({ description: 'Household not found or actor is not a member.' })
+  async sendHouseholdInvitation(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() input: SendHouseholdInvitationDto,
+  ): Promise<SendHouseholdInvitationResponseDto> {
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+    return this.householdsService.sendHouseholdInvitation(
+      request.auth.sub,
+      id,
+      input.email,
+    );
   }
 }

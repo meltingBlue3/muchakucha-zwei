@@ -1,5 +1,6 @@
 import nodemailer, { type SendMailOptions, type Transporter } from 'nodemailer';
 import type {
+  HouseholdInvitationMail,
   MailPort,
   PasswordChangedMail,
   PasswordResetMail,
@@ -151,6 +152,21 @@ export class SmtpMailAdapter implements MailPort {
       subject: 'Your Muchakucha Zwei password was changed',
       text: `${greeting(message.recipientName)},\n\nYour password was changed at ${changedAt}. If this was not you, reset it immediately.`,
       html: `<p>${escapeHtml(greeting(message.recipientName))},</p><p>Your password was changed at ${escapeHtml(changedAt)}. If this was not you, reset it immediately.</p>`,
+    });
+  }
+
+  async sendHouseholdInvitation(message: HouseholdInvitationMail): Promise<void> {
+    const invitationUrl = safeHttpUrl(message.invitationUrl, 'invitationUrl');
+    const expiresText = message.expiresAt.toISOString();
+    const greeter = greeting(message.recipientName);
+    const inviter = message.inviterDisplayName;
+    const householdName = message.householdDisplayName;
+
+    await this.send({
+      to: message.to,
+      subject: `${inviter} 邀请你加入 ${householdName} — Muchakucha Zwei`,
+      text: `${greeter}，\n\n${inviter} 邀请你加入“${householdName}”。\n\n接受邀请：${invitationUrl}\n\n邀请在 ${expiresText} 前有效。`,
+      html: `<p>${escapeHtml(greeter)}，</p><p>${escapeHtml(inviter)} 邀请你加入“${escapeHtml(householdName)}”。</p><p><a href="${escapeHtml(invitationUrl)}">接受邀请</a></p><p>邀请在 ${escapeHtml(expiresText)} 前有效。</p>`,
     });
   }
 

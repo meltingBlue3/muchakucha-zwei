@@ -147,6 +147,16 @@ export interface GetHouseholdResponseDto {
   createdAt: string;
   members: GetHouseholdMemberDto[];
 }
+
+export interface SendHouseholdInvitationDto {
+  /** Canonical invited email address. Role is server-fixed to MEMBER per D-05. */
+  email: string;
+}
+
+export interface SendHouseholdInvitationResponseDto {
+  code: 'INVITATION_SENT';
+  message: string;
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
@@ -169,6 +179,8 @@ import type {
   PasswordResetRequestAcceptedDto,
   CompletePasswordResetDto,
   UpdateHouseholdDto,
+  SendHouseholdInvitationDto,
+  SendHouseholdInvitationResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -314,6 +326,21 @@ export class ApiClient {
     );
   }
 
+  async sendHouseholdInvitation(
+    accessToken: string,
+    householdId: string,
+    body: SendHouseholdInvitationDto,
+    signal?: AbortSignal,
+  ): Promise<SendHouseholdInvitationResponseDto> {
+    return this.authenticated<SendHouseholdInvitationResponseDto>(
+      'POST',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/invitations\`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(\`\${this.baseUrl}\${path}\`, {
       method: 'POST',
@@ -430,6 +457,13 @@ async function generate(): Promise<void> {
       || document.components?.schemas?.UpdateHouseholdDto === undefined
       || document.components.schemas.GetHouseholdResponseDto === undefined) {
       throw new Error('OpenAPI household rename operation or schemas are missing or unstable.');
+    }
+    const sendInvitationPath = document.paths['/api/v1/households/{id}/invitations']?.post;
+    if (sendInvitationPath?.operationId !== 'sendHouseholdInvitation'
+      || sendInvitationPath?.security === undefined
+      || document.components?.schemas?.SendHouseholdInvitationDto === undefined
+      || document.components.schemas.SendHouseholdInvitationResponseDto === undefined) {
+      throw new Error('OpenAPI household invitation operation or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

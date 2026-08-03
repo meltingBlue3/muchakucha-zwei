@@ -22,6 +22,7 @@ model User {
   verificationTokens  EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
   memberships         Membership[]
+  sentInvitations     Invitation[]
 }
 
 model Household {
@@ -31,6 +32,7 @@ model Household {
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   memberships       Membership[]
+  invitations       Invitation[]
   ownerMembership   Membership?  @relation("HouseholdOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
 
   @@map("households")
@@ -46,10 +48,32 @@ model Membership {
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   household    Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
   ownedHousehold Household? @relation("HouseholdOwner")
+  sentInvitations  Invitation[]
 
   @@unique([userId, householdId], map: "Membership_user_id_household_id_key")
   @@index([householdId, role], map: "Membership_household_id_role_idx")
   @@map("memberships")
+}
+
+model Invitation {
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  inviterUserId       String     @map("inviter_user_id") @db.Uuid
+  inviterMembershipId String     @map("inviter_membership_id") @db.Uuid
+  householdId         String     @map("household_id") @db.Uuid
+  emailCanonical      String     @map("email_canonical") @db.VarChar(320)
+  hash                String     @unique @db.Char(64)
+  role                String     @default("MEMBER") @db.VarChar(10)
+  expiresAt           DateTime   @map("expires_at") @db.Timestamptz(3)
+  invalidatedAt       DateTime?  @map("invalidated_at") @db.Timestamptz(3)
+  consumedAt          DateTime?  @map("consumed_at") @db.Timestamptz(3)
+  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  inviterUser         User       @relation(fields: [inviterUserId], references: [id], onDelete: Cascade)
+  inviterMembership   Membership @relation(fields: [inviterMembershipId], references: [id], onDelete: Cascade)
+  household           Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId, emailCanonical, invalidatedAt, consumedAt], map: "Invitation_household_email_state_idx")
+  @@map("invitations")
 }
 
 model AuthSession {
