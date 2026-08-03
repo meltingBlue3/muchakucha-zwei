@@ -148,6 +148,10 @@ export default function HouseholdsIndexRoute() {
                 isCurrent={household.id === currentHouseholdId}
                 key={household.id}
                 onSelect={(id) => { void handleSwitch(id); }}
+                primaryAction={{
+                  label: '查看成员',
+                  onPress: () => void router.push(`/households/${encodeURIComponent(household.id)}`),
+                }}
               />
             ))}
 

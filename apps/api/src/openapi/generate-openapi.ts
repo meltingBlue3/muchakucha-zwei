@@ -125,6 +125,23 @@ export interface ListMyHouseholdsItemDto {
   memberCount: number;
   ownerMembershipId: string;
 }
+
+export interface GetHouseholdMemberDto {
+  membershipId: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER';
+  isCurrentUser: boolean;
+}
+
+export interface GetHouseholdResponseDto {
+  id: string;
+  name: string;
+  ownerMembershipId: string;
+  createdAt: string;
+  members: GetHouseholdMemberDto[];
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
@@ -133,6 +150,7 @@ import type {
   CompleteEmailVerificationResponseDto,
   CreateHouseholdDto,
   CreateHouseholdResponseDto,
+  GetHouseholdResponseDto,
   ListMyHouseholdsItemDto,
   LoginDto,
   LoginResponseDto,
@@ -261,6 +279,20 @@ export class ApiClient {
     );
   }
 
+  async getHousehold(
+    accessToken: string,
+    householdId: string,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'GET',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(\`\${this.baseUrl}\${path}\`, {
       method: 'POST',
@@ -363,6 +395,13 @@ async function generate(): Promise<void> {
     if (document.paths['/api/v1/households']?.get?.operationId !== 'listMyHouseholds'
       || document.components?.schemas?.ListMyHouseholdsItemDto === undefined) {
       throw new Error('OpenAPI household list operation or schemas are missing or unstable.');
+    }
+    const getHouseholdPath = document.paths['/api/v1/households/{id}']?.get;
+    if (getHouseholdPath?.operationId !== 'getHousehold'
+      || getHouseholdPath?.security === undefined
+      || document.components?.schemas?.GetHouseholdResponseDto === undefined
+      || document.components.schemas.GetHouseholdMemberDto === undefined) {
+      throw new Error('OpenAPI household roster operation or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

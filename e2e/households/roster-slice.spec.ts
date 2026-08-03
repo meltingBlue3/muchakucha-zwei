@@ -11,7 +11,7 @@ const password = 'correct horse battery staple 2026';
 async function prepareVerifiedAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string }> {
+): Promise<{ email: string; accessToken: string; userId: string }> {
   const database = new Client({ connectionString: DATABASE_URL });
   await database.connect();
 
@@ -34,6 +34,14 @@ async function prepareVerifiedAccount(
       [email],
     );
 
+    // Fetch the user ID.
+    const userResult = await database.query(
+      `SELECT "id" FROM "User" WHERE "email_canonical" = lower($1)`,
+      [email],
+    );
+    const userId = userResult.rows[0]?.id as string;
+    expect(userId).toBeDefined();
+
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
@@ -44,7 +52,7 @@ async function prepareVerifiedAccount(
     const accessToken = (loginBody as { accessToken?: string }).accessToken;
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken };
+    return { email, accessToken, userId };
   } finally {
     await database.end();
   }
@@ -68,47 +76,127 @@ async function createHousehold(
   return { id: household.id, name: household.name, ownerMembershipId: household.ownerMembershipId };
 }
 
+async function addMembershipViaDb(
+  householdId: string,
+  userId: string,
+  role: string,
+): Promise<void> {
+  const database = new Client({ connectionString: DATABASE_URL });
+  await database.connect();
+  try {
+    await database.query(
+      `INSERT INTO "memberships" ("user_id", "household_id", "role")
+       VALUES ($1, $2, $3)`,
+      [userId, householdId, role],
+    );
+  } finally {
+    await database.end();
+  }
+}
+
 // --- Static guard: this file must contain exactly one test() call. ---
 // The verify automation counts test( occurrences; adding a second test() would
-// break the gate. Keep integration and tie-case variants outside this dedicated
-// RED file.
+// break the gate. Keep integration and tie-case variants outside this dedicated file.
 
-test('shows the isolated totally ordered roster [RED:HOUSEHOLD_ROSTER]', async ({ page, request }) => {
+test('shows the isolated totally ordered roster', async ({ page, request }) => {
   test.setTimeout(120_000);
 
   // --- Precondition: auth is healthy ---
   const owner = await prepareVerifiedAccount('owner', '家主');
-  expect(owner.accessToken).toBeDefined();
+  const adminActor = await prepareVerifiedAccount('admin', '管理员');
+  const memberActor = await prepareVerifiedAccount('member', '普通成员');
+  const outsider = await prepareVerifiedAccount('outsider', '无关人员');
 
   // --- Precondition: database and household creation work ---
   const household = await createHousehold(owner.accessToken, '温暖小家');
 
-  // --- Precondition: listMyHouseholds endpoint is healthy ---
-  const listResponse = await request.get(`${API_ORIGIN}/api/v1/households`, {
-    headers: { authorization: `Bearer ${owner.accessToken}` },
-  });
-  expect(listResponse.status()).toBe(200);
-  const listBody = await listResponse.json();
-  const items = listBody as Array<{ id: string; name: string; role: string }>;
-  expect(items).toHaveLength(1);
-  expect(items[0].id).toBe(household.id);
-  expect(items[0].role).toBe('ADMIN');
+  // Add admin and member to the household (direct DB insert since invites are
+  // not implemented in this plan).
+  await addMembershipViaDb(household.id, adminActor.userId, 'ADMIN');
+  await addMembershipViaDb(household.id, memberActor.userId, 'MEMBER');
 
-  // --- Precondition: the /households selector route renders ---
+  // --- Verify: getHousehold API returns the totally ordered roster ---
+  const rosterResponse = await request.get(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}`,
+    { headers: { authorization: `Bearer ${owner.accessToken}` } },
+  );
+  expect(rosterResponse.status()).toBe(200);
+  const rosterBody = await rosterResponse.json();
+  const roster = rosterBody as {
+    id: string;
+    name: string;
+    ownerMembershipId: string;
+    members: Array<{
+      membershipId: string;
+      userId: string;
+      displayName: string;
+      email: string;
+      role: 'OWNER' | 'ADMIN' | 'MEMBER';
+      isCurrentUser: boolean;
+    }>;
+  };
+  expect(roster.id).toBe(household.id);
+  expect(roster.name).toBe('温暖小家');
+  expect(roster.members).toHaveLength(3);
+
+  // Total order: OWNER -> ADMIN -> MEMBER; current user first within role.
+  expect(roster.members[0].role).toBe('OWNER');
+  expect(roster.members[0].isCurrentUser).toBe(true);
+  expect(roster.members[0].displayName).toBe('家主');
+
+  expect(roster.members[1].role).toBe('ADMIN');
+  expect(roster.members[1].displayName).toBe('管理员');
+
+  expect(roster.members[2].role).toBe('MEMBER');
+  expect(roster.members[2].displayName).toBe('普通成员');
+
+  // --- Verify: cross-household isolation ---
+  // An outsider cannot access the household roster.
+  const outsiderResponse = await request.get(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}`,
+    { headers: { authorization: `Bearer ${outsider.accessToken}` } },
+  );
+  expect(outsiderResponse.status()).toBe(404);
+
+  // --- Verify: admin sees themselves first within the ADMIN role ---
+  const adminView = await request.get(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}`,
+    { headers: { authorization: `Bearer ${adminActor.accessToken}` } },
+  );
+  expect(adminView.status()).toBe(200);
+  const adminRoster = await adminView.json();
+  expect(adminRoster.members[0].role).toBe('OWNER');
+  expect(adminRoster.members[0].isCurrentUser).toBe(false);
+
+  // The admin is current actor - should appear first within ADMIN role.
+  expect(adminRoster.members[1].role).toBe('ADMIN');
+  expect(adminRoster.members[1].isCurrentUser).toBe(true);
+  expect(adminRoster.members[1].displayName).toBe('管理员');
+
+  expect(adminRoster.members[2].role).toBe('MEMBER');
+
+  // --- Verify: the /households selector route renders ---
   await page.goto('/households');
   await expect(page).toHaveURL(/\/households/);
 
-  // === RED GATE ===
-  // The owned household destination /households/[id], its getHousehold API
-  // endpoint, and MemberRow/RoleBadge owned components do not exist yet.
-  // This dedicated roster-slice test is RED until Task 2 implements the full
-  // API-to-UI roster slice (controller/service/DTO/OpenAPI/client/route/components).
-  throw new Error(
-    'IMPLEMENTATION_MISSING_HOUSEHOLD_ROSTER: ' +
-    'The GET /api/v1/households/:id (operationId getHousehold) guarded endpoint, ' +
-    'the /households/[id] route, MemberRow and RoleBadge owned components, ' +
-    'the extended household-api.ts wrapper, and cross-household isolation ' +
-    'guards have not been created yet. Preconditions (auth, createHousehold, ' +
-    'listMyHouseholds, /households selector) are healthy.',
-  );
+  // --- Verify: navigation to the owned household destination works ---
+  // Click "查看成员" on the HouseholdCard to navigate.
+  await page.getByRole('button', { name: '查看成员' }).first().click();
+  await expect(page).toHaveURL(/\/households\//);
+
+  // The roster page should show the household name in the header.
+  await expect(page.getByText('温暖小家').first()).toBeVisible();
+
+  // The member overview should list all members.
+  await expect(page.getByText('家主').first()).toBeVisible();
+  await expect(page.getByText('管理员').first()).toBeVisible();
+  await expect(page.getByText('普通成员').first()).toBeVisible();
+
+  // Role badges should be visible.
+  await expect(page.getByText('所有者').first()).toBeVisible();
+  await expect(page.getByText('成员').first()).toBeVisible();
+
+  // The "我" tag should appear for the current user.
+  // Since the owner is navigating, the page should show "我" for the owner.
+  await expect(page.getByText('我').first()).toBeVisible();
 });

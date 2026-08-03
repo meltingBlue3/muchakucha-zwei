@@ -117,3 +117,20 @@ export interface ListMyHouseholdsItemDto {
   memberCount: number;
   ownerMembershipId: string;
 }
+
+export interface GetHouseholdMemberDto {
+  membershipId: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER';
+  isCurrentUser: boolean;
+}
+
+export interface GetHouseholdResponseDto {
+  id: string;
+  name: string;
+  ownerMembershipId: string;
+  createdAt: string;
+  members: GetHouseholdMemberDto[];
+}

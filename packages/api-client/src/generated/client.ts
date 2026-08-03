@@ -17,6 +17,7 @@ import type {
   CompletePasswordResetDto,
   CreateHouseholdDto,
   CreateHouseholdResponseDto,
+  GetHouseholdResponseDto,
   ListMyHouseholdsItemDto,
 } from './models';
 
@@ -128,6 +129,20 @@ export class ApiClient {
     return this.authenticated<ListMyHouseholdsItemDto[]>(
       'GET',
       '/api/v1/households',
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async getHousehold(
+    accessToken: string,
+    householdId: string,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'GET',
+      `/api/v1/households/${encodeURIComponent(householdId)}`,
       accessToken,
       undefined,
       signal,

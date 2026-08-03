@@ -1,10 +1,11 @@
-import type { ListMyHouseholdsItemDto } from '@muchakucha/api-client';
+import type { GetHouseholdMemberDto, ListMyHouseholdsItemDto } from '@muchakucha/api-client';
 import Home from 'lucide-react-native/icons/home';
 import X from 'lucide-react-native/icons/x';
 import Check from 'lucide-react-native/icons/check';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Users from 'lucide-react-native/icons/users';
 import Crown from 'lucide-react-native/icons/crown';
+import Shield from 'lucide-react-native/icons/shield';
 import AlertTriangle from 'lucide-react-native/icons/alert-triangle';
 
 import React, { forwardRef, useCallback, useRef, useState } from 'react';
@@ -367,6 +368,121 @@ export const AccessChangedPanel = ({
     </Stack>
   </View>
 );
+
+// ---- RoleBadge ----
+
+const ROLE_LABELS: Record<string, string> = Object.freeze({
+  OWNER: '所有者',
+  ADMIN: '管理员',
+  MEMBER: '成员',
+});
+
+interface RoleBadgeProps {
+  role: 'OWNER' | 'ADMIN' | 'MEMBER';
+}
+
+export const RoleBadge = ({ role }: RoleBadgeProps) => {
+  const label = ROLE_LABELS[role] ?? role;
+  const RoleIcon = role === 'OWNER' ? Crown : role === 'ADMIN' ? Shield : undefined;
+
+  return (
+    <View
+      accessibilityLabel={`角色：${label}`}
+      style={{
+        alignItems: 'center',
+        backgroundColor: theme.colors.surfaceMuted,
+        borderRadius: theme.borderRadii.sm,
+        flexDirection: 'row',
+        gap: theme.spacing[1],
+        paddingHorizontal: theme.spacing[2],
+        paddingVertical: theme.spacing[1] / 2,
+      }}
+    >
+      {RoleIcon !== undefined ? (
+        <RoleIcon
+          color={theme.colors.inkMuted}
+          size={theme.controlSizes.icon - 4}
+          strokeWidth={theme.controlSizes.iconStroke}
+        />
+      ) : null}
+      <Text variant="bodySm">{label}</Text>
+    </View>
+  );
+};
+
+// ---- MemberRow ----
+
+interface MemberRowProps {
+  member: GetHouseholdMemberDto;
+}
+
+export const MemberRow = ({ member }: MemberRowProps) => {
+  const roleLabel = ROLE_LABELS[member.role] ?? member.role;
+  const avatarChar = [...member.displayName.trim().normalize('NFC')][0] ?? '?';
+
+  return (
+    <View
+      accessibilityLabel={`${member.displayName}，${roleLabel}${member.isCurrentUser ? '，本人' : ''}`}
+      style={{
+        alignItems: 'center',
+        borderBottomColor: theme.colors.border,
+        borderBottomWidth: theme.borderWidths.default,
+        flexDirection: 'row',
+        gap: theme.spacing[3],
+        minHeight: 72,
+        paddingVertical: theme.spacing[2],
+      }}
+    >
+      {/* Avatar placeholder */}
+      <View
+        accessibilityLabel={`${member.displayName}的头像`}
+        style={{
+          alignItems: 'center',
+          backgroundColor: theme.colors.surfaceMuted,
+          borderRadius: theme.borderRadii.full,
+          height: theme.controlSizes.touchTarget,
+          justifyContent: 'center',
+          width: theme.controlSizes.touchTarget,
+        }}
+      >
+        <Text
+          style={{ fontWeight: '600' as const }}
+          variant="body"
+        >
+          {avatarChar}
+        </Text>
+      </View>
+
+      {/* Name, email, role */}
+      <Stack gap={1} style={{ flex: 1 }}>
+        <Inline gap={2} style={{ alignItems: 'center' }}>
+          <Text
+            numberOfLines={1}
+            variant="body"
+          >
+            {member.displayName}
+          </Text>
+          {member.isCurrentUser ? (
+            <Text
+              style={{ fontWeight: '600' as const }}
+              variant="bodySm"
+            >
+              我
+            </Text>
+          ) : null}
+        </Inline>
+        <Text
+          numberOfLines={1}
+          variant="caption"
+        >
+          {member.email}
+        </Text>
+      </Stack>
+
+      <RoleBadge role={member.role} />
+    </View>
+  );
+};
 
 // ---- SwitchErrorBanner ----
 

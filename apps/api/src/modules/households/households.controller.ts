@@ -1,8 +1,9 @@
-import { Body, Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Req, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -13,6 +14,7 @@ import {
   CreateHouseholdResponseDto,
   ListMyHouseholdsItemDto,
 } from './dto/create-household.dto.js';
+import { GetHouseholdResponseDto } from './dto/membership.dto.js';
 import { HouseholdsService } from './households.service.js';
 
 interface AuthenticatedRequest {
@@ -52,5 +54,27 @@ export class HouseholdsController {
       throw new Error('AccessTokenGuard did not attach verified session claims.');
     }
     return this.householdsService.listMyHouseholds(request.auth.sub);
+  }
+
+  @Get(':id')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'getHousehold' })
+  @ApiOkResponse({ type: GetHouseholdResponseDto })
+  @ApiNotFoundResponse({ description: 'Household not found or the actor is not a member.' })
+  async getHousehold(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<GetHouseholdResponseDto> {
+    if (request.auth === undefined) {
+      throw new Error('AccessTokenGuard did not attach verified session claims.');
+    }
+    const result = await this.householdsService.getHousehold(request.auth.sub, id);
+    if (result === null) {
+      throw new NotFoundException({
+        code: 'HOUSEHOLD_NOT_FOUND',
+        message: 'Household not found or access denied.',
+      });
+    }
+    return result;
   }
 }

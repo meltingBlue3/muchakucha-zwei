@@ -388,6 +388,46 @@
           "households"
         ]
       }
+    },
+    "/api/v1/households/{id}": {
+      "get": {
+        "operationId": "getHousehold",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returns the household roster with totally ordered members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Household not found or the actor is not a member."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
     }
   },
   "info": {
@@ -810,6 +850,80 @@
           "role",
           "memberCount",
           "ownerMembershipId"
+        ]
+      },
+      "GetHouseholdMemberDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "example": "家主"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "owner@example.test"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "OWNER",
+              "ADMIN",
+              "MEMBER"
+            ]
+          },
+          "isCurrentUser": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "membershipId",
+          "userId",
+          "displayName",
+          "email",
+          "role",
+          "isCurrentUser"
+        ]
+      },
+      "GetHouseholdResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "温暖小家"
+          },
+          "ownerMembershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GetHouseholdMemberDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ownerMembershipId",
+          "createdAt",
+          "members"
         ]
       }
     }
