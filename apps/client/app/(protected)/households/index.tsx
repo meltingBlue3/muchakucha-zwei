@@ -12,6 +12,7 @@ import {
   SwitchErrorBanner,
 } from '../../../src/ui/household-components';
 import { Banner, Button, Heading, Spinner, Stack, Text } from '../../../src/ui/primitives';
+import { theme } from '../../../src/ui/theme';
 
 export default function HouseholdsIndexRoute() {
   const router = useRouter();
@@ -129,7 +130,7 @@ export default function HouseholdsIndexRoute() {
         ) : null}
 
         {isSwitching ? (
-          <Stack gap={4} style={{ alignItems: 'center', paddingVertical: 32 }}>
+          <Stack gap={4} style={{ alignItems: 'center', paddingVertical: theme.spacing[8] }}>
             <Spinner label="正在切换家庭" />
             <Text variant="bodySm">正在切换家庭</Text>
           </Stack>

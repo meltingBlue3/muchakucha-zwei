@@ -30,6 +30,7 @@ type ViewState = 'booting' | 'offline' | 'resolved';
 export const SessionBootstrap = ({
   children,
   fontsReady,
+  householdReady: householdReadyProp,
   intendedRoute,
   onRoute,
   restorationRequired = true,
@@ -48,7 +49,7 @@ export const SessionBootstrap = ({
         : 'resolved',
   );
   const [safeIntendedRoute] = useState(() => sanitizeIntendedRoute(intendedRoute));
-  const householdReady = props.householdReady ?? true;
+  const householdReady = householdReadyProp ?? true;
 
   const applyOutcome = useCallback(
     async (outcome: RestoreOutcome): Promise<void> => {
