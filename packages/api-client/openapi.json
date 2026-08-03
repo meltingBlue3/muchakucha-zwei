@@ -546,6 +546,82 @@
         ]
       }
     },
+    "/api/v1/households/invitations/preview": {
+      "get": {
+        "operationId": "previewInvitation",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Raw invitation token from the URL."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreviewResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "households"
+        ]
+      }
+    },
+    "/api/v1/households/invitations/accept": {
+      "post": {
+        "operationId": "acceptInvitation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invitation is invalid, expired, or already used."
+          },
+          "403": {
+            "description": "The authenticated email does not match the invitation recipient."
+          },
+          "409": {
+            "description": "The invitation was already claimed by a concurrent request."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitationDto"
+              }
+            }
+          }
+        },
+        "tags": [
+          "households"
+        ]
+      }
+    }
   },
   "components": {
     "securitySchemes": {
@@ -1078,6 +1154,50 @@
         "required": [
           "code",
           "message"
+        ]
+      },
+      "InvitationPreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "invalid",
+              "expired",
+              "used"
+            ]
+          },
+          "householdName": {
+            "type": "string",
+            "example": "温暖小家",
+            "description": "Only present when kind is 'valid'."
+          },
+          "inviterDisplayName": {
+            "type": "string",
+            "example": "家主",
+            "description": "Only present when kind is 'valid'."
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "ISO 8601 expiry. Only present when kind is 'valid'."
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "AcceptInvitationDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "example": "abc123def456",
+            "description": "The raw invitation token from the URL query parameter."
+          }
+        },
+        "required": [
+          "token"
         ]
       }
     }

@@ -142,7 +142,7 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
     ),
   );
 
-  const inviteUrl = `${EMAIL_LINK_ORIGIN}/invite?token=${encodeURIComponent(rawToken)}`;
+  const inviteUrl = `${EMAIL_LINK_ORIGIN}/invite/${encodeURIComponent(rawToken)}`;
 
   // --- Precondition: the invitation exists in DB with valid state ---
   await withDatabase(async (db) => {
@@ -184,9 +184,10 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
 
   // --- Token sanitation check: the URL should no longer contain the raw token ---
   // D-07 requires immediate sanitization of Web history/native params.
+  // After sanitization, the URL becomes /invite (without the token segment).
   const currentUrl = page.url();
   expect(currentUrl).not.toContain(rawToken);
-  expect(currentUrl).not.toMatch(/token=/);
+  expect(currentUrl).not.toMatch(/\/invite\/[^/]+$/);
 
   // --- Preview: household name and inviter display name are shown ---
   await expect(page.getByText('温暖小家')).toBeVisible({ timeout: 5000 });
@@ -245,17 +246,13 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
   await expect(acceptButton).toBeVisible({ timeout: 5000 });
 
   // ============================================================================
-  // RED MARKER — the actual accept implementation is not yet built
+  // D-08: EXPLICIT ACCEPT — user clicks accept and enters the household
   // ============================================================================
-  // The test below documents the expected behavior of the accept endpoint.
-  // Clicking accept will trigger the implementation-gated behavior. Until the
-  // accept endpoint and client flow exist, this test marks RED.
 
   await acceptButton.click();
 
-  // This unreachable assertion serves as the RED contract marker.
-  // Implementation must remove `expect.fail` and wire the full journey.
-  expect.fail('IMPLEMENTATION_MISSING_INVITATION_ACCEPT: The invitation accept endpoint, client preview, auth return, solo acceptance, mismatch suppression, atomic membership creation, and after-accept routing are not yet implemented. This test describes the end-to-end contract per D-07/D-08.');
+  // Wait for the accept to complete and the page to redirect to the household.
+  await page.waitForTimeout(3000);
 
   // ============================================================================
   // D-08: EXACTLY ONCE — after successful accept, invitation is consumed
@@ -321,7 +318,7 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
   await page.waitForTimeout(1000);
 
   // Navigate to the second invitation URL
-  const secondInviteUrl = `${EMAIL_LINK_ORIGIN}/invite?token=${encodeURIComponent(secondToken)}`;
+  const secondInviteUrl = `${EMAIL_LINK_ORIGIN}/invite/${encodeURIComponent(secondToken)}`;
   await page.goto(secondInviteUrl);
   await page.waitForTimeout(1500);
 
@@ -352,7 +349,7 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
   // ============================================================================
 
   // --- Unknown/invalid token: generic "invalid or expired" page ---
-  const invalidUrl = `${EMAIL_LINK_ORIGIN}/invite?token=not-a-valid-token-at-all`;
+  const invalidUrl = `${EMAIL_LINK_ORIGIN}/invite/not-a-valid-token-at-all`;
   await page.goto(invalidUrl);
   await page.waitForTimeout(1500);
 

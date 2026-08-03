@@ -157,6 +157,17 @@ export interface SendHouseholdInvitationResponseDto {
   code: 'INVITATION_SENT';
   message: string;
 }
+
+export interface InvitationPreviewResponseDto {
+  kind: 'valid' | 'invalid' | 'expired' | 'used';
+  householdName?: string;
+  inviterDisplayName?: string;
+  expiresAt?: string;
+}
+
+export interface AcceptInvitationDto {
+  token: string;
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
@@ -181,6 +192,8 @@ import type {
   UpdateHouseholdDto,
   SendHouseholdInvitationDto,
   SendHouseholdInvitationResponseDto,
+  InvitationPreviewResponseDto,
+  AcceptInvitationDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -341,6 +354,36 @@ export class ApiClient {
     );
   }
 
+  async previewInvitation(token: string, signal?: AbortSignal): Promise<InvitationPreviewResponseDto> {
+    const response = await fetch(
+      \`\${this.baseUrl}/api/v1/households/invitations/preview?token=\${encodeURIComponent(token)}\`,
+      {
+        method: 'GET',
+        credentials: 'include',
+        ...(signal === undefined ? {} : { signal }),
+      },
+    );
+    const payload: unknown = await response.json();
+    if (!response.ok) {
+      throw new ApiClientError(response.status, payload);
+    }
+    return payload as InvitationPreviewResponseDto;
+  }
+
+  async acceptInvitation(
+    accessToken: string,
+    body: AcceptInvitationDto,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'POST',
+      '/api/v1/households/invitations/accept',
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(\`\${this.baseUrl}\${path}\`, {
       method: 'POST',
@@ -464,6 +507,19 @@ async function generate(): Promise<void> {
       || document.components?.schemas?.SendHouseholdInvitationDto === undefined
       || document.components.schemas.SendHouseholdInvitationResponseDto === undefined) {
       throw new Error('OpenAPI household invitation operation or schemas are missing or unstable.');
+    }
+
+    const previewInvitationPath = document.paths['/api/v1/households/invitations/preview']?.get;
+    if (previewInvitationPath?.operationId !== 'previewInvitation'
+      || document.components?.schemas?.InvitationPreviewResponseDto === undefined) {
+      throw new Error('OpenAPI invitation preview operation or schemas are missing or unstable.');
+    }
+
+    const acceptInvitationPath = document.paths['/api/v1/households/invitations/accept']?.post;
+    if (acceptInvitationPath?.operationId !== 'acceptInvitation'
+      || acceptInvitationPath?.security === undefined
+      || document.components?.schemas?.AcceptInvitationDto === undefined) {
+      throw new Error('OpenAPI invitation accept operation or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

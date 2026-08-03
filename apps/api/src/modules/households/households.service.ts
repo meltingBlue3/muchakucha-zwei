@@ -61,8 +61,9 @@ function invitationUrl(token: string, environment: NodeJS.ProcessEnv = process.e
   ) {
     throw new Error('EMAIL_LINK_ORIGIN must be an exact HTTP(S) origin.');
   }
-  const link = new URL('/invite', parsed);
-  link.searchParams.set('token', token);
+  // Use path-segment token per D-07 /invite/[token] route convention.
+  // The route at apps/client/app/invite/[token].tsx extracts the token from the path.
+  const link = new URL(`/invite/${encodeURIComponent(token)}`, parsed);
   return link.href;
 }
 
@@ -394,6 +395,179 @@ export class HouseholdsService {
 
     // Identical response for registered, absent, and repeated non-members (D-06).
     return { code: 'INVITATION_SENT', message: '邀请已发送。' };
+  }
+
+  async previewInvitation(
+    token: string,
+  ): Promise<
+    | { kind: 'valid'; householdName: string; inviterDisplayName: string; expiresAt: string }
+    | { kind: 'invalid' }
+    | { kind: 'expired' }
+    | { kind: 'used' }
+  > {
+    const tokenHash = hashOpaqueToken(token);
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { hash: tokenHash },
+      include: {
+        household: true,
+        inviterUser: true,
+      },
+    });
+
+    // Terminal: not found or invalidated -> generic "invalid"
+    if (invitation === null) return { kind: 'invalid' };
+
+    // Terminal: already consumed
+    if (invitation.consumedAt !== null) return { kind: 'used' };
+
+    // Terminal: explicitly invalidated (replaced by rotation)
+    if (invitation.invalidatedAt !== null) return { kind: 'invalid' };
+
+    // Terminal: expired
+    if (invitation.expiresAt <= new Date()) return { kind: 'expired' };
+
+    // Valid: return the D-07 public-preview fields
+    return {
+      kind: 'valid',
+      householdName: invitation.household.name,
+      inviterDisplayName: invitation.inviterUser.displayName,
+      expiresAt: invitation.expiresAt.toISOString(),
+    };
+  }
+
+  async acceptInvitation(
+    actorId: string,
+    token: string,
+  ): Promise<GetHouseholdResponseDto> {
+    const tokenHash = hashOpaqueToken(token);
+
+    // Load the invitation with related data outside the transaction.
+    // We need the inviter user, household, and the actor user info.
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { hash: tokenHash },
+      include: {
+        household: true,
+        inviterUser: true,
+      },
+    });
+
+    // D-08: Generic "invalid or expired" for unknown/handled tokens.
+    // Do not disclose whether the token exists or what household it targets.
+    const GENERIC_INVALID = {
+      code: 'INVALID_INVITATION',
+      message: '这个邀请无效或已失效。',
+    } as const;
+
+    if (invitation === null) {
+      throw new BadRequestException(GENERIC_INVALID);
+    }
+    if (invitation.consumedAt !== null) {
+      // D-08: "已经接受过，不能再次使用" — but still generic about household
+      throw new BadRequestException({
+        code: 'INVITATION_ALREADY_USED',
+        message: '这个邀请已经接受过，不能再次使用。',
+      });
+    }
+    if (invitation.invalidatedAt !== null || invitation.expiresAt <= new Date()) {
+      throw new BadRequestException(GENERIC_INVALID);
+    }
+
+    // Load actor's canonical email from the trusted server state (D-08, T-02-15).
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { emailCanonical: true, displayName: true },
+    });
+
+    if (actor === null) {
+      throw new BadRequestException(GENERIC_INVALID);
+    }
+
+    // D-08: Email must match. Mismatch hides household and inviter details.
+    if (actor.emailCanonical !== invitation.emailCanonical) {
+      throw new ForbiddenException({
+        code: 'INVITATION_EMAIL_MISMATCH',
+        message: '此邀请发给了另一个邮箱。请切换到受邀账户。',
+      });
+    }
+
+    // Already a member? Double-check to prevent duplicate membership.
+    const existingMembership = await this.prisma.membership.findUnique({
+      where: {
+        userId_householdId: {
+          userId: actorId,
+          householdId: invitation.householdId,
+        },
+      },
+    });
+
+    if (existingMembership !== null) {
+      // Already in the household — mark invitation as consumed and return household.
+      await this.prisma.invitation.update({
+        where: { id: invitation.id },
+        data: { consumedAt: new Date() },
+      });
+      return (await this.getHousehold(actorId, invitation.householdId))!;
+    }
+
+    // D-08 / T-02-16: Atomic claim + membership creation in one Serializable transaction.
+    const now = new Date();
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const outcome = await this.prisma.$transaction(async (transaction) => {
+          // Conditional claim: only claim if invitation is still valid.
+          const claimed = await transaction.invitation.updateMany({
+            where: {
+              id: invitation.id,
+              consumedAt: null,
+              invalidatedAt: null,
+              expiresAt: { gt: now },
+            },
+            data: { consumedAt: now },
+          });
+
+          if (claimed.count !== 1) {
+            return { kind: 'conflict' } as const;
+          }
+
+          // Create MEMBER membership atomically (D-05, D-08).
+          await transaction.membership.create({
+            data: {
+              userId: actorId,
+              householdId: invitation.householdId,
+              role: 'MEMBER',
+            },
+          });
+
+          return { kind: 'completed' } as const;
+        }, { isolationLevel: 'Serializable' });
+
+        if (outcome.kind === 'conflict') {
+          throw new ConflictException({
+            code: 'INVITATION_ALREADY_CLAIMED',
+            message: '这个邀请已经接受过，不能再次使用。',
+          });
+        }
+
+        // Success — return the authoritative household projection.
+        return (await this.getHousehold(actorId, invitation.householdId))!;
+      } catch (error) {
+        if (this.isSerializationConflict(error) && attempt < 2) continue;
+        throw error;
+      }
+    }
+
+    // Should never reach here, but satisfy TypeScript.
+    throw new Error('Unreachable: invitation accept retry loop exhausted.');
+  }
+
+  private isSerializationConflict(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code: string }).code === 'P2034'
+    );
   }
 
   private toMembershipResponse(membership: {

@@ -22,6 +22,8 @@ import type {
   UpdateHouseholdDto,
   SendHouseholdInvitationDto,
   SendHouseholdInvitationResponseDto,
+  InvitationPreviewResponseDto,
+  AcceptInvitationDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -176,6 +178,36 @@ export class ApiClient {
     return this.authenticated<SendHouseholdInvitationResponseDto>(
       'POST',
       `/api/v1/households/${encodeURIComponent(householdId)}/invitations`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async previewInvitation(token: string, signal?: AbortSignal): Promise<InvitationPreviewResponseDto> {
+    const response = await fetch(
+      `${this.baseUrl}/api/v1/households/invitations/preview?token=${encodeURIComponent(token)}`,
+      {
+        method: 'GET',
+        credentials: 'include',
+        ...(signal === undefined ? {} : { signal }),
+      },
+    );
+    const payload: unknown = await response.json();
+    if (!response.ok) {
+      throw new ApiClientError(response.status, payload);
+    }
+    return payload as InvitationPreviewResponseDto;
+  }
+
+  async acceptInvitation(
+    accessToken: string,
+    body: AcceptInvitationDto,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'POST',
+      '/api/v1/households/invitations/accept',
       accessToken,
       body,
       signal,

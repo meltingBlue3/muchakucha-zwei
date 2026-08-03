@@ -5,7 +5,7 @@ import type { SessionStateStore } from './session-state';
 import type { RestoreOutcome, SessionTransport } from '../../platform/session/session-transport';
 import { AuthShell, Button, Spinner, Stack, StatusPanel } from '../../ui/primitives';
 
-export const SAFE_INTENDED_ROUTES = ['/household-handoff', '/profile'] as const;
+export const SAFE_INTENDED_ROUTES = ['/household-handoff', '/profile', '/invite'] as const;
 export type SafeIntendedRoute = (typeof SAFE_INTENDED_ROUTES)[number];
 export type SessionDestination = SafeIntendedRoute | '/login' | '/offline';
 

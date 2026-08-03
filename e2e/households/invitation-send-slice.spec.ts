@@ -211,7 +211,7 @@ test('sends a privacy-preserving invitation from settings [RED:INVITATION_SEND]'
   expect(outsiderText).toContain('温暖小家');
 
   // Invitation URL with raw token
-  expect(outsiderText).toMatch(/\/invite\?token=/);
+  expect(outsiderText).toMatch(/\/invite\//);
 
   // Expiry mapping
   expect(outsiderText).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
@@ -250,7 +250,7 @@ test('sends a privacy-preserving invitation from settings [RED:INVITATION_SEND]'
     // Raw token is NOT in database
     const dbJson = JSON.stringify(invitations.rows);
     // Extract the token from the mailpit text for safety check
-    const tokenMatch = /\/invite\?token=([^\s\n]+)/.exec(outsiderText);
+    const tokenMatch = /\/invite\/([^\s\n]+)/.exec(outsiderText);
     expect(tokenMatch).not.toBeNull();
     const rawToken = tokenMatch![1];
     expect(dbJson).not.toContain(rawToken);

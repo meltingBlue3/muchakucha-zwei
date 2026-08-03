@@ -149,3 +149,14 @@ export interface SendHouseholdInvitationResponseDto {
   code: 'INVITATION_SENT';
   message: string;
 }
+
+export interface InvitationPreviewResponseDto {
+  kind: 'valid' | 'invalid' | 'expired' | 'used';
+  householdName?: string;
+  inviterDisplayName?: string;
+  expiresAt?: string;
+}
+
+export interface AcceptInvitationDto {
+  token: string;
+}
