@@ -89,3 +89,23 @@ export interface CompletePasswordResetDto {
   token: string;
   password: string;
 }
+
+export interface CreateHouseholdDto {
+  /** 1–40 Unicode code points after trim and NFC normalization. */
+  name: string;
+}
+
+export interface MembershipResponseDto {
+  id: string;
+  userId: string;
+  householdId: string;
+  role: 'ADMIN' | 'MEMBER';
+}
+
+export interface CreateHouseholdResponseDto {
+  id: string;
+  name: string;
+  ownerMembershipId: string;
+  createdAt: string;
+  membership: MembershipResponseDto;
+}

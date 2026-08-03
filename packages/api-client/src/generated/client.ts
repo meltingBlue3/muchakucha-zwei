@@ -15,6 +15,8 @@ import type {
   RequestPasswordResetDto,
   PasswordResetRequestAcceptedDto,
   CompletePasswordResetDto,
+  CreateHouseholdDto,
+  CreateHouseholdResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -102,6 +104,20 @@ export class ApiClient {
       const text = await response.text();
       throw new ApiClientError(response.status, text === '' ? undefined : JSON.parse(text));
     }
+  }
+
+  async createHousehold(
+    accessToken: string,
+    body: CreateHouseholdDto,
+    signal?: AbortSignal,
+  ): Promise<CreateHouseholdResponseDto> {
+    return this.authenticated<CreateHouseholdResponseDto>(
+      'POST',
+      '/api/v1/households',
+      accessToken,
+      body,
+      signal,
+    );
   }
 
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
