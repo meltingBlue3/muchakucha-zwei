@@ -137,13 +137,67 @@ test('renames the explicit current household [RED:HOUSEHOLD_RENAME]', async ({ p
   await expect(page).toHaveURL(/\/households\//);
   await expect(page.getByText('温暖小家').first()).toBeVisible();
 
-  // --- Open the real settings route and observe the destination note ---
-  // The settings form must repeat "保存到：{家庭名称}" as the destination note.
-  // No extra confirmation must appear for this ordinary save.
-  // Members and outsiders must not be able to rename.
+  // --- Navigate to the settings route ---
   await page.goto(`/households/${encodeURIComponent(household.id)}/settings`);
+  await page.waitForURL(`/households/${encodeURIComponent(household.id)}/settings`);
   await page.waitForTimeout(1500);
 
-  // RED GATE: The household rename settings slice is not yet implemented.
-  throw new Error('IMPLEMENTATION_MISSING_HOUSEHOLD_RENAME');
+  // --- Observe the destination note ---
+  // The settings form must repeat "保存到：{家庭名称}" as the explicit destination note.
+  await expect(page.getByText('保存到：温暖小家')).toBeVisible({ timeout: 5000 });
+
+  // --- Rename the household ---
+  const nameField = page.getByLabel('家庭名称');
+  await expect(nameField).toBeVisible();
+  await nameField.fill('');
+  await nameField.fill('崭新的家');
+
+  // No extra confirmation — click save directly.
+  await page.getByRole('button', { name: '保存' }).click();
+
+  // --- Verify the header updates to the new authoritative name ---
+  await expect(page.getByText('崭新的家').first()).toBeVisible({ timeout: 5000 });
+
+  // --- Verify the destination note updates too ---
+  await expect(page.getByText('保存到：崭新的家')).toBeVisible({ timeout: 5000 });
+
+  // --- Verify the save success feedback ---
+  await expect(page.getByText('家庭名称已更新。')).toBeVisible({ timeout: 5000 });
+
+  // --- Verify the roster API reflects the rename ---
+  const verifyResponse = await request.get(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}`,
+    { headers: { authorization: `Bearer ${owner.accessToken}` } },
+  );
+  expect(verifyResponse.status()).toBe(200);
+  const verifyBody = await verifyResponse.json();
+  expect(verifyBody.name).toBe('崭新的家');
+
+  // --- Verify a non-owner member cannot rename ---
+  const memberRenameResponse = await request.fetch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${member.accessToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ name: '成员试图改名' }),
+    },
+  );
+  expect(memberRenameResponse.status()).toBe(403);
+
+  // --- Verify an outsider cannot rename ---
+  const outsiderRenameResponse = await request.fetch(
+    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${outsider.accessToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ name: '外人试图改名' }),
+    },
+  );
+  expect(outsiderRenameResponse.status()).toBe(404);
 });

@@ -189,6 +189,53 @@ export class HouseholdsService {
     };
   }
 
+  async updateHousehold(
+    actorId: string,
+    householdId: string,
+    name: string,
+  ): Promise<GetHouseholdResponseDto | null> {
+    const trimmedName = name.trim().normalize('NFC');
+    const codePointCount = [...trimmedName].length;
+    if (
+      codePointCount < NAME_MIN_CODE_POINTS ||
+      codePointCount > NAME_MAX_CODE_POINTS
+    ) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [
+          {
+            field: 'name',
+            codes: ['length'],
+            message: '请输入 1–40 个字符的家庭名称。',
+          },
+        ],
+      });
+    }
+
+    const household = await this.prisma.household.findUnique({
+      where: { id: householdId },
+      include: { memberships: true },
+    });
+
+    if (household === null) return null;
+
+    // Verify the actor is a member of this household.
+    const actorMembership = household.memberships.find((m) => m.userId === actorId);
+    if (actorMembership === undefined) return null;
+
+    // Require current owner.
+    if (actorMembership.id !== household.ownerMembershipId) return null;
+
+    await this.prisma.household.update({
+      where: { id: householdId },
+      data: { name: trimmedName },
+    });
+
+    // Return authoritative household projection.
+    return this.getHousehold(actorId, householdId);
+  }
+
   private toMembershipResponse(membership: {
     id: string;
     userId: string;

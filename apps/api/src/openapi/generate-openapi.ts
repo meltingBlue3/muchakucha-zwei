@@ -103,6 +103,11 @@ export interface CreateHouseholdDto {
   name: string;
 }
 
+export interface UpdateHouseholdDto {
+  /** 1–40 Unicode code points after trim and NFC normalization. */
+  name: string;
+}
+
 export interface MembershipResponseDto {
   id: string;
   userId: string;
@@ -163,6 +168,7 @@ import type {
   RequestPasswordResetDto,
   PasswordResetRequestAcceptedDto,
   CompletePasswordResetDto,
+  UpdateHouseholdDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -293,6 +299,21 @@ export class ApiClient {
     );
   }
 
+  async updateHousehold(
+    accessToken: string,
+    householdId: string,
+    body: UpdateHouseholdDto,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'PATCH',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}\`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(\`\${this.baseUrl}\${path}\`, {
       method: 'POST',
@@ -402,6 +423,13 @@ async function generate(): Promise<void> {
       || document.components?.schemas?.GetHouseholdResponseDto === undefined
       || document.components.schemas.GetHouseholdMemberDto === undefined) {
       throw new Error('OpenAPI household roster operation or schemas are missing or unstable.');
+    }
+    const updateHouseholdPath = document.paths['/api/v1/households/{id}']?.patch;
+    if (updateHouseholdPath?.operationId !== 'updateHousehold'
+      || updateHouseholdPath?.security === undefined
+      || document.components?.schemas?.UpdateHouseholdDto === undefined
+      || document.components.schemas.GetHouseholdResponseDto === undefined) {
+      throw new Error('OpenAPI household rename operation or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

@@ -1,6 +1,6 @@
 import type { ApiClient, GetHouseholdResponseDto, ListMyHouseholdsItemDto } from '@muchakucha/api-client';
 
-export type HouseholdApi = Pick<ApiClient, 'listMyHouseholds' | 'getHousehold'>;
+export type HouseholdApi = Pick<ApiClient, 'listMyHouseholds' | 'getHousehold' | 'updateHousehold'>;
 
 export interface HouseholdListResult {
   items: ListMyHouseholdsItemDto[];

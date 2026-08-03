@@ -19,6 +19,7 @@ import type {
   CreateHouseholdResponseDto,
   GetHouseholdResponseDto,
   ListMyHouseholdsItemDto,
+  UpdateHouseholdDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -145,6 +146,21 @@ export class ApiClient {
       `/api/v1/households/${encodeURIComponent(householdId)}`,
       accessToken,
       undefined,
+      signal,
+    );
+  }
+
+  async updateHousehold(
+    accessToken: string,
+    householdId: string,
+    body: UpdateHouseholdDto,
+    signal?: AbortSignal,
+  ): Promise<GetHouseholdResponseDto> {
+    return this.authenticated<GetHouseholdResponseDto>(
+      'PATCH',
+      `/api/v1/households/${encodeURIComponent(householdId)}`,
+      accessToken,
+      body,
       signal,
     );
   }

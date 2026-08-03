@@ -427,6 +427,60 @@
         "tags": [
           "households"
         ]
+      },
+      "patch": {
+        "operationId": "updateHousehold",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateHouseholdDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Household renamed successfully. Returns the authoritative household projection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetHouseholdResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Household name is invalid or the request is malformed."
+          },
+          "403": {
+            "description": "The actor is a member but not the current owner."
+          },
+          "404": {
+            "description": "Household not found or the actor is not a member."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
       }
     }
   },
@@ -891,6 +945,20 @@
           "email",
           "role",
           "isCurrentUser"
+        ]
+      },
+      "UpdateHouseholdDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "1–40 Unicode code points after trim and NFC normalization."
+          }
+        },
+        "required": [
+          "name"
         ]
       },
       "GetHouseholdResponseDto": {

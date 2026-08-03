@@ -275,3 +275,132 @@ describe('household roster API contract', () => {
     expect([missing.statusCode, nonexistent.statusCode]).toEqual([401, 401]);
   });
 });
+
+describe('household rename API contract', () => {
+  let owner: ActorFixture;
+  let admin: ActorFixture;
+  let member: ActorFixture;
+  let outsider: ActorFixture;
+  let householdId: string;
+
+  beforeEach(async () => {
+    [owner, admin, member, outsider] = await Promise.all([
+      insertActor('owner-rename@example.test', '家主'),
+      insertActor('admin-rename@example.test', '管理员'),
+      insertActor('member-rename@example.test', '普通成员'),
+      insertActor('outsider-rename@example.test', '无关人员'),
+    ]);
+    householdId = await createHouseholdViaApi(owner.accessToken, '温暖小家');
+
+    await addMemberViaDb(householdId, admin, 'ADMIN');
+    await addMemberViaDb(householdId, member, 'MEMBER');
+  });
+
+  async function renameHousehold(
+    accessToken: string,
+    id: string,
+    name: string,
+  ) {
+    return app.getHttpAdapter().getInstance().inject({
+      method: 'PATCH',
+      url: `/api/v1/households/${encodeURIComponent(id)}`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+      },
+      payload: { name },
+    });
+  }
+
+  test('allows the owner to rename the household', async () => {
+    const response = await renameHousehold(owner.accessToken, householdId, '新家园');
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.name).toBe('新家园');
+    expect(body.id).toBe(householdId);
+    expect(body.members).toHaveLength(3);
+
+    // Verify the roster endpoint reflects the rename.
+    const roster = await getHousehold(owner.accessToken, householdId);
+    expect(roster.statusCode).toBe(200);
+    expect(roster.json().name).toBe('新家园');
+  });
+
+  test('applies trim and NFC normalization to the name', async () => {
+    // Combining marks on the same base character — NFC should fold.
+    const response = await renameHousehold(owner.accessToken, householdId, '  家́庭  ');
+    expect(response.statusCode).toBe(200);
+    expect(response.json().name).toBe('家庭');
+  });
+
+  test('rejects a non-owner member with 403', async () => {
+    const response = await renameHousehold(member.accessToken, householdId, '不该改');
+    expect(response.statusCode).toBe(403);
+    const body = response.json();
+    expect(body.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  test('rejects an admin member with 403', async () => {
+    const response = await renameHousehold(admin.accessToken, householdId, '也不该改');
+    expect(response.statusCode).toBe(403);
+    expect(response.json().code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  test('rejects an outsider with 404', async () => {
+    const response = await renameHousehold(outsider.accessToken, householdId, '试探');
+    expect(response.statusCode).toBe(404);
+    expect(response.json().code).toBe('HOUSEHOLD_NOT_FOUND');
+  });
+
+  test('rejects a non-existent household ID with 404', async () => {
+    const response = await renameHousehold(owner.accessToken, randomUUID(), '无名');
+    expect(response.statusCode).toBe(404);
+  });
+
+  test('rejects an empty name with 400', async () => {
+    const response = await renameHousehold(owner.accessToken, householdId, '   ');
+    expect(response.statusCode).toBe(400);
+    const body = response.json();
+    expect(body.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('rejects a name longer than 40 code points with 400', async () => {
+    const tooLong = 'あ'.repeat(41);
+    const response = await renameHousehold(owner.accessToken, householdId, tooLong);
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('VALIDATION_FAILED');
+  });
+
+  test('rejects rename on a household with null ownerMembershipId', async () => {
+    await withDatabase(async (client) => {
+      await client.query(
+        `UPDATE "households" SET "owner_membership_id" = NULL WHERE "id" = $1`,
+        [householdId],
+      );
+    });
+
+    // The actor is still a member but ownerMembershipId is null — service returns null.
+    // Controller checks getHousehold which also returns null for inconsistent state.
+    const response = await renameHousehold(owner.accessToken, householdId, '无效');
+    expect(response.statusCode).toBe(404);
+  });
+
+  test('requires a valid active access-token session', async () => {
+    const missing = await app.getHttpAdapter().getInstance().inject({
+      method: 'PATCH',
+      url: `/api/v1/households/${encodeURIComponent(householdId)}`,
+      headers: { 'content-type': 'application/json' },
+      payload: { name: '无权限' },
+    });
+    const nonexistent = await app.getHttpAdapter().getInstance().inject({
+      method: 'PATCH',
+      url: `/api/v1/households/${encodeURIComponent(householdId)}`,
+      headers: {
+        authorization: `Bearer ${await jwt.signAsync({ sub: randomUUID(), sid: randomUUID() })}`,
+        'content-type': 'application/json',
+      },
+      payload: { name: '假session' },
+    });
+    expect([missing.statusCode, nonexistent.statusCode]).toEqual([401, 401]);
+  });
+});

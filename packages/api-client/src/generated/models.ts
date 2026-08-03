@@ -95,6 +95,11 @@ export interface CreateHouseholdDto {
   name: string;
 }
 
+export interface UpdateHouseholdDto {
+  /** 1–40 Unicode code points after trim and NFC normalization. */
+  name: string;
+}
+
 export interface MembershipResponseDto {
   id: string;
   userId: string;
