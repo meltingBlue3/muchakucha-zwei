@@ -1,11 +1,11 @@
 import type { GetHouseholdMemberDto, ListMyHouseholdsItemDto } from '@muchakucha/api-client';
-import Home from 'lucide-react-native/icons/home';
+import Building2 from 'lucide-react-native/icons/building-2';
 import X from 'lucide-react-native/icons/x';
 import Check from 'lucide-react-native/icons/check';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Crown from 'lucide-react-native/icons/crown';
 import Shield from 'lucide-react-native/icons/shield';
-import AlertTriangle from 'lucide-react-native/icons/alert-triangle';
+import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
 import Clock from 'lucide-react-native/icons/clock';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import Ban from 'lucide-react-native/icons/ban';
@@ -113,7 +113,7 @@ interface HouseholdContextNoteProps {
 
 export const HouseholdContextNote = ({ householdName }: HouseholdContextNoteProps) => (
   <Inline gap={1}>
-    <Home color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+    <Building2 color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
     <Text variant="bodySm">保存到：{householdName}</Text>
   </Inline>
 );
@@ -354,7 +354,7 @@ export const AccessChangedPanel = ({
     }}
   >
     <Stack gap={4}>
-      <AlertTriangle color={theme.colors.destructive} size={theme.spacing[6]} strokeWidth={theme.controlSizes.iconStroke} />
+      <TriangleAlert color={theme.colors.destructive} size={theme.spacing[6]} strokeWidth={theme.controlSizes.iconStroke} />
       <Heading>家庭访问权已变化</Heading>
       <Text>
         {householdName !== undefined

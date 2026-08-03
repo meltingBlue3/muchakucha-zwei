@@ -1,0 +1,38 @@
+{
+  "name": "client",
+  "version": "0.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev": "expo start",
+    "start": "expo start",
+    "web": "expo start --web --port 18025",
+    "test": "jest --runInBand",
+    "test:quick": "jest --runInBand",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@muchakucha/api-client": "workspace:*",
+    "@shopify/restyle": "2.4.5",
+    "@tanstack/react-query": "5.101.4",
+    "expo": "57.0.9",
+    "expo-router": "57.0.9",
+    "expo-secure-store": "57.0.1",
+    "lucide-react-native": "1.28.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-hook-form": "7.83.0",
+    "react-native": "0.86.2",
+    "react-native-safe-area-context": "5.8.0",
+    "react-native-web": "0.21.2",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@testing-library/react-native": "14.0.1",
+    "@types/jest": "30.0.0",
+    "@types/react": "19.2.18",
+    "jest": "30.4.2",
+    "jest-expo": "57.0.3",
+    "typescript": "5.9.3"
+  }
+}

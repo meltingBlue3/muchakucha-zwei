@@ -19,6 +19,7 @@ import {
   Text,
   TextField,
 } from '../../ui/primitives';
+import { theme } from '../../ui/theme';
 
 const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
 const PERMISSION_DENIED = '你没有重命名此家庭的权限。';
@@ -330,7 +331,7 @@ export function HouseholdSettings({
             householdName={householdName}
             onOpenSwitcher={onOpenSwitcher}
           />
-          <Stack gap={4} style={{ paddingTop: 16 }}>
+          <Stack gap={4} style={{ paddingTop: theme.spacing[4] }}>
             {[1, 2, 3].map((i) => (
               <Spinner key={i} label={`加载成员 ${i}`} />
             ))}
@@ -504,7 +505,7 @@ export function HouseholdSettings({
               ) : null}
 
               {invitationListLoading ? (
-                <Stack gap={4} style={{ paddingVertical: 16 }}>
+                <Stack gap={4} style={{ paddingVertical: theme.spacing[4] }}>
                   {[1, 2].map((i) => (
                     <Spinner key={i} label={`加载邀请 ${i}`} />
                   ))}
