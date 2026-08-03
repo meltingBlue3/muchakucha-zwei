@@ -93,7 +93,8 @@ describe('provider-neutral SMTP mail adapter', () => {
     expect(message.html).toContain('http://127.0.0.1:8081/invite/test?token=invite-token-secret');
     expect(message.html).toContain('2026-08-10T00:00:00.000Z');
 
-    // Token is not leaked across messages
-    expect(JSON.stringify(sent)).not.toMatch(/invite-token-secret/);
+    // Token is not leaked into unrelated fields (from, subject)
+    expect(message.from).not.toMatch(/invite-token-secret/);
+    expect(message.subject).not.toMatch(/invite-token-secret/);
   });
 });
