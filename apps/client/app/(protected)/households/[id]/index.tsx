@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import Calendar from 'lucide-react-native/icons/calendar';
+import ListTodo from 'lucide-react-native/icons/list-todo';
 
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../src/features/households/household-context';
@@ -90,6 +91,10 @@ export default function HouseholdDetailRoute() {
     void router.push(`/households/${encodeURIComponent(id)}/events`);
   }, [router, id]);
 
+  const handleOpenTasks = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/tasks`);
+  }, [router, id]);
+
   return (
     <>
       {/* Calendar quick-access */}
@@ -115,6 +120,33 @@ export default function HouseholdDetailRoute() {
               <Text variant="label">家庭日历</Text>
               <Text variant="bodySm" color="inkMuted">
                 查看和管理家庭共享事件
+              </Text>
+            </View>
+            <Text variant="caption" color="coral">
+              进入 ›
+            </Text>
+          </Pressable>
+          {/* Tasks quick-access */}
+          <Pressable
+            onPress={handleOpenTasks}
+            accessibilityLabel="打开家庭任务"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: activeTheme.spacing[3],
+              backgroundColor: activeTheme.colors.surface,
+              borderRadius: activeTheme.borderRadii.md,
+              padding: activeTheme.spacing[4],
+              borderWidth: 1,
+              borderColor: activeTheme.colors.border,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <ListTodo size={24} color={activeTheme.colors.teal} strokeWidth={1.5} />
+            <View style={{ flex: 1 }}>
+              <Text variant="label">家庭任务</Text>
+              <Text variant="bodySm" color="inkMuted">
+                查看和管理共享任务
               </Text>
             </View>
             <Text variant="caption" color="coral">
