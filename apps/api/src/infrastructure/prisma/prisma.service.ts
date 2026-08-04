@@ -5,7 +5,7 @@ import { PrismaClient } from '../../generated/prisma/client.js';
 function requireDatabaseUrl(): string {
   const databaseUrl =
     process.env.DATABASE_URL ??
-    'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test';
+    'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
   return databaseUrl;
 }
 

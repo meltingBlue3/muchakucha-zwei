@@ -10,7 +10,7 @@ export function getTestDatabaseUrl(environment: NodeJS.ProcessEnv = process.env)
   const database = environment.TEST_POSTGRES_DB ?? 'muchakucha_test';
   const user = environment.TEST_POSTGRES_USER ?? 'muchakucha_test';
   const password = environment.TEST_POSTGRES_PASSWORD ?? 'muchakucha_test_only';
-  const port = environment.TEST_POSTGRES_PORT ?? '55432';
+  const port = environment.TEST_POSTGRES_PORT ?? '5432';
   return `postgresql://${user}:${password}@127.0.0.1:${port}/${database}`;
 }
 

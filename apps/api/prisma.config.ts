@@ -1,7 +1,7 @@
 import { defineConfig } from 'prisma/config';
 
 const localTestDatabaseUrl =
-  'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test';
+  'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',

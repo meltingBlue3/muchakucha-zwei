@@ -13,7 +13,7 @@ CREATE TABLE "events" (
 
     CONSTRAINT "events_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "events_household_id_fkey" FOREIGN KEY ("household_id") REFERENCES "households"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "events_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT "events_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE INDEX "Event_household_start_idx" ON "events"("household_id", "start_time");

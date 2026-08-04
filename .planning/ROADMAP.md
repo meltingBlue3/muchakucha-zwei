@@ -164,9 +164,9 @@ Plans:
 
 **Plans:** 4 plans (streamlined — no per-endpoint atomic waves)
 
-- [ ] **03-01:** Prisma migration + events module + full CRUD API with timezone-safe timestamptz modeling
-- [ ] **03-02:** Calendar views (month grid, date list) + date navigation + household-scoped queries
-- [ ] **03-03:** Event create/edit forms + delete + mobile touch-optimized date/time pickers
+- [x] **03-01:** Prisma migration + events module + full CRUD API with timezone-safe timestamptz modeling
+- [x] **03-02:** Calendar views (month grid, date list) + date navigation + household-scoped queries
+- [x] **03-03:** Event create/edit forms + delete + mobile touch-optimized date/time pickers
 - [ ] **03-04:** Gates: integration tests, Playwright E2E, accessibility audit, Android acceptance
 
 ### Phase 4: 任务与今日视图
@@ -239,7 +239,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. 安全账户入口 | 27/27 | ✅ Complete | 2026-08-02 |
 | 2. 家庭组与成员协作 | 12/13 | 🔄 Android acceptance pending | — |
-| 3. 共享家庭日历 | 0/4 | Not started | — |
+| 3. 共享家庭日历 | 3/4 | 🔄 In progress | — |
 | 4. 任务与今日视图 | 0/4 | Not started | — |
 | 5. 笔记与标签整理 | 0/3 | Not started | — |
 | 6. 跨平台完成度与发布准备 | 0/3 | Not started | — |

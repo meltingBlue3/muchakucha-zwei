@@ -22,7 +22,7 @@ function run(command: string, args: string[]): void {
   }
 }
 
-async function hasReadyPostgres18(databaseUrl: string): Promise<boolean> {
+async function hasReadyPostgres(databaseUrl: string): Promise<boolean> {
   const client = new Client({ connectionString: databaseUrl, connectionTimeoutMillis: 1_000 });
 
   try {
@@ -31,7 +31,8 @@ async function hasReadyPostgres18(databaseUrl: string): Promise<boolean> {
       `SELECT current_setting('server_version_num')::integer AS version`,
     );
     const major = Math.floor(result.rows[0]!.version / 10_000);
-    return major === 18;
+    // PostgreSQL 17+ is sufficient for this project (gen_random_uuid, timestamptz, etc.)
+    return major >= 17;
   } catch {
     return false;
   } finally {
@@ -49,8 +50,10 @@ export default async function setupIntegration(): Promise<() => Promise<void>> {
     return async () => undefined;
   }
 
-  if (!(await hasReadyPostgres18(process.env.DATABASE_URL))) {
-    run('docker', ['compose', 'up', '-d', '--wait', 'postgres']);
+  if (!(await hasReadyPostgres(process.env.DATABASE_URL))) {
+    throw new Error(
+      'PostgreSQL 17+ is required. Ensure PostgreSQL is running on the configured DATABASE_URL.',
+    );
   }
   run('pnpm', ['--filter', 'api', 'exec', 'prisma', 'migrate', 'deploy']);
   await resetDatabase();
