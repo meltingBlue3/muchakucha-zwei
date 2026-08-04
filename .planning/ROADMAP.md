@@ -186,8 +186,8 @@ Plans:
 
 **Plans:** 4 plans (streamlined)
 
-- [ ] **04-01:** Prisma migration + tasks module + CRUD API with filtering, status transitions, single assignee
-- [ ] **04-02:** Task list views (filtered/sorted) + create/edit forms + status update + assignment selector
+- [x] **04-01:** Prisma migration + tasks module + CRUD API with filtering, status transitions, single assignee
+- [x] **04-02:** Task list views (filtered/sorted) + create/edit forms + status update + assignment selector
 - [ ] **04-03:** Today view: merged events + assigned tasks + overdue items, mobile-first
 - [ ] **04-04:** Gates: integration tests, Playwright E2E, accessibility audit, Android acceptance
 
@@ -240,7 +240,7 @@ Plans:
 | 1. 安全账户入口 | 27/27 | ✅ Complete | 2026-08-02 |
 | 2. 家庭组与成员协作 | 12/13 | 🔄 Android acceptance pending | — |
 | 3. 共享家庭日历 | 3/4 | 🔄 In progress | — |
-| 4. 任务与今日视图 | 0/4 | Not started | — |
+| 4. 任务与今日视图 | 2/4 | 🔄 In progress | — |
 | 5. 笔记与标签整理 | 0/3 | Not started | — |
 | 6. 跨平台完成度与发布准备 | 0/3 | Not started | — |
 
