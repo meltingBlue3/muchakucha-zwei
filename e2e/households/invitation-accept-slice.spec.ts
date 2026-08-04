@@ -7,7 +7,7 @@ const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const EMAIL_LINK_ORIGIN = process.env.EMAIL_LINK_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
   process.env.DATABASE_URL ??
-  'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test';
+  'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
 const password = 'correct horse battery staple 2026';
 
 // ---- Database helpers ----

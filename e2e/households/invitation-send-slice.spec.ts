@@ -5,7 +5,7 @@ const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
   process.env.DATABASE_URL ??
-  'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test';
+  'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
 const MAILPIT_HTTP = process.env.TEST_MAILPIT_HTTP_URL
   ?? `http://127.0.0.1:${process.env.TEST_MAILPIT_HTTP_PORT ?? '18025'}`;
 const password = 'correct horse battery staple 2026';

@@ -38,7 +38,7 @@ const apiOrigin = requireOrigin('API_ORIGIN');
 const emailLinkOrigin = requireOrigin('EMAIL_LINK_ORIGIN');
 const databaseUrl =
   process.env.DATABASE_URL ??
-  'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test';
+  'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
 
 export default defineConfig({
   testDir: './e2e',
