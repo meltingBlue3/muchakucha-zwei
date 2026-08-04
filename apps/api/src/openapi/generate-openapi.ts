@@ -242,6 +242,43 @@ export interface EventListResponseDto {
   events: EventResponseDto[];
   total: number;
 }
+
+export interface CreateTaskDto {
+  title: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  assigneeId?: string;
+  dueDate?: string;
+}
+
+export interface UpdateTaskDto {
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  assigneeId?: string;
+  dueDate?: string;
+}
+
+export interface TaskResponseDto {
+  id: string;
+  householdId: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  priority: string;
+  assigneeId?: string | null;
+  dueDate?: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskListResponseDto {
+  tasks: TaskResponseDto[];
+  total: number;
+}
 `;
 
 const clientSource = `// Generated from openapi.json. Do not edit.
@@ -280,6 +317,10 @@ import type {
   UpdateEventDto,
   EventResponseDto,
   EventListResponseDto,
+  CreateTaskDto,
+  UpdateTaskDto,
+  TaskResponseDto,
+  TaskListResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -650,6 +691,89 @@ export class ApiClient {
     return this.authenticated<void>(
       'DELETE',
       \`/api/v1/households/\${encodeURIComponent(householdId)}/events/\${encodeURIComponent(eventId)}\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async createTask(
+    accessToken: string,
+    householdId: string,
+    body: CreateTaskDto,
+    signal?: AbortSignal,
+  ): Promise<TaskResponseDto> {
+    return this.authenticated<TaskResponseDto>(
+      'POST',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks\`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async listTasks(
+    accessToken: string,
+    householdId: string,
+    status?: string,
+    priority?: string,
+    assigneeId?: string,
+    signal?: AbortSignal,
+  ): Promise<TaskListResponseDto> {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (priority) params.set('priority', priority);
+    if (assigneeId) params.set('assigneeId', assigneeId);
+    const qs = params.toString();
+    return this.authenticated<TaskListResponseDto>(
+      'GET',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks\${qs ? '?' + qs : ''}\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async getTask(
+    accessToken: string,
+    householdId: string,
+    taskId: string,
+    signal?: AbortSignal,
+  ): Promise<TaskResponseDto> {
+    return this.authenticated<TaskResponseDto>(
+      'GET',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async updateTask(
+    accessToken: string,
+    householdId: string,
+    taskId: string,
+    body: UpdateTaskDto,
+    signal?: AbortSignal,
+  ): Promise<TaskResponseDto> {
+    return this.authenticated<TaskResponseDto>(
+      'PUT',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}\`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async deleteTask(
+    accessToken: string,
+    householdId: string,
+    taskId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'DELETE',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}\`,
       accessToken,
       undefined,
       signal,

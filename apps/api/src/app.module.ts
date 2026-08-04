@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { EventsModule } from './modules/events/events.module.js';
+import { TasksModule } from './modules/tasks/tasks.module.js';
 import { HouseholdsModule } from './modules/households/households.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
@@ -31,6 +32,7 @@ export class AppModule {
         UsersModule.register(environment),
         HouseholdsModule.register(environment),
         EventsModule,
+        TasksModule,
       ],
       providers: [
         {

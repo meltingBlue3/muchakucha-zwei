@@ -234,3 +234,40 @@ export interface EventListResponseDto {
   events: EventResponseDto[];
   total: number;
 }
+
+export interface CreateTaskDto {
+  title: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  assigneeId?: string;
+  dueDate?: string;
+}
+
+export interface UpdateTaskDto {
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  assigneeId?: string;
+  dueDate?: string;
+}
+
+export interface TaskResponseDto {
+  id: string;
+  householdId: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  priority: string;
+  assigneeId?: string | null;
+  dueDate?: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskListResponseDto {
+  tasks: TaskResponseDto[];
+  total: number;
+}
