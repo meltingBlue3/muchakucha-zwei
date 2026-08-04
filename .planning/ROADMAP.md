@@ -11,7 +11,7 @@ Muchakucha Zwei 将以“可实际使用的家庭协作闭环”为顺序推进�
 ## Phases
 
 - [x] **Phase 1: 安全账户入口** — 建立可运行的全栈骨架与完整邮箱账户闭环 (completed 2026-08-02)
-- [ ] **Phase 2: 家庭组与成员协作** — 让用户创建、加入、切换和安全管理家庭组
+- [~] **Phase 2: 家庭组与成员协作** — 让用户创建、加入、切换和安全管理家庭组 (12/13 plans done, Android acceptance pending)
 - [ ] **Phase 3: 共享家庭日历** — 让家庭成员共同维护可靠的日期与时间安排
 - [ ] **Phase 4: 任务与今日视图** — 让家庭成员分配、跟进任务并快速掌握今天
 - [ ] **Phase 5: 笔记与标签整理** — 补全共享信息记录与跨资源整理能力
@@ -126,60 +126,22 @@ Plans:
 4. 客户端始终清楚显示当前家庭，并在创建或编辑家庭数据前保持上下文明确。
 5. 跨家庭访问被拒绝；邀请接受、成员移除和所有权转移具备事务一致性，任何操作都不会留下无 owner 家庭。
 
-**Plans:** 13 plans
+**Plans:** 13 plans (12 complete, 1 remaining)
 
 Plans:
-**Wave 1**
-
-- [ ] 02-01-PLAN.md — Create a household from the D-01 handoff and display its authoritative owner result inside `/households/new`.
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [ ] 02-02-PLAN.md — Produce and consume guarded household listing, device restore/switch, shared cards, and explicit accessChanged recovery.
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [ ] 02-03-PLAN.md — Enter a concrete household destination and view its isolated, totally ordered roster.
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [ ] 02-04-PLAN.md — Rename the explicitly identified current household without an unnecessary confirmation.
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [ ] 02-05-PLAN.md — Send a privacy-preserving invitation from the real settings UI through API, PostgreSQL, and mail.
-
-**Wave 6** *(blocked on Wave 5 completion)*
-
-- [ ] 02-06-PLAN.md — Preview, authenticate back to, and explicitly accept an invitation atomically.
-
-**Wave 7** *(blocked on Wave 6 completion)*
-
-- [ ] 02-07-PLAN.md — Manage invitation statuses, resend, and confirmed revocation.
-
-**Wave 8** *(blocked on Wave 7 completion)*
-
-- [ ] 02-08-PLAN.md — Promote and demote non-owner members under the D-09 permission matrix.
-
-**Wave 9** *(blocked on Wave 8 completion)*
-
-- [ ] 02-09-PLAN.md — Remove non-owner members with D-10 confirmation and D-12 recovery.
-
-**Wave 10** *(blocked on Wave 9 completion)*
-
-- [ ] 02-10-PLAN.md — Transfer the database owner pointer with safe-default final confirmation.
-
-**Wave 11** *(blocked on Wave 10 completion)*
-
-- [ ] 02-11-PLAN.md — Hand ownership to a successor and leave atomically.
-
-**Wave 12** *(blocked on Wave 11 completion)*
-
-- [ ] 02-12-PLAN.md — Close responsive accessibility, exact-level ASVS, migration, and full-regression gates.
-
-**Wave 13** *(blocked on Wave 12 completion)*
-
-- [ ] 02-13-PLAN.md — Accept the complete household collaboration journey on a real Android target.
+**Wave 1** — [x] 02-01-PLAN.md — Create household from D-01 handoff
+**Wave 2** — [x] 02-02-PLAN.md — Guarded household listing, device restore/switch, accessChanged recovery
+**Wave 3** — [x] 02-03-PLAN.md — Household destination and isolated roster
+**Wave 4** — [x] 02-04-PLAN.md — Owner rename household
+**Wave 5** — [x] 02-05-PLAN.md — Privacy-preserving invitation send
+**Wave 6** — [x] 02-06-PLAN.md — Invitation preview, authenticate, atomic accept
+**Wave 7** — [x] 02-07-PLAN.md — Invitation lifecycle (status, resend, revoke)
+**Wave 8** — [x] 02-08-PLAN.md — Role governance (D-09 permission matrix)
+**Wave 9** — [x] 02-09-PLAN.md — Non-owner member removal
+**Wave 10** — [x] 02-10-PLAN.md — Pointer-based ownership transfer
+**Wave 11** — [x] 02-11-PLAN.md — Atomic owner leave with successor handoff
+**Wave 12** — [x] 02-12-PLAN.md — Responsive a11y, ASVS, migration, regression gates
+**Wave 13** — [ ] 02-13-PLAN.md — ◷ Human Android acceptance checkpoint
 
 **Cross-cutting constraints:**
 
@@ -200,7 +162,12 @@ Plans:
 3. 定时事件在不同时区显示正确本地时间，全天事件不会因时区或夏令时变化移动日期。
 4. 所有事件读写都限定在当前家庭和成员权限范围内。
 
-**Plans:** TBD
+**Plans:** 4 plans (streamlined — no per-endpoint atomic waves)
+
+- [ ] **03-01:** Prisma migration + events module + full CRUD API with timezone-safe timestamptz modeling
+- [ ] **03-02:** Calendar views (month grid, date list) + date navigation + household-scoped queries
+- [ ] **03-03:** Event create/edit forms + delete + mobile touch-optimized date/time pickers
+- [ ] **03-04:** Gates: integration tests, Playwright E2E, accessibility audit, Android acceptance
 
 ### Phase 4: 任务与今日视图
 
@@ -217,7 +184,12 @@ Plans:
 3. 任务可在 pending、in_progress 和 completed 之间更新，负责人必须属于当前家庭。
 4. Today 视图同时展示当天事件、分配给当前用户的待办与逾期任务，并支持移动端快速进入处理流程。
 
-**Plans:** TBD
+**Plans:** 4 plans (streamlined)
+
+- [ ] **04-01:** Prisma migration + tasks module + CRUD API with filtering, status transitions, single assignee
+- [ ] **04-02:** Task list views (filtered/sorted) + create/edit forms + status update + assignment selector
+- [ ] **04-03:** Today view: merged events + assigned tasks + overdue items, mobile-first
+- [ ] **04-04:** Gates: integration tests, Playwright E2E, accessibility audit, Android acceptance
 
 ### Phase 5: 笔记与标签整理
 
@@ -234,7 +206,11 @@ Plans:
 3. 成员可为事件或任务附加和移除多个标签，并按标签筛选这两类资源。
 4. 笔记、标签及其关联始终受家庭隔离和权限规则保护。
 
-**Plans:** TBD
+**Plans:** 3 plans (streamlined — notes and labels share the same household scope)
+
+- [ ] **05-01:** Prisma migration + notes & labels modules + full CRUD APIs + label color/name
+- [ ] **05-02:** Notes UI (list, detail, create/edit) + label management UI + tag/untag on events & tasks
+- [ ] **05-03:** Gates: integration tests, Playwright E2E, accessibility audit, Android acceptance
 
 ### Phase 6: 跨平台完成度与发布准备
 
@@ -251,18 +227,25 @@ Plans:
 3. 三个平台共享品牌颜色、字体、间距、圆角和组件状态令牌，关键页面保持统一而适配各自交互环境。
 4. `/api/v1` 兼容性检查、CI、数据库迁移检查、EAS Android/iOS 构建与发布清单全部通过。
 
-**Plans:** TBD
+**Plans:** 3 plans (streamlined — all release auditing consolidated here)
+
+- [ ] **06-01:** iOS real-device acceptance + EAS Android/iOS build profiles + deep-link config
+- [ ] **06-02:** Cross-platform brand audit (colors, typography, spacing, components) + responsive Web parity
+- [ ] **06-03:** Final gates: full ASVS L1, axe accessibility, API v1 compat, migration check, CI, release checklist
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 安全账户入口 | 27/27 | Complete    | 2026-08-02 |
-| 2. 家庭组与成员协作 | 0 / TBD | Not started | — |
-| 3. 共享家庭日历 | 0 / TBD | Not started | — |
-| 4. 任务与今日视图 | 0 / TBD | Not started | — |
-| 5. 笔记与标签整理 | 0 / TBD | Not started | — |
-| 6. 跨平台完成度与发布准备 | 0 / TBD | Not started | — |
+| 1. 安全账户入口 | 27/27 | ✅ Complete | 2026-08-02 |
+| 2. 家庭组与成员协作 | 12/13 | 🔄 Android acceptance pending | — |
+| 3. 共享家庭日历 | 0/4 | Not started | — |
+| 4. 任务与今日视图 | 0/4 | Not started | — |
+| 5. 笔记与标签整理 | 0/3 | Not started | — |
+| 6. 跨平台完成度与发布准备 | 0/3 | Not started | — |
+
+**Total remaining plans: 15** (1 in Phase 2 + 14 in Phases 3-6)
+**Estimated plans saved vs. original methodology: ~40-50**
 
 ---
 *Roadmap created: 2026-07-31*
