@@ -73,8 +73,8 @@ async function loginViaPage(
 ): Promise<void> {
   await page.goto(`${WEB_ORIGIN}/login`);
   await page.waitForTimeout(500);
-  await page.getByLabel('邮箱地址').fill(email);
-  await page.getByLabel('密码').fill(password);
+  await page.getByLabel('邮箱').fill(email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
   await page.getByRole('button', { name: '登录' }).click();
   await page.waitForTimeout(1000);
 }
@@ -356,8 +356,8 @@ test('completes the full household collaboration journey', async ({ page, reques
     },
   );
   expect(aliceTransferAttempt.status()).toBe(403);
-  const aliceTransferBody = (await aliceTransferAttempt.json()) as { code: string };
-  expect(aliceTransferBody.code).toBe('NOT_OWNER');
+  const aliceTransferBody = (await aliceTransferAttempt.json()) as { error: { code: string } };
+  expect(aliceTransferBody.error.code).toBe('NOT_OWNER');
 
   // State should be unchanged after failed transfer attempt.
   const verifyAfterFailed = await request.get(
@@ -450,15 +450,17 @@ test('completes the full household collaboration journey', async ({ page, reques
   await page.waitForURL(/\/households\//);
   await page.waitForTimeout(2000);
 
+  const rosterMain = page.getByRole('main');
+
   // The household header should display the current household name.
-  await expect(page.getByText('アリス家').first()).toBeVisible({ timeout: 5000 });
+  await expect(rosterMain.getByText('アリス家').first()).toBeVisible({ timeout: 5000 });
 
   // Members should be listed.
-  await expect(page.getByText('家主アリス').first()).toBeVisible();
-  await expect(page.getByText('デイブ').first()).toBeVisible();
+  await expect(rosterMain.getByText('家主アリス').first()).toBeVisible();
+  await expect(rosterMain.getByText('デイブ').first()).toBeVisible();
 
   // Role badges should be visible.
-  await expect(page.getByText('所有者').first()).toBeVisible();
+  await expect(rosterMain.getByText('所有者').first()).toBeVisible();
 
   // ============================================================================
   // 13. TRANSACTION FAILURE RECOVERY: Verify that concurrent transfer/leave
@@ -501,8 +503,8 @@ test('completes the full household collaboration journey', async ({ page, reques
     },
   );
   expect(memberRemoveAttempt.status()).toBe(403);
-  const memberRemoveBody = (await memberRemoveAttempt.json()) as { code: string };
-  expect(memberRemoveBody.code).toBe('INSUFFICIENT_ROLE');
+  const memberRemoveBody = (await memberRemoveAttempt.json()) as { error: { code: string } };
+  expect(memberRemoveBody.error.code).toBe('INSUFFICIENT_ROLE');
 
   // Dave is still a member.
   const daveStillPresent = await getHouseholdMemberships(alice.accessToken, aliceHousehold.id);

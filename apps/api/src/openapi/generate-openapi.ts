@@ -126,7 +126,7 @@ export interface CreateHouseholdResponseDto {
 export interface ListMyHouseholdsItemDto {
   id: string;
   name: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'OWNER' | 'ADMIN' | 'MEMBER';
   memberCount: number;
   ownerMembershipId: string;
 }
@@ -209,6 +209,8 @@ export interface LeaveHouseholdDto {
 
 const clientSource = `// Generated from openapi.json. Do not edit.
 import type {
+  RegisterDto,
+  RegistrationAcceptedDto,
   CompleteEmailVerificationDto,
   CompleteEmailVerificationResponseDto,
   CreateHouseholdDto,
@@ -231,7 +233,6 @@ import type {
   SendHouseholdInvitationResponseDto,
   InvitationPreviewResponseDto,
   AcceptInvitationDto,
-  InvitationListItemDto,
   ListInvitationsResponseDto,
   ResendInvitationResponseDto,
   RevokeInvitationResponseDto,

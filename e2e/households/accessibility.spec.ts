@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
@@ -88,21 +88,21 @@ async function createHousehold(
   return { id: household.id, name: household.name, ownerMembershipId: household.ownerMembershipId };
 }
 
-async function addMembershipViaDb(
-  householdId: string,
-  userId: string,
-  role: string,
-): Promise<void> {
-  await withDatabase(async (database) => {
-    await database.query(
-      `INSERT INTO "memberships" ("user_id", "household_id", "role")
-       VALUES ($1, $2, $3)`,
-      [userId, householdId, role],
-    );
-  });
+async function loginViaPage(page: Page, email: string): Promise<void> {
+  await page.goto('/login');
+  await page.getByLabel('邮箱').fill(email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page).not.toHaveURL(/\/login$/);
 }
 
 test.describe('household accessibility matrix', () => {
+  let noHouseholdEmail: string;
+
+  test.beforeAll(async () => {
+    noHouseholdEmail = (await prepareVerifiedAccount('no-household', '无障碍测试用户')).email;
+  });
+
   // ============================================================================
   // 1. AXE AT ALL RESPONSIVE BREAKPOINTS — public household routes
   // ============================================================================
@@ -110,6 +110,7 @@ test.describe('household accessibility matrix', () => {
   for (const width of widths) {
     test(`has no axe violations at ${width}px on the household handoff page`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
+      await loginViaPage(page, noHouseholdEmail);
       await page.goto('/household-handoff');
       await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
       const results = await new AxeBuilder({ page }).analyze();
@@ -119,6 +120,7 @@ test.describe('household accessibility matrix', () => {
 
     test(`has no axe violations at ${width}px on the create household page`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
+      await loginViaPage(page, noHouseholdEmail);
       await page.goto('/households/new');
       await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
       const results = await new AxeBuilder({ page }).analyze();
@@ -147,7 +149,6 @@ test.describe('household accessibility matrix', () => {
 
     // Create a household via API.
     const household = await createHousehold(owner.accessToken, 'アクセシブル家');
-    await addMembershipViaDb(household.id, owner.userId, 'OWNER');
 
     // Mock the household API response for the UI.
     await context.route(`**/api/v1/households/${encodeURIComponent(household.id)}`, (route) =>
@@ -235,6 +236,7 @@ test.describe('household accessibility matrix', () => {
 
   test('keyboard tab order is logical on the no-household handoff page', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
+    await loginViaPage(page, noHouseholdEmail);
     await page.goto('/household-handoff');
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
@@ -251,6 +253,7 @@ test.describe('household accessibility matrix', () => {
 
   test('keyboard tab order includes household form and actions', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
+    await loginViaPage(page, noHouseholdEmail);
     await page.goto('/households/new');
     await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
 
@@ -267,6 +270,7 @@ test.describe('household accessibility matrix', () => {
   for (const width of [320, 768] as const) {
     test(`household handoff remains usable at 200% zoom (${width}px viewport)`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
+      await loginViaPage(page, noHouseholdEmail);
       await page.goto('/household-handoff');
       await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
@@ -297,6 +301,7 @@ test.describe('household accessibility matrix', () => {
     });
     const page = await context.newPage();
 
+    await loginViaPage(page, noHouseholdEmail);
     await page.goto('/household-handoff');
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
@@ -324,6 +329,7 @@ test.describe('household accessibility matrix', () => {
     });
     const page = await context.newPage();
 
+    await loginViaPage(page, noHouseholdEmail);
     await page.goto('/household-handoff');
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
@@ -343,6 +349,7 @@ test.describe('household accessibility matrix', () => {
 
   test('has accessible live region containers on household pages', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
+    await loginViaPage(page, noHouseholdEmail);
 
     // Create household page should have live region support for status feedback.
     await page.goto('/households/new');
@@ -362,6 +369,7 @@ test.describe('household accessibility matrix', () => {
 
   test('household settings page has no axe violations at web breakpoint', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
+    await loginViaPage(page, noHouseholdEmail);
     await page.goto('/household-handoff');
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 

@@ -171,8 +171,8 @@ test('owner hands off and leaves', async ({ page, request }) => {
 
   await page.goto(`${WEB_ORIGIN}/login`);
   await page.waitForTimeout(500);
-  await page.getByLabel('邮箱地址').fill(owner.email);
-  await page.getByLabel('密码').fill(password);
+  await page.getByLabel('邮箱').fill(owner.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
   await page.getByRole('button', { name: '登录' }).click();
   await page.waitForTimeout(1000);
 
@@ -244,8 +244,8 @@ test('owner hands off and leaves', async ({ page, request }) => {
     },
   );
   expect(bystanderLeaveResponse.status()).toBe(403);
-  const bystanderBody = (await bystanderLeaveResponse.json()) as { code: string };
-  expect(bystanderBody.code).toBe('NOT_OWNER');
+  const bystanderBody = (await bystanderLeaveResponse.json()) as { error: { code: string } };
+  expect(bystanderBody.error.code).toBe('NOT_OWNER');
 
   // ============================================================================
   // D-11: Owner pointer unchanged after failed leave attempt by non-owner.

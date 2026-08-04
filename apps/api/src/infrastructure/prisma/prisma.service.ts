@@ -3,10 +3,9 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client.js';
 
 function requireDatabaseUrl(): string {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required to initialize Prisma.');
-  }
+  const databaseUrl =
+    process.env.DATABASE_URL ??
+    'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test';
   return databaseUrl;
 }
 

@@ -2,12 +2,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
-import { sessionTransport } from '../../../../../../src/features/auth/session-runtime';
-import { sessionStateStore } from '../../../../../../src/features/auth/session-runtime';
+import { sessionTransport } from '../../../../../src/features/auth/session-runtime';
+import { sessionStateStore } from '../../../../../src/features/auth/session-runtime';
+import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import { ApiClient } from '@muchakucha/api-client';
-import { FinalConfirmation } from '../../../../../../src/ui/household-components';
-import { Banner, Heading, Stack, Text } from '../../../../../../src/ui/primitives';
-import { theme } from '../../../../../../src/ui/theme';
+import { FinalConfirmation } from '../../../../../src/ui/household-components';
+import { Banner, Button, Heading, Stack, Text } from '../../../../../src/ui/primitives';
+import { theme } from '../../../../../src/ui/theme';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3000';
 
@@ -28,6 +29,7 @@ const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3000'
  */
 export default function LeaveHouseholdPage() {
   const router = useRouter();
+  const { enterAccessChanged } = useHouseholdContext();
   const params = useLocalSearchParams<{
     id: string;
     successorMembershipId: string;
@@ -70,6 +72,7 @@ export default function LeaveHouseholdPage() {
       // loss and render the explicit access-changed explanation before any
       // further routing. If the user has no other households, they land on
       // the D-01 create/accept handoff page.
+      enterAccessChanged(householdName);
       router.replace('/households');
     } catch (_err: unknown) {
       setError('离开家庭失败，当前家庭状态未改变。请重试。');
@@ -77,15 +80,20 @@ export default function LeaveHouseholdPage() {
       // On failure, return to consequence stage so user can re-evaluate.
       setStage('consequence');
     }
-  }, [householdId, successorMembershipId, router]);
+  }, [enterAccessChanged, householdId, householdName, successorMembershipId, router]);
 
   const handleCancel = useCallback(() => {
     router.back();
   }, [router]);
 
+  const handleContinue = useCallback(() => {
+    setError(undefined);
+    setStage('final');
+  }, []);
+
   // ---- Stage 1: Consequence summary ----
 
-  return (
+  if (stage === 'consequence') return (
     <>
       {error !== undefined ? (
         <View style={{ padding: theme.spacing[4] }}>
@@ -128,18 +136,23 @@ export default function LeaveHouseholdPage() {
             </Stack>
           </Stack>
           <Stack gap={3}>
-            <FinalConfirmation
-              heading="确认离开家庭"
-              body={`确认后将离开「${householdName}」，所有权将永久转移给 ${successorDisplayName}。\n\n你将不再是该家庭的成员。此操作不可撤销。`}
-              safeActionLabel="取消离开"
-              destructiveActionLabel="确认离开家庭"
-              onSafeAction={handleCancel}
-              onDestructiveAction={() => { void handleConfirm(); }}
-              busy={busy}
-            />
+            <Button label="取消离开" onPress={handleCancel} />
+            <Button label="继续" onPress={handleContinue} />
           </Stack>
         </Stack>
       </View>
     </>
+  );
+
+  return (
+    <FinalConfirmation
+      heading="确认离开家庭"
+      body={`确认后将离开「${householdName}」，所有权将永久转移给 ${successorDisplayName}。\n\n你将不再是该家庭的成员。此操作不可撤销。`}
+      safeActionLabel="取消离开"
+      destructiveActionLabel="确认离开家庭"
+      onSafeAction={handleCancel}
+      onDestructiveAction={() => { void handleConfirm(); }}
+      busy={busy}
+    />
   );
 }

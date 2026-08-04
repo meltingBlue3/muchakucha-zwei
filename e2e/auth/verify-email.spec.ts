@@ -2,7 +2,8 @@ import { expect, test, type APIRequestContext, type BrowserContext, type Page } 
 import { createHash } from 'node:crypto';
 import { Client } from 'pg';
 
-const MAILPIT_ORIGIN = process.env.MAILPIT_ORIGIN ?? 'http://127.0.0.1:18025';
+const MAILPIT_ORIGIN = process.env.MAILPIT_ORIGIN
+  ?? `http://127.0.0.1:${process.env.TEST_MAILPIT_HTTP_PORT ?? '18025'}`;
 const DATABASE_URL =
   process.env.DATABASE_URL
   ?? 'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test';

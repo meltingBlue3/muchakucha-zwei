@@ -3,7 +3,8 @@ import React, { useMemo } from 'react';
 
 import { sessionApiClient, sessionTransport } from '../../src/features/auth/session-runtime';
 import { createHouseholdProvider, useHouseholdContext } from '../../src/features/households/household-context';
-import { AppShell, Spinner, Text, Stack as UIStack } from '../../src/ui/primitives';
+import { AppShell } from '../../src/ui/household-components';
+import { Spinner, Text, Stack as UIStack } from '../../src/ui/primitives';
 
 function ResolvingGate({ children }: { children: React.ReactNode }) {
   const { viewState } = useHouseholdContext();

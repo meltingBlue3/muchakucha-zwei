@@ -115,12 +115,23 @@ test('lists restores switches and explains access loss', async ({ page, request 
   }
 
   // --- UI: navigate to the no-household handoff for a fresh actor ---
+  await page.goto('/login');
+  await page.getByLabel('邮箱').fill(secondary.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page).not.toHaveURL(/\/login$/);
   await page.goto('/household-handoff');
   await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
   // --- UI: navigate to /households and verify the selector lists the memberships ---
   // This path exercises the household-context provider, session-bootstrap extension,
   // and /households route rendering.
+  await page.context().clearCookies();
+  await page.goto('/login');
+  await page.getByLabel('邮箱').fill(primary.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page).not.toHaveURL(/\/login$/);
   await page.goto('/households');
   await expect(page).toHaveURL(/\/households/);
 

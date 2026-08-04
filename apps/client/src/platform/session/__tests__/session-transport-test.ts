@@ -197,6 +197,8 @@ describe('platform session transport contract', () => {
 
   test('session state distinguishes authenticated, offline, and reauthentication states', () => {
     const state = createSessionStateStore();
+    const listener = jest.fn();
+    const unsubscribe = state.subscribe(listener);
     expect(state.get()).toEqual({ kind: 'booting' });
     state.enterOfflineWaiting();
     expect(state.get()).toEqual({ kind: 'offlineWaiting', retainedCredential: true });
@@ -209,6 +211,11 @@ describe('platform session transport contract', () => {
     });
     state.enterUnauthenticated();
     expect(state.get()).toEqual({ kind: 'unauthenticated' });
+    expect(listener).toHaveBeenCalledTimes(4);
+    expect(listener).toHaveBeenLastCalledWith({ kind: 'unauthenticated' });
+    unsubscribe();
+    state.enterOfflineWaiting();
+    expect(listener).toHaveBeenCalledTimes(4);
   });
 
   test('platform adapters never reference forbidden browser-readable storage', () => {

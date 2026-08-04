@@ -175,6 +175,12 @@ test('shows the isolated totally ordered roster', async ({ page, request }) => {
 
   expect(adminRoster.members[2].role).toBe('MEMBER');
 
+  await page.goto('/login');
+  await page.getByLabel('邮箱').fill(owner.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page).not.toHaveURL(/\/login$/);
+
   // --- Verify: the /households selector route renders ---
   await page.goto('/households');
   await expect(page).toHaveURL(/\/households/);
@@ -184,19 +190,21 @@ test('shows the isolated totally ordered roster', async ({ page, request }) => {
   await page.getByRole('button', { name: '查看成员' }).first().click();
   await expect(page).toHaveURL(/\/households\//);
 
+  const rosterMain = page.getByRole('main');
+
   // The roster page should show the household name in the header.
-  await expect(page.getByText('温暖小家').first()).toBeVisible();
+  await expect(rosterMain.getByText('温暖小家').first()).toBeVisible();
 
   // The member overview should list all members.
-  await expect(page.getByText('家主').first()).toBeVisible();
-  await expect(page.getByText('管理员').first()).toBeVisible();
-  await expect(page.getByText('普通成员').first()).toBeVisible();
+  await expect(rosterMain.getByText('家主').first()).toBeVisible();
+  await expect(rosterMain.getByText('管理员').first()).toBeVisible();
+  await expect(rosterMain.getByText('普通成员').first()).toBeVisible();
 
   // Role badges should be visible.
-  await expect(page.getByText('所有者').first()).toBeVisible();
-  await expect(page.getByText('成员').first()).toBeVisible();
+  await expect(rosterMain.getByText('所有者').first()).toBeVisible();
+  await expect(rosterMain.getByText('成员').first()).toBeVisible();
 
   // The "我" tag should appear for the current user.
   // Since the owner is navigating, the page should show "我" for the owner.
-  await expect(page.getByText('我').first()).toBeVisible();
+  await expect(rosterMain.getByText('我').first()).toBeVisible();
 });

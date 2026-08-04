@@ -31,8 +31,35 @@ async function removeStore(key: string): Promise<void> {
 export function createNativeCurrentHouseholdStore(): CurrentHouseholdStore {
   let cachedId: string | null = null;
   let cachedTimestamps: Record<string, number> | null = null;
+  let hydration: Promise<void> | null = null;
 
   return {
+    async hydrate(): Promise<void> {
+      hydration ??= Promise.all([
+        readStore(CURRENT_ID_KEY),
+        readStore(ACCESS_TIMESTAMPS_KEY),
+      ]).then(([storedId, storedTimestamps]) => {
+        cachedId = storedId;
+        if (storedTimestamps === null) {
+          cachedTimestamps = {};
+          return;
+        }
+        try {
+          const parsed: unknown = JSON.parse(storedTimestamps);
+          const timestamps: Record<string, number> = {};
+          if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+            for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+              if (typeof value === 'number' && Number.isFinite(value)) timestamps[id] = value;
+            }
+          }
+          cachedTimestamps = timestamps;
+        } catch {
+          cachedTimestamps = {};
+        }
+      });
+      await hydration;
+    },
+
     getCurrentId(): string | null {
       return cachedId;
     },
@@ -57,7 +84,7 @@ export function createNativeCurrentHouseholdStore(): CurrentHouseholdStore {
     },
 
     async clearHouseholdData(householdId: string): Promise<void> {
-      const timestamps = cachedTimestamps ?? {};
+      const timestamps = { ...(cachedTimestamps ?? {}) };
       delete timestamps[householdId];
       await this.setAccessTimestamps(timestamps);
       if (cachedId === householdId) {

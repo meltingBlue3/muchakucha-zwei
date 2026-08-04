@@ -49,8 +49,8 @@ export class ListMyHouseholdsItemDto {
   @ApiProperty({ example: 'My Family' })
   name!: string;
 
-  @ApiProperty({ enum: ['ADMIN', 'MEMBER'] })
-  role!: 'ADMIN' | 'MEMBER';
+  @ApiProperty({ enum: ['OWNER', 'ADMIN', 'MEMBER'] })
+  role!: 'OWNER' | 'ADMIN' | 'MEMBER';
 
   @ApiProperty({ example: 3 })
   memberCount!: number;

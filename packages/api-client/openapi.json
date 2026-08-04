@@ -1,6 +1,264 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Login input or transport is invalid."
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Refresh credential transport is invalid."
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Current device session revoked and Web refresh cookie cleared."
+          },
+          "400": {
+            "description": "Logout does not accept a user or session target."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "operationId": "register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationAcceptedDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Registration input or transport is invalid."
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/email-verifications/complete": {
+      "post": {
+        "operationId": "completeEmailVerification",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteEmailVerificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompleteEmailVerificationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Verification input or transport is invalid."
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/email-verifications/resend": {
+      "post": {
+        "operationId": "resendEmailVerification",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendEmailVerificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResendEmailVerificationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/password-reset/request": {
+      "post": {
+        "operationId": "requestPasswordReset",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPasswordResetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResetRequestAcceptedDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Password reset request input is invalid."
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/password-reset/complete": {
+      "post": {
+        "operationId": "completePasswordReset",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompletePasswordResetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Password changed and all existing sessions revoked."
+          },
+          "400": {
+            "description": "Password or reset credential is invalid."
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/users/me": {
       "get": {
         "operationId": "getMe",
@@ -548,11 +806,11 @@
           "403": {
             "description": "Actor lacks governance rights or is attempting to target the owner."
           },
-          "409": {
-            "description": "Stale membership state or ownership changed during the request."
-          },
           "404": {
             "description": "Household or target membership not found, or actor is not a member."
+          },
+          "409": {
+            "description": "Stale membership state or ownership changed during the request."
           }
         },
         "security": [
@@ -604,11 +862,11 @@
           "403": {
             "description": "Actor lacks governance rights or is attempting to target the owner."
           },
-          "409": {
-            "description": "Stale membership state or ownership changed during the request."
-          },
           "404": {
             "description": "Household or target membership not found, or actor is not a member."
+          },
+          "409": {
+            "description": "Stale membership state or ownership changed during the request."
           }
         },
         "security": [
@@ -662,11 +920,11 @@
           "403": {
             "description": "Actor is not the current owner."
           },
-          "409": {
-            "description": "Stale ownership state or a concurrent transfer changed the owner pointer."
-          },
           "404": {
             "description": "Household or successor membership not found, or actor is not a member."
+          },
+          "409": {
+            "description": "Stale ownership state or a concurrent transfer changed the owner pointer."
           }
         },
         "security": [
@@ -704,20 +962,17 @@
           }
         },
         "responses": {
-          "204": {
-            "description": "Owner-leave completed. Former owner membership deleted, successor is now the owner."
-          },
           "400": {
             "description": "Successor is the current owner (self-leave) or the last member cannot leave."
           },
           "403": {
             "description": "Actor is not the current owner."
           },
-          "409": {
-            "description": "Stale ownership state or a concurrent transfer/leave changed the owner pointer."
-          },
           "404": {
             "description": "Household or successor membership not found, or actor is not a member."
+          },
+          "409": {
+            "description": "Stale ownership state or a concurrent transfer/leave changed the owner pointer."
           }
         },
         "security": [
@@ -728,264 +983,6 @@
         "summary": "",
         "tags": [
           "households"
-        ]
-      }
-    },
-    "/api/v1/auth/login": {
-      "post": {
-        "operationId": "login",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Login input or transport is invalid."
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/refresh": {
-      "post": {
-        "operationId": "refresh",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RefreshResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Refresh credential transport is invalid."
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/logout": {
-      "post": {
-        "operationId": "logout",
-        "parameters": [],
-        "responses": {
-          "204": {
-            "description": "Current device session revoked and Web refresh cookie cleared."
-          },
-          "400": {
-            "description": "Logout does not accept a user or session target."
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/register": {
-      "post": {
-        "operationId": "register",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegistrationAcceptedDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Registration input or transport is invalid."
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/email-verifications/complete": {
-      "post": {
-        "operationId": "completeEmailVerification",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompleteEmailVerificationDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CompleteEmailVerificationResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Verification input or transport is invalid."
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/email-verifications/resend": {
-      "post": {
-        "operationId": "resendEmailVerification",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResendEmailVerificationDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResendEmailVerificationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/password-reset/request": {
-      "post": {
-        "operationId": "requestPasswordReset",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequestPasswordResetDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PasswordResetRequestAcceptedDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Password reset request input is invalid."
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/password-reset/complete": {
-      "post": {
-        "operationId": "completePasswordReset",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompletePasswordResetDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Password changed and all existing sessions revoked."
-          },
-          "400": {
-            "description": "Password or reset credential is invalid."
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
         ]
       }
     }
@@ -1007,6 +1004,257 @@
       }
     },
     "schemas": {
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "member@example.com",
+            "maxLength": 320
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "writeOnly": true
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "native",
+              "web"
+            ]
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "platform"
+        ]
+      },
+      "LoginResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Native-only refresh credential. Web responses omit this property."
+          }
+        },
+        "required": [
+          "accessToken"
+        ]
+      },
+      "RefreshDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "Native-only opaque refresh credential.",
+            "minLength": 1
+          }
+        }
+      },
+      "RefreshResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Native-only rotated refresh credential. Web responses omit this property."
+          }
+        },
+        "required": [
+          "accessToken"
+        ]
+      },
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "member@example.com",
+            "maxLength": 320
+          },
+          "displayName": {
+            "type": "string",
+            "example": "Member",
+            "maxLength": 80
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128,
+            "writeOnly": true
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "native",
+              "web"
+            ]
+          }
+        },
+        "required": [
+          "email",
+          "displayName",
+          "password",
+          "platform"
+        ]
+      },
+      "RegistrationAcceptedDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "REGISTRATION_ACCEPTED"
+            ]
+          },
+          "pendingProof": {
+            "type": "string",
+            "description": "Native-only pending proof for encrypted device storage."
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "CompleteEmailVerificationDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "writeOnly": true
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "native"
+            ]
+          },
+          "pendingProof": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "CompleteEmailVerificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "verified_auto_login",
+              "verified_login_required",
+              "expired",
+              "used",
+              "invalid",
+              "superseded"
+            ]
+          },
+          "accessToken": {
+            "type": "string",
+            "description": "Short-lived access credential issued only for same-device success."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Native-only refresh credential for encrypted device storage."
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "ResendEmailVerificationDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "member@example.com",
+            "maxLength": 320
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ResendEmailVerificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "RESEND_ACCEPTED"
+            ]
+          },
+          "retryAfterSeconds": {
+            "type": "number",
+            "example": 60,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "code",
+          "retryAfterSeconds"
+        ]
+      },
+      "RequestPasswordResetDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "member@example.com",
+            "maxLength": 320
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "PasswordResetRequestAcceptedDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "PASSWORD_RESET_REQUEST_ACCEPTED"
+            ]
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "CompletePasswordResetDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "writeOnly": true
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ]
+      },
       "CurrentUserDto": {
         "type": "object",
         "properties": {
@@ -1259,6 +1507,7 @@
           "role": {
             "type": "string",
             "enum": [
+              "OWNER",
               "ADMIN",
               "MEMBER"
             ]
@@ -1426,7 +1675,7 @@
               "ADMIN",
               "MEMBER"
             ],
-            "description": "Target role. OWNER is never a valid DTO value - ownership transfer uses a separate endpoint.",
+            "description": "Target role. OWNER is never a valid DTO value — ownership transfer uses a separate endpoint.",
             "example": "ADMIN"
           }
         },
@@ -1460,257 +1709,6 @@
         },
         "required": [
           "successorMembershipId"
-        ]
-      },
-      "LoginDto": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "example": "member@example.com",
-            "maxLength": 320
-          },
-          "password": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-            "writeOnly": true
-          },
-          "platform": {
-            "type": "string",
-            "enum": [
-              "native",
-              "web"
-            ]
-          }
-        },
-        "required": [
-          "email",
-          "password",
-          "platform"
-        ]
-      },
-      "LoginResponseDto": {
-        "type": "object",
-        "properties": {
-          "accessToken": {
-            "type": "string"
-          },
-          "refreshToken": {
-            "type": "string",
-            "description": "Native-only refresh credential. Web responses omit this property."
-          }
-        },
-        "required": [
-          "accessToken"
-        ]
-      },
-      "RefreshDto": {
-        "type": "object",
-        "properties": {
-          "refreshToken": {
-            "type": "string",
-            "description": "Native-only opaque refresh credential.",
-            "minLength": 1
-          }
-        }
-      },
-      "RefreshResponseDto": {
-        "type": "object",
-        "properties": {
-          "accessToken": {
-            "type": "string"
-          },
-          "refreshToken": {
-            "type": "string",
-            "description": "Native-only rotated refresh credential. Web responses omit this property."
-          }
-        },
-        "required": [
-          "accessToken"
-        ]
-      },
-      "RegisterDto": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "example": "member@example.com",
-            "maxLength": 320
-          },
-          "displayName": {
-            "type": "string",
-            "example": "Member",
-            "maxLength": 80
-          },
-          "password": {
-            "type": "string",
-            "minLength": 12,
-            "maxLength": 128,
-            "writeOnly": true
-          },
-          "platform": {
-            "type": "string",
-            "enum": [
-              "native",
-              "web"
-            ]
-          }
-        },
-        "required": [
-          "email",
-          "displayName",
-          "password",
-          "platform"
-        ]
-      },
-      "RegistrationAcceptedDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "enum": [
-              "REGISTRATION_ACCEPTED"
-            ]
-          },
-          "pendingProof": {
-            "type": "string",
-            "description": "Native-only pending proof for encrypted device storage."
-          }
-        },
-        "required": [
-          "code"
-        ]
-      },
-      "CompleteEmailVerificationDto": {
-        "type": "object",
-        "properties": {
-          "token": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{43}$",
-            "writeOnly": true
-          },
-          "platform": {
-            "type": "string",
-            "enum": [
-              "native"
-            ]
-          },
-          "pendingProof": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{43}$",
-            "writeOnly": true
-          }
-        },
-        "required": [
-          "token"
-        ]
-      },
-      "CompleteEmailVerificationResponseDto": {
-        "type": "object",
-        "properties": {
-          "outcome": {
-            "type": "string",
-            "enum": [
-              "verified_auto_login",
-              "verified_login_required",
-              "expired",
-              "used",
-              "invalid",
-              "superseded"
-            ]
-          },
-          "accessToken": {
-            "type": "string",
-            "description": "Short-lived access credential issued only for same-device success."
-          },
-          "refreshToken": {
-            "type": "string",
-            "description": "Native-only refresh credential for encrypted device storage."
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "ResendEmailVerificationDto": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "example": "member@example.com",
-            "maxLength": 320
-          }
-        },
-        "required": [
-          "email"
-        ]
-      },
-      "ResendEmailVerificationResponseDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "enum": [
-              "RESEND_ACCEPTED"
-            ]
-          },
-          "retryAfterSeconds": {
-            "type": "number",
-            "example": 60,
-            "minimum": 1
-          }
-        },
-        "required": [
-          "code",
-          "retryAfterSeconds"
-        ]
-      },
-      "RequestPasswordResetDto": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "example": "member@example.com",
-            "maxLength": 320
-          }
-        },
-        "required": [
-          "email"
-        ]
-      },
-      "PasswordResetRequestAcceptedDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "enum": [
-              "PASSWORD_RESET_REQUEST_ACCEPTED"
-            ]
-          }
-        },
-        "required": [
-          "code"
-        ]
-      },
-      "CompletePasswordResetDto": {
-        "type": "object",
-        "properties": {
-          "token": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{43}$",
-            "writeOnly": true
-          },
-          "password": {
-            "type": "string",
-            "minLength": 12,
-            "maxLength": 128,
-            "writeOnly": true
-          }
-        },
-        "required": [
-          "token",
-          "password"
         ]
       }
     }

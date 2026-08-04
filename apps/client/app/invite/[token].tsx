@@ -4,19 +4,16 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
 import { InvitationFlow } from '../../src/features/households/invitation-flow';
-import { createSessionStateStore } from '../../src/features/auth/session-state';
-import { createWebSessionTransport } from '../../src/platform/session/session-transport.web';
+import { sessionStateStore, sessionTransport } from '../../src/features/auth/session-runtime';
+import { createNativePendingInvitationStore } from '../../src/platform/invitation/pending-invitation.native';
+import { createWebPendingInvitationStore } from '../../src/platform/invitation/pending-invitation.web';
 import { AuthShell } from '../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3000';
 const apiClient = new ApiClient(API_ORIGIN);
-const sessionStateStore = createSessionStateStore();
-const unsupportedRefresh = async (): Promise<never> => {
-  throw new Error('Session refresh is owned by the session bootstrap flow.');
-};
-const webSessionTransport = createWebSessionTransport(unsupportedRefresh);
-
-const INVITE_TOKEN_KEY = 'mk_invite_pending_token';
+const pendingInvitationStore = Platform.OS === 'web'
+  ? createWebPendingInvitationStore()
+  : createNativePendingInvitationStore();
 
 /**
  * D-07: Immediately sanitize the token-bearing URL from browser history.
@@ -43,11 +40,18 @@ export default function InviteRoute() {
   // Persist the token across the login round-trip.
   // On first visit: token comes from the URL path segment (/invite/TOKEN).
   // On return after login: token is restored from sessionStorage.
-  const [persistedToken, setPersistedToken] = useState<string | undefined>(() => {
-    if (urlToken) return urlToken;
-    if (typeof window !== 'undefined') return window.sessionStorage.getItem(INVITE_TOKEN_KEY) ?? undefined;
-    return undefined;
-  });
+  const [persistedToken, setPersistedToken] = useState<string | undefined>(urlToken);
+
+  useEffect(() => {
+    if (urlToken !== undefined) return;
+    let active = true;
+    void pendingInvitationStore.get().then((token) => {
+      if (active && token !== null) setPersistedToken(token);
+    });
+    return () => {
+      active = false;
+    };
+  }, [urlToken]);
 
   // When we have a URL token, persist it and sanitize the URL.
   const sanitized = useRef(false);
@@ -56,13 +60,13 @@ export default function InviteRoute() {
     sanitized.current = true;
 
     if (urlToken) {
-      // Persist token to survive login redirect.
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(INVITE_TOKEN_KEY, urlToken);
-      }
-      // D-07: Sanitize the URL immediately.
-      sanitizeTokenBearingUrl();
       setPersistedToken(urlToken);
+      void pendingInvitationStore.set(urlToken).then(() => {
+        // Use a real route replacement so Expo Router cannot restore the
+        // token-bearing history entry after a direct history mutation.
+        if (Platform.OS === 'web') router.replace('/invite' as never);
+        else sanitizeTokenBearingUrl();
+      });
     }
   }, [urlToken]);
 
@@ -74,26 +78,48 @@ export default function InviteRoute() {
   useEffect(() => {
     if (stateResolved.current) return;
     stateResolved.current = true;
+    let active = true;
 
     const initial = sessionStateStore.get();
     if (initial.kind === 'authenticated') {
       setIsAuthenticated(true);
-      setAccessToken(initial.accessToken);
+      setAccessToken(initial.session.accessToken);
     }
 
     const unsubscribe = sessionStateStore.subscribe((state) => {
       if (state.kind === 'authenticated') {
         setIsAuthenticated(true);
-        setAccessToken(state.accessToken);
+        setAccessToken(state.session.accessToken);
+      } else {
+        setIsAuthenticated(false);
+        setAccessToken(undefined);
       }
     });
 
-    return unsubscribe;
+    // Invitation previews remain publicly reachable, so the root bootstrap does
+    // not restore or redirect on this route. A fresh authenticated deep link
+    // must still recover the HttpOnly-cookie session opportunistically.
+    if (initial.kind === 'booting') {
+      void sessionTransport.restore().then((outcome) => {
+        if (!active) return;
+        if (outcome.kind === 'authenticated') {
+          sessionStateStore.enterAuthenticated(outcome.session);
+        } else {
+          sessionStateStore.enterUnauthenticated();
+        }
+      }).catch(() => {
+        if (active) sessionStateStore.enterUnauthenticated();
+      });
+    }
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const handleLogin = () => {
-    // Navigate to the root; session-bootstrap handles auth and returns via intended route.
-    router.replace('/' as never);
+    router.replace({ pathname: '/login', params: { intended: '/invite' } } as never);
   };
 
   const handleRegister = () => {
@@ -101,16 +127,14 @@ export default function InviteRoute() {
   };
 
   const handleSwitchAccount = () => {
-    void webSessionTransport.clear();
-    sessionStateStore.enterReauthenticationRequired('请切换到受邀账户。');
+    void sessionTransport.clear();
+    sessionStateStore.enterUnauthenticated();
     router.replace('/login' as never);
   };
 
   const handleEnterHousehold = (household: GetHouseholdResponseDto) => {
     // Clear the pending token since the invitation has been consumed.
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem(INVITE_TOKEN_KEY);
-    }
+    void pendingInvitationStore.clear();
     router.replace(`/households/${encodeURIComponent(household.id)}` as never);
   };
 
@@ -119,7 +143,7 @@ export default function InviteRoute() {
   return (
     <AuthShell>
       <InvitationFlow
-        accessToken={accessToken}
+        {...(accessToken === undefined ? {} : { accessToken })}
         apiClient={apiClient}
         isAuthenticated={isAuthenticated}
         onEnterHousehold={handleEnterHousehold}

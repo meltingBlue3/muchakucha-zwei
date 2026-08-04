@@ -128,6 +128,12 @@ test('renames the explicit current household [RED:HOUSEHOLD_RENAME]', async ({ p
   expect(roster.members[0].role).toBe('OWNER');
   expect(roster.members[0].isCurrentUser).toBe(true);
 
+  await page.goto('/login');
+  await page.getByLabel('邮箱').fill(owner.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page).not.toHaveURL(/\/login$/);
+
   // --- Precondition: /households selector is healthy ---
   await page.goto('/households');
   await expect(page).toHaveURL(/\/households/);
@@ -135,7 +141,7 @@ test('renames the explicit current household [RED:HOUSEHOLD_RENAME]', async ({ p
   // --- Precondition: roster navigation works ---
   await page.getByRole('button', { name: '查看成员' }).first().click();
   await expect(page).toHaveURL(/\/households\//);
-  await expect(page.getByText('温暖小家').first()).toBeVisible();
+  await expect(page.getByRole('main').getByText('温暖小家').first()).toBeVisible();
 
   // --- Navigate to the settings route ---
   await page.goto(`/households/${encodeURIComponent(household.id)}/settings`);
@@ -144,7 +150,7 @@ test('renames the explicit current household [RED:HOUSEHOLD_RENAME]', async ({ p
 
   // --- Observe the destination note ---
   // The settings form must repeat "保存到：{家庭名称}" as the explicit destination note.
-  await expect(page.getByText('保存到：温暖小家')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('保存到：温暖小家').first()).toBeVisible({ timeout: 5000 });
 
   // --- Rename the household ---
   const nameField = page.getByLabel('家庭名称');
@@ -159,7 +165,7 @@ test('renames the explicit current household [RED:HOUSEHOLD_RENAME]', async ({ p
   await expect(page.getByText('崭新的家').first()).toBeVisible({ timeout: 5000 });
 
   // --- Verify the destination note updates too ---
-  await expect(page.getByText('保存到：崭新的家')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('保存到：崭新的家').first()).toBeVisible({ timeout: 5000 });
 
   // --- Verify the save success feedback ---
   await expect(page.getByText('家庭名称已更新。')).toBeVisible({ timeout: 5000 });
@@ -182,7 +188,7 @@ test('renames the explicit current household [RED:HOUSEHOLD_RENAME]', async ({ p
         authorization: `Bearer ${member.accessToken}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ name: '成员试图改名' }),
+      data: { name: '成员试图改名' },
     },
   );
   expect(memberRenameResponse.status()).toBe(403);
@@ -196,7 +202,7 @@ test('renames the explicit current household [RED:HOUSEHOLD_RENAME]', async ({ p
         authorization: `Bearer ${outsider.accessToken}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ name: '外人试图改名' }),
+      data: { name: '外人试图改名' },
     },
   );
   expect(outsiderRenameResponse.status()).toBe(404);

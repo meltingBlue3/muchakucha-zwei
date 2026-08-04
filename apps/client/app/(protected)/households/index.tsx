@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 
-import { sessionTransport } from '../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../src/features/households/household-context';
 import {
   AccessChangedPanel,
@@ -20,9 +19,9 @@ export default function HouseholdsIndexRoute() {
     viewState,
     households,
     currentHouseholdId,
+    accessChangedHouseholdName,
     switchHousehold,
     refreshHouseholds,
-    enterAccessChanged,
   } = useHouseholdContext();
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -63,10 +62,9 @@ export default function HouseholdsIndexRoute() {
       <AppShell accessibilityLabel="家庭访问权已变化">
         <AccessChangedPanel
           hasOtherHouseholds={hasOtherHouseholds}
-          householdName={currentHousehold?.name}
+          {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
           onChooseOther={() => {
-            // Navigate back to selector.
-            void router.replace('/households');
+            void refreshHouseholds();
           }}
           onCreateNew={() => {
             // Navigate to D-01 handoff.

@@ -40,6 +40,12 @@ ALTER TABLE "memberships"
     ADD CONSTRAINT "Membership_household_id_fkey"
     FOREIGN KEY ("household_id") REFERENCES "households"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- Composite unique constraint needed for the deferred composite FK below.
+-- PostgreSQL requires the referenced columns (id, household_id) to have
+-- an exact matching unique constraint, even though id alone is the PK.
+CREATE UNIQUE INDEX "Membership_id_household_id_key"
+    ON "memberships"("id", "household_id");
+
 -- Deferred same-household composite FK: ensures ownerMembershipId points to a
 -- Membership whose householdId matches the Household's own id.  Deferred so the
 -- transaction can create the Household and Membership before linking them.

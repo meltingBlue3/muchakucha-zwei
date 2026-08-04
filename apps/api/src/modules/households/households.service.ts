@@ -144,7 +144,7 @@ export class HouseholdsService {
     return memberships.map((m) => ({
       id: m.household.id,
       name: m.household.name,
-      role: m.role as 'ADMIN' | 'MEMBER',
+      role: (m.id === m.household.ownerMembershipId ? 'OWNER' : m.role) as 'OWNER' | 'ADMIN' | 'MEMBER',
       memberCount: m.household._count.memberships,
       ownerMembershipId: m.household.ownerMembershipId!,
     }));
@@ -386,7 +386,7 @@ export class HouseholdsService {
     }, { isolationLevel: 'Serializable' });
 
     // Send email after successful commit.
-    void this.mailPort.sendHouseholdInvitation({
+    await this.mailPort.sendHouseholdInvitation({
       to: deliveryEmail,
       invitationUrl: invitationUrl(rawToken),
       inviterDisplayName,
@@ -489,25 +489,6 @@ export class HouseholdsService {
         code: 'INVITATION_EMAIL_MISMATCH',
         message: '此邀请发给了另一个邮箱。请切换到受邀账户。',
       });
-    }
-
-    // Already a member? Double-check to prevent duplicate membership.
-    const existingMembership = await this.prisma.membership.findUnique({
-      where: {
-        userId_householdId: {
-          userId: actorId,
-          householdId: invitation.householdId,
-        },
-      },
-    });
-
-    if (existingMembership !== null) {
-      // Already in the household — mark invitation as consumed and return household.
-      await this.prisma.invitation.update({
-        where: { id: invitation.id },
-        data: { consumedAt: new Date() },
-      });
-      return (await this.getHousehold(actorId, invitation.householdId))!;
     }
 
     // D-08 / T-02-16: Atomic claim + membership creation in one Serializable transaction.
@@ -732,7 +713,7 @@ export class HouseholdsService {
     }, { isolationLevel: 'Serializable' });
 
     // Send email after successful commit.
-    void this.mailPort.sendHouseholdInvitation({
+    await this.mailPort.sendHouseholdInvitation({
       to: deliveryEmail,
       invitationUrl: invitationUrl(rawToken),
       inviterDisplayName,
@@ -873,10 +854,20 @@ export class HouseholdsService {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         await this.prisma.$transaction(async (transaction) => {
-          // Lock the household row to prevent concurrent ownership changes.
+          await transaction.$queryRaw`
+            SELECT "id" FROM "households"
+            WHERE "id" = ${householdId}::uuid
+            FOR UPDATE
+          `;
+          await transaction.$queryRaw`
+            SELECT "id" FROM "memberships"
+            WHERE "household_id" = ${householdId}::uuid
+              AND ("user_id" = ${actorId}::uuid OR "id" = ${targetMembershipId}::uuid)
+            FOR UPDATE
+          `;
           const locked = await transaction.household.findUnique({
             where: { id: householdId },
-            select: { ownerMembershipId: true },
+            include: { memberships: true },
           });
           if (locked === null || locked.ownerMembershipId === null) {
             throw new NotFoundException({
@@ -893,13 +884,42 @@ export class HouseholdsService {
             });
           }
 
+          const currentActor = locked.memberships.find((membership) => membership.userId === actorId);
+          const currentTarget = locked.memberships.find((membership) => membership.id === targetMembershipId);
+          if (currentActor === undefined || currentTarget === undefined) {
+            throw new NotFoundException({
+              code: 'HOUSEHOLD_NOT_FOUND',
+              message: 'Household not found or access denied.',
+            });
+          }
+          const currentActorRole: Role = currentActor.id === locked.ownerMembershipId
+            ? 'OWNER'
+            : currentActor.role as Role;
+          const currentTargetIsOwner = currentTarget.id === locked.ownerMembershipId;
+          const currentTargetRole: Role = currentTargetIsOwner ? 'OWNER' : currentTarget.role as Role;
+          const currentFailure = roleChangeFailure(
+            currentTargetIsOwner,
+            currentActorRole,
+            currentTargetRole,
+            newRole,
+          );
+          if (currentFailure === 'TARGET_IS_OWNER') {
+            throw new ForbiddenException({ code: 'OWNER_UNTOUCHABLE', message: '所有者的角色不能变更。' });
+          }
+          if (currentFailure === 'INSUFFICIENT_ROLE') {
+            throw new ForbiddenException({ code: 'INSUFFICIENT_ROLE', message: '只有所有者和管理员可以变更成员角色。' });
+          }
+          if (currentFailure === 'SAME_ROLE') {
+            throw new BadRequestException({ code: 'ROLE_UNCHANGED', message: '目标成员已经是该角色。' });
+          }
+
           // Conditional update: only change if the target membership still has
           // the role we loaded and is not the owner pointer.
           const updated = await transaction.membership.updateMany({
             where: {
               id: targetMembershipId,
               householdId,
-              role: targetMembership.role,
+              role: currentTarget.role,
             },
             data: { role: newRole },
           });
@@ -982,10 +1002,20 @@ export class HouseholdsService {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         await this.prisma.$transaction(async (transaction) => {
-          // Lock the household row to prevent concurrent ownership changes.
+          await transaction.$queryRaw`
+            SELECT "id" FROM "households"
+            WHERE "id" = ${householdId}::uuid
+            FOR UPDATE
+          `;
+          await transaction.$queryRaw`
+            SELECT "id" FROM "memberships"
+            WHERE "household_id" = ${householdId}::uuid
+              AND ("user_id" = ${actorId}::uuid OR "id" = ${targetMembershipId}::uuid)
+            FOR UPDATE
+          `;
           const locked = await transaction.household.findUnique({
             where: { id: householdId },
-            select: { ownerMembershipId: true },
+            include: { memberships: true },
           });
           if (locked === null || locked.ownerMembershipId === null) {
             throw new NotFoundException({
@@ -1002,13 +1032,36 @@ export class HouseholdsService {
             });
           }
 
+          const currentActor = locked.memberships.find((membership) => membership.userId === actorId);
+          const currentTarget = locked.memberships.find((membership) => membership.id === targetMembershipId);
+          if (currentActor === undefined || currentTarget === undefined) {
+            throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found or access denied.' });
+          }
+          const currentActorRole: Role = currentActor.id === locked.ownerMembershipId
+            ? 'OWNER'
+            : currentActor.role as Role;
+          const currentFailure = removalFailure(
+            currentTarget.id === locked.ownerMembershipId,
+            currentActorRole,
+            currentTarget.userId === actorId,
+          );
+          if (currentFailure === 'TARGET_IS_OWNER') {
+            throw new ForbiddenException({ code: 'OWNER_UNTOUCHABLE', message: '所有者的成员关系不能移除。' });
+          }
+          if (currentFailure === 'INSUFFICIENT_ROLE') {
+            throw new ForbiddenException({ code: 'INSUFFICIENT_ROLE', message: '只有所有者和管理员可以移除成员。' });
+          }
+          if (currentFailure === 'TARGET_IS_SELF') {
+            throw new BadRequestException({ code: 'CANNOT_REMOVE_SELF', message: '不能移除自己的成员关系，请使用离开家庭流程。' });
+          }
+
           // Conditional delete: only remove if the target membership still
           // has the role we loaded (stale detection) and is NOT the owner.
           const deleted = await transaction.membership.deleteMany({
             where: {
               id: targetMembershipId,
               householdId,
-              role: targetMembership.role,
+              role: currentTarget.role,
             },
           });
 
@@ -1076,16 +1129,24 @@ export class HouseholdsService {
       });
     }
 
-    const formerOwnerMembershipId = actorMembership.id;
-
     // Guarded, stale-proof ownership transfer inside a Serializable transaction.
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         await this.prisma.$transaction(async (transaction) => {
-          // Lock the household row to prevent concurrent transfers.
+          await transaction.$queryRaw`
+            SELECT "id" FROM "households"
+            WHERE "id" = ${householdId}::uuid
+            FOR UPDATE
+          `;
+          await transaction.$queryRaw`
+            SELECT "id" FROM "memberships"
+            WHERE "household_id" = ${householdId}::uuid
+              AND ("user_id" = ${actorId}::uuid OR "id" = ${successorMembershipId}::uuid)
+            FOR UPDATE
+          `;
           const locked = await transaction.household.findUnique({
             where: { id: householdId },
-            select: { ownerMembershipId: true },
+            include: { memberships: true },
           });
           if (locked === null || locked.ownerMembershipId === null) {
             throw new NotFoundException({
@@ -1102,10 +1163,26 @@ export class HouseholdsService {
             });
           }
 
+          const currentActor = locked.memberships.find((membership) => membership.userId === actorId);
+          const currentSuccessor = locked.memberships.find((membership) => membership.id === successorMembershipId);
+          if (currentActor === undefined || currentSuccessor === undefined) {
+            throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found or access denied.' });
+          }
+          const currentFailure = transferFailure(
+            currentActor.id === locked.ownerMembershipId,
+            currentSuccessor.id === currentActor.id,
+          );
+          if (currentFailure === 'NOT_OWNER') {
+            throw new ForbiddenException({ code: 'NOT_OWNER', message: '只有家庭所有者可以转移所有权。' });
+          }
+          if (currentFailure === 'SUCCESSOR_IS_OWNER') {
+            throw new BadRequestException({ code: 'SUCCESSOR_IS_OWNER', message: '不能将所有权转移给自己。' });
+          }
+
           // Reset former owner's role to MEMBER (D-10 / D-11).
           const demoted = await transaction.membership.updateMany({
             where: {
-              id: formerOwnerMembershipId,
+              id: currentActor.id,
               householdId,
             },
             data: { role: 'MEMBER' },
@@ -1123,7 +1200,7 @@ export class HouseholdsService {
           const transferred = await transaction.household.updateMany({
             where: {
               id: householdId,
-              ownerMembershipId: formerOwnerMembershipId,
+              ownerMembershipId: currentActor.id,
             },
             data: { ownerMembershipId: successorMembershipId },
           });
@@ -1218,10 +1295,20 @@ export class HouseholdsService {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         await this.prisma.$transaction(async (transaction) => {
-          // Lock the household row to prevent concurrent transfers/leaves.
+          await transaction.$queryRaw`
+            SELECT "id" FROM "households"
+            WHERE "id" = ${householdId}::uuid
+            FOR UPDATE
+          `;
+          await transaction.$queryRaw`
+            SELECT "id" FROM "memberships"
+            WHERE "household_id" = ${householdId}::uuid
+              AND ("user_id" = ${actorId}::uuid OR "id" = ${successorMembershipId}::uuid)
+            FOR UPDATE
+          `;
           const locked = await transaction.household.findUnique({
             where: { id: householdId },
-            select: { ownerMembershipId: true },
+            include: { memberships: true },
           });
           if (locked === null || locked.ownerMembershipId === null) {
             throw new NotFoundException({
@@ -1238,11 +1325,31 @@ export class HouseholdsService {
             });
           }
 
+          const currentActor = locked.memberships.find((membership) => membership.userId === actorId);
+          const currentSuccessor = locked.memberships.find((membership) => membership.id === successorMembershipId);
+          if (currentActor === undefined || currentSuccessor === undefined) {
+            throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found or access denied.' });
+          }
+          const currentFailure = leaveFailure(
+            currentActor.id === locked.ownerMembershipId,
+            currentSuccessor.id === currentActor.id,
+            locked.memberships.length > 1,
+          );
+          if (currentFailure === 'NOT_OWNER') {
+            throw new ForbiddenException({ code: 'NOT_OWNER', message: '只有家庭所有者可以离开家庭。' });
+          }
+          if (currentFailure === 'SUCCESSOR_IS_OWNER') {
+            throw new BadRequestException({ code: 'SUCCESSOR_IS_OWNER', message: '不能将所有权转移给自己后离开。' });
+          }
+          if (currentFailure === 'LAST_MEMBER') {
+            throw new BadRequestException({ code: 'LAST_MEMBER', message: '不能离开家庭，因为你是唯一的成员。' });
+          }
+
           // Move owner pointer to successor atomically (compare-and-set).
           const transferred = await transaction.household.updateMany({
             where: {
               id: householdId,
-              ownerMembershipId: actorMembership.id,
+              ownerMembershipId: currentActor.id,
             },
             data: { ownerMembershipId: successorMembershipId },
           });
@@ -1257,7 +1364,7 @@ export class HouseholdsService {
           // Delete the former owner's membership.
           // The deferred composite FK and non-null pointer validate at commit.
           await transaction.membership.delete({
-            where: { id: actorMembership.id },
+            where: { id: currentActor.id },
           });
         }, { isolationLevel: 'Serializable' });
 

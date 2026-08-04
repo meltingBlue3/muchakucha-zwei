@@ -16,6 +16,7 @@ export default function RootLayout() {
     pathname === '/forgot-password' ||
     pathname === '/auth/reset-password' ||
     pathname === '/reset-success';
+  const invitationPreview = pathname === '/invite' || pathname.startsWith('/invite/');
   const routeSession = useCallback(
     (destination: '/household-handoff' | '/profile' | '/login' | '/offline', intendedRoute?: string) => {
       router.replace({
@@ -35,7 +36,7 @@ export default function RootLayout() {
         fontsReady
         intendedRoute={pathname}
         onRoute={routeSession}
-        restorationRequired={!isPublicContinuation}
+        restorationRequired={!isPublicContinuation && !invitationPreview}
         sessionStateStore={sessionStateStore}
         sessionTransport={sessionTransport}
       >

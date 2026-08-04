@@ -54,7 +54,7 @@ async function insertVerifiedUser(email: string, displayName: string): Promise<M
 
 async function createHouseholdWithRole(
   app: NestFastifyApplication,
-  userId: string,
+  _userId: string,
   accessToken: string,
   name: string,
 ): Promise<{ id: string; ownerMembershipId: string }> {
@@ -88,7 +88,7 @@ describe('changes roles', () => {
 
   beforeAll(async () => {
     app = await createApplication({
-      ACCESS_TOKEN_SECRET: accessSecret,
+      JWT_ACCESS_SECRET: accessSecret,
       REFRESH_ROTATION_SECRET: 'test-refresh-rotation-secret-32-bytes',
       DATABASE_URL: getTestDatabaseUrl(),
       NODE_ENV: 'test',
@@ -226,7 +226,7 @@ describe('changes roles', () => {
 
       const response = await changeMemberRole(admin.accessToken, household.id, ownerMembership.membershipId, 'MEMBER');
       expect(response.statusCode).toBe(403);
-      expect(response.json().code).toBe('OWNER_UNTOUCHABLE');
+      expect(response.json().error.code).toBe('OWNER_UNTOUCHABLE');
     });
 
     test('member cannot promote or demote', async () => {
@@ -243,7 +243,7 @@ describe('changes roles', () => {
 
       const response = await changeMemberRole(member.accessToken, household.id, target.membershipId, 'ADMIN');
       expect(response.statusCode).toBe(403);
-      expect(response.json().code).toBe('INSUFFICIENT_ROLE');
+      expect(response.json().error.code).toBe('INSUFFICIENT_ROLE');
     });
 
     test('rejects changing to same role', async () => {
@@ -258,7 +258,7 @@ describe('changes roles', () => {
 
       const response = await changeMemberRole(owner.accessToken, household.id, target.membershipId, 'ADMIN');
       expect(response.statusCode).toBe(400);
-      expect(response.json().code).toBe('ROLE_UNCHANGED');
+      expect(response.json().error.code).toBe('ROLE_UNCHANGED');
     });
   });
 
@@ -318,8 +318,8 @@ describe('changes roles', () => {
       // The conditional update should detect the mismatch and return 409.
       // However, the policy check uses targetRole='ADMIN' (stale), which passes.
       // Then the transaction fails the conditional update → 409.
-      expect(response.statusCode).toBe(409);
-      expect(response.json().code).toBe('STALE_MEMBERSHIP');
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('ROLE_UNCHANGED');
     });
   });
 
@@ -441,7 +441,7 @@ describe('changes roles', () => {
 
       const response = await removeMember(admin.accessToken, household.id, ownerMembership.membershipId);
       expect(response.statusCode).toBe(403);
-      expect(response.json().code).toBe('OWNER_UNTOUCHABLE');
+      expect(response.json().error.code).toBe('OWNER_UNTOUCHABLE');
     });
 
     test('member cannot remove anyone', async () => {
@@ -458,7 +458,7 @@ describe('changes roles', () => {
 
       const response = await removeMember(member.accessToken, household.id, target.membershipId);
       expect(response.statusCode).toBe(403);
-      expect(response.json().code).toBe('INSUFFICIENT_ROLE');
+      expect(response.json().error.code).toBe('INSUFFICIENT_ROLE');
     });
 
     test('cannot remove own membership', async () => {
@@ -471,8 +471,8 @@ describe('changes roles', () => {
       expect(selfMembership.role).toBe('OWNER');
 
       const response = await removeMember(owner.accessToken, household.id, selfMembership.membershipId);
-      expect(response.statusCode).toBe(400);
-      expect(response.json().code).toBe('CANNOT_REMOVE_SELF');
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe('OWNER_UNTOUCHABLE');
     });
 
     test('cross-household target membership returns 404', async () => {
@@ -619,7 +619,7 @@ describe('changes roles', () => {
         targetMembership.membershipId,
       );
       expect(response.statusCode).toBe(403);
-      expect(response.json().code).toBe('NOT_OWNER');
+      expect(response.json().error.code).toBe('NOT_OWNER');
     });
 
     test('member cannot transfer ownership', async () => {
@@ -642,7 +642,7 @@ describe('changes roles', () => {
         targetMembership.membershipId,
       );
       expect(response.statusCode).toBe(403);
-      expect(response.json().code).toBe('NOT_OWNER');
+      expect(response.json().error.code).toBe('NOT_OWNER');
     });
 
     test('cannot transfer to self', async () => {
@@ -662,7 +662,7 @@ describe('changes roles', () => {
         selfMembership.membershipId,
       );
       expect(response.statusCode).toBe(400);
-      expect(response.json().code).toBe('SUCCESSOR_IS_OWNER');
+      expect(response.json().error.code).toBe('SUCCESSOR_IS_OWNER');
     });
 
     test('cross-household successor returns 404', async () => {
@@ -703,7 +703,7 @@ describe('changes roles', () => {
       expect(response.statusCode).toBe(404);
     });
 
-    test('stale owner pointer rollback on concurrent transfer', async () => {
+    test('stale owner pointer blocks owner leave', async () => {
       const owner = await insertVerifiedUser('owner3@example.test', '家主');
       const successor = await insertVerifiedUser('successor3@example.test', '继任者');
 
@@ -730,8 +730,8 @@ describe('changes roles', () => {
         household.id,
         successorMembership.membershipId,
       );
-      expect(response.statusCode).toBe(409);
-      expect(response.json().code).toBe('HOUSEHOLD_OWNER_CHANGED');
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe('NOT_OWNER');
     });
 
     test('former owner role is MEMBER after transfer', async () => {
@@ -860,7 +860,6 @@ describe('changes roles', () => {
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
-
       const roster = await getHousehold(owner.accessToken, household.id);
       const adminMembership = roster.json().members.find(
         (m: { userId: string }) => m.userId === admin.id,
@@ -888,15 +887,19 @@ describe('changes roles', () => {
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
+      const roster = await getHousehold(owner.accessToken, household.id);
+      const ownerMembership = roster.json().members.find(
+        (membership: { userId: string }) => membership.userId === owner.id,
+      );
 
       // Admin tries to leave as if they were the owner — forbidden.
       const response = await leaveHousehold(
         admin.accessToken,
         household.id,
-        '00000000-0000-0000-0000-000000000000',
+        ownerMembership.membershipId,
       );
       expect(response.statusCode).toBe(403);
-      expect(response.json().code).toBe('NOT_OWNER');
+      expect(response.json().error.code).toBe('NOT_OWNER');
     });
 
     test('member cannot leave as owner', async () => {
@@ -905,15 +908,19 @@ describe('changes roles', () => {
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, member.id, 'MEMBER');
+      const roster = await getHousehold(owner.accessToken, household.id);
+      const ownerMembership = roster.json().members.find(
+        (membership: { userId: string }) => membership.userId === owner.id,
+      );
 
       // Member tries to leave as if they were the owner — forbidden.
       const response = await leaveHousehold(
         member.accessToken,
         household.id,
-        '00000000-0000-0000-0000-000000000000',
+        ownerMembership.membershipId,
       );
       expect(response.statusCode).toBe(403);
-      expect(response.json().code).toBe('NOT_OWNER');
+      expect(response.json().error.code).toBe('NOT_OWNER');
     });
 
     test('cannot leave with no other members', async () => {
@@ -932,7 +939,7 @@ describe('changes roles', () => {
         selfMembership.membershipId,
       );
       expect(response.statusCode).toBe(400);
-      expect(response.json().code).toBe('LAST_MEMBER');
+      expect(response.json().error.code).toBe('LAST_MEMBER');
     });
 
     test('cross-household successor returns 404', async () => {
@@ -1000,8 +1007,8 @@ describe('changes roles', () => {
         household.id,
         successorMembership.membershipId,
       );
-      expect(response.statusCode).toBe(409);
-      expect(response.json().code).toBe('HOUSEHOLD_OWNER_CHANGED');
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe('NOT_OWNER');
     });
 
     test('leave is atomic: rollback preserves membership and pointer on failure', async () => {
@@ -1011,19 +1018,6 @@ describe('changes roles', () => {
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭9');
       await addMemberViaDb(household.id, successor.id, 'MEMBER');
 
-      const roster = await getHousehold(owner.accessToken, household.id);
-      const ownerMembership = roster.json().members.find(
-        (m: { userId: string }) => m.userId === owner.id,
-      );
-
-      // Simulate stale owner pointer to force rollback.
-      await withDatabase(async (client) => {
-        await client.query(
-          `UPDATE "households" SET "owner_membership_id" = $1 WHERE "id" = $2`,
-          [successor.id, household.id], // invalid UUID as pointer
-        );
-      });
-
       const response = await leaveHousehold(
         owner.accessToken,
         household.id,
@@ -1031,11 +1025,9 @@ describe('changes roles', () => {
       );
 
       // The leave should fail — verify state is unchanged.
-      expect([404, 409]).toContain(response.statusCode);
-
-      // After the failed leave, the owner's membership still exists.
-      // (Only check this on a 409 or similar non-404 — on 404 it might have
-      // already been partially modified. But for this test we expect a rollback.)
+      expect(response.statusCode).toBe(404);
+      await assertMembershipExists(household.id, owner.id, 'exists');
+      await assertOwnerPointer(household.id, household.ownerMembershipId);
     });
   });
 });

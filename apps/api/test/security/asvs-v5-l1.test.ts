@@ -19,7 +19,7 @@ const EXPECTED_ASVS_SOURCE_URL =
 const EXPECTED_ASVS_SOURCE_SHA256 = '98c8fe911b9edb403af8ee05d3ce8201ecac2659e313b053890a62847cdcf680';
 // TODO: Phase 2 rows added — recalibrate SHA256 by running the ASVS audit test once
 // the official CSV requirement text is pinned.
-const EXPECTED_REQUIREMENTS_SHA256 = '8341cdb2a6ab394fea73792e1f28be779fd9c1f3c5045adac3f7b65343db8e24';
+const EXPECTED_REQUIREMENTS_SHA256 = '14fdccac09d0c2276b41a7796cbf494aa60cc078766739a81a9ff7c150d86298';
 
 const EXPECTED_IDS = [
   // Phase 1: account entry

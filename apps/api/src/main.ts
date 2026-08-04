@@ -1,4 +1,11 @@
+import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+
+try {
+  if (existsSync('.env')) process.loadEnvFile('.env');
+} catch {
+  // .env is optional — proceed with process.env as-is
+}
 import { pathToFileURL } from 'node:url';
 import fastifyCookie from '@fastify/cookie';
 import {
@@ -64,7 +71,7 @@ function parseExactOrigins(value: string | undefined, nodeEnvironment: string): 
     ? configured
     : nodeEnvironment === 'production'
       ? []
-      : ['http://127.0.0.1:8081'];
+      : ['http://127.0.0.1:8081', 'http://127.0.0.1:19000', 'http://localhost:19000'];
 
   if (candidates.length === 0) {
     throw new Error('WEB_ORIGIN is required in production.');
@@ -263,7 +270,9 @@ const entrypoint = process.argv[1];
 if (entrypoint !== undefined && import.meta.url === pathToFileURL(entrypoint).href) {
   void bootstrap().catch((error: unknown) => {
     const name = error instanceof Error ? error.name : 'UnknownError';
-    process.stderr.write(`API bootstrap failed (${name}).\n`);
+    const message = error instanceof Error ? error.message : '';
+    const stack = error instanceof Error ? error.stack : '';
+    process.stderr.write(`API bootstrap failed (${name}): ${message}\n${stack}\n`);
     process.exitCode = 1;
   });
 }

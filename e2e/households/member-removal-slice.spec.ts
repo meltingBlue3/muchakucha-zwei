@@ -157,8 +157,8 @@ test('removes a non-owner member', async ({ page, request }) => {
 
   await page.goto(`${WEB_ORIGIN}/login`);
   await page.waitForTimeout(500);
-  await page.getByLabel('邮箱地址').fill(owner.email);
-  await page.getByLabel('密码').fill(password);
+  await page.getByLabel('邮箱').fill(owner.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
   await page.getByRole('button', { name: '登录' }).click();
   await page.waitForTimeout(1000);
 
@@ -200,8 +200,8 @@ test('removes a non-owner member', async ({ page, request }) => {
     },
   );
   expect(adminTargetOwner.status()).toBe(403);
-  const adminOwnerBody = (await adminTargetOwner.json()) as { code: string };
-  expect(adminOwnerBody.code).toBe('OWNER_UNTOUCHABLE');
+  const adminOwnerBody = (await adminTargetOwner.json()) as { error: { code: string } };
+  expect(adminOwnerBody.error.code).toBe('OWNER_UNTOUCHABLE');
 
   // ============================================================================
   // D-09: MEMBER CANNOT REMOVE — forbidden.
@@ -215,8 +215,8 @@ test('removes a non-owner member', async ({ page, request }) => {
     },
   );
   expect(memberRemoving.status()).toBe(403);
-  const memberBody = (await memberRemoving.json()) as { code: string };
-  expect(memberBody.code).toBe('INSUFFICIENT_ROLE');
+  const memberBody = (await memberRemoving.json()) as { error: { code: string } };
+  expect(memberBody.error.code).toBe('INSUFFICIENT_ROLE');
 
   // ============================================================================
   // D-09: ADMIN REMOVES ANOTHER ADMIN — works.

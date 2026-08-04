@@ -19,8 +19,9 @@ export interface HouseholdContextValue {
   viewState: HouseholdViewState;
   households: ListMyHouseholdsItemDto[];
   currentHouseholdId: string | null;
+  accessChangedHouseholdName: string | undefined;
   switchHousehold: (householdId: string) => Promise<boolean>;
-  refreshHouseholds: () => Promise<void>;
+  refreshHouseholds: () => Promise<boolean>;
   enterAccessChanged: (lostHouseholdName?: string) => void;
   resolve: () => Promise<void>;
 }
@@ -84,6 +85,7 @@ export function createHouseholdProvider(
     const mountedRef = useRef(true);
 
     const doResolve = useCallback(async (): Promise<void> => {
+      await store.hydrate();
       const accessToken = getAccessToken();
       if (accessToken === null) {
         if (mountedRef.current) {
@@ -116,7 +118,7 @@ export function createHouseholdProvider(
           : null;
 
         const sorted = sortHouseholds(items, validPersistedId, timestamps);
-        const activeId = validPersistedId ?? sorted[0].id;
+        const activeId = validPersistedId ?? sorted[0]!.id;
 
         setHouseholds(sorted);
         setCurrentHouseholdId(activeId);
@@ -158,31 +160,31 @@ export function createHouseholdProvider(
       return promise;
     }, [doResolve]);
 
-    const refreshHouseholds = useCallback(async (): Promise<void> => {
+    const refreshHouseholds = useCallback(async (): Promise<boolean> => {
       setViewState('resolving');
       // Persist current selection during refresh.
       const priorId = currentHouseholdId;
       const accessToken = getAccessToken();
       if (accessToken === null) {
         setViewState('noHousehold');
-        return;
+        return false;
       }
       try {
         const result = await fetchHouseholds(householdApi, accessToken);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current) return false;
 
         if (result.items.length === 0) {
           await store.clearAll();
           setHouseholds([]);
           setCurrentHouseholdId(null);
           setViewState('noHousehold');
-          return;
+          return true;
         }
 
         const timestamps = store.getAccessTimestamps();
         const validId = priorId !== null && result.items.some((h) => h.id === priorId)
           ? priorId
-          : result.items[0].id;
+          : result.items[0]!.id;
         const sorted = sortHouseholds(result.items, validId, timestamps);
         setHouseholds(sorted);
         setCurrentHouseholdId(validId);
@@ -195,10 +197,13 @@ export function createHouseholdProvider(
           if (!joinedIds.has(id)) delete updatedTimestamps[id];
         }
         await store.setAccessTimestamps(updatedTimestamps);
+        setAccessChangedHouseholdName(undefined);
+        return true;
       } catch {
         if (mountedRef.current) {
           setViewState(priorId !== null ? 'offlineRetained' : 'noHousehold');
         }
+        return false;
       }
     }, [currentHouseholdId, getAccessToken, householdApi, store]);
 
@@ -220,7 +225,14 @@ export function createHouseholdProvider(
         if (!mountedRef.current) return false;
 
         const confirmed = result.items.find((h) => h.id === householdId);
-        if (confirmed === undefined) return false;
+        if (confirmed === undefined) {
+          await store.clearHouseholdData(householdId);
+          setHouseholds(sortHouseholds(result.items, null, store.getAccessTimestamps()));
+          setCurrentHouseholdId(null);
+          setAccessChangedHouseholdName(membership.name);
+          setViewState('accessChanged');
+          return false;
+        }
 
         // Update timestamps and current selection.
         const timestamps = store.getAccessTimestamps();
@@ -267,6 +279,7 @@ export function createHouseholdProvider(
       viewState,
       households,
       currentHouseholdId,
+      accessChangedHouseholdName,
       switchHousehold,
       refreshHouseholds,
       enterAccessChanged,

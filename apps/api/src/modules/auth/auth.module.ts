@@ -1,4 +1,4 @@
-import { DynamicModule, Module } from '@nestjs/common';
+import { DynamicModule, Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { MAIL_PORT } from '../../infrastructure/mail/mail.port.js';
 import {
@@ -18,6 +18,7 @@ function accessTokenSecret(environment: NodeJS.ProcessEnv): string {
   return secret;
 }
 
+@Global()
 @Module({})
 export class AuthModule {
   static register(environment: NodeJS.ProcessEnv = process.env): DynamicModule {

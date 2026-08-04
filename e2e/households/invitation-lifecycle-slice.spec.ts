@@ -102,10 +102,13 @@ async function seedInvitation(
   const tokenHash = hashToken(rawToken);
   const emailCanonical = recipientEmail.trim().normalize('NFC').toLowerCase();
   const expiresAt = overrides?.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const createdAt = expiresAt.getTime() <= Date.now()
+    ? new Date(expiresAt.getTime() - 7 * 24 * 60 * 60 * 1000)
+    : new Date();
 
   await db.query(
-    `INSERT INTO "invitations" ("inviter_user_id", "inviter_membership_id", "household_id", "email_canonical", "hash", "role", "expires_at", "consumed_at", "invalidated_at")
-     VALUES ($1, $2, $3, $4, $5, 'MEMBER', $6, $7, $8)`,
+    `INSERT INTO "invitations" ("inviter_user_id", "inviter_membership_id", "household_id", "email_canonical", "hash", "role", "expires_at", "consumed_at", "invalidated_at", "created_at")
+     VALUES ($1, $2, $3, $4, $5, 'MEMBER', $6, $7, $8, $9)`,
     [
       inviterUserId,
       inviterMembershipId,
@@ -115,6 +118,7 @@ async function seedInvitation(
       expiresAt.toISOString(),
       overrides?.consumedAt?.toISOString() ?? null,
       overrides?.invalidatedAt?.toISOString() ?? null,
+      createdAt.toISOString(),
     ],
   );
 
@@ -183,8 +187,8 @@ test('manages invitation lifecycle', async ({ page, request }) => {
 
   await page.goto(`${WEB_ORIGIN}/login`);
   await page.waitForTimeout(500);
-  await page.getByLabel('邮箱地址').fill(owner.email);
-  await page.getByLabel('密码').fill(password);
+  await page.getByLabel('邮箱').fill(owner.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
   await page.getByRole('button', { name: '登录' }).click();
   await page.waitForTimeout(1000);
 
@@ -201,7 +205,7 @@ test('manages invitation lifecycle', async ({ page, request }) => {
   // ============================================================================
 
   // Verify invitation statuses appear in the list
-  await expect(page.getByText('待接受')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('待接受').first()).toBeVisible({ timeout: 5000 });
   await expect(page.getByText('已过期')).toBeVisible({ timeout: 5000 });
   await expect(page.getByText('已接受')).toBeVisible({ timeout: 5000 });
   await expect(page.getByText('已撤销')).toBeVisible({ timeout: 5000 });
@@ -253,7 +257,7 @@ test('manages invitation lifecycle', async ({ page, request }) => {
   // But we'll first verify the destructive revoke works.
 
   // Click the destructive revoke button
-  await page.getByText('撤销邀请').click();
+  await page.getByRole('button', { name: '撤销邀请', exact: true }).click();
 
   // Wait for redirect back to settings
   await page.waitForTimeout(1000);

@@ -128,22 +128,24 @@ interface HouseholdCardProps {
 }
 
 export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryAction }: HouseholdCardProps) => {
-  const roleText = household.role === 'ADMIN' ? '管理员' : '成员';
+  const roleText = household.role === 'OWNER' ? '所有者' : household.role === 'ADMIN' ? '管理员' : '成员';
   const memberLabel = `${household.memberCount} 位成员`;
 
   return (
-    <Pressable
-      accessibilityRole={onSelect !== undefined ? 'button' : 'none'}
-      onPress={onSelect !== undefined ? () => onSelect(household.id) : undefined}
-      style={({ pressed }) => ({
-        backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface,
-        borderColor: isCurrent ? theme.colors.coral : theme.colors.border,
-        borderRadius: theme.borderRadii.lg,
-        borderWidth: theme.borderWidths.default,
-        padding: theme.spacing[4],
-      })}
-    >
+    <View style={{
+      backgroundColor: theme.colors.surface,
+      borderColor: isCurrent ? theme.colors.coral : theme.colors.border,
+      borderRadius: theme.borderRadii.lg,
+      borderWidth: theme.borderWidths.default,
+      overflow: 'hidden',
+      padding: theme.spacing[4],
+    }}>
       <Stack gap={2}>
+        <Pressable
+          accessibilityRole={onSelect !== undefined ? 'button' : 'none'}
+          onPress={onSelect !== undefined ? () => onSelect(household.id) : undefined}
+          style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+        >
         <Inline gap={2} style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <Stack gap={1} style={{ flex: 1 }}>
             <Text
@@ -163,6 +165,7 @@ export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryA
             <Check color={theme.colors.coral} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
           ) : null}
         </Inline>
+        </Pressable>
         {primaryAction !== undefined ? (
           <Button
             label={primaryAction.label}
@@ -170,7 +173,7 @@ export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryA
           />
         ) : null}
       </Stack>
-    </Pressable>
+    </View>
   );
 };
 
@@ -193,6 +196,11 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
       onSelect(id);
       onClose();
     }, [onSelect, onClose]);
+
+    // React Native Web keeps a closed Modal subtree in the DOM. Unmounting it
+    // prevents duplicate hidden household labels from polluting navigation and
+    // accessibility queries while the switcher is inactive.
+    if (!visible) return null;
 
     const content = (
       <View
@@ -705,9 +713,8 @@ export const ConfirmationPage = ({
             gap: theme.spacing[2],
             justifyContent: 'center',
             minHeight: theme.controlSizes.primary,
-            opacity: busy ? 1 : pressed ? 0.85 : 1,
             minWidth: theme.controlSizes.touchTarget,
-            opacity: busy ? 0.5 : 1,
+            opacity: busy ? 0.5 : pressed ? 0.85 : 1,
             paddingHorizontal: theme.spacing[4],
           })}
         >
@@ -786,9 +793,8 @@ export const FinalConfirmation = ({
             gap: theme.spacing[2],
             justifyContent: 'center',
             minHeight: theme.controlSizes.primary,
-            opacity: busy ? 1 : pressed ? 0.85 : 1,
             minWidth: theme.controlSizes.touchTarget,
-            opacity: busy ? 0.5 : 1,
+            opacity: busy ? 0.5 : pressed ? 0.85 : 1,
             paddingHorizontal: theme.spacing[4],
           })}
         >

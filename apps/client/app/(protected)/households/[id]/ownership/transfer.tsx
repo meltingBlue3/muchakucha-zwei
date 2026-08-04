@@ -2,12 +2,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
-import { sessionTransport } from '../../../../../../src/features/auth/session-runtime';
-import { sessionStateStore } from '../../../../../../src/features/auth/session-runtime';
+import { sessionTransport } from '../../../../../src/features/auth/session-runtime';
+import { sessionStateStore } from '../../../../../src/features/auth/session-runtime';
 import { ApiClient } from '@muchakucha/api-client';
-import { FinalConfirmation } from '../../../../../../src/ui/household-components';
-import { Banner, Heading, Spinner, Stack, Text } from '../../../../../../src/ui/primitives';
-import { theme } from '../../../../../../src/ui/theme';
+import { FinalConfirmation } from '../../../../../src/ui/household-components';
+import { Banner, Button, Heading, Spinner, Stack, Text } from '../../../../../src/ui/primitives';
+import { theme } from '../../../../../src/ui/theme';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3000';
 
@@ -126,15 +126,8 @@ export default function TransferOwnershipPage() {
               </Stack>
             </Stack>
             <Stack gap={3}>
-              <FinalConfirmation
-                heading="确认所有权转移"
-                body={`确认后将「${householdName}」的所有权永久转移给 ${successorDisplayName}。\n\n你的角色将变更为普通成员。此操作不可撤销。`}
-                safeActionLabel="取消转移"
-                destructiveActionLabel="确认转移所有权"
-                onSafeAction={handleCancel}
-                onDestructiveAction={() => { void handleConfirm(); }}
-                busy={busy}
-              />
+              <Button label="取消转移" onPress={handleCancel} />
+              <Button label="继续" onPress={handleContinue} />
             </Stack>
           </Stack>
         </View>

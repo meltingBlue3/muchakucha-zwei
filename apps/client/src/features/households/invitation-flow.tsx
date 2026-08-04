@@ -200,6 +200,7 @@ export function InvitationFlow({
     const copy = terminalCopy[state.reason];
     return (
       <StatusPanel
+        action={null}
         heading={copy.heading}
         body={copy.body}
         kind="offline"

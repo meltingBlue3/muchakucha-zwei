@@ -160,8 +160,13 @@ describe('session bootstrap contract', () => {
   test('preserves only an allowlisted internal intended route', () => {
     expect(sanitizeIntendedRoute('/profile')).toBe('/profile');
     expect(sanitizeIntendedRoute('/household-handoff')).toBe('/household-handoff');
+    expect(sanitizeIntendedRoute('/households')).toBe('/households');
+    expect(sanitizeIntendedRoute('/households/123e4567-e89b-12d3-a456-426614174000/settings'))
+      .toBe('/households/123e4567-e89b-12d3-a456-426614174000/settings');
+    expect(sanitizeIntendedRoute('/invite/opaque_token-123')).toBe('/invite/opaque_token-123');
     expect(sanitizeIntendedRoute('https://attacker.test')).toBeUndefined();
     expect(sanitizeIntendedRoute('javascript:alert(1)')).toBeUndefined();
     expect(sanitizeIntendedRoute('//attacker.test')).toBeUndefined();
+    expect(sanitizeIntendedRoute('/households/../../profile')).toBeUndefined();
   });
 });

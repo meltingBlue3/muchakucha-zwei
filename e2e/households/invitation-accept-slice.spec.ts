@@ -209,8 +209,8 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
   await expect(page).toHaveURL(/\/login/);
 
   // Complete login with the invited email
-  await page.getByLabel('邮箱地址').fill(invitee.email);
-  await page.getByLabel('密码').fill(password);
+  await page.getByLabel('邮箱').fill(invitee.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
   await page.getByRole('button', { name: '登录' }).click();
 
   // After login, the user should be returned to the invitation page (not auto-accepted)
@@ -291,7 +291,8 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
   const inListAfter = postAcceptBody.some((h) => h.id === household.id);
   expect(inListAfter).toBe(true);
 
-  // --- User is redirected to the household (not left on invite page) ---
+  // --- The accepted state requires the documented explicit enter action ---
+  await page.getByRole('button', { name: '进入家庭' }).click();
   await expect(page).toHaveURL(/\/households\//);
 
   // ============================================================================
@@ -309,18 +310,28 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
     ),
   );
 
-  // Log in as the stranger (different email)
-  await page.goto(`${WEB_ORIGIN}/login`);
-  await page.waitForTimeout(500);
-  await page.getByLabel('邮箱地址').fill(stranger.email);
-  await page.getByLabel('密码').fill(password);
+  // Log out through the real session flow before signing in as the stranger.
+  // Direct /login navigation while authenticated is intentionally redirected.
+  await page.goto(`${WEB_ORIGIN}/profile`);
+  await page.getByRole('button', { name: '退出登录' }).first().click();
+  const logoutDialog = page.getByRole('dialog', { name: '退出这台设备？' });
+  await logoutDialog.getByRole('button', { name: '退出登录' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+
+  // Log in as the stranger (different email).
+  await page.getByLabel('邮箱').fill(stranger.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
   await page.getByRole('button', { name: '登录' }).click();
-  await page.waitForTimeout(1000);
+  await expect(page).not.toHaveURL(/\/login$/);
 
   // Navigate to the second invitation URL
   const secondInviteUrl = `${EMAIL_LINK_ORIGIN}/invite/${encodeURIComponent(secondToken)}`;
   await page.goto(secondInviteUrl);
   await page.waitForTimeout(1500);
+
+  // The public preview does not disclose the invited email. Mismatch is
+  // determined only by the authenticated accept attempt.
+  await page.getByRole('button', { name: '接受邀请' }).click();
 
   // --- Mismatch: household name and inviter are hidden ---
   // D-08: "不匹配时提示切换账户，且不泄露更多邀请细节"

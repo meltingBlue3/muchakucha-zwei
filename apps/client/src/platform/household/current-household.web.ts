@@ -32,6 +32,8 @@ function removeStorage(key: string): void {
 
 export function createWebCurrentHouseholdStore(): CurrentHouseholdStore {
   return {
+    async hydrate(): Promise<void> {},
+
     getCurrentId(): string | null {
       return readStorage(CURRENT_ID_KEY);
     },

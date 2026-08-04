@@ -1,5 +1,7 @@
 // Generated from openapi.json. Do not edit.
 import type {
+  RegisterDto,
+  RegistrationAcceptedDto,
   CompleteEmailVerificationDto,
   CompleteEmailVerificationResponseDto,
   CreateHouseholdDto,
@@ -22,7 +24,6 @@ import type {
   SendHouseholdInvitationResponseDto,
   InvitationPreviewResponseDto,
   AcceptInvitationDto,
-  InvitationListItemDto,
   ListInvitationsResponseDto,
   ResendInvitationResponseDto,
   RevokeInvitationResponseDto,

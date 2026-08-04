@@ -15,7 +15,7 @@ export default function LoginRoute() {
     <AuthShell>
       <LoginForm
         intendedRoute={intended}
-        onAuthenticated={() => router.replace('/household-handoff' as never)}
+        onAuthenticated={() => router.replace((intended ?? '/household-handoff') as never)}
         onForgotPassword={() => router.push('/forgot-password' as never)}
         onOffline={() => router.replace('/offline' as never)}
         onRegister={() => router.push('/register' as never)}

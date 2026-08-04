@@ -4,8 +4,9 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { Client } from 'pg';
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createApplication } from '../../src/main.js';
+import { MAIL_PORT, type MailPort } from '../../src/infrastructure/mail/mail.port.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
 const accessSecret = 'test-only-access-secret-that-is-longer-than-thirty-two-bytes';
@@ -13,6 +14,7 @@ const jwt = new JwtService({ secret: accessSecret, signOptions: { algorithm: 'HS
 
 interface MemberFixture {
   accessToken: string;
+  email: string;
   id: string;
 }
 
@@ -49,6 +51,7 @@ async function insertVerifiedUser(email: string, displayName: string): Promise<M
   });
   return {
     id: userId,
+    email,
     accessToken: await jwt.signAsync({ sub: userId, sid: sessionId }),
   };
 }
@@ -98,10 +101,13 @@ async function seedInvitation(
   const tokenHash = hashToken(rawToken);
   const emailCanonical = recipientEmail.trim().normalize('NFC').toLowerCase();
   const expiresAt = overrides?.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const createdAt = expiresAt.getTime() <= Date.now()
+    ? new Date(expiresAt.getTime() - 7 * 24 * 60 * 60 * 1000)
+    : new Date();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "invitations" ("inviter_user_id", "inviter_membership_id", "household_id", "email_canonical", "hash", "role", "expires_at", "consumed_at", "invalidated_at")
-       VALUES ($1, $2, $3, $4, $5, 'MEMBER', $6, $7, $8)`,
+      `INSERT INTO "invitations" ("inviter_user_id", "inviter_membership_id", "household_id", "email_canonical", "hash", "role", "expires_at", "consumed_at", "invalidated_at", "created_at")
+       VALUES ($1, $2, $3, $4, $5, 'MEMBER', $6, $7, $8, $9)`,
       [
         inviterUserId,
         inviterMembershipId,
@@ -111,6 +117,7 @@ async function seedInvitation(
         expiresAt.toISOString(),
         overrides?.consumedAt?.toISOString() ?? null,
         overrides?.invalidatedAt?.toISOString() ?? null,
+        createdAt.toISOString(),
       ],
     );
   });
@@ -122,6 +129,7 @@ let owner: MemberFixture;
 let invitee: MemberFixture;
 let stranger: MemberFixture;
 let household: { id: string; ownerMembershipId: string };
+let mailPort: MailPort;
 
 beforeAll(async () => {
   app = await createApplication({
@@ -132,6 +140,7 @@ beforeAll(async () => {
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
+  mailPort = app.get<MailPort>(MAIL_PORT);
 });
 
 afterAll(async () => {
@@ -139,6 +148,8 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  vi.restoreAllMocks();
+  vi.spyOn(mailPort, 'sendHouseholdInvitation').mockResolvedValue(undefined);
   await resetDatabase();
   owner = await insertVerifiedUser('owner@example.test', '家主');
   invitee = await insertVerifiedUser('invitee@example.test', '被邀请人');
@@ -165,24 +176,35 @@ function inject(opts: {
   });
 }
 
+describe('sendHouseholdInvitation delivery', () => {
+  test('does not report success when invitation mail delivery fails', async () => {
+    vi.mocked(mailPort.sendHouseholdInvitation).mockRejectedValueOnce(
+      new Error('SMTP delivery rejected'),
+    );
+
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+      body: { email: 'delivery-failure@example.test' },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(mailPort.sendHouseholdInvitation).toHaveBeenCalledOnce();
+  });
+});
+
 // ASVS evidence: invitation token in URL is accepted residual risk — compensating controls: no-referrer, hash-only storage, single-use seven-day expiry, generic responses
 describe('previewInvitation', () => {
   test('returns valid preview for a pending invitation', async () => {
     const token = await seedInvitation(
-      owner.id, household.ownerMembershipId, household.id, invitee.email.split('@')[0] + '@invitee.test',
-    );
-
-    // Fix: use the actual email seeded
-    const fixedEmail = 'matching@example.test';
-    const matchingInvitee = await insertVerifiedUser(fixedEmail, '匹配用户');
-    const token2 = await seedInvitation(
-      owner.id, household.ownerMembershipId, household.id, fixedEmail,
+      owner.id, household.ownerMembershipId, household.id, invitee.email,
     );
 
     const response = await inject({
       method: 'GET',
       url: '/api/v1/households/invitations/preview',
-      query: { token: token2 },
+      query: { token },
     });
     expect(response.statusCode).toBe(200);
     const body = response.json<{
@@ -200,7 +222,7 @@ describe('previewInvitation', () => {
 
   test('returns expired for an expired invitation', async () => {
     const token = await seedInvitation(
-      owner.id, household.ownerMembershipId, household.id, invitee.email.split('@')[0] + '@expired.test',
+      owner.id, household.ownerMembershipId, household.id, invitee.email,
       { expiresAt: new Date(Date.now() - 1000) },
     );
     const response = await inject({
@@ -214,7 +236,7 @@ describe('previewInvitation', () => {
 
   test('returns used for a consumed invitation', async () => {
     const token = await seedInvitation(
-      owner.id, household.ownerMembershipId, household.id, invitee.email.split('@')[0] + '@used.test',
+      owner.id, household.ownerMembershipId, household.id, invitee.email,
       { consumedAt: new Date() },
     );
     const response = await inject({
@@ -239,7 +261,7 @@ describe('previewInvitation', () => {
 
   test('returns invalid for invalidated invitation', async () => {
     const token = await seedInvitation(
-      owner.id, household.ownerMembershipId, household.id, invitee.email.split('@')[0] + '@inval.test',
+      owner.id, household.ownerMembershipId, household.id, invitee.email,
       { invalidatedAt: new Date() },
     );
     const response = await inject({
@@ -265,7 +287,7 @@ describe('previewInvitation', () => {
 describe('acceptInvitation', () => {
   test('accepts with matching email and creates membership', async () => {
     const token = await seedInvitation(
-      owner.id, household.ownerMembershipId, household.id, invitee.email.split('@')[0] + '@invitee.test',
+      owner.id, household.ownerMembershipId, household.id, invitee.email,
     );
 
     const response = await inject({
@@ -294,7 +316,7 @@ describe('acceptInvitation', () => {
 
   test('rejects with 403 when email does not match', async () => {
     const token = await seedInvitation(
-      owner.id, household.ownerMembershipId, household.id, invitee.email.split('@')[0] + '@invitee.test',
+      owner.id, household.ownerMembershipId, household.id, invitee.email,
     );
 
     // Stranger (different email) tries to accept
@@ -305,8 +327,8 @@ describe('acceptInvitation', () => {
       body: { token },
     });
     expect(response.statusCode).toBe(403);
-    const body = response.json<{ code: string; message: string }>();
-    expect(body.code).toBe('INVITATION_EMAIL_MISMATCH');
+    const body = response.json<{ error: { code: string; message: string } }>();
+    expect(body.error.code).toBe('INVITATION_EMAIL_MISMATCH');
 
     // Invitation is NOT consumed
     await withDatabase(async (client) => {
@@ -320,7 +342,7 @@ describe('acceptInvitation', () => {
 
   test('rejects already consumed invitation', async () => {
     const token = await seedInvitation(
-      owner.id, household.ownerMembershipId, household.id, invitee.email.split('@')[0] + '@invitee.test',
+      owner.id, household.ownerMembershipId, household.id, invitee.email,
     );
 
     // First accept
@@ -340,13 +362,13 @@ describe('acceptInvitation', () => {
       body: { token },
     });
     expect(second.statusCode).toBe(400);
-    const body = second.json<{ code: string }>();
-    expect(body.code).toBe('INVITATION_ALREADY_USED');
+    const body = second.json<{ error: { code: string } }>();
+    expect(body.error.code).toBe('INVITATION_ALREADY_USED');
   });
 
   test('rejects expired invitation', async () => {
     const token = await seedInvitation(
-      owner.id, household.ownerMembershipId, household.id, invitee.email.split('@')[0] + '@invitee.test',
+      owner.id, household.ownerMembershipId, household.id, invitee.email,
       { expiresAt: new Date(Date.now() - 1000) },
     );
 
@@ -361,7 +383,7 @@ describe('acceptInvitation', () => {
 
   test('creates exactly one membership on concurrent accept', async () => {
     const token = await seedInvitation(
-      owner.id, household.ownerMembershipId, household.id, invitee.email.split('@')[0] + '@invitee.test',
+      owner.id, household.ownerMembershipId, household.id, invitee.email,
     );
 
     // Fire two concurrent accepts
@@ -404,8 +426,8 @@ describe('acceptInvitation', () => {
       body: { token: 'not-a-valid-token-at-all' },
     });
     expect(response.statusCode).toBe(400);
-    const body = response.json<{ code: string }>();
-    expect(body.code).toBe('INVALID_INVITATION');
+    const body = response.json<{ error: { code: string } }>();
+    expect(body.error.code).toBe('INVALID_INVITATION');
   });
 
   test('rejects unauthenticated request', async () => {
@@ -422,7 +444,7 @@ describe('acceptInvitation', () => {
     // Owner invites themselves — edge case: should work since they're not a member
     const otherHousehold = await seedHousehold(stranger.id, '其他家庭');
     const token = await seedInvitation(
-      stranger.id, otherHousehold.ownerMembershipId, otherHousehold.id, owner.email.split('@')[0] + '@example.test',
+      stranger.id, otherHousehold.ownerMembershipId, otherHousehold.id, owner.email,
     );
 
     const response = await inject({
@@ -495,6 +517,7 @@ describe('listInvitations', () => {
     });
     // Invitee is not a member of this household, so they get 404.
     // A member household would get 403.
+    expect(response.statusCode).toBe(404);
   });
 
   test('outsider gets 404', async () => {
@@ -508,6 +531,34 @@ describe('listInvitations', () => {
 });
 
 describe('resendInvitation', () => {
+  test('does not report success when resent invitation mail delivery fails', async () => {
+    await seedInvitation(
+      owner.id, household.ownerMembershipId, household.id, 'resend-delivery-failure@example.test',
+    );
+    const listBefore = await inject({
+      method: 'GET',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      accessToken: owner.accessToken,
+    });
+    const target = listBefore
+      .json<{ invitations: Array<{ id: string; emailCanonical: string }> }>()
+      .invitations
+      .find((invitation) => invitation.emailCanonical === 'resend-delivery-failure@example.test');
+    expect(target).toBeDefined();
+    vi.mocked(mailPort.sendHouseholdInvitation).mockRejectedValueOnce(
+      new Error('SMTP delivery rejected'),
+    );
+
+    const response = await inject({
+      method: 'POST',
+      url: `/api/v1/households/${encodeURIComponent(household.id)}/invitations/${encodeURIComponent(target!.id)}/resend`,
+      accessToken: owner.accessToken,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(mailPort.sendHouseholdInvitation).toHaveBeenCalledOnce();
+  });
+
   test('owner can resend a pending invitation and old token is invalidated', async () => {
     const token = await seedInvitation(
       owner.id, household.ownerMembershipId, household.id, 'resend-pending@example.test',
@@ -541,17 +592,24 @@ describe('resendInvitation', () => {
     const afterList = (listAfter.json<{ invitations: Array<{ id: string; emailCanonical: string; status: string }> }>()).invitations;
     const oldInv = afterList.find((i) => i.id === targetInv!.id);
     expect(oldInv!.status).toBe('revoked');
+    const oldTokenPreview = await inject({
+      method: 'GET',
+      url: '/api/v1/households/invitations/preview',
+      query: { token },
+    });
+    expect(oldTokenPreview.statusCode).toBe(200);
+    expect(oldTokenPreview.json<{ kind: string }>().kind).toBe('invalid');
 
     // A new pending invitation should exist for the same email
     const newPendings = afterList.filter(
       (i) => i.emailCanonical === 'resend-pending@example.test' && i.status === 'pending',
     );
     expect(newPendings.length).toBe(1);
-    expect(newPendings[0].id).not.toBe(targetInv!.id);
+    expect(newPendings[0]!.id).not.toBe(targetInv!.id);
   });
 
   test('owner can resend an expired invitation', async () => {
-    const token = await seedInvitation(
+    await seedInvitation(
       owner.id, household.ownerMembershipId, household.id, 'resend-expired@example.test',
       { expiresAt: new Date(Date.now() - 1000) },
     );
@@ -574,7 +632,7 @@ describe('resendInvitation', () => {
   });
 
   test('cannot resend an already accepted invitation', async () => {
-    const token = await seedInvitation(
+    await seedInvitation(
       owner.id, household.ownerMembershipId, household.id, 'resend-consumed@example.test',
       { consumedAt: new Date() },
     );
@@ -594,8 +652,8 @@ describe('resendInvitation', () => {
       accessToken: owner.accessToken,
     });
     expect(response.statusCode).toBe(400);
-    const body = response.json<{ code: string }>();
-    expect(body.code).toBe('INVITATION_ALREADY_ACCEPTED');
+    const body = response.json<{ error: { code: string } }>();
+    expect(body.error.code).toBe('INVITATION_ALREADY_ACCEPTED');
   });
 
   test('member cannot resend', async () => {
@@ -607,7 +665,7 @@ describe('resendInvitation', () => {
       );
     });
 
-    const token = await seedInvitation(
+    await seedInvitation(
       owner.id, household.ownerMembershipId, household.id, 'resend-by-member@example.test',
     );
 
@@ -630,7 +688,7 @@ describe('resendInvitation', () => {
 
 describe('revokeInvitation', () => {
   test('owner can revoke a pending invitation', async () => {
-    const token = await seedInvitation(
+    await seedInvitation(
       owner.id, household.ownerMembershipId, household.id, 'revoke-pending@example.test',
     );
 
@@ -664,7 +722,7 @@ describe('revokeInvitation', () => {
   });
 
   test('revoke on already consumed invitation succeeds silently (safe revoke)', async () => {
-    const token = await seedInvitation(
+    await seedInvitation(
       owner.id, household.ownerMembershipId, household.id, 'revoke-consumed@example.test',
       { consumedAt: new Date() },
     );
@@ -690,7 +748,7 @@ describe('revokeInvitation', () => {
   });
 
   test('revoke on already revoked invitation succeeds silently', async () => {
-    const token = await seedInvitation(
+    await seedInvitation(
       owner.id, household.ownerMembershipId, household.id, 'revoke-already@example.test',
       { invalidatedAt: new Date() },
     );
@@ -730,7 +788,7 @@ describe('revokeInvitation', () => {
       );
     });
 
-    const token = await seedInvitation(
+    await seedInvitation(
       owner.id, household.ownerMembershipId, household.id, 'revoke-by-member@example.test',
     );
 

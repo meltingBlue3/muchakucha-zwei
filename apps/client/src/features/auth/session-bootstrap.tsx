@@ -5,12 +5,19 @@ import type { SessionStateStore } from './session-state';
 import type { RestoreOutcome, SessionTransport } from '../../platform/session/session-transport';
 import { AuthShell, Button, Spinner, Stack, StatusPanel } from '../../ui/primitives';
 
-export const SAFE_INTENDED_ROUTES = ['/household-handoff', '/profile', '/invite'] as const;
-export type SafeIntendedRoute = (typeof SAFE_INTENDED_ROUTES)[number];
+export const SAFE_INTENDED_ROUTES = ['/household-handoff', '/profile', '/invite', '/households', '/households/new'] as const;
+export type SafeIntendedRoute = (typeof SAFE_INTENDED_ROUTES)[number] | `/invite/${string}` | `/households/${string}`;
 export type SessionDestination = SafeIntendedRoute | '/login' | '/offline';
 
 export function sanitizeIntendedRoute(value: string | undefined): SafeIntendedRoute | undefined {
-  return SAFE_INTENDED_ROUTES.find((route) => route === value);
+  const exact = SAFE_INTENDED_ROUTES.find((route) => route === value);
+  if (exact !== undefined) return exact;
+  if (value === undefined || /[?#\\]/.test(value) || value.includes('..')) return undefined;
+  if (/^\/invite\/[A-Za-z0-9_-]+$/.test(value)) return value as `/invite/${string}`;
+  if (/^\/households\/[0-9a-f-]{36}(?:\/settings|\/ownership\/(?:transfer|leave)|\/invitations\/[0-9a-f-]{36}\/revoke)?$/i.test(value)) {
+    return value as `/households/${string}`;
+  }
+  return undefined;
 }
 
 export interface SessionBootstrapProps extends PropsWithChildren {

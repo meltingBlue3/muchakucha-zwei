@@ -1,4 +1,4 @@
-import type { ApiClient, ChangeMemberRoleDto, GetHouseholdMemberDto, LeaveHouseholdDto, TransferOwnershipDto } from '@muchakucha/api-client';
+import type { ApiClient, ChangeMemberRoleDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
@@ -73,7 +73,8 @@ export function canGovern(
   targetIsSelf: boolean,
 ): boolean {
   // Owner is untouchable for role changes.
-  if (targetIsOwner) return false;
+  if (targetIsOwner || targetRole === 'OWNER') return false;
+  if (actorIsOwner !== (actorRole === 'OWNER')) return false;
   // Member cannot govern anyone.
   if (actorRole === 'MEMBER') return false;
   // Cannot govern yourself.
@@ -93,7 +94,7 @@ export function canRemove(
   targetIsOwner: boolean,
   targetIsSelf: boolean,
 ): boolean {
-  if (targetIsOwner) return false;
+  if (targetIsOwner || targetRole === 'OWNER') return false;
   if (targetIsSelf) return false;
   if (actorRole === 'MEMBER') return false;
   return actorRole === 'OWNER' || actorRole === 'ADMIN';

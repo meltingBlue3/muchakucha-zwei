@@ -18,9 +18,9 @@ export default function HouseholdDetailRoute() {
     viewState,
     households,
     currentHouseholdId,
+    accessChangedHouseholdName,
     switchHousehold,
     refreshHouseholds,
-    enterAccessChanged,
   } = useHouseholdContext();
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -57,9 +57,9 @@ export default function HouseholdDetailRoute() {
       <AppShell accessibilityLabel="家庭访问权已变化">
         <AccessChangedPanel
           hasOtherHouseholds={hasOtherHouseholds}
-          householdName={currentHousehold?.name}
+          {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
           onChooseOther={() => {
-            void router.replace('/households');
+            void refreshHouseholds().then(() => router.replace('/households'));
           }}
           onCreateNew={() => {
             void router.replace('/household-handoff');

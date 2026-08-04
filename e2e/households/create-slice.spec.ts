@@ -50,7 +50,13 @@ async function prepareVerifiedAccount(): Promise<{ email: string; accessToken: s
 test('creates and displays the authoritative household', async ({ page, request }) => {
   test.setTimeout(60_000);
 
-  const { accessToken } = await prepareVerifiedAccount();
+  const { email, accessToken } = await prepareVerifiedAccount();
+
+  await page.goto('/login');
+  await page.getByLabel('邮箱').fill(email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page).not.toHaveURL(/\/login$/);
 
   // Navigate to the no-household handoff and verify the heading is visible.
   await page.goto('/household-handoff');

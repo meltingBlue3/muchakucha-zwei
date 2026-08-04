@@ -44,6 +44,11 @@ const httpServer = createHttpServer((request, response) => {
     return;
   }
   if (url.pathname === '/messages') {
+    if (request.method === 'DELETE') {
+      messages.length = 0;
+      response.writeHead(204).end();
+      return;
+    }
     const recipient = url.searchParams.get('recipient') ?? '';
     const path = url.searchParams.get('path') ?? '';
     const matching = messages.filter(

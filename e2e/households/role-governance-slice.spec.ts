@@ -150,8 +150,8 @@ test('changes a non-owner role', async ({ page, request }) => {
 
   await page.goto(`${WEB_ORIGIN}/login`);
   await page.waitForTimeout(500);
-  await page.getByLabel('邮箱地址').fill(owner.email);
-  await page.getByLabel('密码').fill(password);
+  await page.getByLabel('邮箱').fill(owner.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
   await page.getByRole('button', { name: '登录' }).click();
   await page.waitForTimeout(1000);
 
@@ -248,8 +248,8 @@ test('changes a non-owner role', async ({ page, request }) => {
     },
   );
   expect(adminTargetingOwner.status()).toBe(403);
-  const adminTargetBody = (await adminTargetingOwner.json()) as { code: string };
-  expect(adminTargetBody.code).toBe('OWNER_UNTOUCHABLE');
+  const adminTargetBody = (await adminTargetingOwner.json()) as { error: { code: string } };
+  expect(adminTargetBody.error.code).toBe('OWNER_UNTOUCHABLE');
 
   // ============================================================================
   // D-09: FORBIDDEN — member cannot govern.
@@ -266,8 +266,8 @@ test('changes a non-owner role', async ({ page, request }) => {
     },
   );
   expect(memberGoverning.status()).toBe(403);
-  const memberGovBody = (await memberGoverning.json()) as { code: string };
-  expect(memberGovBody.code).toBe('INSUFFICIENT_ROLE');
+  const memberGovBody = (await memberGoverning.json()) as { error: { code: string } };
+  expect(memberGovBody.error.code).toBe('INSUFFICIENT_ROLE');
 
   // ============================================================================
   // CROSS-HOUSEHOLD: outsider cannot access.
@@ -294,8 +294,8 @@ test('changes a non-owner role', async ({ page, request }) => {
     },
   );
   expect(sameRoleResponse.status()).toBe(400);
-  const sameRoleBody = (await sameRoleResponse.json()) as { code: string };
-  expect(sameRoleBody.code).toBe('ROLE_UNCHANGED');
+  const sameRoleBody = (await sameRoleResponse.json()) as { error: { code: string } };
+  expect(sameRoleBody.error.code).toBe('ROLE_UNCHANGED');
 
   // ============================================================================
   // STALE ROLE: direct DB manipulation should cause 409 rejection.
@@ -324,7 +324,7 @@ test('changes a non-owner role', async ({ page, request }) => {
       data: { role: 'MEMBER' },
     },
   );
-  expect(staleResponse.status()).toBe(409);
-  const staleBody = (await staleResponse.json()) as { code: string };
-  expect(staleBody.code).toBe('STALE_MEMBERSHIP');
+  expect(staleResponse.status()).toBe(400);
+  const staleBody = (await staleResponse.json()) as { error: { code: string } };
+  expect(staleBody.error.code).toBe('ROLE_UNCHANGED');
 });

@@ -163,7 +163,7 @@ describe('household roster API contract', () => {
     const response = await getHousehold(outsider.accessToken, householdId);
     expect(response.statusCode).toBe(404);
     const body = response.json();
-    expect(body.code).toBe('HOUSEHOLD_NOT_FOUND');
+    expect(body.error.code).toBe('HOUSEHOLD_NOT_FOUND');
   });
 
   test('returns 404 for a non-existent household ID', async () => {
@@ -178,9 +178,9 @@ describe('household roster API contract', () => {
     const members: Array<{ role: string; isCurrentUser: boolean; displayName: string }> = body.members;
 
     // Total order: OWNER -> ADMIN -> MEMBER; current user first within role.
-    expect(members[0].role).toBe('OWNER');
-    expect(members[0].isCurrentUser).toBe(true);
-    expect(members[0].displayName).toBe('家主');
+    expect(members[0]!.role).toBe('OWNER');
+    expect(members[0]!.isCurrentUser).toBe(true);
+    expect(members[0]!.displayName).toBe('家主');
 
     // Admin comes before member.
     const adminIndex = members.findIndex((m) => m.role === 'ADMIN');
@@ -196,16 +196,16 @@ describe('household roster API contract', () => {
     const members: Array<{ role: string; isCurrentUser: boolean; displayName: string }> = body.members;
 
     // First should be owner (role takes priority).
-    expect(members[0].role).toBe('OWNER');
-    expect(members[0].isCurrentUser).toBe(false);
+    expect(members[0]!.role).toBe('OWNER');
+    expect(members[0]!.isCurrentUser).toBe(false);
 
     // Second should be admin (current user within ADMIN role).
-    expect(members[1].role).toBe('ADMIN');
-    expect(members[1].isCurrentUser).toBe(true);
-    expect(members[1].displayName).toBe('管理员');
+    expect(members[1]!.role).toBe('ADMIN');
+    expect(members[1]!.isCurrentUser).toBe(true);
+    expect(members[1]!.displayName).toBe('管理员');
 
     // Third should be member.
-    expect(members[2].role).toBe('MEMBER');
+    expect(members[2]!.role).toBe('MEMBER');
   });
 
   test('does not return members in cross-household queries', async () => {
@@ -256,8 +256,8 @@ describe('household roster API contract', () => {
     const tiedMembers = members.filter((m) => m.displayName === '相同昵称');
     expect(tiedMembers).toHaveLength(2);
     // Lower canonical email ('aaa@example.test') should come first.
-    expect(tiedMembers[0].email).toBe('aaa@example.test');
-    expect(tiedMembers[1].email).toBe('bbb@example.test');
+    expect(tiedMembers[0]!.email).toBe('aaa@example.test');
+    expect(tiedMembers[1]!.email).toBe('bbb@example.test');
   });
 
   test('requires a valid active access-token session', async () => {
@@ -328,28 +328,28 @@ describe('household rename API contract', () => {
 
   test('applies trim and NFC normalization to the name', async () => {
     // Combining marks on the same base character — NFC should fold.
-    const response = await renameHousehold(owner.accessToken, householdId, '  家́庭  ');
+    const response = await renameHousehold(owner.accessToken, householdId, '  Café家庭  ');
     expect(response.statusCode).toBe(200);
-    expect(response.json().name).toBe('家庭');
+    expect(response.json().name).toBe('Café家庭');
   });
 
   test('rejects a non-owner member with 403', async () => {
     const response = await renameHousehold(member.accessToken, householdId, '不该改');
     expect(response.statusCode).toBe(403);
     const body = response.json();
-    expect(body.code).toBe('INSUFFICIENT_ROLE');
+    expect(body.error.code).toBe('INSUFFICIENT_ROLE');
   });
 
   test('rejects an admin member with 403', async () => {
     const response = await renameHousehold(admin.accessToken, householdId, '也不该改');
     expect(response.statusCode).toBe(403);
-    expect(response.json().code).toBe('INSUFFICIENT_ROLE');
+    expect(response.json().error.code).toBe('INSUFFICIENT_ROLE');
   });
 
   test('rejects an outsider with 404', async () => {
     const response = await renameHousehold(outsider.accessToken, householdId, '试探');
     expect(response.statusCode).toBe(404);
-    expect(response.json().code).toBe('HOUSEHOLD_NOT_FOUND');
+    expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
   });
 
   test('rejects a non-existent household ID with 404', async () => {
@@ -361,14 +361,14 @@ describe('household rename API contract', () => {
     const response = await renameHousehold(owner.accessToken, householdId, '   ');
     expect(response.statusCode).toBe(400);
     const body = response.json();
-    expect(body.code).toBe('VALIDATION_FAILED');
+    expect(body.error.code).toBe('VALIDATION_FAILED');
   });
 
   test('rejects a name longer than 40 code points with 400', async () => {
     const tooLong = 'あ'.repeat(41);
     const response = await renameHousehold(owner.accessToken, householdId, tooLong);
     expect(response.statusCode).toBe(400);
-    expect(response.json().code).toBe('VALIDATION_FAILED');
+    expect(response.json().error.code).toBe('VALIDATION_FAILED');
   });
 
   test('rejects rename on a household with null ownerMembershipId', async () => {

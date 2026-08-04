@@ -133,11 +133,11 @@ export function leaveFailure(
   // Only the current owner may leave through the handoff flow.
   if (!actorIsOwner) return 'NOT_OWNER';
 
-  // Leaving requires a successor — self-transfer makes no sense.
-  if (successorIsActor) return 'SUCCESSOR_IS_OWNER';
-
   // Cannot leave if no one else is in the household.
   if (!hasOtherMembers) return 'LAST_MEMBER';
+
+  // Leaving requires a successor — self-transfer makes no sense.
+  if (successorIsActor) return 'SUCCESSOR_IS_OWNER';
 
   return undefined;
 }

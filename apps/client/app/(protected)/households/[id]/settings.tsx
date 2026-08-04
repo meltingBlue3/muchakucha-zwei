@@ -18,7 +18,9 @@ export default function HouseholdSettingsRoute() {
     viewState,
     households,
     currentHouseholdId,
+    accessChangedHouseholdName,
     switchHousehold,
+    refreshHouseholds,
     enterAccessChanged,
   } = useHouseholdContext();
 
@@ -55,6 +57,12 @@ export default function HouseholdSettingsRoute() {
     enterAccessChanged(lostHouseholdName);
   }, [enterAccessChanged]);
 
+  const handleRevokeNavigate = useCallback((householdId: string, invitationId: string) => {
+    void router.push(
+      `/households/${encodeURIComponent(householdId)}/invitations/${encodeURIComponent(invitationId)}/revoke`,
+    );
+  }, [router]);
+
   // ---- AccessChanged or member lost access ----
   if (viewState === 'accessChanged') {
     const hasOtherHouseholds = households.length > 0;
@@ -62,9 +70,9 @@ export default function HouseholdSettingsRoute() {
       <AppShell accessibilityLabel="家庭访问权已变化">
         <AccessChangedPanel
           hasOtherHouseholds={hasOtherHouseholds}
-          householdName={currentHousehold?.name}
+          {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
           onChooseOther={() => {
-            void router.replace('/households');
+            void refreshHouseholds().then(() => router.replace('/households'));
           }}
           onCreateNew={() => {
             void router.replace('/household-handoff');
@@ -95,6 +103,7 @@ export default function HouseholdSettingsRoute() {
         onRenameAccessChanged={handleRenameAccessChanged}
         showRename
         onInviteAccessChanged={handleInviteAccessChanged}
+        onRevokeNavigate={handleRevokeNavigate}
         showInvite
       />
       <HouseholdSwitcher

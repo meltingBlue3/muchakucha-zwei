@@ -1,4 +1,5 @@
 export interface CurrentHouseholdStore {
+  hydrate(): Promise<void>;
   getCurrentId(): string | null;
   setCurrentId(id: string): Promise<void>;
   getAccessTimestamps(): Record<string, number>;

@@ -6,18 +6,14 @@ const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
   process.env.DATABASE_URL ??
   'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test';
-const MAILPIT_HTTP = process.env.TEST_MAILPIT_HTTP_URL ?? 'http://127.0.0.1:18025';
+const MAILPIT_HTTP = process.env.TEST_MAILPIT_HTTP_URL
+  ?? `http://127.0.0.1:${process.env.TEST_MAILPIT_HTTP_PORT ?? '18025'}`;
 const password = 'correct horse battery staple 2026';
 
 // ---- Mailpit helpers ----
 
 async function deleteAllMailpitMessages(): Promise<void> {
-  await fetch(`${MAILPIT_HTTP}/api/v1/messages`, { method: 'DELETE' });
-}
-
-interface MailpitMessageSummary {
-  ID: string;
-  To: Array<{ Address: string }>;
+  await fetch(`${MAILPIT_HTTP}/messages`, { method: 'DELETE' });
 }
 
 interface MailpitMessageDetail {
@@ -28,16 +24,23 @@ interface MailpitMessageDetail {
 }
 
 async function fetchLatestMailpitMessage(recipient: string): Promise<MailpitMessageDetail | null> {
-  const searchResponse = await fetch(
-    `${MAILPIT_HTTP}/api/v1/search?kind=to&query=${encodeURIComponent(recipient)}`,
-  );
-  const searchBody = (await searchResponse.json()) as { messages?: MailpitMessageSummary[] };
+  const searchResponse = await fetch(`${MAILPIT_HTTP}/messages?recipient=${encodeURIComponent(recipient)}`);
+  const searchBody = (await searchResponse.json()) as { messages?: string[] };
   const messages = searchBody.messages ?? [];
   if (messages.length === 0) return null;
-
-  // Fetch the most recent message detail.
-  const detailResponse = await fetch(`${MAILPIT_HTTP}/api/v1/message/${encodeURIComponent(messages[0].ID)}`);
-  return (await detailResponse.json()) as MailpitMessageDetail;
+  const raw = messages.at(-1)!;
+  const bytes: number[] = [];
+  const unfolded = raw.replace(/=\r?\n/g, '');
+  for (let index = 0; index < unfolded.length; index += 1) {
+    if (unfolded[index] === '=' && /^[0-9A-F]{2}$/i.test(unfolded.slice(index + 1, index + 3))) {
+      bytes.push(Number.parseInt(unfolded.slice(index + 1, index + 3), 16));
+      index += 2;
+    } else {
+      bytes.push(unfolded.charCodeAt(index));
+    }
+  }
+  const decoded = Buffer.from(bytes).toString('utf8');
+  return { ID: 'latest', To: [{ Address: recipient }], Text: decoded, HTML: decoded };
 }
 
 // ---- Account helpers ----
@@ -167,13 +170,19 @@ test('sends a privacy-preserving invitation from settings [RED:INVITATION_SEND]'
   expect(roster.members[0].role).toBe('OWNER');
   expect(roster.members[0].isCurrentUser).toBe(true);
 
+  // Establish the Web browser session; the Node-side API login above does not
+  // transfer its HttpOnly refresh cookie into Playwright's browser context.
+  await page.goto('/login');
+  await page.getByLabel('邮箱').fill(owner.email);
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page).not.toHaveURL(/\/login$/);
+
   // --- Precondition: /households selector is healthy ---
   await page.goto('/households');
   await expect(page).toHaveURL(/\/households/);
 
   // --- Precondition: settings route is reachable ---
-  await page.getByRole('button', { name: '查看成员' }).first().click();
-  await expect(page).toHaveURL(/\/households\//);
   await page.goto(`/households/${encodeURIComponent(household.id)}/settings`);
   await page.waitForURL(`/households/${encodeURIComponent(household.id)}/settings`);
   await page.waitForTimeout(1500);
@@ -225,7 +234,7 @@ test('sends a privacy-preserving invitation from settings [RED:INVITATION_SEND]'
   await database.connect();
   try {
     const invitations = await database.query(
-      `SELECT "hash", "email_canonical", "role", "expires_at", "invalidated_at", "consumed_at", "created_at"
+      `SELECT "id", "hash", "email_canonical", "role", "expires_at", "invalidated_at", "consumed_at", "created_at"
        FROM "invitations" WHERE "household_id" = $1 ORDER BY "created_at" DESC`,
       [household.id],
     );
@@ -302,7 +311,7 @@ test('sends a privacy-preserving invitation from settings [RED:INVITATION_SEND]'
           authorization: `Bearer ${member.accessToken}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ email: 'someone@example.test' }),
+        data: { email: 'someone@example.com' },
       },
     );
     expect(memberInviteResponse.status()).toBe(403);
@@ -317,7 +326,7 @@ test('sends a privacy-preserving invitation from settings [RED:INVITATION_SEND]'
           authorization: `Bearer ${outsider.accessToken}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ email: 'someone@example.test' }),
+        data: { email: 'someone@example.com' },
       },
     );
     expect(outsiderInviteResponse.status()).toBe(404);
@@ -333,7 +342,7 @@ test('sends a privacy-preserving invitation from settings [RED:INVITATION_SEND]'
           authorization: `Bearer ${existingAdmin.accessToken}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ email: 'admin-invited@example.test' }),
+        data: { email: 'admin-invited@example.test' },
       },
     );
     expect(adminInviteResponse.status()).toBe(201);

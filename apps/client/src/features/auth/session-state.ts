@@ -12,6 +12,7 @@ export type SessionState =
 
 export interface SessionStateStore {
   get(): SessionState;
+  subscribe(listener: (state: SessionState) => void): () => void;
   enterAuthenticated(session: AccessSession): void;
   enterUnauthenticated(): void;
   enterOfflineWaiting(): void;
@@ -20,20 +21,29 @@ export interface SessionStateStore {
 
 export function createSessionStateStore(): SessionStateStore {
   let state: SessionState = { kind: 'booting' };
+  const listeners = new Set<(state: SessionState) => void>();
+  const setState = (next: SessionState) => {
+    state = next;
+    for (const listener of listeners) listener(state);
+  };
 
   return {
     get: () => state,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
     enterAuthenticated: (session) => {
-      state = { kind: 'authenticated', session };
+      setState({ kind: 'authenticated', session });
     },
     enterUnauthenticated: () => {
-      state = { kind: 'unauthenticated' };
+      setState({ kind: 'unauthenticated' });
     },
     enterOfflineWaiting: () => {
-      state = { kind: 'offlineWaiting', retainedCredential: true };
+      setState({ kind: 'offlineWaiting', retainedCredential: true });
     },
     enterReauthenticationRequired: (reason) => {
-      state = { kind: 'reauthRequired', reason };
+      setState({ kind: 'reauthRequired', reason });
     },
   };
 }

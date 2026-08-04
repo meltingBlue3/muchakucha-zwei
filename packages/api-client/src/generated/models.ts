@@ -118,7 +118,7 @@ export interface CreateHouseholdResponseDto {
 export interface ListMyHouseholdsItemDto {
   id: string;
   name: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'OWNER' | 'ADMIN' | 'MEMBER';
   memberCount: number;
   ownerMembershipId: string;
 }
