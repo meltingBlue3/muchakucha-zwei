@@ -1,5 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
+import { useTheme } from '@shopify/restyle';
+import Calendar from 'lucide-react-native/icons/calendar';
 
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../src/features/households/household-context';
@@ -10,6 +13,7 @@ import {
   HouseholdSwitcher,
 } from '../../../../src/ui/household-components';
 import { Stack, Text } from '../../../../src/ui/primitives';
+import type { Theme } from '../../../../src/ui/theme';
 
 export default function HouseholdDetailRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -80,14 +84,51 @@ export default function HouseholdDetailRoute() {
     );
   }
 
+  const activeTheme = useTheme<Theme>();
+
+  const handleOpenCalendar = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/events`);
+  }, [router, id]);
+
   return (
     <>
-      <HouseholdSettings
-        deps={deps}
-        householdId={id}
-        householdName={householdName}
-        onOpenSwitcher={() => setSwitcherOpen(true)}
-      />
+      {/* Calendar quick-access */}
+      <AppShell accessibilityLabel="家庭详情">
+        <Stack gap={4}>
+          <Pressable
+            onPress={handleOpenCalendar}
+            accessibilityLabel="打开家庭日历"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: activeTheme.spacing[3],
+              backgroundColor: activeTheme.colors.surface,
+              borderRadius: activeTheme.borderRadii.md,
+              padding: activeTheme.spacing[4],
+              borderWidth: 1,
+              borderColor: activeTheme.colors.border,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Calendar size={24} color={activeTheme.colors.coral} strokeWidth={1.5} />
+            <View style={{ flex: 1 }}>
+              <Text variant="label">家庭日历</Text>
+              <Text variant="bodySm" color="inkMuted">
+                查看和管理家庭共享事件
+              </Text>
+            </View>
+            <Text variant="caption" color="coral">
+              进入 ›
+            </Text>
+          </Pressable>
+          <HouseholdSettings
+            deps={deps}
+            householdId={id}
+            householdName={householdName}
+            onOpenSwitcher={() => setSwitcherOpen(true)}
+          />
+        </Stack>
+      </AppShell>
       <HouseholdSwitcher
         currentHouseholdId={currentHouseholdId}
         households={households}
