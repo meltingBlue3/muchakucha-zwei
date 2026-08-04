@@ -197,3 +197,40 @@ export interface LeaveHouseholdDto {
   /** Membership ID of the successor who will become the new owner after the current owner leaves. */
   successorMembershipId: string;
 }
+
+export interface CreateEventDto {
+  title: string;
+  description?: string;
+  startTime: string;
+  endTime: string;
+  allDay?: boolean;
+  location?: string;
+}
+
+export interface UpdateEventDto {
+  title?: string;
+  description?: string;
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  location?: string;
+}
+
+export interface EventResponseDto {
+  id: string;
+  householdId: string;
+  title: string;
+  description?: string | null;
+  startTime: string;
+  endTime: string;
+  allDay: boolean;
+  location?: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventListResponseDto {
+  events: EventResponseDto[];
+  total: number;
+}

@@ -23,6 +23,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   memberships         Membership[]
   sentInvitations     Invitation[]
+  createdEvents       Event[]
 }
 
 model Household {
@@ -33,6 +34,7 @@ model Household {
   updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   memberships       Membership[]
   invitations       Invitation[]
+  events            Event[]
   ownerMembership   Membership?  @relation("HouseholdOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
 
   @@map("households")
@@ -117,6 +119,28 @@ model EmailVerificationToken {
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, consumedAt, invalidatedAt], map: "EmailVerificationToken_user_state_idx")
+}
+
+model Event {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId String     @map("household_id") @db.Uuid
+  title       String     @db.VarChar(200)
+  description String?    @db.Text
+  startTime   DateTime   @map("start_time") @db.Timestamptz(3)
+  endTime     DateTime   @map("end_time") @db.Timestamptz(3)
+  allDay      Boolean    @default(false) @map("all_day")
+  location    String?    @db.VarChar(255)
+  createdBy   String     @map("created_by") @db.Uuid
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  household   Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  creator     User       @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([householdId, startTime], map: "Event_household_start_idx")
+  @@index([householdId, endTime], map: "Event_household_end_idx")
+  @@index([createdBy], map: "Event_created_by_idx")
+  @@map("events")
 }
 
 model PasswordResetToken {

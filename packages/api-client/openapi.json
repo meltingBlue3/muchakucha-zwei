@@ -985,6 +985,167 @@
           "households"
         ]
       }
+    },
+    "/api/v1/households/{householdId}/events": {
+      "post": {
+        "operationId": "createEvent",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "events"
+        ]
+      },
+      "get": {
+        "operationId": "listEvents",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "ISO date string (inclusive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "ISO date string (inclusive)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/api/v1/households/{householdId}/events/{eventId}": {
+      "get": {
+        "operationId": "getEvent",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "events"
+        ]
+      },
+      "put": {
+        "operationId": "updateEvent",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "events"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteEvent",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "events"
+        ]
+      }
     }
   },
   "info": {
@@ -1710,6 +1871,143 @@
         "required": [
           "successorMembershipId"
         ]
+      },
+      "CreateEventDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Event title",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description"
+          },
+          "startTime": {
+            "type": "string",
+            "description": "Start time in ISO 8601 format"
+          },
+          "endTime": {
+            "type": "string",
+            "description": "End time in ISO 8601 format"
+          },
+          "allDay": {
+            "type": "boolean",
+            "description": "Whether this is an all-day event",
+            "default": false
+          },
+          "location": {
+            "type": "string",
+            "description": "Optional location",
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "title",
+          "startTime",
+          "endTime"
+        ]
+      },
+      "EventResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "householdId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "object"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "allDay": {
+            "type": "boolean"
+          },
+          "location": {
+            "type": "object"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "householdId",
+          "title",
+          "startTime",
+          "endTime",
+          "allDay",
+          "createdBy",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "EventListResponseDto": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventResponseDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "events",
+          "total"
+        ]
+      },
+      "UpdateEventDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Event title",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description"
+          },
+          "startTime": {
+            "type": "string",
+            "description": "Start time in ISO 8601 format"
+          },
+          "endTime": {
+            "type": "string",
+            "description": "End time in ISO 8601 format"
+          },
+          "allDay": {
+            "type": "boolean",
+            "description": "Whether this is an all-day event"
+          },
+          "location": {
+            "type": "string",
+            "description": "Optional location",
+            "maxLength": 255
+          }
+        }
       }
     }
   }

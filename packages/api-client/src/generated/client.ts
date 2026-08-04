@@ -30,6 +30,10 @@ import type {
   ChangeMemberRoleDto,
   TransferOwnershipDto,
   LeaveHouseholdDto,
+  CreateEventDto,
+  UpdateEventDto,
+  EventResponseDto,
+  EventListResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -325,6 +329,87 @@ export class ApiClient {
     );
   }
 
+  async createEvent(
+    accessToken: string,
+    householdId: string,
+    body: CreateEventDto,
+    signal?: AbortSignal,
+  ): Promise<EventResponseDto> {
+    return this.authenticated<EventResponseDto>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/events`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async listEvents(
+    accessToken: string,
+    householdId: string,
+    startDate?: string,
+    endDate?: string,
+    signal?: AbortSignal,
+  ): Promise<EventListResponseDto> {
+    const params = new URLSearchParams();
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    const qs = params.toString();
+    return this.authenticated<EventListResponseDto>(
+      'GET',
+      `/api/v1/households/${encodeURIComponent(householdId)}/events${qs ? `?${qs}` : ''}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async getEvent(
+    accessToken: string,
+    householdId: string,
+    eventId: string,
+    signal?: AbortSignal,
+  ): Promise<EventResponseDto> {
+    return this.authenticated<EventResponseDto>(
+      'GET',
+      `/api/v1/households/${encodeURIComponent(householdId)}/events/${encodeURIComponent(eventId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async updateEvent(
+    accessToken: string,
+    householdId: string,
+    eventId: string,
+    body: UpdateEventDto,
+    signal?: AbortSignal,
+  ): Promise<EventResponseDto> {
+    return this.authenticated<EventResponseDto>(
+      'PUT',
+      `/api/v1/households/${encodeURIComponent(householdId)}/events/${encodeURIComponent(eventId)}`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async deleteEvent(
+    accessToken: string,
+    householdId: string,
+    eventId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'DELETE',
+      `/api/v1/households/${encodeURIComponent(householdId)}/events/${encodeURIComponent(eventId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
@@ -341,7 +426,7 @@ export class ApiClient {
   }
 
   private async authenticated<T>(
-    method: 'GET' | 'PATCH' | 'POST' | 'DELETE',
+    method: 'GET' | 'PATCH' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     accessToken: string,
     body?: unknown,
