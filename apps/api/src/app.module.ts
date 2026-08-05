@@ -5,6 +5,8 @@ import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { EventsModule } from './modules/events/events.module.js';
 import { TasksModule } from './modules/tasks/tasks.module.js';
+import { NotesModule } from './modules/notes/notes.module.js';
+import { LabelsModule } from './modules/labels/labels.module.js';
 import { HouseholdsModule } from './modules/households/households.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
@@ -33,6 +35,8 @@ export class AppModule {
         HouseholdsModule.register(environment),
         EventsModule,
         TasksModule,
+        NotesModule,
+        LabelsModule,
       ],
       providers: [
         {

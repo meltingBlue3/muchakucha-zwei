@@ -1,4 +1,9 @@
+import { existsSync } from 'node:fs';
 import { defineConfig } from 'prisma/config';
+
+if (existsSync('.env')) {
+  process.loadEnvFile('.env');
+}
 
 const localTestDatabaseUrl =
   'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
