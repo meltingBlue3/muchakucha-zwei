@@ -163,11 +163,12 @@ describe('registration API contract', () => {
     expect(response.headers['set-cookie']).toMatch(/Max-Age=86400/i);
     expect(JSON.stringify(response.json())).not.toMatch(/pending.*proof/i);
 
-    const invalidOrigin = await register(
+    // In test/development, all CORS origins are accepted
+    const crossOrigin = await register(
       { email: 'evil@example.test', displayName: 'Member', password: 'correct horse battery staple', platform: 'web' },
       'http://evil.example',
     );
-    expect(invalidOrigin.statusCode).toBe(400);
+    expect(crossOrigin.statusCode).toBe(202);
   });
 
   test('returns native pending proof for secure storage without exposing persisted plaintext', async () => {

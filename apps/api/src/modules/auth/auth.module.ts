@@ -1,6 +1,7 @@
 import { DynamicModule, Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { MAIL_PORT } from '../../infrastructure/mail/mail.port.js';
+import { ConsoleMailAdapter } from '../../infrastructure/mail/console-mail.adapter.js';
 import {
   loadSmtpMailConfig,
   SmtpMailAdapter,
@@ -38,7 +39,13 @@ export class AuthModule {
         AccessTokenGuard,
         {
           provide: MAIL_PORT,
-          useFactory: (): SmtpMailAdapter => new SmtpMailAdapter(loadSmtpMailConfig()),
+          useFactory: (): SmtpMailAdapter | ConsoleMailAdapter => {
+            if (environment.NODE_ENV === 'production') {
+              return new SmtpMailAdapter(loadSmtpMailConfig(environment));
+            }
+            // 开发/测试环境直接输出邮件到控制台，无需 SMTP 服务器
+            return new ConsoleMailAdapter();
+          },
         },
       ],
       controllers: [AuthController],

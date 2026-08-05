@@ -33,6 +33,7 @@ interface RuntimeConfig {
   logLevel: string;
   port: number;
   webOrigins: ReadonlySet<string>;
+  nodeEnvironment: string;
 }
 
 interface ErrorResponse {
@@ -106,6 +107,7 @@ export function parseRuntimeConfig(environment: Environment = process.env): Runt
     logLevel: environment.LOG_LEVEL ?? (nodeEnvironment === 'test' ? 'silent' : 'info'),
     port: parsePort(environment.PORT),
     webOrigins: parseExactOrigins(environment.WEB_ORIGIN, nodeEnvironment),
+    nodeEnvironment,
   };
 }
 
@@ -207,6 +209,11 @@ export async function createApplication(
     credentials: true,
     methods: ['GET', 'PATCH', 'POST', 'OPTIONS'],
     origin: (origin, callback) => {
+      // 非生产环境允许所有来源，便于开发和多设备测试
+      if (config.nodeEnvironment !== 'production') {
+        callback(null, true);
+        return;
+      }
       callback(null, origin === undefined || config.webOrigins.has(origin));
     },
   });

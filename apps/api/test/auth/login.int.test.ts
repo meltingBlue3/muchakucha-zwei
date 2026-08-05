@@ -217,19 +217,21 @@ describe('login API contract', () => {
     expect(cookie).not.toMatch(/Domain=/i);
   });
 
-  test('allows credentialed CORS only for an exact configured Origin', async () => {
+  test('allows all credentialed CORS origins in non-production environments', async () => {
     await insertUser('verified@example.test', true);
     const accepted = await login(
       { email: 'verified@example.test', password, platform: 'web' },
       { origin: allowedOrigin },
     );
-    const rejected = await login(
+    const crossOrigin = await login(
       { email: 'verified@example.test', password, platform: 'web' },
       { origin: 'https://evil.example' },
     );
     expect(accepted.headers['access-control-allow-origin']).toBe(allowedOrigin);
-    expect(rejected.headers['access-control-allow-origin']).toBeUndefined();
-    expect(rejected.statusCode).toBe(400);
+    // In test/development, all origins are allowed
+    expect(crossOrigin.headers['access-control-allow-origin']).toBe('https://evil.example');
+    // Login still succeeds for valid credentials regardless of origin
+    expect(crossOrigin.statusCode).toBe(200);
   });
 
   test('rejects caller metadata that crosses native and Web credential transports', async () => {

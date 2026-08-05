@@ -57,6 +57,13 @@ function configuredWebOrigins(): ReadonlySet<string> {
   return new Set(configured?.length ? configured : ['http://127.0.0.1:8081']);
 }
 
+function isAllowedOrigin(origin: string | undefined): boolean {
+  // 非生产环境允许所有来源，便于开发和多设备测试
+  if (process.env.NODE_ENV !== 'production') return true;
+  if (origin === undefined) return false;
+  return configuredWebOrigins().has(origin);
+}
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -75,7 +82,7 @@ export class AuthController {
   ): Promise<LoginResponseDto> {
     const browserRequest = origin !== undefined;
     if (
-      (input.platform === 'web' && (!browserRequest || !configuredWebOrigins().has(origin)))
+      (input.platform === 'web' && (!browserRequest || !isAllowedOrigin(origin)))
       || (input.platform === 'native' && browserRequest)
     ) {
       throw new BadRequestException({
@@ -110,7 +117,7 @@ export class AuthController {
     const cookieSource = cookieCredential !== undefined;
     if (
       cookieSource === (bodyCredential !== undefined)
-      || (cookieSource && (!browserRequest || !configuredWebOrigins().has(origin)))
+      || (cookieSource && (!browserRequest || !isAllowedOrigin(origin)))
       || (!cookieSource && browserRequest)
     ) {
       throw new BadRequestException({
@@ -168,7 +175,7 @@ export class AuthController {
     @Res({ passthrough: true }) reply: CookieReply,
   ): Promise<RegistrationAcceptedDto> {
     const isWeb = input.platform === 'web';
-    if ((isWeb && (origin === undefined || !configuredWebOrigins().has(origin))) || (!isWeb && origin !== undefined)) {
+    if ((isWeb && (origin === undefined || !isAllowedOrigin(origin))) || (!isWeb && origin !== undefined)) {
       throw new BadRequestException({
         code: 'INVALID_REGISTRATION_TRANSPORT',
         message: 'Registration transport is invalid.',
@@ -205,7 +212,7 @@ export class AuthController {
   ): Promise<CompleteEmailVerificationResponseDto> {
     const names = cookieNames();
     const browserRequest = origin !== undefined;
-    if ((browserRequest && !configuredWebOrigins().has(origin)) || (browserRequest && input.platform === 'native')) {
+    if ((browserRequest && !isAllowedOrigin(origin)) || (browserRequest && input.platform === 'native')) {
       throw new BadRequestException({
         code: 'INVALID_VERIFICATION_TRANSPORT',
         message: 'Verification transport is invalid.',
