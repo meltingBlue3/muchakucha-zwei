@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import Calendar from 'lucide-react-native/icons/calendar';
 import ListTodo from 'lucide-react-native/icons/list-todo';
+import Sunrise from 'lucide-react-native/icons/sunrise';
 
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../src/features/households/household-context';
@@ -87,6 +88,10 @@ export default function HouseholdDetailRoute() {
 
   const activeTheme = useTheme<Theme>();
 
+  const handleOpenToday = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/today`);
+  }, [router, id]);
+
   const handleOpenCalendar = useCallback(() => {
     void router.push(`/households/${encodeURIComponent(id)}/events`);
   }, [router, id]);
@@ -100,6 +105,33 @@ export default function HouseholdDetailRoute() {
       {/* Calendar quick-access */}
       <AppShell accessibilityLabel="家庭详情">
         <Stack gap={4}>
+          {/* Today quick-access */}
+          <Pressable
+            onPress={handleOpenToday}
+            accessibilityLabel="打开今日视图"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: activeTheme.spacing[3],
+              backgroundColor: activeTheme.colors.coralSoft,
+              borderRadius: activeTheme.borderRadii.md,
+              padding: activeTheme.spacing[4],
+              borderWidth: 1,
+              borderColor: activeTheme.colors.coral,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Sunrise size={24} color={activeTheme.colors.coral} />
+            <View style={{ flex: 1 }}>
+              <Text variant="label">今日视图</Text>
+              <Text variant="bodySm" color="inkMuted">
+                查看今天的日程、待办和任务
+              </Text>
+            </View>
+            <Text variant="caption" color="coral">
+              进入 ›
+            </Text>
+          </Pressable>
           <Pressable
             onPress={handleOpenCalendar}
             accessibilityLabel="打开家庭日历"

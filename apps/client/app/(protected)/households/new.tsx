@@ -1,8 +1,10 @@
 import { Controller, useForm } from 'react-hook-form';
-import { useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { z } from 'zod';
 
 import { sessionApiClient, sessionTransport } from '../../../src/features/auth/session-runtime';
+import { useHouseholdContext } from '../../../src/features/households/household-context';
 import { AuthShell, Banner, Button, Heading, Stack, Text, TextField } from '../../../src/ui/primitives';
 
 const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
@@ -23,10 +25,9 @@ const nameSchema = z
 type HouseholdFormValues = { name: string };
 
 export default function NewHouseholdRoute() {
-  const [successHousehold, setSuccessHousehold] = useState<{
-    name: string;
-    role: string;
-  } | null>(null);
+  const router = useRouter();
+  const { refreshHouseholds } = useHouseholdContext();
+  const [successHouseholdId, setSuccessHouseholdId] = useState<string | null>(null);
   const {
     clearErrors,
     control,
@@ -49,6 +50,12 @@ export default function NewHouseholdRoute() {
     return false;
   };
 
+  const handleEnterHousehold = useCallback(async () => {
+    if (successHouseholdId === null) return;
+    await refreshHouseholds();
+    void router.replace(`/households/${encodeURIComponent(successHouseholdId)}`);
+  }, [successHouseholdId, refreshHouseholds, router]);
+
   const submit = handleSubmit(async (values) => {
     clearErrors();
     const parsed = nameSchema.safeParse(values.name);
@@ -68,26 +75,26 @@ export default function NewHouseholdRoute() {
         { name: normalizedName },
         new AbortController().signal,
       );
-      setSuccessHousehold({
-        name: household.name,
-        role: household.membership.role === 'ADMIN' ? '所有者' : '成员',
-      });
+      setSuccessHouseholdId(household.id);
     } catch {
       setError('root.server', { message: GENERIC_ERROR });
     }
   });
 
-  if (successHousehold !== null) {
+  if (successHouseholdId !== null) {
     return (
       <AuthShell>
         <Stack gap={6}>
           <Stack gap={2}>
-            <Heading>{successHousehold.name}</Heading>
+            <Heading>家庭已创建</Heading>
           </Stack>
           <Stack accessibilityLiveRegion="polite" accessibilityRole={'status' as never} gap={1}>
             <Text>家庭已创建。你现在是这个家庭的所有者。</Text>
-            <Text>角色：{successHousehold.role}</Text>
           </Stack>
+          <Button
+            label="进入家庭"
+            onPress={() => void handleEnterHousehold()}
+          />
         </Stack>
       </AuthShell>
     );
