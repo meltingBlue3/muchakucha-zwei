@@ -1165,7 +1165,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Function"
+                "$ref": "#/components/schemas/CreateTaskDto"
               }
             }
           }
@@ -1319,7 +1319,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Function"
+                "$ref": "#/components/schemas/UpdateTaskDto"
               }
             }
           }
@@ -2244,9 +2244,94 @@
           }
         }
       },
-      "Function": {
+      "CreateTaskDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "任务标题",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "description": "任务描述"
+          },
+          "status": {
+            "type": "string",
+            "description": "任务状态",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed"
+            ],
+            "default": "pending"
+          },
+          "priority": {
+            "type": "string",
+            "description": "任务优先级",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "urgent"
+            ],
+            "default": "medium"
+          },
+          "assigneeId": {
+            "type": "string",
+            "description": "负责人成员 ID（必须是当前家庭成员）"
+          },
+          "dueDate": {
+            "type": "string",
+            "description": "截止日期"
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "UpdateTaskDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "任务标题",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "description": "任务描述"
+          },
+          "status": {
+            "type": "string",
+            "description": "任务状态",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed"
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "description": "任务优先级",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "urgent"
+            ]
+          },
+          "assigneeId": {
+            "type": "string",
+            "description": "负责人成员 ID"
+          },
+          "dueDate": {
+            "type": "string",
+            "description": "截止日期"
+          }
+        }
       }
     }
   }

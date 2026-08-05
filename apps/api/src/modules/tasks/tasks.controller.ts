@@ -23,8 +23,9 @@ import {
 } from '@nestjs/swagger';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import { TasksService } from './tasks.service.js';
-import type { CreateTaskDto, TaskListResponseDto, TaskResponseDto } from './dto/create-task.dto.js';
-import type { UpdateTaskDto } from './dto/update-task.dto.js';
+import { CreateTaskDto } from './dto/create-task.dto.js';
+import type { TaskListResponseDto, TaskResponseDto } from './dto/create-task.dto.js';
+import { UpdateTaskDto } from './dto/update-task.dto.js';
 
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
