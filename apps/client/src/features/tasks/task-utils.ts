@@ -36,3 +36,33 @@ export function isOverdue(dueDateIso: string | null): boolean {
   today.setHours(0, 0, 0, 0);
   return due < today;
 }
+
+/**
+ * Returns true when the due date falls within the next `withinDays` days
+ * (inclusive of the end date, exclusive of today).
+ */
+export function isApproachingDeadline(
+  dueDateIso: string | null,
+  withinDays: number = 7,
+): boolean {
+  if (dueDateIso === null || dueDateIso === '') return false;
+  const due = new Date(dueDateIso);
+  const now = new Date();
+
+  // Exclude overdue tasks — those are handled separately.
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  if (due < todayStart) return false;
+
+  // Exclude today's tasks — they already appear in the "today" bucket.
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const dueStr = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+  if (dueStr === todayStr) return false;
+
+  // Compute the cutoff: end of the window (today + withinDays).
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() + withinDays);
+  cutoff.setHours(23, 59, 59, 999);
+
+  return due <= cutoff;
+}

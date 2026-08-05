@@ -5,6 +5,7 @@ import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import Calendar from 'lucide-react-native/icons/calendar';
 import Clock from 'lucide-react-native/icons/clock';
+import Hourglass from 'lucide-react-native/icons/hourglass';
 import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
 
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
@@ -12,7 +13,7 @@ import { useHouseholdContext } from '../../../../src/features/households/househo
 import { EventCard } from '../../../../src/features/events/event-card';
 import { TaskCard } from '../../../../src/features/tasks/task-card';
 import { toDateIso } from '../../../../src/features/events/calendar-utils';
-import { isOverdue } from '../../../../src/features/tasks/task-utils';
+import { isApproachingDeadline, isOverdue } from '../../../../src/features/tasks/task-utils';
 import {
   AccessChangedPanel,
   AppShell,
@@ -60,10 +61,11 @@ export default function TodayRoute() {
   }, [members]);
 
   // Split tasks into groups
-  const { overdueTasks, todayTasks, upcomingTasks } = useMemo(() => {
+  const { overdueTasks, todayTasks, approachingTasks, otherUpcomingTasks } = useMemo(() => {
     const overdue: TaskResponseDto[] = [];
     const dueToday: TaskResponseDto[] = [];
-    const upcoming: TaskResponseDto[] = [];
+    const approaching: TaskResponseDto[] = [];
+    const other: TaskResponseDto[] = [];
 
     for (const task of tasks) {
       if (task.status === 'completed') continue;
@@ -71,12 +73,19 @@ export default function TodayRoute() {
         overdue.push(task);
       } else if (isToday(task.dueDate ?? null) || task.dueDate === null || task.dueDate === '') {
         dueToday.push(task);
+      } else if (isApproachingDeadline(task.dueDate ?? null, 7)) {
+        approaching.push(task);
       } else {
-        upcoming.push(task);
+        other.push(task);
       }
     }
 
-    return { overdueTasks: overdue, todayTasks: dueToday, upcomingTasks: upcoming };
+    return {
+      overdueTasks: overdue,
+      todayTasks: dueToday,
+      approachingTasks: approaching,
+      otherUpcomingTasks: other,
+    };
   }, [tasks]);
 
   const fetchData = useCallback(async () => {
@@ -280,14 +289,45 @@ export default function TodayRoute() {
               </View>
             )}
 
-            {/* Upcoming tasks */}
-            {upcomingTasks.length > 0 && (
+            {/* Approaching deadlines — always shown so the user knows this section exists */}
+            <View>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: activeTheme.spacing[2],
+                marginBottom: activeTheme.spacing[2],
+              }}>
+                <Hourglass size={16} color={activeTheme.colors.coral} />
+                <Text variant="label">
+                  临近截止日期 ({approachingTasks.length})
+                </Text>
+              </View>
+              {approachingTasks.length === 0 ? (
+                <Text variant="bodySm" color="inkMuted">
+                  未来 7 天内没有到期的任务。
+                </Text>
+              ) : (
+                <Stack gap={2}>
+                  {approachingTasks.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
+                      onPress={handleTaskPress}
+                    />
+                  ))}
+                </Stack>
+              )}
+            </View>
+
+            {/* Other upcoming tasks (more than 7 days away) */}
+            {otherUpcomingTasks.length > 0 && (
               <View>
                 <Text variant="label" color="inkMuted" style={{ marginBottom: activeTheme.spacing[2] }}>
-                  即将到来 ({upcomingTasks.length})
+                  稍后待办 ({otherUpcomingTasks.length})
                 </Text>
                 <Stack gap={2}>
-                  {upcomingTasks.map((task) => (
+                  {otherUpcomingTasks.map((task) => (
                     <TaskCard
                       key={task.id}
                       task={task}
@@ -300,7 +340,7 @@ export default function TodayRoute() {
             )}
 
             {/* Empty state */}
-            {events.length === 0 && overdueTasks.length === 0 && todayTasks.length === 0 && upcomingTasks.length === 0 && (
+            {events.length === 0 && overdueTasks.length === 0 && todayTasks.length === 0 && otherUpcomingTasks.length === 0 && (
               <View style={{
                 alignItems: 'center',
                 paddingVertical: activeTheme.spacing[8],
