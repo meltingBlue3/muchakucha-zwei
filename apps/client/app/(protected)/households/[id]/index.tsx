@@ -185,6 +185,33 @@ export default function HouseholdDetailRoute() {
               进入 ›
             </Text>
           </Pressable>
+          {/* Settings quick-access */}
+          <Pressable
+            onPress={() => void router.push(`/households/${encodeURIComponent(id)}/settings`)}
+            accessibilityLabel="打开家庭设置"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: activeTheme.spacing[3],
+              backgroundColor: activeTheme.colors.surface,
+              borderRadius: activeTheme.borderRadii.md,
+              padding: activeTheme.spacing[4],
+              borderWidth: 1,
+              borderColor: activeTheme.colors.border,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <View style={{ flex: 1 }}>
+              <Text variant="label">家庭设置</Text>
+              <Text variant="bodySm" color="inkMuted">
+                管理成员、发送邀请、重命名家庭
+              </Text>
+            </View>
+            <Text variant="caption" color="coral">
+              进入 ›
+            </Text>
+          </Pressable>
+
           <HouseholdSettings
             deps={deps}
             householdId={id}

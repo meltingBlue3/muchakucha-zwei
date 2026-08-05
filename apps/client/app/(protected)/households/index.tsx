@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { useHouseholdContext } from '../../../src/features/households/household-context';
 import {
@@ -29,6 +29,14 @@ export default function HouseholdsIndexRoute() {
   const [isSwitching, setIsSwitching] = useState(false);
 
   const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
+
+  // When user already has a current household, jump straight to its detail
+  // page — the list view is a transient entry point, not a destination.
+  useEffect(() => {
+    if (viewState === 'ready' && currentHouseholdId !== null) {
+      void router.replace(`/households/${encodeURIComponent(currentHouseholdId)}`);
+    }
+  }, [viewState, currentHouseholdId, router]);
 
   const handleSwitch = useCallback(async (householdId: string) => {
     if (householdId === currentHouseholdId) {
@@ -146,10 +154,6 @@ export default function HouseholdsIndexRoute() {
                 isCurrent={household.id === currentHouseholdId}
                 key={household.id}
                 onSelect={(id) => { void handleSwitch(id); }}
-                primaryAction={{
-                  label: '查看成员',
-                  onPress: () => void router.push(`/households/${encodeURIComponent(household.id)}`),
-                }}
               />
             ))}
 
