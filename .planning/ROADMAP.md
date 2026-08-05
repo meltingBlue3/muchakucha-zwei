@@ -189,7 +189,7 @@ Plans:
 - [x] **04-01:** Prisma migration + tasks module + CRUD API with filtering, status transitions, single assignee
 - [x] **04-02:** Task list views (filtered/sorted) + create/edit forms + status update + assignment selector
 - [x] **04-03:** Today view: merged events + assigned tasks + overdue items, mobile-first
-- [ ] **04-04:** Gates: integration tests, Playwright E2E, accessibility audit, Android acceptance
+- [~] **04-04:** Gates: integration tests (✅), Playwright E2E (✅), accessibility audit, Android acceptance
 
 ### Phase 5: 笔记与标签整理
 
