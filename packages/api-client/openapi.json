@@ -1147,7 +1147,7 @@
         ]
       }
     },
-    "/api/v1/api/v1/households/{householdId}/tasks": {
+    "/api/v1/households/{householdId}/tasks": {
       "post": {
         "operationId": "createTask",
         "parameters": [
@@ -1251,7 +1251,7 @@
         ]
       }
     },
-    "/api/v1/api/v1/households/{householdId}/tasks/{taskId}": {
+    "/api/v1/households/{householdId}/tasks/{taskId}": {
       "get": {
         "operationId": "getTask",
         "parameters": [
