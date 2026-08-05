@@ -41,6 +41,14 @@ function isUnauthorized(error: unknown): boolean {
   );
 }
 
+function isEmailNotVerified(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('status' in error)) return false;
+  if ((error as { status?: unknown }).status !== 403) return false;
+  const body = (error as { body?: unknown }).body;
+  if (typeof body !== 'object' || body === null || !('error' in body)) return false;
+  return (body as { error?: { code?: string } }).error?.code === 'EMAIL_NOT_VERIFIED';
+}
+
 export const LoginForm = ({
   onAuthenticated,
   onForgotPassword,
@@ -98,7 +106,9 @@ export const LoginForm = ({
       setError('root.server', {
         message: isUnauthorized(error)
           ? '邮箱或密码不正确，请重新输入。'
-          : '这次没有完成。请检查网络后重试。',
+          : isEmailNotVerified(error)
+            ? '此邮箱尚未验证，请先完成邮箱验证后再登录。'
+            : '这次没有完成。请检查网络后重试。',
       });
     }
   });

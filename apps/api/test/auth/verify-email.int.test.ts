@@ -133,7 +133,7 @@ describe('email verification API contract', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ outcome: 'verified_auto_login', accessToken: expect.any(String) });
     expect(response.headers['set-cookie']).toEqual(expect.arrayContaining([
-      expect.stringMatching(new RegExp(`${refreshCookieName}=.+HttpOnly.*SameSite=Lax`, 'i')),
+      expect.stringMatching(new RegExp(`${refreshCookieName}=.+HttpOnly.*SameSite=None`, 'i')),
       expect.stringMatching(new RegExp(`${pendingCookieName}=.*Max-Age=0`, 'i')),
     ]));
     expect(JSON.stringify(response.json())).not.toMatch(/(?:pendingProof|refreshToken)/);
@@ -260,7 +260,7 @@ describe('email verification API contract', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ outcome: 'verified_login_required' });
     expect(response.headers['set-cookie']).toMatch(new RegExp(
-      `${pendingCookieName}=.*Max-Age=0.*Path=/api/v1/auth/email-verifications.*HttpOnly.*SameSite=Lax`,
+      `${pendingCookieName}=.*Max-Age=0.*Path=/api/v1/auth/email-verifications.*HttpOnly.*SameSite=None`,
       'i',
     ));
   });

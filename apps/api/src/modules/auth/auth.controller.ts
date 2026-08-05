@@ -30,7 +30,7 @@ interface CookieReply {
     httpOnly: boolean;
     maxAge: number;
     path: string;
-    sameSite: 'lax';
+    sameSite: 'lax' | 'none';
     secure: boolean;
   }): void;
 }
@@ -187,8 +187,8 @@ export class AuthController {
       const production = process.env.NODE_ENV === 'production';
       reply.setCookie(production ? '__Secure-mk_pending_proof' : 'mk_pending_proof_dev', result.pendingProof, {
         httpOnly: true,
-        secure: production,
-        sameSite: 'lax',
+        secure: true,
+        sameSite: production ? 'lax' : 'none',
         path: PENDING_PROOF_PATH,
         maxAge: PENDING_PROOF_MAX_AGE_SECONDS,
       });
@@ -236,16 +236,16 @@ export class AuthController {
       if (result.outcome === 'verified_auto_login' && result.refreshToken !== undefined) {
         reply.setCookie(names.refresh, result.refreshToken, {
           httpOnly: true,
-          secure: production,
-          sameSite: 'lax',
+          secure: true,
+          sameSite: production ? 'lax' : 'none',
           path: REFRESH_COOKIE_PATH,
           maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
         });
       }
       reply.setCookie(names.pending, '', {
         httpOnly: true,
-        secure: production,
-        sameSite: 'lax',
+        secure: true,
+        sameSite: production ? 'lax' : 'none',
         path: PENDING_PROOF_PATH,
         maxAge: 0,
       });
@@ -295,8 +295,11 @@ export class AuthController {
     const production = process.env.NODE_ENV === 'production';
     reply.setCookie(cookieNames().refresh, refreshToken, {
       httpOnly: true,
-      secure: production,
-      sameSite: 'lax',
+      // Always Secure — localhost is a secure context so browsers accept
+      // Secure cookies over HTTP on localhost/127.0.0.1. This is required
+      // because SameSite=None without Secure is silently rejected.
+      secure: true,
+      sameSite: production ? 'lax' : 'none',
       path: REFRESH_COOKIE_PATH,
       maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
     });
@@ -306,8 +309,8 @@ export class AuthController {
     const production = process.env.NODE_ENV === 'production';
     reply.setCookie(cookieNames().refresh, '', {
       httpOnly: true,
-      secure: production,
-      sameSite: 'lax',
+      secure: true,
+      sameSite: production ? 'lax' : 'none',
       path: REFRESH_COOKIE_PATH,
       maxAge: 0,
     });

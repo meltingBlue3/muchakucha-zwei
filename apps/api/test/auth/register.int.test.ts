@@ -158,7 +158,7 @@ describe('registration API contract', () => {
       allowedOrigin,
     );
     expect(response.statusCode).toBe(202);
-    expect(response.headers['set-cookie']).toMatch(/mk_pending_proof_dev=.*HttpOnly.*SameSite=Lax/i);
+    expect(response.headers['set-cookie']).toMatch(/mk_pending_proof_dev=.*HttpOnly.*SameSite=None/i);
     expect(response.headers['set-cookie']).toContain('Path=/api/v1/auth/email-verifications');
     expect(response.headers['set-cookie']).toMatch(/Max-Age=86400/i);
     expect(JSON.stringify(response.json())).not.toMatch(/pending.*proof/i);

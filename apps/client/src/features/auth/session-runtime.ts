@@ -5,7 +5,7 @@ import { createSessionStateStore } from './session-state';
 import { createNativeSessionTransport } from '../../platform/session/session-transport.native';
 import { createWebSessionTransport } from '../../platform/session/session-transport.web';
 
-const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3000';
+const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
 export const sessionApiClient = new ApiClient(apiOrigin);
 export const sessionStateStore = createSessionStateStore();

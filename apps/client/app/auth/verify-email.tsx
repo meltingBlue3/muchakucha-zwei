@@ -4,20 +4,12 @@ import { useRef } from 'react';
 import { Platform } from 'react-native';
 
 import { VerificationLanding } from '../../src/features/auth/verification-flow';
-import { createSessionStateStore } from '../../src/features/auth/session-state';
+import { sessionStateStore, sessionTransport } from '../../src/features/auth/session-runtime';
 import { pendingProofStore } from '../../src/platform/session/pending-proof.native';
-import { createNativeSessionTransport } from '../../src/platform/session/session-transport.native';
-import { createWebSessionTransport } from '../../src/platform/session/session-transport.web';
 import { AuthShell } from '../../src/ui/primitives';
 
-const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3000';
+const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 const apiClient = new ApiClient(apiOrigin);
-const sessionStateStore = createSessionStateStore();
-const unsupportedRefresh = async (): Promise<never> => {
-  throw new Error('Session refresh is owned by the session bootstrap flow.');
-};
-const nativeSessionTransport = createNativeSessionTransport(unsupportedRefresh);
-const webSessionTransport = createWebSessionTransport(unsupportedRefresh);
 
 function replaceTokenBearingLocation(): void {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -50,7 +42,7 @@ export default function VerifyEmailRoute() {
         platform={platform}
         replaceTokenBearingLocation={replaceTokenBearingLocation}
         sessionStateStore={sessionStateStore}
-        sessionTransport={platform === 'native' ? nativeSessionTransport : webSessionTransport}
+        sessionTransport={sessionTransport}
         token={landingToken.current}
       />
     </AuthShell>

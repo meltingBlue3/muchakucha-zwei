@@ -31,7 +31,7 @@ test.describe('Web login and session restoration', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        headers: { 'set-cookie': 'mucha_refresh=session; HttpOnly; Path=/api/v1/auth; SameSite=Lax' },
+        headers: { 'set-cookie': 'mucha_refresh=session; HttpOnly; Path=/api/v1/auth; SameSite=None' },
         body: JSON.stringify({ accessToken: 'login-access' }),
       });
     });

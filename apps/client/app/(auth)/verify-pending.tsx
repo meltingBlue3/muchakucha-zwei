@@ -5,7 +5,7 @@ import { Linking } from 'react-native';
 import { VerificationPending } from '../../src/features/auth/verification-flow';
 import { AuthShell } from '../../src/ui/primitives';
 
-const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3000';
+const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 const apiClient = new ApiClient(apiOrigin);
 
 export default function VerifyPendingRoute() {

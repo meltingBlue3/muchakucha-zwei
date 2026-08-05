@@ -9,7 +9,7 @@ import { ConfirmationPage } from '../../../../../../src/ui/household-components'
 import { Banner } from '../../../../../../src/ui/primitives';
 import { theme } from '../../../../../../src/ui/theme';
 
-const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3000';
+const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
 export default function RevokeInvitationPage() {
   const router = useRouter();

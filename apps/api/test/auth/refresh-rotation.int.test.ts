@@ -222,7 +222,7 @@ describe('refresh rotation API contract', () => {
       origin: allowedOrigin,
     });
     expect(response.statusCode).toBe(200);
-    expect(response.headers['set-cookie']).toMatch(/mk_refresh_dev=.*HttpOnly.*SameSite=Lax/i);
+    expect(response.headers['set-cookie']).toMatch(/mk_refresh_dev=.*HttpOnly.*SameSite=None/i);
     expect(response.headers['set-cookie']).toContain('Path=/api/v1/auth');
     expect(JSON.stringify(response.json())).not.toMatch(/refreshToken/);
   });

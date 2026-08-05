@@ -1,15 +1,15 @@
 import { ApiClient, type GetHouseholdResponseDto } from '@muchakucha/api-client';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
 import { InvitationFlow } from '../../src/features/households/invitation-flow';
 import { sessionStateStore, sessionTransport } from '../../src/features/auth/session-runtime';
 import { createNativePendingInvitationStore } from '../../src/platform/invitation/pending-invitation.native';
 import { createWebPendingInvitationStore } from '../../src/platform/invitation/pending-invitation.web';
-import { AuthShell } from '../../src/ui/primitives';
+import { AuthShell, Button, Heading, Stack, Text, TextField } from '../../src/ui/primitives';
 
-const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://127.0.0.1:3000';
+const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 const apiClient = new ApiClient(API_ORIGIN);
 const pendingInvitationStore = Platform.OS === 'web'
   ? createWebPendingInvitationStore()
@@ -138,7 +138,61 @@ export default function InviteRoute() {
     router.replace(`/households/${encodeURIComponent(household.id)}` as never);
   };
 
-  if (!persistedToken) return null;
+  // No-token manual entry.
+  const [manualToken, setManualToken] = useState('');
+
+  const handleSubmitManualToken = useCallback(() => {
+    let trimmed = manualToken.trim();
+    if (trimmed === '') return;
+
+    // If the user pastes a full URL, extract the last path segment as the token.
+    if (/^https?:\/\//i.test(trimmed)) {
+      try {
+        const segments = new URL(trimmed).pathname.split('/').filter(Boolean);
+        const last = segments[segments.length - 1];
+        if (last !== undefined && /^[A-Za-z0-9_-]+$/.test(last)) {
+          trimmed = last;
+        }
+      } catch {
+        // Keep the raw input if URL parsing fails.
+      }
+    }
+
+    setPersistedToken(trimmed);
+  }, [manualToken]);
+
+  if (!persistedToken) {
+    return (
+      <AuthShell>
+        <Stack gap={6}>
+          <Stack gap={2}>
+            <Heading>加入家庭</Heading>
+            <Text>
+              家庭管理员发送的邀请邮件中包含一个邀请链接，点击链接即可自动加入。
+              你也可以将收到的邀请链接或邀请码粘贴到下方。
+            </Text>
+          </Stack>
+          <Stack gap={2}>
+            <TextField
+              label="邀请链接或邀请码"
+              value={manualToken}
+              onChangeText={setManualToken}
+              placeholder="粘贴邀请链接或邀请码"
+              autoComplete="off"
+            />
+            <Button
+              disabled={manualToken.trim() === ''}
+              label="查看邀请"
+              onPress={handleSubmitManualToken}
+            />
+          </Stack>
+          <Text variant="caption" color="inkMuted">
+            还没有邀请？请联系家庭管理员，让对方在家庭设置中发送邀请链接。
+          </Text>
+        </Stack>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell>
