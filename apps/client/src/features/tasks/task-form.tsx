@@ -4,6 +4,7 @@ import { useTheme } from '@shopify/restyle';
 import type { CreateTaskDto, TaskResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text } from '../../ui/primitives';
+import { DateField } from '../../ui/date-field';
 
 const STATUSES = [
   { value: 'pending', label: '待办' },
@@ -209,17 +210,14 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
       </Stack>
 
       {/* Due date */}
-      <Stack gap={1}>
-        <Text variant="label">截止日期（可选）</Text>
-        <TextInput
-          value={form.dueDate}
-          onChangeText={(v) => updateField('dueDate', v)}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={activeTheme.colors.inkMuted}
-          style={inputStyle}
-          accessibilityLabel="截止日期"
-        />
-      </Stack>
+      <DateField
+        value={form.dueDate}
+        onChange={(v) => updateField('dueDate', v)}
+        mode="date"
+        label="截止日期（可选）"
+        placeholder="YYYY-MM-DD"
+        accessibilityLabel="截止日期"
+      />
 
       {/* Description */}
       <Stack gap={1}>

@@ -4,6 +4,7 @@ import { useTheme } from '@shopify/restyle';
 import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text } from '../../ui/primitives';
+import { DateField } from '../../ui/date-field';
 import { toDateIso } from './calendar-utils';
 
 type EventInput = Omit<CreateEventDto, 'startTime' | 'endTime'> & {
@@ -126,21 +127,19 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
       <Stack gap={1}>
         <Text variant="label">开始</Text>
         <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
-          <TextInput
+          <DateField
             value={form.startDate}
-            onChangeText={(v) => updateField('startDate', v)}
+            onChange={(v) => updateField('startDate', v)}
+            mode="date"
             placeholder="YYYY-MM-DD"
-            placeholderTextColor={activeTheme.colors.inkMuted}
-            style={[inputStyle, { flex: form.allDay ? 1 : 1 }]}
             accessibilityLabel="开始日期"
           />
           {!form.allDay && (
-            <TextInput
+            <DateField
               value={form.startTime}
-              onChangeText={(v) => updateField('startTime', v)}
+              onChange={(v) => updateField('startTime', v)}
+              mode="time"
               placeholder="HH:mm"
-              placeholderTextColor={activeTheme.colors.inkMuted}
-              style={[inputStyle, { flex: 1 }]}
               accessibilityLabel="开始时间"
             />
           )}
@@ -151,21 +150,19 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
       <Stack gap={1}>
         <Text variant="label">结束</Text>
         <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
-          <TextInput
+          <DateField
             value={form.endDate}
-            onChangeText={(v) => updateField('endDate', v)}
+            onChange={(v) => updateField('endDate', v)}
+            mode="date"
             placeholder="YYYY-MM-DD"
-            placeholderTextColor={activeTheme.colors.inkMuted}
-            style={[inputStyle, { flex: 1 }]}
             accessibilityLabel="结束日期"
           />
           {!form.allDay && (
-            <TextInput
+            <DateField
               value={form.endTime}
-              onChangeText={(v) => updateField('endTime', v)}
+              onChange={(v) => updateField('endTime', v)}
+              mode="time"
               placeholder="HH:mm"
-              placeholderTextColor={activeTheme.colors.inkMuted}
-              style={[inputStyle, { flex: 1 }]}
               accessibilityLabel="结束时间"
             />
           )}
