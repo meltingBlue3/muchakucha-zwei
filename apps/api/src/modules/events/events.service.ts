@@ -111,7 +111,14 @@ export class EventsService {
     if (startDate || endDate) {
       const startTime: Record<string, Date> = {};
       if (startDate) startTime.gte = new Date(startDate);
-      if (endDate) startTime.lte = new Date(endDate);
+      if (endDate) {
+        // endDate is inclusive (the last day to include). Advance by one
+        // day and use < so events whose startTime falls anywhere on
+        // endDate are captured, not just those at midnight UTC.
+        const endExclusive = new Date(endDate);
+        endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+        startTime.lt = endExclusive;
+      }
       where.startTime = startTime;
     }
 
