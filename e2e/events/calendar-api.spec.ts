@@ -140,7 +140,7 @@ test.describe('Calendar Events API', () => {
     const listResult = await apiCall(
       owner.accessToken,
       'GET',
-      `/api/v1/households/${householdId}/events?start=${now.toISOString().split('T')[0]}&end=${dayAfter.toISOString().split('T')[0]}`,
+      `/api/v1/households/${householdId}/events?startDate=${now.toISOString().split('T')[0]}&endDate=${dayAfter.toISOString().split('T')[0]}`,
     );
     expect(listResult.status).toBe(200);
     expect(listResult.body.events.length).toBe(2);
@@ -149,7 +149,7 @@ test.describe('Calendar Events API', () => {
     const todayResult = await apiCall(
       owner.accessToken,
       'GET',
-      `/api/v1/households/${householdId}/events?start=${now.toISOString().split('T')[0]}&end=${now.toISOString().split('T')[0]}`,
+      `/api/v1/households/${householdId}/events?startDate=${now.toISOString().split('T')[0]}&endDate=${now.toISOString().split('T')[0]}`,
     );
     expect(todayResult.status).toBe(200);
     expect(todayResult.body.events.length).toBe(1);
