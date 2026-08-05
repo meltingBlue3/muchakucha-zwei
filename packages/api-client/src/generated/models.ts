@@ -271,3 +271,56 @@ export interface TaskListResponseDto {
   tasks: TaskResponseDto[];
   total: number;
 }
+
+export interface CreateNoteDto {
+  title: string;
+  body?: string;
+}
+
+export interface UpdateNoteDto {
+  title?: string;
+  body?: string;
+}
+
+export interface NoteResponseDto {
+  id: string;
+  householdId: string;
+  title: string;
+  body?: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NoteListResponseDto {
+  notes: NoteResponseDto[];
+  total: number;
+}
+
+export interface CreateLabelDto {
+  name: string;
+  color: string;
+}
+
+export interface UpdateLabelDto {
+  name?: string;
+  color?: string;
+}
+
+export interface LabelResponseDto {
+  id: string;
+  householdId: string;
+  name: string;
+  color: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface LabelListResponseDto {
+  labels: LabelResponseDto[];
+  total: number;
+}
+
+export interface TagEntitiesDto {
+  labelIds: string[];
+}

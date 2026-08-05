@@ -38,6 +38,15 @@ import type {
   UpdateTaskDto,
   TaskResponseDto,
   TaskListResponseDto,
+  CreateNoteDto,
+  UpdateNoteDto,
+  NoteResponseDto,
+  NoteListResponseDto,
+  CreateLabelDto,
+  UpdateLabelDto,
+  LabelResponseDto,
+  LabelListResponseDto,
+  TagEntitiesDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -491,6 +500,211 @@ export class ApiClient {
     return this.authenticated<void>(
       'DELETE',
       `/api/v1/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  // ---- Notes ----
+
+  async createNote(
+    accessToken: string,
+    householdId: string,
+    body: CreateNoteDto,
+    signal?: AbortSignal,
+  ): Promise<NoteResponseDto> {
+    return this.authenticated<NoteResponseDto>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/notes`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async listNotes(
+    accessToken: string,
+    householdId: string,
+    signal?: AbortSignal,
+  ): Promise<NoteListResponseDto> {
+    return this.authenticated<NoteListResponseDto>(
+      'GET',
+      `/api/v1/households/${encodeURIComponent(householdId)}/notes`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async getNote(
+    accessToken: string,
+    householdId: string,
+    noteId: string,
+    signal?: AbortSignal,
+  ): Promise<NoteResponseDto> {
+    return this.authenticated<NoteResponseDto>(
+      'GET',
+      `/api/v1/households/${encodeURIComponent(householdId)}/notes/${encodeURIComponent(noteId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async updateNote(
+    accessToken: string,
+    householdId: string,
+    noteId: string,
+    body: UpdateNoteDto,
+    signal?: AbortSignal,
+  ): Promise<NoteResponseDto> {
+    return this.authenticated<NoteResponseDto>(
+      'PUT',
+      `/api/v1/households/${encodeURIComponent(householdId)}/notes/${encodeURIComponent(noteId)}`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async deleteNote(
+    accessToken: string,
+    householdId: string,
+    noteId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'DELETE',
+      `/api/v1/households/${encodeURIComponent(householdId)}/notes/${encodeURIComponent(noteId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  // ---- Labels ----
+
+  async createLabel(
+    accessToken: string,
+    householdId: string,
+    body: CreateLabelDto,
+    signal?: AbortSignal,
+  ): Promise<LabelResponseDto> {
+    return this.authenticated<LabelResponseDto>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/labels`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async listLabels(
+    accessToken: string,
+    householdId: string,
+    signal?: AbortSignal,
+  ): Promise<LabelListResponseDto> {
+    return this.authenticated<LabelListResponseDto>(
+      'GET',
+      `/api/v1/households/${encodeURIComponent(householdId)}/labels`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async updateLabel(
+    accessToken: string,
+    householdId: string,
+    labelId: string,
+    body: UpdateLabelDto,
+    signal?: AbortSignal,
+  ): Promise<LabelResponseDto> {
+    return this.authenticated<LabelResponseDto>(
+      'PUT',
+      `/api/v1/households/${encodeURIComponent(householdId)}/labels/${encodeURIComponent(labelId)}`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async deleteLabel(
+    accessToken: string,
+    householdId: string,
+    labelId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'DELETE',
+      `/api/v1/households/${encodeURIComponent(householdId)}/labels/${encodeURIComponent(labelId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  // ---- Tag / Untag ----
+
+  async tagEvent(
+    accessToken: string,
+    householdId: string,
+    eventId: string,
+    body: TagEntitiesDto,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/events/${encodeURIComponent(eventId)}/labels`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async untagEvent(
+    accessToken: string,
+    householdId: string,
+    eventId: string,
+    labelId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'DELETE',
+      `/api/v1/households/${encodeURIComponent(householdId)}/events/${encodeURIComponent(eventId)}/labels/${encodeURIComponent(labelId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async tagTask(
+    accessToken: string,
+    householdId: string,
+    taskId: string,
+    body: TagEntitiesDto,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}/labels`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async untagTask(
+    accessToken: string,
+    householdId: string,
+    taskId: string,
+    labelId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'DELETE',
+      `/api/v1/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}/labels/${encodeURIComponent(labelId)}`,
       accessToken,
       undefined,
       signal,
