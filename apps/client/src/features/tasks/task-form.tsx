@@ -92,7 +92,9 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
     // Always include optional fields so the backend can clear them
     // (the update endpoint treats absent/undefined as "no change").
     data.description = (form.description ?? '').trim();
-    data.assigneeId = form.assigneeId; // empty string clears the assignee
+    if (form.assigneeId) {
+      data.assigneeId = form.assigneeId;
+    }
     if (form.dueDate !== '') {
       // Convert through new Date() so local midnight is mapped to UTC —
       // never hardcode Z, which would treat the local date as UTC midnight.

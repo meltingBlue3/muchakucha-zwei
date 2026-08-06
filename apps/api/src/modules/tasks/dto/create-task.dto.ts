@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsIn, IsOptional, IsString, IsUUID, Length, MaxLength } from 'class-validator';
 import { LabelResponseDto } from '../../labels/dto/create-label.dto.js';
 
@@ -33,6 +34,7 @@ export class CreateTaskDto {
   priority?: TaskPriority;
 
   @ApiPropertyOptional({ description: '负责人成员 ID（必须是当前家庭成员）' })
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @IsOptional()
   @IsUUID('4')
   assigneeId?: string;
