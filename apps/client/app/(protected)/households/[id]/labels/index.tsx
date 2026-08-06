@@ -200,7 +200,7 @@ export default function LabelsIndexRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="标签管理" refreshing={refreshing} onRefresh={handleRefresh}>
+      <AppShell accessibilityLabel="标签管理" refreshing={refreshing} onRefresh={handleRefresh} title="标签管理" showProfile>
         <Stack gap={4}>
           <HouseholdHeader
             householdName={currentHousehold?.name ?? ''}

@@ -49,6 +49,10 @@ export interface HouseholdSettingsProps {
   onInviteAccessChanged?: (lostHouseholdName: string) => void;
   /** Called to navigate to the revoke confirmation page. */
   onRevokeNavigate?: (householdId: string, invitationId: string) => void;
+  /** Optional nav header props passed through to the internal AppShell. */
+  navTitle?: string;
+  navShowBack?: boolean;
+  navShowProfile?: boolean;
 }
 
 type ViewState =
@@ -67,6 +71,9 @@ export function HouseholdSettings({
   showInvite = false,
   onInviteAccessChanged,
   onRevokeNavigate,
+  navTitle,
+  navShowBack = false,
+  navShowProfile = false,
 }: HouseholdSettingsProps) {
   const [viewState, setViewState] = useState<ViewState>({ kind: 'loading' });
   const abortRef = useRef<AbortController | null>(null);
@@ -325,7 +332,7 @@ export function HouseholdSettings({
 
   if (viewState.kind === 'loading') {
     return (
-      <AppShell accessibilityLabel="正在加载成员">
+      <AppShell accessibilityLabel="正在加载成员" title={navTitle} showBack={navShowBack} showProfile={navShowProfile}>
         <Stack gap={6}>
           <HouseholdHeader
             householdName={householdName}
@@ -343,7 +350,7 @@ export function HouseholdSettings({
 
   if (viewState.kind === 'error') {
     return (
-      <AppShell accessibilityLabel="成员加载失败">
+      <AppShell accessibilityLabel="成员加载失败" title={navTitle} showBack={navShowBack} showProfile={navShowProfile}>
         <Stack gap={6}>
           <HouseholdHeader
             householdName={householdName}
@@ -357,7 +364,7 @@ export function HouseholdSettings({
 
   if (viewState.kind === 'inconsistent') {
     return (
-      <AppShell accessibilityLabel="成员数据异常">
+      <AppShell accessibilityLabel="成员数据异常" title={navTitle} showBack={navShowBack} showProfile={navShowProfile}>
         <Stack gap={6}>
           <HouseholdHeader
             householdName={householdName}
@@ -375,7 +382,7 @@ export function HouseholdSettings({
   const authoritativeName = data.name;
 
   return (
-    <AppShell accessibilityLabel={`${authoritativeName}的成员`}>
+    <AppShell accessibilityLabel={`${authoritativeName}的成员`} title={navTitle} showBack={navShowBack} showProfile={navShowProfile}>
       <Stack gap={6}>
         <HouseholdHeader
           householdName={authoritativeName}

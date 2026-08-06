@@ -35,7 +35,7 @@ export default function CreateNoteRoute() {
   );
 
   return (
-    <AppShell accessibilityLabel="创建笔记">
+    <AppShell accessibilityLabel="创建笔记" title="创建笔记" showBack showProfile>
       <Stack gap={4}>
         <Text variant="heading">创建笔记</Text>
         {error !== null && (

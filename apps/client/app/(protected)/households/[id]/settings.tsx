@@ -105,6 +105,9 @@ export default function HouseholdSettingsRoute() {
         onInviteAccessChanged={handleInviteAccessChanged}
         onRevokeNavigate={handleRevokeNavigate}
         showInvite
+        navTitle="家庭设置"
+        navShowBack
+        navShowProfile
       />
       <HouseholdSwitcher
         currentHouseholdId={currentHouseholdId}

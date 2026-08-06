@@ -46,7 +46,7 @@ export default function CreateEventRoute() {
   }, [router]);
 
   return (
-    <AppShell accessibilityLabel="创建事件">
+    <AppShell accessibilityLabel="创建事件" title="创建事件" showBack showProfile>
       <Screen>
         <Stack gap={4}>
           <Text variant="heading">创建事件</Text>

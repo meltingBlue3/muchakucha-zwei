@@ -117,7 +117,7 @@ export default function NotesListRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="家庭笔记" refreshing={refreshing} onRefresh={handleRefresh}>
+      <AppShell accessibilityLabel="家庭笔记" refreshing={refreshing} onRefresh={handleRefresh} title="家庭笔记" showProfile>
         <Stack gap={4}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <HouseholdHeader

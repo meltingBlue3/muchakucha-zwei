@@ -1,8 +1,10 @@
 import type { GetHouseholdMemberDto, ListMyHouseholdsItemDto } from '@muchakucha/api-client';
+import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import Building2 from 'lucide-react-native/icons/building-2';
 import X from 'lucide-react-native/icons/x';
 import Check from 'lucide-react-native/icons/check';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
+import CircleUserRound from 'lucide-react-native/icons/circle-user-round';
 import Crown from 'lucide-react-native/icons/crown';
 import Shield from 'lucide-react-native/icons/shield';
 import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
@@ -11,6 +13,7 @@ import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import Ban from 'lucide-react-native/icons/ban';
 import Mail from 'lucide-react-native/icons/mail';
 
+import { useRouter } from 'expo-router';
 import React, { forwardRef, useCallback, useRef } from 'react';
 import {
   Modal,
@@ -39,39 +42,140 @@ interface AppShellProps {
   accessibilityLabel?: string;
   refreshing?: boolean;
   onRefresh?: () => void;
+  title?: string | undefined;
+  showBack?: boolean;
+  onBack?: () => void;
+  showProfile?: boolean;
 }
 
-export const AppShell = ({ children, accessibilityLabel, refreshing = false, onRefresh }: AppShellProps) => (
-  <SafeAreaView
-    accessibilityLabel={accessibilityLabel}
-    role={Platform.OS === 'web' ? 'main' : undefined}
-    style={{ backgroundColor: theme.colors.canvas, flex: 1 }}
-  >
-    <ScrollView
-      contentContainerStyle={{
-        flexGrow: 1,
-        paddingHorizontal: theme.layout.mobileInset,
-        paddingVertical: theme.spacing[6],
-        maxWidth: Platform.OS === 'web' ? theme.layout.householdMaxWidth : undefined,
-        alignSelf: Platform.OS === 'web' ? 'center' : undefined,
-        width: '100%',
-      }}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={
-        onRefresh !== undefined ? (
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[theme.colors.coral]}
-            tintColor={theme.colors.coral}
-          />
-        ) : undefined
-      }
+export const AppShell = ({
+  children,
+  accessibilityLabel,
+  refreshing = false,
+  onRefresh,
+  title,
+  showBack = false,
+  onBack,
+  showProfile = false,
+}: AppShellProps) => {
+  const router = useRouter();
+
+  const handleBack = useCallback(() => {
+    if (onBack !== undefined) {
+      onBack();
+    } else {
+      router.back();
+    }
+  }, [onBack, router]);
+
+  const handleProfile = useCallback(() => {
+    router.push('/profile' as never);
+  }, [router]);
+
+  const hasNav = title !== undefined || showBack || showProfile;
+
+  return (
+    <SafeAreaView
+      accessibilityLabel={accessibilityLabel}
+      role={Platform.OS === 'web' ? 'main' : undefined}
+      style={{ backgroundColor: theme.colors.canvas, flex: 1 }}
     >
-      {children}
-    </ScrollView>
-  </SafeAreaView>
-);
+      {hasNav ? (
+        <View
+          style={{
+            alignItems: 'center',
+            borderBottomColor: theme.colors.border,
+            borderBottomWidth: theme.borderWidths.default,
+            backgroundColor: theme.colors.canvas,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            minHeight: 48,
+            paddingHorizontal: theme.layout.mobileInset,
+            paddingVertical: theme.spacing[1],
+          }}
+        >
+          {/* Left: back button */}
+          <View style={{ width: 44, alignItems: 'flex-start' }}>
+            {showBack ? (
+              <Pressable
+                accessibilityLabel="返回"
+                accessibilityRole="button"
+                onPress={handleBack}
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: theme.controlSizes.touchTarget,
+                  minWidth: theme.controlSizes.touchTarget,
+                }}
+              >
+                <ArrowLeft
+                  color={theme.colors.ink}
+                  size={theme.controlSizes.icon}
+                  strokeWidth={theme.controlSizes.iconStroke}
+                />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Center: title */}
+          <Text
+            numberOfLines={1}
+            style={{ flex: 1, textAlign: 'center', fontWeight: '600' as const }}
+            variant="body"
+          >
+            {title ?? ''}
+          </Text>
+
+          {/* Right: profile */}
+          <View style={{ width: 44, alignItems: 'flex-end' }}>
+            {showProfile ? (
+              <Pressable
+                accessibilityLabel="个人中心"
+                accessibilityRole="button"
+                onPress={handleProfile}
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: theme.controlSizes.touchTarget,
+                  minWidth: theme.controlSizes.touchTarget,
+                }}
+              >
+                <CircleUserRound
+                  color={theme.colors.ink}
+                  size={theme.controlSizes.icon}
+                  strokeWidth={theme.controlSizes.iconStroke}
+                />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: theme.layout.mobileInset,
+          paddingVertical: theme.spacing[6],
+          maxWidth: Platform.OS === 'web' ? theme.layout.householdMaxWidth : undefined,
+          alignSelf: Platform.OS === 'web' ? 'center' : undefined,
+          width: '100%',
+        }}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          onRefresh !== undefined ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.coral]}
+              tintColor={theme.colors.coral}
+            />
+          ) : undefined
+        }
+      >
+        {children}
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
 
 // ---- HouseholdHeader ----
 

@@ -85,7 +85,7 @@ export default function EditNoteRoute() {
 
   if (loading) {
     return (
-      <AppShell accessibilityLabel="加载笔记中">
+      <AppShell accessibilityLabel="加载笔记中" title="编辑笔记" showBack showProfile>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: activeTheme.spacing[12] }}>
           <ActivityIndicator color={activeTheme.colors.coral} />
         </View>
@@ -95,7 +95,7 @@ export default function EditNoteRoute() {
 
   if (note === null || error !== null) {
     return (
-      <AppShell accessibilityLabel="笔记加载失败">
+      <AppShell accessibilityLabel="笔记加载失败" title="编辑笔记" showBack showProfile>
         <Stack gap={4}>
           <Text variant="heading">笔记</Text>
           <Text>{error ?? '笔记未找到。'}</Text>
@@ -110,7 +110,7 @@ export default function EditNoteRoute() {
   }
 
   return (
-    <AppShell accessibilityLabel="编辑笔记">
+    <AppShell accessibilityLabel="编辑笔记" title="编辑笔记" showBack showProfile>
       <Stack gap={4}>
         <Text variant="heading">编辑笔记</Text>
         {error !== null && (

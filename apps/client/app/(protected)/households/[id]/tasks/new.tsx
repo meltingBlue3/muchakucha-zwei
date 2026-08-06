@@ -96,7 +96,7 @@ export default function CreateTaskRoute() {
   }
 
   return (
-    <AppShell accessibilityLabel="创建任务">
+    <AppShell accessibilityLabel="创建任务" title="创建任务" showBack showProfile>
       <Stack gap={4}>
         <HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => {}} />
 

@@ -113,7 +113,7 @@ export default function HouseholdDetailRoute() {
   return (
     <>
       {/* Calendar quick-access */}
-      <AppShell accessibilityLabel="家庭详情">
+      <AppShell accessibilityLabel="家庭详情" title="首页" showProfile>
         <Stack gap={4}>
           {/* Today quick-access */}
           <Pressable

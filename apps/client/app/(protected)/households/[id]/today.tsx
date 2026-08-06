@@ -216,7 +216,7 @@ export default function TodayRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="今日视图" refreshing={refreshing} onRefresh={handleRefresh}>
+      <AppShell accessibilityLabel="今日视图" refreshing={refreshing} onRefresh={handleRefresh} title="今日视图" showProfile>
       <Stack gap={4}>
         {/* Header */}
         <HouseholdHeader

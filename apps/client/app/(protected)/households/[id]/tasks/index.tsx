@@ -223,7 +223,7 @@ export default function TaskListRoute() {
 
   return (
   <>
-    <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh}>
+    <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile>
       <Stack gap={4}>
         {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

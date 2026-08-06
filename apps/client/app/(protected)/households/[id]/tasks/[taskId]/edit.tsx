@@ -108,7 +108,7 @@ export default function EditTaskRoute() {
   }
 
   return (
-    <AppShell accessibilityLabel="编辑任务">
+    <AppShell accessibilityLabel="编辑任务" title="编辑任务" showBack showProfile>
       <Stack gap={4}>
         <HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => {}} />
 

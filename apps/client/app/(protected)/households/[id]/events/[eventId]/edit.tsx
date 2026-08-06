@@ -94,7 +94,7 @@ export default function EditEventRoute() {
 
   if (loading) {
     return (
-      <AppShell accessibilityLabel="加载事件中">
+      <AppShell accessibilityLabel="加载事件中" title="编辑事件" showBack showProfile>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: activeTheme.spacing[12] }}>
           <ActivityIndicator color={activeTheme.colors.coral} />
         </View>
@@ -104,7 +104,7 @@ export default function EditEventRoute() {
 
   if (event === null || error !== null) {
     return (
-      <AppShell accessibilityLabel="事件加载失败">
+      <AppShell accessibilityLabel="事件加载失败" title="编辑事件" showBack showProfile>
         <Screen>
           <Stack gap={4}>
             <Text variant="heading">事件</Text>
@@ -121,7 +121,7 @@ export default function EditEventRoute() {
   }
 
   return (
-    <AppShell accessibilityLabel="编辑事件">
+    <AppShell accessibilityLabel="编辑事件" title="编辑事件" showBack showProfile>
       <Screen>
         <Stack gap={4}>
           <Text variant="heading">编辑事件</Text>

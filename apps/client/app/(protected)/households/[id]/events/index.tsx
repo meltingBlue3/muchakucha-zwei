@@ -200,7 +200,7 @@ export default function CalendarRoute() {
 
   return (
   <>
-    <AppShell accessibilityLabel="家庭日历" refreshing={refreshing} onRefresh={handleRefresh}>
+    <AppShell accessibilityLabel="家庭日历" refreshing={refreshing} onRefresh={handleRefresh} title="家庭日历" showProfile>
       <Stack gap={4}>
         {/* Header with household name and create button */}
         <View
