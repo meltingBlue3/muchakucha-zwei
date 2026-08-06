@@ -50,6 +50,7 @@
     "@types/nodemailer": "8.0.1",
     "@types/pg": "8.20.0",
     "@types/supertest": "7.2.1",
+    "eas-cli": "^21.6.0",
     "jest": "30.4.2",
     "jest-expo": "57.0.3",
     "prisma": "7.9.1",
