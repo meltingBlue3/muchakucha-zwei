@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, IsUUID, Length, MaxLength } from 'class-validator';
+import { LabelResponseDto } from '../../labels/dto/create-label.dto.js';
 
 export const TASK_STATUSES = ['pending', 'in_progress', 'completed'] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -54,6 +55,9 @@ export class TaskResponseDto {
   @ApiProperty() createdBy!: string;
   @ApiProperty() createdAt!: string;
   @ApiProperty() updatedAt!: string;
+
+  @ApiProperty({ type: [LabelResponseDto] })
+  labels!: LabelResponseDto[];
 }
 
 export class TaskListResponseDto {

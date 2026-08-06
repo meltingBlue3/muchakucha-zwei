@@ -18,6 +18,16 @@ interface EventRow {
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
+  labels: Array<{
+    label: {
+      id: string;
+      householdId: string;
+      name: string;
+      color: string;
+      createdBy: string;
+      createdAt: Date;
+    };
+  }>;
 }
 
 @Injectable()
@@ -93,6 +103,7 @@ export class EventsService {
         location: input.location?.trim() || null,
         createdBy: actorId,
       },
+      include: { labels: { include: { label: true } } },
     });
 
     return this.toResponse(event);
@@ -110,7 +121,17 @@ export class EventsService {
     const where: Record<string, unknown> = { householdId };
     if (startDate || endDate) {
       const startTime: Record<string, Date> = {};
-      if (startDate) startTime.gte = new Date(startDate);
+      if (startDate) {
+        // startDate is the client's local date (e.g. "2026-08-06").
+        // new Date("YYYY-MM-DD") creates midnight *UTC*, but an event
+        // whose local start is on startDate may have a UTC timestamp
+        // on the previous calendar day when the client is in a positive
+        // UTC offset (e.g. CST = UTC+8 → local midnight = 16:00Z the
+        // day before). Subtract one UTC day so those events are captured.
+        const startUtc = new Date(startDate);
+        startUtc.setUTCDate(startUtc.getUTCDate() - 1);
+        startTime.gte = startUtc;
+      }
       if (endDate) {
         // endDate is inclusive (the last day to include). Advance by one
         // day and use < so events whose startTime falls anywhere on
@@ -126,6 +147,7 @@ export class EventsService {
       this.prisma.event.findMany({
         where: where as any,
         orderBy: { startTime: 'asc' },
+        include: { labels: { include: { label: true } } },
       }),
       this.prisma.event.count({ where: where as any }),
     ]);
@@ -144,7 +166,10 @@ export class EventsService {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
 
-    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      include: { labels: { include: { label: true } } },
+    });
     if (event === null || event.householdId !== householdId) {
       throw new NotFoundException({ code: 'EVENT_NOT_FOUND', message: 'Event not found.' });
     }
@@ -190,6 +215,7 @@ export class EventsService {
     const updated = await this.prisma.event.update({
       where: { id: eventId },
       data,
+      include: { labels: { include: { label: true } } },
     });
 
     return this.toResponse(updated);
@@ -230,6 +256,14 @@ export class EventsService {
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+      labels: row.labels.map((el) => ({
+        id: el.label.id,
+        householdId: el.label.householdId,
+        name: el.label.name,
+        color: el.label.color,
+        createdBy: el.label.createdBy,
+        createdAt: el.label.createdAt.toISOString(),
+      })),
     };
   }
 }

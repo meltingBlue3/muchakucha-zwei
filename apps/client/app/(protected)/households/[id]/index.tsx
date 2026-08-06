@@ -3,7 +3,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import Calendar from 'lucide-react-native/icons/calendar';
+import FileText from 'lucide-react-native/icons/file-text';
 import ListTodo from 'lucide-react-native/icons/list-todo';
+import Tag from 'lucide-react-native/icons/tag';
 import Sunrise from 'lucide-react-native/icons/sunrise';
 
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
@@ -100,6 +102,14 @@ export default function HouseholdDetailRoute() {
     void router.push(`/households/${encodeURIComponent(id)}/tasks`);
   }, [router, id]);
 
+  const handleOpenNotes = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/notes`);
+  }, [router, id]);
+
+  const handleOpenLabels = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/labels`);
+  }, [router, id]);
+
   return (
     <>
       {/* Calendar quick-access */}
@@ -179,6 +189,60 @@ export default function HouseholdDetailRoute() {
               <Text variant="label">家庭任务</Text>
               <Text variant="bodySm" color="inkMuted">
                 查看和管理共享任务
+              </Text>
+            </View>
+            <Text variant="caption" color="coral">
+              进入 ›
+            </Text>
+          </Pressable>
+          {/* Labels quick-access */}
+          <Pressable
+            onPress={handleOpenLabels}
+            accessibilityLabel="管理标签"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: activeTheme.spacing[3],
+              backgroundColor: activeTheme.colors.surface,
+              borderRadius: activeTheme.borderRadii.md,
+              padding: activeTheme.spacing[4],
+              borderWidth: 1,
+              borderColor: activeTheme.colors.border,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Tag size={24} color={activeTheme.colors.coral} strokeWidth={1.5} />
+            <View style={{ flex: 1 }}>
+              <Text variant="label">标签管理</Text>
+              <Text variant="bodySm" color="inkMuted">
+                创建和管理标签，给事件和任务分类
+              </Text>
+            </View>
+            <Text variant="caption" color="coral">
+              进入 ›
+            </Text>
+          </Pressable>
+          {/* Notes quick-access */}
+          <Pressable
+            onPress={handleOpenNotes}
+            accessibilityLabel="打开家庭笔记"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: activeTheme.spacing[3],
+              backgroundColor: activeTheme.colors.surface,
+              borderRadius: activeTheme.borderRadii.md,
+              padding: activeTheme.spacing[4],
+              borderWidth: 1,
+              borderColor: activeTheme.colors.border,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <FileText size={24} color={activeTheme.colors.teal} strokeWidth={1.5} />
+            <View style={{ flex: 1 }}>
+              <Text variant="label">家庭笔记</Text>
+              <Text variant="bodySm" color="inkMuted">
+                共享笔记、文档和想法
               </Text>
             </View>
             <Text variant="caption" color="coral">

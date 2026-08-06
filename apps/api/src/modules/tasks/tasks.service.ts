@@ -26,6 +26,16 @@ interface TaskRow {
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
+  labels: Array<{
+    label: {
+      id: string;
+      householdId: string;
+      name: string;
+      color: string;
+      createdBy: string;
+      createdAt: Date;
+    };
+  }>;
 }
 
 interface ListFilters {
@@ -115,6 +125,7 @@ export class TasksService {
         dueDate,
         createdBy: actorId,
       },
+      include: { labels: { include: { label: true } } },
     });
 
     return this.toResponse(task);
@@ -137,6 +148,7 @@ export class TasksService {
       this.prisma.task.findMany({
         where: where as any,
         orderBy: [{ priority: 'asc' }, { dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
+        include: { labels: { include: { label: true } } },
       }),
       this.prisma.task.count({ where: where as any }),
     ]);
@@ -155,7 +167,10 @@ export class TasksService {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
 
-    const task = await this.prisma.task.findUnique({ where: { id: taskId } });
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      include: { labels: { include: { label: true } } },
+    });
     if (task === null || task.householdId !== householdId) {
       throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found.' });
     }
@@ -260,6 +275,7 @@ export class TasksService {
     const updated = await this.prisma.task.update({
       where: { id: taskId },
       data,
+      include: { labels: { include: { label: true } } },
     });
 
     return this.toResponse(updated);
@@ -303,6 +319,14 @@ export class TasksService {
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+      labels: row.labels.map((tl) => ({
+        id: tl.label.id,
+        householdId: tl.label.householdId,
+        name: tl.label.name,
+        color: tl.label.color,
+        createdBy: tl.label.createdBy,
+        createdAt: tl.label.createdAt.toISOString(),
+      })),
     };
   }
 }

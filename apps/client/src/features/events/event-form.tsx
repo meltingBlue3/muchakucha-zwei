@@ -5,6 +5,7 @@ import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text } from '../../ui/primitives';
 import { DateField } from '../../ui/date-field';
+import { LabelPicker } from '../labels/label-picker';
 import { toDateIso } from './calendar-utils';
 
 type EventInput = Omit<CreateEventDto, 'startTime' | 'endTime'> & {
@@ -31,9 +32,12 @@ interface EventFormProps {
   onCancel: () => void;
   submitLabel: string;
   isSubmitting: boolean;
+  householdId?: string;
+  selectedLabelIds?: string[];
+  onLabelChange?: (labelIds: string[]) => void;
 }
 
-export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitting }: EventFormProps) {
+export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: EventFormProps) {
   const activeTheme = useTheme<Theme>();
   const [form, setForm] = useState<EventInput>(() => {
     if (initial) {
@@ -65,21 +69,39 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
       return;
     }
 
-    const startTime = form.allDay
-      ? `${form.startDate}T00:00:00.000Z`
-      : new Date(`${form.startDate}T${form.startTime}:00`).toISOString();
-    const endTime = form.allDay
-      ? `${form.endDate}T23:59:59.999Z`
-      : new Date(`${form.endDate}T${form.endTime}:00`).toISOString();
+    // Validate end is after start
+    const startDateTime = new Date(
+      form.allDay
+        ? `${form.startDate}T00:00:00`
+        : `${form.startDate}T${form.startTime}:00`,
+    );
+    const endDateTime = new Date(
+      form.allDay
+        ? `${form.endDate}T23:59:59`
+        : `${form.endDate}T${form.endTime}:00`,
+    );
+    if (endDateTime <= startDateTime) {
+      setError('结束时间必须晚于开始时间。');
+      return;
+    }
+
+    // Always convert through new Date() so local date/time is
+    // correctly mapped to UTC — never hardcode a Z suffix because
+    // that would treat the local date as UTC midnight, shifting
+    // the effective time by the timezone offset (e.g. +8 h for CST).
+    const startTime = startDateTime.toISOString();
+    const endTime = endDateTime.toISOString();
 
     const data: CreateEventDto = {
       title: form.title.trim(),
       startTime,
       endTime,
+      allDay: form.allDay,
     };
-    if ((form.description ?? '').trim() !== '') data.description = (form.description ?? '').trim();
-    if (form.allDay) data.allDay = true;
-    if ((form.location ?? '').trim() !== '') data.location = (form.location ?? '').trim();
+    // Always include optional fields so the backend can clear them
+    // (the update endpoint treats absent/undefined as "no change").
+    data.description = (form.description ?? '').trim();
+    data.location = (form.location ?? '').trim();
 
     await onSubmit(data);
   }, [form, onSubmit]);
@@ -197,6 +219,18 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
           accessibilityLabel="事件描述"
         />
       </Stack>
+
+      {/* Labels */}
+      {householdId !== undefined && selectedLabelIds !== undefined && onLabelChange !== undefined && (
+        <Stack gap={1}>
+          <Text variant="label">标签</Text>
+          <LabelPicker
+            householdId={householdId}
+            selectedLabelIds={selectedLabelIds}
+            onChange={onLabelChange}
+          />
+        </Stack>
+      )}
 
       {/* Error */}
       {error !== null && (

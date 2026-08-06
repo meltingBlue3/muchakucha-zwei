@@ -5,6 +5,7 @@ import type { CreateTaskDto, TaskResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text } from '../../ui/primitives';
 import { DateField } from '../../ui/date-field';
+import { LabelPicker } from '../labels/label-picker';
 
 const STATUSES = [
   { value: 'pending', label: '待办' },
@@ -49,9 +50,12 @@ interface TaskFormProps {
   onCancel: () => void;
   submitLabel: string;
   isSubmitting: boolean;
+  householdId?: string;
+  selectedLabelIds?: string[];
+  onLabelChange?: (labelIds: string[]) => void;
 }
 
-export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, isSubmitting }: TaskFormProps) {
+export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: TaskFormProps) {
   const activeTheme = useTheme<Theme>();
   const [form, setForm] = useState<TaskInput>(() => {
     if (initial) {
@@ -85,9 +89,17 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
       priority: form.priority,
     };
 
-    if ((form.description ?? '').trim() !== '') data.description = (form.description ?? '').trim();
-    if (form.assigneeId !== '') data.assigneeId = form.assigneeId;
-    if (form.dueDate !== '') data.dueDate = new Date(form.dueDate + 'T00:00:00.000Z').toISOString();
+    // Always include optional fields so the backend can clear them
+    // (the update endpoint treats absent/undefined as "no change").
+    data.description = (form.description ?? '').trim();
+    data.assigneeId = form.assigneeId; // empty string clears the assignee
+    if (form.dueDate !== '') {
+      // Convert through new Date() so local midnight is mapped to UTC —
+      // never hardcode Z, which would treat the local date as UTC midnight.
+      data.dueDate = new Date(form.dueDate + 'T00:00:00').toISOString();
+    } else {
+      data.dueDate = ''; // clears the due date
+    }
 
     await onSubmit(data);
   }, [form, onSubmit]);
@@ -233,6 +245,18 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
           accessibilityLabel="任务描述"
         />
       </Stack>
+
+      {/* Labels */}
+      {householdId !== undefined && selectedLabelIds !== undefined && onLabelChange !== undefined && (
+        <Stack gap={1}>
+          <Text variant="label">标签</Text>
+          <LabelPicker
+            householdId={householdId}
+            selectedLabelIds={selectedLabelIds}
+            onChange={onLabelChange}
+          />
+        </Stack>
+      )}
 
       {/* Error */}
       {error !== null && (

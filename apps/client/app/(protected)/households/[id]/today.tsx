@@ -18,6 +18,7 @@ import {
   AccessChangedPanel,
   AppShell,
   HouseholdHeader,
+  HouseholdSwitcher,
 } from '../../../../src/ui/household-components';
 import { Stack, Text } from '../../../../src/ui/primitives';
 import type { Theme } from '../../../../src/ui/theme';
@@ -41,6 +42,7 @@ export default function TodayRoute() {
     currentHouseholdId,
     accessChangedHouseholdName,
     refreshHouseholds,
+    switchHousehold,
   } = useHouseholdContext();
 
   const [events, setEvents] = useState<EventResponseDto[]>([]);
@@ -48,6 +50,9 @@ export default function TodayRoute() {
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [statusChangingTaskId, setStatusChangingTaskId] = useState<string | null>(null);
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
@@ -100,27 +105,27 @@ export default function TodayRoute() {
       }
 
       const today = todayIso();
-      const [eventsResult, tasksResult, householdResult, meResult] = await Promise.all([
+      const [eventsResult, tasksResult, householdResult] = await Promise.all([
         sessionApiClient.listEvents(token, householdId, today, today),
         sessionApiClient.listTasks(token, householdId),
         sessionApiClient.getHousehold(token, householdId),
-        sessionApiClient.getMe(token),
       ]);
 
       setEvents(eventsResult.events);
       setMembers(householdResult.members);
-
-      // Filter tasks assigned to current user
-      const myTasks = tasksResult.tasks.filter(
-        (t) => t.assigneeId === meResult.id,
-      );
-      setTasks(myTasks);
+      setTasks(tasksResult.tasks);
     } catch (err) {
       setError('无法加载今日数据，请检查网络连接后重试。');
     } finally {
       setLoading(false);
     }
   }, [householdId]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
 
   useEffect(() => {
     void fetchData();
@@ -144,11 +149,46 @@ export default function TodayRoute() {
     [router, householdId],
   );
 
+  const handleTaskStatusChange = useCallback(async (task: TaskResponseDto) => {
+    if (householdId === undefined || householdId === '') return;
+    const nextStatus =
+      task.status === 'pending' ? 'in_progress'
+        : task.status === 'in_progress' ? 'completed'
+        : 'pending';
+    setStatusChangingTaskId(task.id);
+    try {
+      const token = await sessionTransport.getAccessToken();
+      if (token === null) return;
+      await sessionApiClient.updateTask(token, householdId, task.id, {
+        title: task.title,
+        status: nextStatus,
+        priority: task.priority,
+      });
+      void fetchData();
+    } catch {
+      // silently ignore - failed status change
+    } finally {
+      setStatusChangingTaskId(null);
+    }
+  }, [householdId, fetchData]);
+
   const dateLabel = useMemo(() => {
     const now = new Date();
     const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
     return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${weekDays[now.getDay()]}`;
   }, []);
+
+  const handleSwitch = useCallback(async (householdId: string) => {
+    if (householdId === currentHouseholdId) {
+      setSwitcherOpen(false);
+      return;
+    }
+    const success = await switchHousehold(householdId);
+    if (success) {
+      void router.replace(`/households/${encodeURIComponent(householdId)}/today`);
+    }
+    setSwitcherOpen(false);
+  }, [currentHouseholdId, switchHousehold, router]);
 
   // AccessChanged state
   if (viewState === 'accessChanged') {
@@ -175,12 +215,13 @@ export default function TodayRoute() {
   }
 
   return (
-    <AppShell accessibilityLabel="今日视图">
+    <>
+      <AppShell accessibilityLabel="今日视图" refreshing={refreshing} onRefresh={handleRefresh}>
       <Stack gap={4}>
         {/* Header */}
         <HouseholdHeader
           householdName={currentHousehold?.name ?? ''}
-          onOpenSwitcher={() => {}}
+          onOpenSwitcher={() => setSwitcherOpen(true)}
         />
 
         {/* Date label */}
@@ -230,6 +271,8 @@ export default function TodayRoute() {
                       task={task}
                       assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
                       onPress={handleTaskPress}
+                      onStatusChange={handleTaskStatusChange}
+                      statusChanging={statusChangingTaskId === task.id}
                     />
                   ))}
                 </Stack>
@@ -283,6 +326,8 @@ export default function TodayRoute() {
                       task={task}
                       assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
                       onPress={handleTaskPress}
+                      onStatusChange={handleTaskStatusChange}
+                      statusChanging={statusChangingTaskId === task.id}
                     />
                   ))}
                 </Stack>
@@ -314,6 +359,8 @@ export default function TodayRoute() {
                       task={task}
                       assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
                       onPress={handleTaskPress}
+                      onStatusChange={handleTaskStatusChange}
+                      statusChanging={statusChangingTaskId === task.id}
                     />
                   ))}
                 </Stack>
@@ -333,6 +380,8 @@ export default function TodayRoute() {
                       task={task}
                       assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
                       onPress={handleTaskPress}
+                      onStatusChange={handleTaskStatusChange}
+                      statusChanging={statusChangingTaskId === task.id}
                     />
                   ))}
                 </Stack>
@@ -354,5 +403,17 @@ export default function TodayRoute() {
         )}
       </Stack>
     </AppShell>
-  );
+
+    <HouseholdSwitcher
+      currentHouseholdId={currentHouseholdId}
+      households={households}
+      onCreateNew={() => {
+        void router.push('/households/new');
+        setSwitcherOpen(false);
+      }}
+      onClose={() => setSwitcherOpen(false)}
+      onSelect={(hid) => { void handleSwitch(hid); }}
+      visible={switcherOpen}
+    />
+  </>  );
 }

@@ -1,8 +1,9 @@
-import { Pressable } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text } from '../../ui/primitives';
+import { LabelChip } from '../labels/label-chip';
 import { formatDateRange } from './calendar-utils';
 
 interface EventCardProps {
@@ -42,6 +43,13 @@ export function EventCard({ event, onPress }: EventCardProps) {
           <Text variant="bodySm" numberOfLines={2} color="inkMuted">
             {event.description}
           </Text>
+        )}
+        {(event.labels ?? []).length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[1] }}>
+            {(event.labels ?? []).map((label) => (
+              <LabelChip key={label.id} label={label} small />
+            ))}
+          </View>
         )}
       </Stack>
     </Pressable>

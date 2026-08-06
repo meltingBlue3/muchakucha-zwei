@@ -13,6 +13,7 @@ import {
   AccessChangedPanel,
   AppShell,
   HouseholdHeader,
+  HouseholdSwitcher,
 } from '../../../../../src/ui/household-components';
 import { Stack, Text } from '../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../src/ui/theme';
@@ -27,6 +28,7 @@ export default function CalendarRoute() {
     currentHouseholdId,
     accessChangedHouseholdName,
     refreshHouseholds,
+    switchHousehold,
   } = useHouseholdContext();
 
   const today = useMemo(() => new Date(), []);
@@ -37,6 +39,21 @@ export default function CalendarRoute() {
   const [eventsByDate, setEventsByDate] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [labelFilter, setLabelFilter] = useState<string>('all');
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  const handleSwitch = useCallback(async (householdId: string) => {
+    if (householdId === currentHouseholdId) {
+      setSwitcherOpen(false);
+      return;
+    }
+    const success = await switchHousehold(householdId);
+    if (success) {
+      void router.replace(`/households/${encodeURIComponent(householdId)}/events`);
+    }
+    setSwitcherOpen(false);
+  }, [currentHouseholdId, switchHousehold, router]);
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
@@ -82,19 +99,40 @@ export default function CalendarRoute() {
     }
   }, [householdId, year, month]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchEvents();
+    setRefreshing(false);
+  }, [fetchEvents]);
+
   useEffect(() => {
     void fetchEvents();
   }, [fetchEvents]);
 
-  // Filter events for selected date
+  // Extract unique labels from loaded events
+  const availableLabels = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string; color: string }>();
+    for (const e of events) {
+      for (const l of e.labels ?? []) {
+        if (!seen.has(l.id)) {
+          seen.set(l.id, { id: l.id, name: l.name, color: l.color });
+        }
+      }
+    }
+    return [...seen.values()];
+  }, [events]);
+
+  // Filter events for selected date (with optional label filter)
   const selectedDateEvents = useMemo(() => {
     if (selectedDateIso === null) return [];
     return events.filter((e) => {
       const eventStart = toDateIso(new Date(e.startTime));
       const eventEnd = toDateIso(new Date(e.endTime));
-      return selectedDateIso >= eventStart && selectedDateIso <= eventEnd;
+      if (!(selectedDateIso >= eventStart && selectedDateIso <= eventEnd)) return false;
+      if (labelFilter !== 'all' && !(e.labels ?? []).some((l) => l.id === labelFilter)) return false;
+      return true;
     });
-  }, [events, selectedDateIso]);
+  }, [events, selectedDateIso, labelFilter]);
 
   const handlePrevMonth = useCallback(() => {
     if (month === 0) {
@@ -161,7 +199,8 @@ export default function CalendarRoute() {
   }
 
   return (
-    <AppShell accessibilityLabel="家庭日历">
+  <>
+    <AppShell accessibilityLabel="家庭日历" refreshing={refreshing} onRefresh={handleRefresh}>
       <Stack gap={4}>
         {/* Header with household name and create button */}
         <View
@@ -173,7 +212,7 @@ export default function CalendarRoute() {
         >
           <HouseholdHeader
             householdName={currentHousehold?.name ?? ''}
-            onOpenSwitcher={() => {}}
+            onOpenSwitcher={() => setSwitcherOpen(true)}
           />
           <Pressable
             onPress={handleCreateEvent}
@@ -202,6 +241,53 @@ export default function CalendarRoute() {
           onNextMonth={handleNextMonth}
           onSelectDate={handleSelectDate}
         />
+
+        {/* Label filter */}
+        {availableLabels.length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], alignItems: 'center' }}>
+            <Pressable
+              onPress={() => setLabelFilter('all')}
+              style={({ pressed }) => ({
+                paddingHorizontal: activeTheme.spacing[3],
+                paddingVertical: activeTheme.spacing[1],
+                borderRadius: activeTheme.borderRadii.full,
+                borderWidth: 1,
+                borderColor: labelFilter === 'all' ? activeTheme.colors.coral : activeTheme.colors.border,
+                backgroundColor: 'transparent',
+                opacity: pressed ? 0.7 : 1,
+              })}
+              accessibilityLabel="全部标签"
+            >
+              <Text variant="caption" color={labelFilter === 'all' ? 'coral' : 'inkMuted'}>
+                全部标签
+              </Text>
+            </Pressable>
+            {availableLabels.map((l) => (
+              <Pressable
+                key={l.id}
+                onPress={() => setLabelFilter(labelFilter === l.id ? 'all' : l.id)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: activeTheme.spacing[1],
+                  paddingHorizontal: activeTheme.spacing[3],
+                  paddingVertical: activeTheme.spacing[1],
+                  borderRadius: activeTheme.borderRadii.full,
+                  borderWidth: 1,
+                  borderColor: labelFilter === l.id ? l.color : activeTheme.colors.border,
+                  backgroundColor: labelFilter === l.id ? l.color + '18' : 'transparent',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+                accessibilityLabel={`筛选标签：${l.name}`}
+              >
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: l.color }} />
+                <Text variant="caption" style={{ color: labelFilter === l.id ? l.color : activeTheme.colors.inkMuted }}>
+                  {l.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         {/* Selected date events */}
         <Stack gap={2}>
@@ -239,7 +325,7 @@ export default function CalendarRoute() {
 
           {!loading && error === null && selectedDateEvents.length === 0 && (
             <Text variant="bodySm" color="inkMuted">
-              这一天没有事件。
+              {labelFilter !== 'all' ? '没有符合筛选条件的事件。' : '这一天没有事件。'}
             </Text>
           )}
 
@@ -249,5 +335,17 @@ export default function CalendarRoute() {
         </Stack>
       </Stack>
     </AppShell>
-  );
+
+    <HouseholdSwitcher
+      currentHouseholdId={currentHouseholdId}
+      households={households}
+      onCreateNew={() => {
+        void router.push('/households/new');
+        setSwitcherOpen(false);
+      }}
+      onClose={() => setSwitcherOpen(false)}
+      onSelect={(hid) => { void handleSwitch(hid); }}
+      visible={switcherOpen}
+    />
+  </>  );
 }

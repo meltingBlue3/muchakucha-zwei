@@ -207,7 +207,7 @@ export async function createApplication(
   app.setGlobalPrefix(API_PREFIX);
   app.enableCors({
     credentials: true,
-    methods: ['GET', 'PATCH', 'POST', 'OPTIONS'],
+    methods: ['GET', 'PATCH', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     origin: (origin, callback) => {
       // 非生产环境允许所有来源，便于开发和多设备测试
       if (config.nodeEnvironment !== 'production') {

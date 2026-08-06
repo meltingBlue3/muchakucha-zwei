@@ -2504,6 +2504,37 @@
           "endTime"
         ]
       },
+      "LabelResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "householdId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "householdId",
+          "name",
+          "color",
+          "createdBy",
+          "createdAt"
+        ]
+      },
       "EventResponseDto": {
         "type": "object",
         "properties": {
@@ -2539,6 +2570,12 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LabelResponseDto"
+            }
           }
         },
         "required": [
@@ -2550,7 +2587,8 @@
           "allDay",
           "createdBy",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "labels"
         ]
       },
       "EventListResponseDto": {
@@ -2795,37 +2833,6 @@
         "required": [
           "name",
           "color"
-        ]
-      },
-      "LabelResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "householdId": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "color": {
-            "type": "string"
-          },
-          "createdBy": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "householdId",
-          "name",
-          "color",
-          "createdBy",
-          "createdAt"
         ]
       },
       "LabelListResponseDto": {

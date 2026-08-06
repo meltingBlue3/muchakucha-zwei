@@ -12,7 +12,7 @@ import {
   AppShell,
   HouseholdHeader,
 } from '../../../../../src/ui/household-components';
-import { Stack } from '../../../../../src/ui/primitives';
+import { Stack, Text } from '../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../src/ui/theme';
 import type { CreateTaskDto } from '@muchakucha/api-client';
 
@@ -31,6 +31,8 @@ export default function CreateTaskRoute() {
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
@@ -60,15 +62,25 @@ export default function CreateTaskRoute() {
   const handleSubmit = useCallback(async (data: CreateTaskDto) => {
     if (householdId === undefined || householdId === '') return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const token = await sessionTransport.getAccessToken();
-      if (token === null) return;
-      await sessionApiClient.createTask(token, householdId, data);
+      if (token === null) {
+        setSubmitError('登录已过期，请重新登录。');
+        setSubmitting(false);
+        return;
+      }
+      const task = await sessionApiClient.createTask(token, householdId, data);
+      // Tag the new task with selected labels
+      if (selectedLabelIds.length > 0) {
+        await sessionApiClient.tagTask(token, householdId, task.id, { labelIds: selectedLabelIds });
+      }
       router.back();
     } catch {
+      setSubmitError('创建任务失败，请重试。');
       setSubmitting(false);
     }
-  }, [householdId, router]);
+  }, [householdId, router, selectedLabelIds]);
 
   if (viewState === 'accessChanged') {
     return (
@@ -93,13 +105,27 @@ export default function CreateTaskRoute() {
             <ActivityIndicator color={activeTheme.colors.coral} />
           </View>
         ) : (
-          <TaskForm
-            members={memberOptions}
-            onSubmit={handleSubmit}
-            onCancel={() => router.back()}
-            submitLabel="创建任务"
-            isSubmitting={submitting}
-          />
+          <Stack gap={4}>
+            {submitError !== null && (
+              <View style={{
+                backgroundColor: activeTheme.colors.destructiveSoft,
+                padding: activeTheme.spacing[4],
+                borderRadius: activeTheme.borderRadii.md,
+              }}>
+                <Text variant="bodySm" color="destructive">{submitError}</Text>
+              </View>
+            )}
+            <TaskForm
+              members={memberOptions}
+              onSubmit={handleSubmit}
+              onCancel={() => router.back()}
+              submitLabel="创建任务"
+              isSubmitting={submitting}
+              householdId={householdId}
+              selectedLabelIds={selectedLabelIds}
+              onLabelChange={setSelectedLabelIds}
+            />
+          </Stack>
         )}
       </Stack>
     </AppShell>

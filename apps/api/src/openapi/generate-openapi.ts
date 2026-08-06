@@ -236,6 +236,7 @@ export interface EventResponseDto {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  labels: LabelResponseDto[];
 }
 
 export interface EventListResponseDto {
@@ -273,6 +274,7 @@ export interface TaskResponseDto {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  labels: LabelResponseDto[];
 }
 
 export interface TaskListResponseDto {

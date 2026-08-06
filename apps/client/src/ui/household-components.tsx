@@ -16,6 +16,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   View,
 } from 'react-native';
@@ -36,9 +37,11 @@ import { theme } from './theme';
 interface AppShellProps {
   children: React.ReactNode;
   accessibilityLabel?: string;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }
 
-export const AppShell = ({ children, accessibilityLabel }: AppShellProps) => (
+export const AppShell = ({ children, accessibilityLabel, refreshing = false, onRefresh }: AppShellProps) => (
   <SafeAreaView
     accessibilityLabel={accessibilityLabel}
     role={Platform.OS === 'web' ? 'main' : undefined}
@@ -54,6 +57,16 @@ export const AppShell = ({ children, accessibilityLabel }: AppShellProps) => (
         width: '100%',
       }}
       keyboardShouldPersistTaps="handled"
+      refreshControl={
+        onRefresh !== undefined ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.coral]}
+            tintColor={theme.colors.coral}
+          />
+        ) : undefined
+      }
     >
       {children}
     </ScrollView>

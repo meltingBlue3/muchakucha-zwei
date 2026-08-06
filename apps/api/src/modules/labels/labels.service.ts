@@ -206,15 +206,23 @@ export class LabelsService {
       });
     }
 
-    await this.prisma.$transaction(
-      input.labelIds.map((labelId) =>
+    await this.prisma.$transaction([
+      // Remove labels that are no longer selected
+      this.prisma.eventLabel.deleteMany({
+        where: {
+          eventId,
+          labelId: { notIn: input.labelIds },
+        },
+      }),
+      // Upsert the currently selected labels
+      ...input.labelIds.map((labelId) =>
         this.prisma.eventLabel.upsert({
           where: { eventId_labelId: { eventId, labelId } },
           create: { eventId, labelId },
           update: {},
         }),
       ),
-    );
+    ]);
   }
 
   async untagEvent(
@@ -265,15 +273,23 @@ export class LabelsService {
       });
     }
 
-    await this.prisma.$transaction(
-      input.labelIds.map((labelId) =>
+    await this.prisma.$transaction([
+      // Remove labels that are no longer selected
+      this.prisma.taskLabel.deleteMany({
+        where: {
+          taskId,
+          labelId: { notIn: input.labelIds },
+        },
+      }),
+      // Upsert the currently selected labels
+      ...input.labelIds.map((labelId) =>
         this.prisma.taskLabel.upsert({
           where: { taskId_labelId: { taskId, labelId } },
           create: { taskId, labelId },
           update: {},
         }),
       ),
-    );
+    ]);
   }
 
   async untagTask(

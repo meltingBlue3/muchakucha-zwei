@@ -1,0 +1,55 @@
+import { Pressable, View } from 'react-native';
+import { useTheme } from '@shopify/restyle';
+import type { NoteResponseDto } from '@muchakucha/api-client';
+import FileText from 'lucide-react-native/icons/file-text';
+import type { Theme } from '../../ui/theme';
+import { Stack, Text } from '../../ui/primitives';
+
+interface NoteCardProps {
+  note: NoteResponseDto;
+  onPress: (note: NoteResponseDto) => void;
+}
+
+export function NoteCard({ note, onPress }: NoteCardProps) {
+  const activeTheme = useTheme<Theme>();
+
+  const updatedDate = new Date(note.updatedAt);
+  const dateLabel = `${updatedDate.getFullYear()}-${String(updatedDate.getMonth() + 1).padStart(2, '0')}-${String(updatedDate.getDate()).padStart(2, '0')}`;
+
+  const bodyPreview = (note.body ?? '').trim();
+  const previewText = bodyPreview.length > 120 ? bodyPreview.slice(0, 120) + '…' : bodyPreview;
+
+  return (
+    <Pressable
+      onPress={() => onPress(note)}
+      accessibilityLabel={`笔记：${note.title}`}
+      style={({ pressed }) => ({
+        backgroundColor: activeTheme.colors.surface,
+        borderRadius: activeTheme.borderRadii.md,
+        padding: activeTheme.spacing[4],
+        borderWidth: 1,
+        borderColor: activeTheme.colors.border,
+        opacity: pressed ? 0.8 : 1,
+      })}
+    >
+      <View style={{ flexDirection: 'row', gap: activeTheme.spacing[3] }}>
+        <View style={{ paddingTop: activeTheme.spacing[1] }}>
+          <FileText size={20} color={activeTheme.colors.teal} strokeWidth={1.5} />
+        </View>
+        <Stack gap={1} style={{ flex: 1 }}>
+          <Text variant="label" numberOfLines={1}>
+            {note.title}
+          </Text>
+          <Text variant="caption" color="inkMuted">
+            {dateLabel}
+          </Text>
+          {previewText !== '' && (
+            <Text variant="bodySm" numberOfLines={2} color="inkMuted">
+              {previewText}
+            </Text>
+          )}
+        </Stack>
+      </View>
+    </Pressable>
+  );
+}

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsDateString, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { LabelResponseDto } from '../../labels/dto/create-label.dto.js';
 
 export class CreateEventDto {
   @ApiProperty({ description: 'Event title', minLength: 1, maxLength: 200 })
@@ -66,6 +67,9 @@ export class EventResponseDto {
 
   @ApiProperty()
   updatedAt!: string;
+
+  @ApiProperty({ type: [LabelResponseDto] })
+  labels!: LabelResponseDto[];
 }
 
 export class EventListResponseDto {

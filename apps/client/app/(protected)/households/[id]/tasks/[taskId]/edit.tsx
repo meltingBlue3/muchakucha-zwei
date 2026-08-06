@@ -33,6 +33,8 @@ export default function EditTaskRoute() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
@@ -54,6 +56,7 @@ export default function EditTaskRoute() {
         ]);
         setTask(taskResult);
         setMembers(householdResult.members);
+        setSelectedLabelIds((taskResult.labels ?? []).map((l) => l.id));
       } catch {
         // leave empty
       } finally {
@@ -70,11 +73,13 @@ export default function EditTaskRoute() {
       const token = await sessionTransport.getAccessToken();
       if (token === null) return;
       await sessionApiClient.updateTask(token, householdId, taskId, data);
+      // Sync labels: tag with all selected labels (replaces current)
+      await sessionApiClient.tagTask(token, householdId, taskId, { labelIds: selectedLabelIds });
       router.back();
     } catch {
       setSubmitting(false);
     }
-  }, [householdId, taskId, router]);
+  }, [householdId, taskId, router, selectedLabelIds]);
 
   const handleDelete = useCallback(async () => {
     if (householdId === undefined || householdId === '' || taskId === undefined || taskId === '') return;
@@ -120,24 +125,73 @@ export default function EditTaskRoute() {
               onCancel={() => router.back()}
               submitLabel="保存修改"
               isSubmitting={submitting}
+              householdId={householdId}
+              selectedLabelIds={selectedLabelIds}
+              onLabelChange={setSelectedLabelIds}
             />
-            <Pressable
-              onPress={handleDelete}
-              disabled={deleting}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                paddingVertical: activeTheme.spacing[3],
-                borderRadius: activeTheme.borderRadii.sm,
-                borderWidth: 1,
-                borderColor: activeTheme.colors.destructive,
-                opacity: pressed ? 0.7 : 1,
-              })}
-              accessibilityLabel="删除任务"
-            >
-              <Text variant="button" color="destructive">
-                {deleting ? '删除中…' : '删除任务'}
-              </Text>
-            </Pressable>
+            {/* Delete section */}
+            <View style={{ marginTop: activeTheme.spacing[4], borderTopWidth: 1, borderTopColor: activeTheme.colors.border, paddingTop: activeTheme.spacing[4] }}>
+              {!confirmDelete ? (
+                <Pressable
+                  onPress={() => setConfirmDelete(true)}
+                  disabled={deleting}
+                  style={({ pressed }) => ({
+                    alignItems: 'center',
+                    paddingVertical: activeTheme.spacing[3],
+                    borderRadius: activeTheme.borderRadii.sm,
+                    borderWidth: 1,
+                    borderColor: activeTheme.colors.destructive,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                  accessibilityLabel="删除任务"
+                >
+                  <Text variant="button" color="destructive">
+                    删除任务
+                  </Text>
+                </Pressable>
+              ) : (
+                <Stack gap={3}>
+                  <Text variant="bodySm" color="destructive">
+                    确定要删除这个任务吗？此操作不可撤销。
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: activeTheme.spacing[3] }}>
+                    <Pressable
+                      onPress={() => setConfirmDelete(false)}
+                      disabled={deleting}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        alignItems: 'center',
+                        paddingVertical: activeTheme.spacing[3],
+                        borderRadius: activeTheme.borderRadii.sm,
+                        borderWidth: 1,
+                        borderColor: activeTheme.colors.border,
+                        opacity: pressed ? 0.7 : 1,
+                      })}
+                      accessibilityLabel="取消删除"
+                    >
+                      <Text variant="button" color="ink">取消</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleDelete}
+                      disabled={deleting}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        alignItems: 'center',
+                        paddingVertical: activeTheme.spacing[3],
+                        borderRadius: activeTheme.borderRadii.sm,
+                        backgroundColor: deleting ? activeTheme.colors.disabled : activeTheme.colors.destructive,
+                        opacity: pressed ? 0.7 : 1,
+                      })}
+                      accessibilityLabel="确认删除任务"
+                    >
+                      <Text variant="button" color="surface">
+                        {deleting ? '删除中…' : '确认删除'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </Stack>
+              )}
+            </View>
           </Stack>
         ) : (
           <Text variant="bodySm" color="inkMuted">任务未找到。</Text>

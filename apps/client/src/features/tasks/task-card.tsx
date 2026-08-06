@@ -1,8 +1,11 @@
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { TaskResponseDto } from '@muchakucha/api-client';
+import Circle from 'lucide-react-native/icons/circle';
+import CircleCheckBig from 'lucide-react-native/icons/circle-check-big';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text } from '../../ui/primitives';
+import { LabelChip } from '../labels/label-chip';
 import { statusLabel, priorityLabel, formatDueDate, isOverdue } from './task-utils';
 
 const BADGE_PADDING_V = 2;
@@ -12,11 +15,14 @@ interface TaskCardProps {
   task: TaskResponseDto;
   assigneeName?: string;
   onPress: (task: TaskResponseDto) => void;
+  onStatusChange?: (task: TaskResponseDto) => void;
+  statusChanging?: boolean;
 }
 
-export function TaskCard({ task, assigneeName, onPress }: TaskCardProps) {
+export function TaskCard({ task, assigneeName, onPress, onStatusChange, statusChanging = false }: TaskCardProps) {
   const activeTheme = useTheme<Theme>();
   const overdue = isOverdue(task.dueDate ?? null);
+  const canToggle = onStatusChange !== undefined;
 
   const statusColors: Record<string, string> = {
     pending: activeTheme.colors.border,
@@ -45,38 +51,77 @@ export function TaskCard({ task, assigneeName, onPress }: TaskCardProps) {
       })}
     >
       <Stack gap={2}>
-        {/* Top row: status + priority */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}>
-          <View
-            style={{
-              backgroundColor: statusColors[task.status] ?? activeTheme.colors.border,
-              paddingHorizontal: activeTheme.spacing[2],
-              paddingVertical: BADGE_PADDING_V,
-              borderRadius: activeTheme.borderRadii.sm,
-            }}
-          >
-            <Text variant="caption" color="surface">
-              {statusLabel(task.status)}
-            </Text>
+        {/* Top row: status + priority + toggle */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2], flex: 1 }}>
+            <View
+              style={{
+                backgroundColor: statusColors[task.status] ?? activeTheme.colors.border,
+                paddingHorizontal: activeTheme.spacing[2],
+                paddingVertical: BADGE_PADDING_V,
+                borderRadius: activeTheme.borderRadii.sm,
+              }}
+            >
+              <Text variant="caption" color="surface">
+                {statusLabel(task.status)}
+              </Text>
+            </View>
+            <View
+              style={{
+                backgroundColor: 'transparent',
+                borderWidth: 1,
+                borderColor: priorityColors[task.priority] ?? activeTheme.colors.border,
+                paddingHorizontal: activeTheme.spacing[2],
+                paddingVertical: BADGE_PADDING_V_OUTLINE,
+                borderRadius: activeTheme.borderRadii.sm,
+              }}
+            >
+              <Text variant="caption" color={task.priority === 'urgent' ? 'destructive' : 'inkMuted'}>
+                {priorityLabel(task.priority)}
+              </Text>
+            </View>
+            {overdue && (
+              <Text variant="caption" color="destructive">
+                逾期
+              </Text>
+            )}
           </View>
-          <View
-            style={{
-              backgroundColor: 'transparent',
-              borderWidth: 1,
-              borderColor: priorityColors[task.priority] ?? activeTheme.colors.border,
-              paddingHorizontal: activeTheme.spacing[2],
-              paddingVertical: BADGE_PADDING_V_OUTLINE,
-              borderRadius: activeTheme.borderRadii.sm,
-            }}
-          >
-            <Text variant="caption" color={task.priority === 'urgent' ? 'destructive' : 'inkMuted'}>
-              {priorityLabel(task.priority)}
-            </Text>
-          </View>
-          {overdue && (
-            <Text variant="caption" color="destructive">
-              逾期
-            </Text>
+          {canToggle && (
+            <Pressable
+              onPress={() => onStatusChange?.(task)}
+              disabled={statusChanging}
+              accessibilityLabel={
+                task.status === 'completed'
+                  ? '重新打开任务'
+                  : task.status === 'in_progress'
+                    ? '完成任务'
+                    : '开始任务'
+              }
+              accessibilityRole="button"
+              hitSlop={activeTheme.spacing[2]}
+              style={({ pressed }) => ({
+                opacity: statusChanging ? 0.5 : pressed ? 0.7 : 1,
+                padding: activeTheme.spacing[1],
+              })}
+            >
+              {task.status === 'completed' ? (
+                <CircleCheckBig
+                  size={24}
+                  color={activeTheme.colors.teal}
+                  strokeWidth={1.5}
+                />
+              ) : (
+                <Circle
+                  size={24}
+                  color={
+                    task.status === 'in_progress'
+                      ? activeTheme.colors.teal
+                      : activeTheme.colors.border
+                  }
+                  strokeWidth={1.5}
+                />
+              )}
+            </Pressable>
           )}
         </View>
 
@@ -108,6 +153,15 @@ export function TaskCard({ task, assigneeName, onPress }: TaskCardProps) {
           <Text variant="bodySm" numberOfLines={2} color="inkMuted">
             {task.description ?? ''}
           </Text>
+        )}
+
+        {/* Labels */}
+        {(task.labels ?? []).length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[1] }}>
+            {(task.labels ?? []).map((label) => (
+              <LabelChip key={label.id} label={label} small />
+            ))}
+          </View>
         )}
       </Stack>
     </Pressable>

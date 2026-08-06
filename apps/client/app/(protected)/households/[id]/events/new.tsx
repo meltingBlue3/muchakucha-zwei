@@ -12,6 +12,7 @@ export default function CreateEventRoute() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
 
   const handleSubmit = useCallback(
     async (data: CreateEventDto) => {
@@ -23,7 +24,11 @@ export default function CreateEventRoute() {
           setError('登录已过期，请重新登录。');
           return;
         }
-        await sessionApiClient.createEvent(token, id!, data);
+        const event = await sessionApiClient.createEvent(token, id!, data);
+        // Tag the new event with selected labels
+        if (selectedLabelIds.length > 0) {
+          await sessionApiClient.tagEvent(token, id!, event.id, { labelIds: selectedLabelIds });
+        }
         router.back();
       } catch (err: unknown) {
         const message =
@@ -33,7 +38,7 @@ export default function CreateEventRoute() {
         setIsSubmitting(false);
       }
     },
-    [id, router],
+    [id, router, selectedLabelIds],
   );
 
   const handleCancel = useCallback(() => {
@@ -55,6 +60,9 @@ export default function CreateEventRoute() {
             onCancel={handleCancel}
             submitLabel="创建"
             isSubmitting={isSubmitting}
+            householdId={id}
+            selectedLabelIds={selectedLabelIds}
+            onLabelChange={setSelectedLabelIds}
           />
         </Stack>
       </Screen>

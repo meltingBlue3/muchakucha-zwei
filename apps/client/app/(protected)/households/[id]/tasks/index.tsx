@@ -11,17 +11,27 @@ import {
   AccessChangedPanel,
   AppShell,
   HouseholdHeader,
+  HouseholdSwitcher,
 } from '../../../../../src/ui/household-components';
 import { Stack, Text } from '../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../src/ui/theme';
 
 type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
+type PriorityFilterKey = 'all' | 'low' | 'medium' | 'high' | 'urgent';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'pending', label: '待办' },
   { key: 'in_progress', label: '进行中' },
   { key: 'completed', label: '已完成' },
+];
+
+const PRIORITY_FILTERS: { key: PriorityFilterKey; label: string }[] = [
+  { key: 'all', label: '全部优先级' },
+  { key: 'low', label: '低' },
+  { key: 'medium', label: '中' },
+  { key: 'high', label: '高' },
+  { key: 'urgent', label: '紧急' },
 ];
 
 export default function TaskListRoute() {
@@ -34,13 +44,20 @@ export default function TaskListRoute() {
     currentHouseholdId,
     accessChangedHouseholdName,
     refreshHouseholds,
+    switchHousehold,
   } = useHouseholdContext();
 
   const [tasks, setTasks] = useState<TaskResponseDto[]>([]);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilterKey>('all');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
+  const [labelFilter, setLabelFilter] = useState<string>('all');
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [statusChangingTaskId, setStatusChangingTaskId] = useState<string | null>(null);
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
@@ -53,10 +70,47 @@ export default function TaskListRoute() {
     return map;
   }, [members]);
 
+  // Extract unique labels from loaded tasks
+  const availableLabels = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string; color: string }>();
+    for (const t of tasks) {
+      for (const l of t.labels ?? []) {
+        if (!seen.has(l.id)) {
+          seen.set(l.id, { id: l.id, name: l.name, color: l.color });
+        }
+      }
+    }
+    return [...seen.values()];
+  }, [tasks]);
+
   const filteredTasks = useMemo(() => {
-    if (filter === 'all') return tasks;
-    return tasks.filter((t) => t.status === filter);
-  }, [tasks, filter]);
+    let result = tasks;
+    if (filter !== 'all') {
+      result = result.filter((t) => t.status === filter);
+    }
+    if (priorityFilter !== 'all') {
+      result = result.filter((t) => t.priority === priorityFilter);
+    }
+    if (assigneeFilter !== 'all') {
+      result = result.filter((t) => t.assigneeId === assigneeFilter);
+    }
+    if (labelFilter !== 'all') {
+      result = result.filter((t) => (t.labels ?? []).some((l) => l.id === labelFilter));
+    }
+    return result;
+  }, [tasks, filter, priorityFilter, assigneeFilter, labelFilter]);
+
+  const assigneeOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { userId: string; displayName: string }[] = [];
+    for (const m of members) {
+      if (!seen.has(m.userId)) {
+        seen.add(m.userId);
+        options.push({ userId: m.userId, displayName: m.displayName });
+      }
+    }
+    return options;
+  }, [members]);
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === '') return;
@@ -81,6 +135,12 @@ export default function TaskListRoute() {
     }
   }, [householdId]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
+
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
@@ -94,9 +154,44 @@ export default function TaskListRoute() {
     [router, householdId],
   );
 
+  const handleTaskStatusChange = useCallback(async (task: TaskResponseDto) => {
+    if (householdId === undefined || householdId === '') return;
+    const nextStatus =
+      task.status === 'pending' ? 'in_progress'
+        : task.status === 'in_progress' ? 'completed'
+        : 'pending';
+    setStatusChangingTaskId(task.id);
+    try {
+      const token = await sessionTransport.getAccessToken();
+      if (token === null) return;
+      await sessionApiClient.updateTask(token, householdId, task.id, {
+        title: task.title,
+        status: nextStatus,
+        priority: task.priority,
+      });
+      void fetchData();
+    } catch {
+      // silently ignore
+    } finally {
+      setStatusChangingTaskId(null);
+    }
+  }, [householdId, fetchData]);
+
   const handleCreateTask = useCallback(() => {
     void router.push(`/households/${encodeURIComponent(householdId!)}/tasks/new`);
   }, [router, householdId]);
+
+  const handleSwitch = useCallback(async (householdId: string) => {
+    if (householdId === currentHouseholdId) {
+      setSwitcherOpen(false);
+      return;
+    }
+    const success = await switchHousehold(householdId);
+    if (success) {
+      void router.replace(`/households/${encodeURIComponent(householdId)}/tasks`);
+    }
+    setSwitcherOpen(false);
+  }, [currentHouseholdId, switchHousehold, router]);
 
   // AccessChanged state
   if (viewState === 'accessChanged') {
@@ -127,13 +222,14 @@ export default function TaskListRoute() {
   }
 
   return (
-    <AppShell accessibilityLabel="家庭任务">
+  <>
+    <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh}>
       <Stack gap={4}>
         {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <HouseholdHeader
             householdName={currentHousehold?.name ?? ''}
-            onOpenSwitcher={() => {}}
+            onOpenSwitcher={() => setSwitcherOpen(true)}
           />
           <Pressable
             onPress={handleCreateTask}
@@ -152,8 +248,8 @@ export default function TaskListRoute() {
           </Pressable>
         </View>
 
-        {/* Filters */}
-        <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
+        {/* Status filters */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
           {FILTERS.map((f) => (
             <Pressable
               key={f.key}
@@ -173,6 +269,120 @@ export default function TaskListRoute() {
             </Pressable>
           ))}
         </View>
+
+        {/* Priority filters */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+          {PRIORITY_FILTERS.map((p) => (
+            <Pressable
+              key={p.key}
+              onPress={() => setPriorityFilter(p.key)}
+              style={({ pressed }) => ({
+                paddingHorizontal: activeTheme.spacing[3],
+                paddingVertical: activeTheme.spacing[1],
+                borderRadius: activeTheme.borderRadii.full,
+                borderWidth: 1,
+                borderColor: priorityFilter === p.key ? activeTheme.colors.coral : activeTheme.colors.border,
+                backgroundColor: 'transparent',
+                opacity: pressed ? 0.7 : 1,
+              })}
+              accessibilityLabel={`优先级筛选：${p.label}`}
+            >
+              <Text variant="caption" color={priorityFilter === p.key ? 'coral' : 'inkMuted'}>
+                {p.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Assignee filter */}
+        {assigneeOptions.length > 1 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+            <Pressable
+              onPress={() => setAssigneeFilter('all')}
+              style={({ pressed }) => ({
+                paddingHorizontal: activeTheme.spacing[3],
+                paddingVertical: activeTheme.spacing[1],
+                borderRadius: activeTheme.borderRadii.full,
+                borderWidth: 1,
+                borderColor: assigneeFilter === 'all' ? activeTheme.colors.teal : activeTheme.colors.border,
+                backgroundColor: 'transparent',
+                opacity: pressed ? 0.7 : 1,
+              })}
+              accessibilityLabel="全部成员"
+            >
+              <Text variant="caption" color={assigneeFilter === 'all' ? 'teal' : 'inkMuted'}>
+                全部成员
+              </Text>
+            </Pressable>
+            {assigneeOptions.map((m) => (
+              <Pressable
+                key={m.userId}
+                onPress={() => setAssigneeFilter(m.userId)}
+                style={({ pressed }) => ({
+                  paddingHorizontal: activeTheme.spacing[3],
+                  paddingVertical: activeTheme.spacing[1],
+                  borderRadius: activeTheme.borderRadii.full,
+                  borderWidth: 1,
+                  borderColor: assigneeFilter === m.userId ? activeTheme.colors.teal : activeTheme.colors.border,
+                  backgroundColor: 'transparent',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+                accessibilityLabel={`筛选：${m.displayName}`}
+              >
+                <Text variant="caption" color={assigneeFilter === m.userId ? 'teal' : 'inkMuted'}>
+                  {m.displayName}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {/* Label filter */}
+        {availableLabels.length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], alignItems: 'center' }}>
+            <Pressable
+              onPress={() => setLabelFilter('all')}
+              style={({ pressed }) => ({
+                paddingHorizontal: activeTheme.spacing[3],
+                paddingVertical: activeTheme.spacing[1],
+                borderRadius: activeTheme.borderRadii.full,
+                borderWidth: 1,
+                borderColor: labelFilter === 'all' ? activeTheme.colors.coral : activeTheme.colors.border,
+                backgroundColor: 'transparent',
+                opacity: pressed ? 0.7 : 1,
+              })}
+              accessibilityLabel="全部标签"
+            >
+              <Text variant="caption" color={labelFilter === 'all' ? 'coral' : 'inkMuted'}>
+                全部标签
+              </Text>
+            </Pressable>
+            {availableLabels.map((l) => (
+              <Pressable
+                key={l.id}
+                onPress={() => setLabelFilter(labelFilter === l.id ? 'all' : l.id)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: activeTheme.spacing[1],
+                  paddingHorizontal: activeTheme.spacing[3],
+                  paddingVertical: activeTheme.spacing[1],
+                  borderRadius: activeTheme.borderRadii.full,
+                  borderWidth: 1,
+                  borderColor: labelFilter === l.id ? l.color : activeTheme.colors.border,
+                  backgroundColor: labelFilter === l.id ? l.color + '18' : 'transparent',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+                accessibilityLabel={`筛选标签：${l.name}`}
+              >
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: l.color }} />
+                <Text variant="caption" style={{ color: labelFilter === l.id ? l.color : activeTheme.colors.inkMuted }}>
+                  {l.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         {/* Loading */}
         {loading && (
@@ -208,9 +418,23 @@ export default function TaskListRoute() {
             task={task}
             assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
             onPress={handleTaskPress}
+            onStatusChange={handleTaskStatusChange}
+            statusChanging={statusChangingTaskId === task.id}
           />
         ))}
       </Stack>
     </AppShell>
-  );
+
+    <HouseholdSwitcher
+      currentHouseholdId={currentHouseholdId}
+      households={households}
+      onCreateNew={() => {
+        void router.push('/households/new');
+        setSwitcherOpen(false);
+      }}
+      onClose={() => setSwitcherOpen(false)}
+      onSelect={(hid) => { void handleSwitch(hid); }}
+      visible={switcherOpen}
+    />
+  </>  );
 }
