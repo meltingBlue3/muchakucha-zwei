@@ -56,6 +56,21 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
+// React Native 0.86.2's getDevServer() reads NativeSourceCode's scriptURL and
+// calls .match() on it with no null guard. Jest's default native-module mock
+// resolves scriptURL to null, so any module that calls getDevServer() as an
+// import-time side effect (e.g. expo-router's Navigator, via expo's Fast
+// Refresh message socket) crashes the whole test file before a single test
+// runs. Provide a fixed dev-server descriptor so that import-time call is safe.
+jest.mock('react-native/Libraries/Core/Devtools/getDevServer', () => ({
+  __esModule: true,
+  default: () => ({
+    url: 'http://localhost:8081/',
+    fullBundleUrl: null,
+    bundleLoadedFromServer: false,
+  }),
+}));
+
 const rejectUnmockedRequest = (input: Parameters<typeof fetch>[0]) =>
   Promise.reject(new Error(`Unmocked network request: ${String(input)}`));
 
