@@ -80,7 +80,7 @@ export default function TaskDetailRoute() {
     );
   }
 
-  const assigneeNames = task.assigneeIds.map(
+  const assigneeNames = (task.assigneeIds ?? []).map(
     (uid) => members.find((m) => m.userId === uid)?.displayName ?? '未知成员',
   );
   const overdue = isOverdue(task.dueDate ?? null) && task.status !== 'completed';
