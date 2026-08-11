@@ -3,6 +3,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
+import ChevronDown from 'lucide-react-native/icons/chevron-down';
+import ChevronUp from 'lucide-react-native/icons/chevron-up';
+import ListFilter from 'lucide-react-native/icons/list-filter';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
@@ -58,6 +61,7 @@ export default function TaskListRoute() {
   const [labelFilter, setLabelFilter] = useState<string>('all');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [statusChangingTaskId, setStatusChangingTaskId] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
@@ -99,6 +103,9 @@ export default function TaskListRoute() {
     }
     return result;
   }, [tasks, filter, priorityFilter, assigneeFilter, labelFilter]);
+
+  const activeFilterCount = [filter !== 'all', priorityFilter !== 'all', assigneeFilter !== 'all', labelFilter !== 'all']
+    .filter(Boolean).length;
 
   const assigneeOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -254,159 +261,207 @@ export default function TaskListRoute() {
           </Pressable>
         </View>
 
-        {/* Status filters */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
-          {FILTERS.map((f) => (
-            <Pressable
-              key={f.key}
-              onPress={() => setFilter(f.key)}
-              hitSlop={activeTheme.spacing[2]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: filter === f.key }}
-              style={({ pressed }) => ({
-                paddingHorizontal: activeTheme.spacing[3],
-                paddingVertical: activeTheme.spacing[2],
+        {/* Filters (collapsible — keeps the four filter groups from dominating the page) */}
+        <View>
+          <Pressable
+            onPress={() => setFiltersOpen((open) => !open)}
+            hitSlop={activeTheme.spacing[2]}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: filtersOpen }}
+            accessibilityLabel={`筛选任务${activeFilterCount > 0 ? `，已选择 ${activeFilterCount} 项` : ''}`}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: activeTheme.spacing[2],
+              minHeight: activeTheme.controlSizes.touchTarget,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <ListFilter
+              size={activeTheme.controlSizes.icon}
+              color={activeTheme.colors.ink}
+              strokeWidth={activeTheme.controlSizes.iconStroke}
+            />
+            <Text variant="label">筛选</Text>
+            {activeFilterCount > 0 && (
+              <View style={{
+                minWidth: 18,
+                height: 18,
+                paddingHorizontal: activeTheme.spacing[1],
                 borderRadius: activeTheme.borderRadii.full,
-                backgroundColor: filter === f.key ? activeTheme.colors.coral : activeTheme.colors.surfaceMuted,
-                opacity: pressed ? 0.7 : 1,
-              })}
-              accessibilityLabel={`筛选：${f.label}`}
-            >
-              <Text variant="bodySm" color={filter === f.key ? 'surface' : 'inkMuted'}>
-                {f.label}
-              </Text>
-            </Pressable>
-          ))}
+                backgroundColor: activeTheme.colors.coral,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Text variant="caption" color="surface">{activeFilterCount}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }} />
+            {filtersOpen ? (
+              <ChevronUp size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} />
+            ) : (
+              <ChevronDown size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} />
+            )}
+          </Pressable>
+
+          {filtersOpen && (
+            <Stack gap={3} style={{ paddingTop: activeTheme.spacing[1] }}>
+              {/* Status filters */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+                {FILTERS.map((f) => (
+                  <Pressable
+                    key={f.key}
+                    onPress={() => setFilter(f.key)}
+                    hitSlop={activeTheme.spacing[2]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: filter === f.key }}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: activeTheme.spacing[3],
+                      paddingVertical: activeTheme.spacing[2],
+                      borderRadius: activeTheme.borderRadii.full,
+                      backgroundColor: filter === f.key ? activeTheme.colors.coral : activeTheme.colors.surfaceMuted,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                    accessibilityLabel={`筛选：${f.label}`}
+                  >
+                    <Text variant="bodySm" color={filter === f.key ? 'surface' : 'inkMuted'}>
+                      {f.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Priority filters */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+                {PRIORITY_FILTERS.map((p) => (
+                  <Pressable
+                    key={p.key}
+                    onPress={() => setPriorityFilter(p.key)}
+                    hitSlop={activeTheme.spacing[3]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: priorityFilter === p.key }}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: activeTheme.spacing[3],
+                      paddingVertical: activeTheme.spacing[1],
+                      borderRadius: activeTheme.borderRadii.full,
+                      borderWidth: 1,
+                      borderColor: priorityFilter === p.key ? activeTheme.colors.coral : activeTheme.colors.border,
+                      backgroundColor: 'transparent',
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                    accessibilityLabel={`优先级筛选：${p.label}`}
+                  >
+                    <Text variant="caption" color={priorityFilter === p.key ? 'coral' : 'inkMuted'}>
+                      {p.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Assignee filter */}
+              {assigneeOptions.length > 1 && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+                  <Pressable
+                    onPress={() => setAssigneeFilter('all')}
+                    hitSlop={activeTheme.spacing[3]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: assigneeFilter === 'all' }}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: activeTheme.spacing[3],
+                      paddingVertical: activeTheme.spacing[1],
+                      borderRadius: activeTheme.borderRadii.full,
+                      borderWidth: 1,
+                      borderColor: assigneeFilter === 'all' ? activeTheme.colors.teal : activeTheme.colors.border,
+                      backgroundColor: 'transparent',
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                    accessibilityLabel="全部成员"
+                  >
+                    <Text variant="caption" color={assigneeFilter === 'all' ? 'teal' : 'inkMuted'}>
+                      全部成员
+                    </Text>
+                  </Pressable>
+                  {assigneeOptions.map((m) => (
+                    <Pressable
+                      key={m.userId}
+                      onPress={() => setAssigneeFilter(m.userId)}
+                      hitSlop={activeTheme.spacing[3]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: assigneeFilter === m.userId }}
+                      style={({ pressed }) => ({
+                        paddingHorizontal: activeTheme.spacing[3],
+                        paddingVertical: activeTheme.spacing[1],
+                        borderRadius: activeTheme.borderRadii.full,
+                        borderWidth: 1,
+                        borderColor: assigneeFilter === m.userId ? activeTheme.colors.teal : activeTheme.colors.border,
+                        backgroundColor: 'transparent',
+                        opacity: pressed ? 0.7 : 1,
+                      })}
+                      accessibilityLabel={`筛选：${m.displayName}`}
+                    >
+                      <Text variant="caption" color={assigneeFilter === m.userId ? 'teal' : 'inkMuted'}>
+                        {m.displayName}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              {/* Label filter */}
+              {availableLabels.length > 0 && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], alignItems: 'center' }}>
+                  <Pressable
+                    onPress={() => setLabelFilter('all')}
+                    hitSlop={activeTheme.spacing[3]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: labelFilter === 'all' }}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: activeTheme.spacing[3],
+                      paddingVertical: activeTheme.spacing[1],
+                      borderRadius: activeTheme.borderRadii.full,
+                      borderWidth: 1,
+                      borderColor: labelFilter === 'all' ? activeTheme.colors.coral : activeTheme.colors.border,
+                      backgroundColor: 'transparent',
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                    accessibilityLabel="全部标签"
+                  >
+                    <Text variant="caption" color={labelFilter === 'all' ? 'coral' : 'inkMuted'}>
+                      全部标签
+                    </Text>
+                  </Pressable>
+                  {availableLabels.map((l) => (
+                    <Pressable
+                      key={l.id}
+                      onPress={() => setLabelFilter(labelFilter === l.id ? 'all' : l.id)}
+                      hitSlop={activeTheme.spacing[3]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: labelFilter === l.id }}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: activeTheme.spacing[1],
+                        paddingHorizontal: activeTheme.spacing[3],
+                        paddingVertical: activeTheme.spacing[1],
+                        borderRadius: activeTheme.borderRadii.full,
+                        borderWidth: 1,
+                        borderColor: labelFilter === l.id ? l.color : activeTheme.colors.border,
+                        backgroundColor: labelFilter === l.id ? l.color + '18' : 'transparent',
+                        opacity: pressed ? 0.7 : 1,
+                      })}
+                      accessibilityLabel={`筛选标签：${l.name}`}
+                    >
+                      <View style={{ width: 8, height: 8, borderRadius: activeTheme.borderRadii.full, backgroundColor: l.color }} />
+                      <Text variant="caption" style={{ color: labelFilter === l.id ? l.color : activeTheme.colors.inkMuted }}>
+                        {l.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </Stack>
+          )}
         </View>
-
-        {/* Priority filters */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
-          {PRIORITY_FILTERS.map((p) => (
-            <Pressable
-              key={p.key}
-              onPress={() => setPriorityFilter(p.key)}
-              hitSlop={activeTheme.spacing[3]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: priorityFilter === p.key }}
-              style={({ pressed }) => ({
-                paddingHorizontal: activeTheme.spacing[3],
-                paddingVertical: activeTheme.spacing[1],
-                borderRadius: activeTheme.borderRadii.full,
-                borderWidth: 1,
-                borderColor: priorityFilter === p.key ? activeTheme.colors.coral : activeTheme.colors.border,
-                backgroundColor: 'transparent',
-                opacity: pressed ? 0.7 : 1,
-              })}
-              accessibilityLabel={`优先级筛选：${p.label}`}
-            >
-              <Text variant="caption" color={priorityFilter === p.key ? 'coral' : 'inkMuted'}>
-                {p.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* Assignee filter */}
-        {assigneeOptions.length > 1 && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
-            <Pressable
-              onPress={() => setAssigneeFilter('all')}
-              hitSlop={activeTheme.spacing[3]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: assigneeFilter === 'all' }}
-              style={({ pressed }) => ({
-                paddingHorizontal: activeTheme.spacing[3],
-                paddingVertical: activeTheme.spacing[1],
-                borderRadius: activeTheme.borderRadii.full,
-                borderWidth: 1,
-                borderColor: assigneeFilter === 'all' ? activeTheme.colors.teal : activeTheme.colors.border,
-                backgroundColor: 'transparent',
-                opacity: pressed ? 0.7 : 1,
-              })}
-              accessibilityLabel="全部成员"
-            >
-              <Text variant="caption" color={assigneeFilter === 'all' ? 'teal' : 'inkMuted'}>
-                全部成员
-              </Text>
-            </Pressable>
-            {assigneeOptions.map((m) => (
-              <Pressable
-                key={m.userId}
-                onPress={() => setAssigneeFilter(m.userId)}
-                hitSlop={activeTheme.spacing[3]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: assigneeFilter === m.userId }}
-                style={({ pressed }) => ({
-                  paddingHorizontal: activeTheme.spacing[3],
-                  paddingVertical: activeTheme.spacing[1],
-                  borderRadius: activeTheme.borderRadii.full,
-                  borderWidth: 1,
-                  borderColor: assigneeFilter === m.userId ? activeTheme.colors.teal : activeTheme.colors.border,
-                  backgroundColor: 'transparent',
-                  opacity: pressed ? 0.7 : 1,
-                })}
-                accessibilityLabel={`筛选：${m.displayName}`}
-              >
-                <Text variant="caption" color={assigneeFilter === m.userId ? 'teal' : 'inkMuted'}>
-                  {m.displayName}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        {/* Label filter */}
-        {availableLabels.length > 0 && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], alignItems: 'center' }}>
-            <Pressable
-              onPress={() => setLabelFilter('all')}
-              hitSlop={activeTheme.spacing[3]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: labelFilter === 'all' }}
-              style={({ pressed }) => ({
-                paddingHorizontal: activeTheme.spacing[3],
-                paddingVertical: activeTheme.spacing[1],
-                borderRadius: activeTheme.borderRadii.full,
-                borderWidth: 1,
-                borderColor: labelFilter === 'all' ? activeTheme.colors.coral : activeTheme.colors.border,
-                backgroundColor: 'transparent',
-                opacity: pressed ? 0.7 : 1,
-              })}
-              accessibilityLabel="全部标签"
-            >
-              <Text variant="caption" color={labelFilter === 'all' ? 'coral' : 'inkMuted'}>
-                全部标签
-              </Text>
-            </Pressable>
-            {availableLabels.map((l) => (
-              <Pressable
-                key={l.id}
-                onPress={() => setLabelFilter(labelFilter === l.id ? 'all' : l.id)}
-                hitSlop={activeTheme.spacing[3]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: labelFilter === l.id }}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: activeTheme.spacing[1],
-                  paddingHorizontal: activeTheme.spacing[3],
-                  paddingVertical: activeTheme.spacing[1],
-                  borderRadius: activeTheme.borderRadii.full,
-                  borderWidth: 1,
-                  borderColor: labelFilter === l.id ? l.color : activeTheme.colors.border,
-                  backgroundColor: labelFilter === l.id ? l.color + '18' : 'transparent',
-                  opacity: pressed ? 0.7 : 1,
-                })}
-                accessibilityLabel={`筛选标签：${l.name}`}
-              >
-                <View style={{ width: 8, height: 8, borderRadius: activeTheme.borderRadii.full, backgroundColor: l.color }} />
-                <Text variant="caption" style={{ color: labelFilter === l.id ? l.color : activeTheme.colors.inkMuted }}>
-                  {l.name}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
 
         {/* Loading */}
         {loading && (
