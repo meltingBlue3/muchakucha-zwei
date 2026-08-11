@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
+import { ApiClientError } from '@muchakucha/api-client';
 import type { TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
@@ -32,6 +33,7 @@ export default function EditTaskRoute() {
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
@@ -69,14 +71,33 @@ export default function EditTaskRoute() {
   const handleSubmit = useCallback(async (data: CreateTaskDto) => {
     if (householdId === undefined || householdId === '' || taskId === undefined || taskId === '') return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const token = await sessionTransport.getAccessToken();
-      if (token === null) return;
+      if (token === null) {
+        setSubmitError('登录已过期，请重新登录。');
+        setSubmitting(false);
+        return;
+      }
       await sessionApiClient.updateTask(token, householdId, taskId, data);
       // Sync labels: tag with all selected labels (replaces current)
       await sessionApiClient.tagTask(token, householdId, taskId, { labelIds: selectedLabelIds });
       router.back();
-    } catch {
+    } catch (error: unknown) {
+      if (error instanceof ApiClientError) {
+        const details = (error.body as { error?: { details?: Array<{ field?: string }> } } | undefined)?.error?.details;
+        if (details?.some((d) => d.field === 'assigneeIds')) {
+          setSubmitError('存在负责人已不再是该家庭成员，请重新选择负责人。');
+        } else if (error.status === 403) {
+          setSubmitError('你没有权限编辑这个任务。');
+        } else if (error.status === 404) {
+          setSubmitError('任务不存在或已被删除。');
+        } else {
+          setSubmitError('保存失败，请重试。');
+        }
+      } else {
+        setSubmitError('保存失败，请检查网络连接后重试。');
+      }
       setSubmitting(false);
     }
   }, [householdId, taskId, router, selectedLabelIds]);
@@ -120,6 +141,15 @@ export default function EditTaskRoute() {
           </View>
         ) : task !== null ? (
           <Stack gap={4}>
+            {submitError !== null && (
+              <View style={{
+                backgroundColor: activeTheme.colors.destructiveSoft,
+                padding: activeTheme.spacing[4],
+                borderRadius: activeTheme.borderRadii.md,
+              }}>
+                <Text variant="bodySm" color="destructive">{submitError}</Text>
+              </View>
+            )}
             <TaskForm
               initial={task}
               members={memberOptions}
