@@ -87,7 +87,7 @@ export default function NotesListRoute() {
   const handleNotePress = useCallback(
     (note: NoteResponseDto) => {
       void router.push(
-        `/households/${encodeURIComponent(householdId!)}/notes/${encodeURIComponent(note.id)}/edit`,
+        `/households/${encodeURIComponent(householdId!)}/notes/${encodeURIComponent(note.id)}`,
       );
     },
     [router, householdId],

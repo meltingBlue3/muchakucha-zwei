@@ -7,7 +7,7 @@ import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { EventForm } from '../../../../../../src/features/events/event-form';
 import { AppShell } from '../../../../../../src/ui/household-components';
-import { Screen, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
 export default function EditEventRoute() {
@@ -79,7 +79,9 @@ export default function EditEventRoute() {
         return;
       }
       await sessionApiClient.deleteEvent(token, id!, eventId!);
-      router.back();
+      // Go straight back to the calendar list, not router.back() — a single
+      // pop would land on the now-deleted event's detail screen.
+      router.dismissTo(`/households/${encodeURIComponent(id!)}/events`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '删除失败，请重试。';
       setError(message);
@@ -105,24 +107,21 @@ export default function EditEventRoute() {
   if (event === null || error !== null) {
     return (
       <AppShell accessibilityLabel="事件加载失败" title="编辑事件" showBack showProfile>
-        <Screen>
-          <Stack gap={4}>
-            <Text variant="heading">事件</Text>
-            <Text>{error ?? '事件未找到。'}</Text>
-            <Pressable onPress={() => router.back()} hitSlop={activeTheme.spacing[4]}>
-              <Text variant="label" color="coral">
-                返回日历
-              </Text>
-            </Pressable>
-          </Stack>
-        </Screen>
+        <Stack gap={4}>
+          <Text variant="heading">事件</Text>
+          <Text>{error ?? '事件未找到。'}</Text>
+          <Pressable onPress={() => router.back()} hitSlop={activeTheme.spacing[4]}>
+            <Text variant="label" color="coral">
+              返回日历
+            </Text>
+          </Pressable>
+        </Stack>
       </AppShell>
     );
   }
 
   return (
     <AppShell accessibilityLabel="编辑事件" title="编辑事件" showBack showProfile>
-      <Screen>
         <Stack gap={4}>
           <Text variant="heading">编辑事件</Text>
           {error !== null && (
@@ -207,7 +206,6 @@ export default function EditEventRoute() {
             )}
           </View>
         </Stack>
-      </Screen>
     </AppShell>
   );
 }

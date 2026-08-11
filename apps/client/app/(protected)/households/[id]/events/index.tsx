@@ -164,7 +164,7 @@ export default function CalendarRoute() {
   const handleEventPress = useCallback(
     (event: EventResponseDto) => {
       void router.push(
-        `/households/${encodeURIComponent(householdId!)}/events/${encodeURIComponent(event.id)}/edit`,
+        `/households/${encodeURIComponent(householdId!)}/events/${encodeURIComponent(event.id)}`,
       );
     },
     [router, householdId],

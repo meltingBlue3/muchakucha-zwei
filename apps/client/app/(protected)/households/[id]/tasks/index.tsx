@@ -153,7 +153,7 @@ export default function TaskListRoute() {
   const handleTaskPress = useCallback(
     (task: TaskResponseDto) => {
       void router.push(
-        `/households/${encodeURIComponent(householdId!)}/tasks/${encodeURIComponent(task.id)}/edit`,
+        `/households/${encodeURIComponent(householdId!)}/tasks/${encodeURIComponent(task.id)}`,
       );
     },
     [router, householdId],

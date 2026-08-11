@@ -139,7 +139,7 @@ export default function TodayRoute() {
   const handleEventPress = useCallback(
     (event: EventResponseDto) => {
       void router.push(
-        `/households/${encodeURIComponent(householdId!)}/events/${encodeURIComponent(event.id)}/edit`,
+        `/households/${encodeURIComponent(householdId!)}/events/${encodeURIComponent(event.id)}`,
       );
     },
     [router, householdId],
@@ -148,7 +148,7 @@ export default function TodayRoute() {
   const handleTaskPress = useCallback(
     (task: TaskResponseDto) => {
       void router.push(
-        `/households/${encodeURIComponent(householdId!)}/tasks/${encodeURIComponent(task.id)}/edit`,
+        `/households/${encodeURIComponent(householdId!)}/tasks/${encodeURIComponent(task.id)}`,
       );
     },
     [router, householdId],
