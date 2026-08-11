@@ -12,9 +12,9 @@ Muchakucha Zwei 将以“可实际使用的家庭协作闭环”为顺序推进�
 
 - [x] **Phase 1: 安全账户入口** — 建立可运行的全栈骨架与完整邮箱账户闭环 (completed 2026-08-02)
 - [~] **Phase 2: 家庭组与成员协作** — 让用户创建、加入、切换和安全管理家庭组 (12/13 plans done, Android acceptance pending)
-- [ ] **Phase 3: 共享家庭日历** — 让家庭成员共同维护可靠的日期与时间安排
-- [ ] **Phase 4: 任务与今日视图** — 让家庭成员分配、跟进任务并快速掌握今天
-- [ ] **Phase 5: 笔记与标签整理** — 补全共享信息记录与跨资源整理能力
+- [~] **Phase 3: 共享家庭日历** — 让家庭成员共同维护可靠的日期与时间安排 (3/4 plans done, all automated gates green except accessibility audit; Android acceptance pending)
+- [~] **Phase 4: 任务与今日视图** — 让家庭成员分配、跟进任务并快速掌握今天 (3/4 plans done, all automated gates green including accessibility; only Android acceptance pending)
+- [~] **Phase 5: 笔记与标签整理** — 补全共享信息记录与跨资源整理能力 (功能代码已实现于主分支，但绕过了正式 GSD plan/execute 流程；零自动化测试覆盖，缺"按标签筛选"能力)
 - [ ] **Phase 6: 跨平台完成度与发布准备** — 完成移动优先体验、辅助 Web 与发布质量门槛
 
 ## Phase Details
@@ -167,7 +167,9 @@ Plans:
 - [x] **03-01:** Prisma migration + events module + full CRUD API with timezone-safe timestamptz modeling
 - [x] **03-02:** Calendar views (month grid, date list) + date navigation + household-scoped queries
 - [x] **03-03:** Event create/edit forms + delete + mobile touch-optimized date/time pickers
-- [ ] **03-04:** Gates: integration tests, Playwright E2E, accessibility audit, Android acceptance
+- [~] **03-04:** Gates — integration tests ✅ (167/167, `apps/api/test/events/events.int.test.ts`), Playwright E2E ✅ (`e2e/events/calendar-api.spec.ts`), accessibility audit ❌ (no dedicated a11y E2E spec for calendar/events, unlike tasks), Android acceptance ❌ (real-device session pending, same as 02-13)
+
+**Verified status (2026-08-05 handoff, `.planning/phases/03-shared-calendar/.continue-here.md`):** typecheck, Prisma migrations (4 on PG17), client Jest (153 passed/2 skipped), API unit (4/4), and API integration (167/167) all green. Only accessibility audit and Android acceptance remain.
 
 ### Phase 4: 任务与今日视图
 
@@ -189,7 +191,9 @@ Plans:
 - [x] **04-01:** Prisma migration + tasks module + CRUD API with filtering, status transitions, single assignee
 - [x] **04-02:** Task list views (filtered/sorted) + create/edit forms + status update + assignment selector
 - [x] **04-03:** Today view: merged events + assigned tasks + overdue items, mobile-first
-- [~] **04-04:** Gates: integration tests (✅), Playwright E2E (✅), accessibility audit, Android acceptance
+- [~] **04-04:** Gates — integration tests ✅, Playwright E2E ✅, accessibility audit ✅ (`e2e/tasks/accessibility.spec.ts` — axe, reduced-motion, forced-colors across tasks list + Today view), Android acceptance ❌ (real-device session pending, same as 02-13/03-04)
+
+**Note:** ROADMAP text previously lagged the commit history — the accessibility E2E suite (`57e2e5e`) landed after the "3/4 complete" doc update (`97335e4`) and was never reflected here until this pass. All automated gates for Phase 4 are green; Android acceptance is the sole remaining item.
 
 ### Phase 5: 笔记与标签整理
 
@@ -208,9 +212,11 @@ Plans:
 
 **Plans:** 3 plans (streamlined — notes and labels share the same household scope)
 
-- [ ] **05-01:** Prisma migration + notes & labels modules + full CRUD APIs + label color/name
-- [ ] **05-02:** Notes UI (list, detail, create/edit) + label management UI + tag/untag on events & tasks
-- [ ] **05-03:** Gates: integration tests, Playwright E2E, accessibility audit, Android acceptance
+⚠️ **This phase's code was written directly on main without going through `/gsd-discuss-phase` → `/gsd-plan-phase` → `/gsd-execute-phase`.** No `.planning/phases/05-*` PLAN.md/SUMMARY.md files exist, so `gsd-tools` cannot see this work — the automated progress scan (`roadmap.analyze`) still reports 0/3. Status below is from direct source verification on 2026-08-11.
+
+- [x] **05-01:** Prisma migration + notes & labels modules + full CRUD APIs + label color/name — verified in code (migration `20260805075417_add_notes_labels`; `abf7f5c`, `36147fa`)
+- [~] **05-02:** Notes UI (list, detail, create/edit) + label management UI + tag/untag on events & tasks — verified in code; **gap: no "filter events/tasks by label" capability** (success criterion 3 requires it; no `labelId` query param on events/tasks list endpoints, no filter UI)
+- [ ] **05-03:** Gates: integration tests, Playwright E2E, accessibility audit, Android acceptance — **not started; zero test files found** (no `apps/api/test/notes/`, `apps/api/test/labels/`, `e2e/notes/`, or `e2e/labels/`)
 
 ### Phase 6: 跨平台完成度与发布准备
 
@@ -239,14 +245,14 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. 安全账户入口 | 27/27 | ✅ Complete | 2026-08-02 |
 | 2. 家庭组与成员协作 | 12/13 | 🔄 Android acceptance pending | — |
-| 3. 共享家庭日历 | 3/4 | 🔄 In progress | — |
-| 4. 任务与今日视图 | 3/4 | 🔄 In progress | — |
-| 5. 笔记与标签整理 | 0/3 | Not started | — |
+| 3. 共享家庭日历 | 3/4 | 🔄 Android acceptance + accessibility audit pending | — |
+| 4. 任务与今日视图 | 3/4 | 🔄 Android acceptance pending (all other gates green) | — |
+| 5. 笔记与标签整理 | ~2/3 (code only, untracked) | ⚠️ Code done outside GSD flow — zero tests, label-filter gap, no gates run | — |
 | 6. 跨平台完成度与发布准备 | 0/3 | Not started | — |
 
-**Total remaining plans: 15** (1 in Phase 2 + 14 in Phases 3-6)
+**Total remaining plans: 15 formally tracked** (1 in Phase 2, 1 in Phase 3, 1 in Phase 4, 3 in Phase 5, 3 in Phase 6) — **plus a backlog of untracked work**: a shared Android-acceptance session covering Phases 2–4, retroactive GSD plan/summary artifacts for Phase 5, its missing test suite, and its label-filter feature.
 **Estimated plans saved vs. original methodology: ~40-50**
 
 ---
 *Roadmap created: 2026-07-31*
-*Last updated: 2026-07-31 after v1 requirements approval*
+*Last updated: 2026-08-11 — reconciled Phases 3-5 status against source code and test files (see verification notes above); `.planning` artifacts had fallen behind actual implementation*

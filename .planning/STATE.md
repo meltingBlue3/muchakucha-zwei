@@ -4,11 +4,11 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 02
 current_phase_name: household-member-collaboration
-status: executing
-stopped_at: context exhaustion at 76% (2026-08-04)
-last_updated: "2026-08-04T17:44:45.269Z"
-last_activity: 2026-08-03
-last_activity_desc: Phase 02 execution started
+status: blocked_on_human_checkpoint
+stopped_at: Android acceptance checkpoints pending across Phases 2-4 (2026-08-11)
+last_updated: "2026-08-11T00:00:00.000Z"
+last_activity: 2026-08-06
+last_activity_desc: EAS build config + client navigation header (feature work continued past Phase 2 in code, ahead of GSD tracking)
 progress:
   total_phases: 2
   completed_phases: 1
@@ -20,10 +20,10 @@ progress:
 
 ## Current Position
 
-**Phase:** 02 (household-member-collaboration) — EXECUTING
-**Plan:** 1 of 13
-**Status:** Executing Phase 02
-**Last activity:** 2026-08-03 — Phase 02 execution started
+**Phase (GSD-tracked):** 02 (household-member-collaboration) — 12/13 plans complete, blocked on `02-13` (Android acceptance)
+**Reconciled 2026-08-11:** Direct source verification shows implementation has actually progressed through Phases 3, 4, and most of 5 — see `.planning/ROADMAP.md` for the full per-phase breakdown. `gsd-tools` still reports current_phase=02 because no `.planning/phases/03-*` through `05-*` PLAN.md/SUMMARY.md artifacts exist on disk (that work was done directly on `main`, outside `/gsd-discuss-phase` → `/gsd-plan-phase` → `/gsd-execute-phase`). This field is left at 02 deliberately — it is the earliest phase with real unresolved GSD-tracked work (a pending human checkpoint), consistent with `/gsd-progress`'s own Route 0 resume-incomplete-phase logic.
+**Status:** Not executing — waiting on human action (real Android device), not on planning/coding
+**Last activity:** 2026-08-06 — most recent commit (`f2969a4`, EAS build config); session history before this reconciliation pass stopped tracking at 2026-08-04
 
 ## Project Reference
 
@@ -47,20 +47,27 @@ See `.planning/PROJECT.md` for the project definition and `.planning/ROADMAP.md`
 
 - iOS simulator and final App Store validation require access to macOS, although EAS cloud builds can be initiated from Windows.
 - Transactional email, PostgreSQL hosting, object hosting and observability providers remain deployment-time choices.
+- **Three phases are parked on the same real-device Android acceptance step**: `02-13`, `03-04`, `04-04`. All automated gates for Phases 2-4 are green; only the human-in-the-loop device session is outstanding. Worth batching into one acceptance pass.
+- **Phase 3 (calendar) is missing an accessibility E2E audit** — `e2e/tasks/accessibility.spec.ts` exists for Phase 4 but there's no equivalent for events/calendar screens.
+- **Phase 5 (notes & labels) was implemented directly on `main`, bypassing the GSD plan/execute flow.** Code is functionally complete (API + client UI for notes CRUD, label CRUD with rename/color, tag/untag on events and tasks) but: (a) has zero automated test coverage — no integration tests, no E2E tests, (b) is missing the "filter events/tasks by label" capability required by the phase's success criteria, and (c) has no accessibility audit or Android acceptance. No `.planning/phases/05-*` PLAN.md/SUMMARY.md artifacts exist to formally close it out.
+- Working tree has uncommitted changes as of 2026-08-11 (`apps/client/app.json`, `eas.json`, `package.json`, `pnpm-lock.yaml`) adding `expo-build-properties` (Android cleartext traffic) and pointing the EAS preview API origin at a public IP — appears to be in-progress prep for a remote device build/test, not yet committed.
 
 ## Blockers
 
-None.
+None hard-blocking — all current blockers are the pending human Android acceptance checkpoints noted above (require a real device, not further coding).
 
 ## Next Action
 
-Discuss and plan Phase 2: 家庭组与成员协作.
+Pick one:
+1. **Close out the Android-acceptance backlog** — run one real-device session covering `02-13`, `03-04`, and `04-04` together (`/gsd-execute-phase 02` picks up `02-13` first; `03-04`/`04-04` have no formal PLAN.md to execute against since those phase directories are empty — see below).
+2. **Formally close Phase 5** — since no GSD artifacts exist for it, treat it as needing retroactive planning: write CONTEXT/PLAN/SUMMARY docs for the already-implemented 05-01/05-02 work, then plan and execute 05-03 (test suite + label-filter feature + accessibility + Android acceptance). `/gsd-plan-phase 5` or `/gsd-add-tests` are candidate entry points.
+3. Note: Phase 3 and 4 also lack `.planning/phases/03-*`/`04-*` PLAN.md/SUMMARY.md files even though their code is verified complete via direct source inspection (see ROADMAP.md notes, 2026-08-11) — only Phase 3 had a stray `.continue-here.md` handoff. If strict GSD tracking parity matters going forward, those phases may also need retroactive artifacts.
 
 ## Session
 
-**Last session:** 2026-08-04T17:44:45.255Z
-**Stopped at:** context exhaustion at 76% (2026-08-04)
-**Resume file:** .planning/phases/02-household-member-collaboration/02-UI-SPEC.md
+**Last session:** 2026-08-04T17:44:45.255Z (prior GSD-tracked session; work continued in git afterward without corresponding STATE.md updates until this reconciliation)
+**Stopped at:** Reconciliation pass 2026-08-11 — STATE.md and ROADMAP.md updated to match verified source/test state for Phases 3-5; no code changes made.
+**Resume file:** .planning/phases/02-household-member-collaboration/02-UI-SPEC.md (for `02-13` Android acceptance)
 
 ## Performance Metrics
 
