@@ -88,7 +88,9 @@ export default function EditTaskRoute() {
       const token = await sessionTransport.getAccessToken();
       if (token === null) return;
       await sessionApiClient.deleteTask(token, householdId, taskId);
-      router.back();
+      // Go straight back to the task list, not router.back() — a single
+      // pop would land on the now-deleted task's detail screen.
+      router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks`);
     } catch {
       setDeleting(false);
     }

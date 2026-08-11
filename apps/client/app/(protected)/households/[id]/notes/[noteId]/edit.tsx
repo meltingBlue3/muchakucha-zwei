@@ -75,7 +75,9 @@ export default function EditNoteRoute() {
         return;
       }
       await sessionApiClient.deleteNote(token, id!, noteId!);
-      router.back();
+      // Go straight back to the note list, not router.back() — a single
+      // pop would land on the now-deleted note's detail screen.
+      router.dismissTo(`/households/${encodeURIComponent(id!)}/notes`);
     } catch {
       setError('删除失败，请重试。');
     } finally {
