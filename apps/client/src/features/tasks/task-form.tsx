@@ -59,12 +59,17 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
   const activeTheme = useTheme<Theme>();
   const [form, setForm] = useState<TaskInput>(() => {
     if (initial) {
+      // Drop assignees who are no longer household members — the picker
+      // below only offers current members as choices, so a stale ID here
+      // would be invisible/unremovable in the UI yet still fail server-side
+      // validation on every save, permanently blocking edits to this task.
+      const currentMemberIds = new Set(members.map((m) => m.userId));
       return {
         title: initial.title,
         description: initial.description ?? '',
         status: initial.status,
         priority: initial.priority,
-        assigneeIds: initial.assigneeIds ?? [],
+        assigneeIds: (initial.assigneeIds ?? []).filter((uid) => currentMemberIds.has(uid)),
         dueDate: initial.dueDate?.split('T')[0] ?? '',
       };
     }
