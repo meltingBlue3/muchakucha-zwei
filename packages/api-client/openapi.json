@@ -2675,9 +2675,12 @@
             ],
             "default": "medium"
           },
-          "assigneeId": {
-            "type": "string",
-            "description": "负责人成员 ID（必须是当前家庭成员）"
+          "assigneeIds": {
+            "description": "负责人成员 ID 列表（每个 ID 必须是当前家庭成员）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "dueDate": {
             "type": "string",
@@ -2720,9 +2723,12 @@
               "urgent"
             ]
           },
-          "assigneeId": {
-            "type": "string",
-            "description": "负责人成员 ID"
+          "assigneeIds": {
+            "description": "负责人成员 ID 列表（传空数组可清除全部负责人）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "dueDate": {
             "type": "string",

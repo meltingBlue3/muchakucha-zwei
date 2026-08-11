@@ -21,7 +21,6 @@ interface TaskRow {
   description: string | null;
   status: string;
   priority: string;
-  assigneeId: string | null;
   dueDate: Date | null;
   createdBy: string;
   createdAt: Date;
@@ -36,6 +35,7 @@ interface TaskRow {
       createdAt: Date;
     };
   }>;
+  assignees: Array<{ userId: string }>;
 }
 
 interface ListFilters {
@@ -68,6 +68,20 @@ export class TasksService {
     return true; // OWNER or ADMIN
   }
 
+  private async validateAssigneeIds(householdId: string, assigneeIds: string[]): Promise<void> {
+    if (assigneeIds.length === 0) return;
+    const memberships = await this.prisma.membership.findMany({
+      where: { householdId, userId: { in: assigneeIds } },
+    });
+    if (memberships.length !== new Set(assigneeIds).size) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [{ field: 'assigneeIds', codes: ['not_household_member'], message: 'All assignees must be household members.' }],
+      });
+    }
+  }
+
   // ---- CRUD ----
 
   async create(
@@ -87,19 +101,9 @@ export class TasksService {
       });
     }
 
-    // Validate assignee is a household member
-    if (input.assigneeId) {
-      const assigneeMembership = await this.prisma.membership.findUnique({
-        where: { userId_householdId: { userId: input.assigneeId, householdId } },
-      });
-      if (assigneeMembership === null) {
-        throw new BadRequestException({
-          code: 'VALIDATION_FAILED',
-          message: 'Request validation failed.',
-          details: [{ field: 'assigneeId', codes: ['not_household_member'], message: 'Assignee must be a household member.' }],
-        });
-      }
-    }
+    // Validate assignees are household members
+    const assigneeIds = [...new Set(input.assigneeIds ?? [])];
+    await this.validateAssigneeIds(householdId, assigneeIds);
 
     // Validate dueDate
     let dueDate: Date | null = null;
@@ -121,11 +125,11 @@ export class TasksService {
         description: input.description?.trim() || null,
         status: input.status ?? 'pending',
         priority: input.priority ?? 'medium',
-        assigneeId: input.assigneeId ?? null,
         dueDate,
         createdBy: actorId,
+        assignees: { create: assigneeIds.map((userId) => ({ userId })) },
       },
-      include: { labels: { include: { label: true } } },
+      include: { labels: { include: { label: true } }, assignees: true },
     });
 
     return this.toResponse(task);
@@ -142,13 +146,13 @@ export class TasksService {
     const where: Record<string, unknown> = { householdId };
     if (filters.status) where.status = filters.status;
     if (filters.priority) where.priority = filters.priority;
-    if (filters.assigneeId) where.assigneeId = filters.assigneeId;
+    if (filters.assigneeId) where.assignees = { some: { userId: filters.assigneeId } };
 
     const [tasks, total] = await Promise.all([
       this.prisma.task.findMany({
         where: where as any,
         orderBy: [{ priority: 'asc' }, { dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
-        include: { labels: { include: { label: true } } },
+        include: { labels: { include: { label: true } }, assignees: true },
       }),
       this.prisma.task.count({ where: where as any }),
     ]);
@@ -169,7 +173,7 @@ export class TasksService {
 
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
-      include: { labels: { include: { label: true } } },
+      include: { labels: { include: { label: true } }, assignees: true },
     });
     if (task === null || task.householdId !== householdId) {
       throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found.' });
@@ -238,22 +242,10 @@ export class TasksService {
       data.priority = input.priority;
     }
 
-    if (input.assigneeId !== undefined) {
-      if (input.assigneeId !== null && input.assigneeId !== '') {
-        const assigneeMembership = await this.prisma.membership.findUnique({
-          where: { userId_householdId: { userId: input.assigneeId, householdId } },
-        });
-        if (assigneeMembership === null) {
-          throw new BadRequestException({
-            code: 'VALIDATION_FAILED',
-            message: 'Request validation failed.',
-            details: [{ field: 'assigneeId', codes: ['not_household_member'] }],
-          });
-        }
-        data.assigneeId = input.assigneeId;
-      } else {
-        data.assigneeId = null;
-      }
+    let nextAssigneeIds: string[] | null = null;
+    if (input.assigneeIds !== undefined) {
+      nextAssigneeIds = [...new Set(input.assigneeIds)];
+      await this.validateAssigneeIds(householdId, nextAssigneeIds);
     }
 
     if (input.dueDate !== undefined) {
@@ -272,10 +264,28 @@ export class TasksService {
       }
     }
 
+    if (nextAssigneeIds !== null) {
+      const assigneeIds = nextAssigneeIds;
+      await this.prisma.$transaction([
+        // Remove assignees that are no longer selected
+        this.prisma.taskAssignee.deleteMany({
+          where: { taskId, userId: { notIn: assigneeIds } },
+        }),
+        // Upsert the currently selected assignees
+        ...assigneeIds.map((userId) =>
+          this.prisma.taskAssignee.upsert({
+            where: { taskId_userId: { taskId, userId } },
+            create: { taskId, userId },
+            update: {},
+          }),
+        ),
+      ]);
+    }
+
     const updated = await this.prisma.task.update({
       where: { id: taskId },
       data,
-      include: { labels: { include: { label: true } } },
+      include: { labels: { include: { label: true } }, assignees: true },
     });
 
     return this.toResponse(updated);
@@ -314,7 +324,7 @@ export class TasksService {
       description: row.description,
       status: row.status as TaskStatus,
       priority: row.priority as TaskPriority,
-      assigneeId: row.assigneeId,
+      assigneeIds: row.assignees.map((a) => a.userId),
       dueDate: row.dueDate?.toISOString() ?? null,
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),

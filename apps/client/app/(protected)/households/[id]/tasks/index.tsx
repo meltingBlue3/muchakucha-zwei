@@ -92,7 +92,7 @@ export default function TaskListRoute() {
       result = result.filter((t) => t.priority === priorityFilter);
     }
     if (assigneeFilter !== 'all') {
-      result = result.filter((t) => t.assigneeId === assigneeFilter);
+      result = result.filter((t) => (t.assigneeIds ?? []).includes(assigneeFilter));
     }
     if (labelFilter !== 'all') {
       result = result.filter((t) => (t.labels ?? []).some((l) => l.id === labelFilter));
@@ -445,7 +445,7 @@ export default function TaskListRoute() {
           <TaskCard
             key={task.id}
             task={task}
-            assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
+            assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
             onPress={handleTaskPress}
             onStatusChange={handleTaskStatusChange}
             statusChanging={statusChangingTaskId === task.id}

@@ -24,8 +24,8 @@ model User {
   memberships         Membership[]
   sentInvitations     Invitation[]
   createdEvents       Event[]
-  createdTasks        Task[]       @relation("CreatedTasks")
-  assignedTasks       Task[]       @relation("AssignedTasks")
+  createdTasks        Task[]          @relation("CreatedTasks")
+  taskAssignments     TaskAssignee[]
   createdNotes        Note[]
   createdLabels       Label[]
 }
@@ -158,20 +158,17 @@ model Task {
   description String?    @db.Text
   status      String     @default("pending") @db.VarChar(20)
   priority    String     @default("medium") @db.VarChar(10)
-  assigneeId  String?    @map("assignee_id") @db.Uuid
   dueDate     DateTime?  @map("due_date") @db.Timestamptz(3)
   createdBy   String     @map("created_by") @db.Uuid
   createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  household   Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  assignee    User?       @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
-  creator     User        @relation("CreatedTasks", fields: [createdBy], references: [id], onDelete: Cascade)
+  household   Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  creator     User           @relation("CreatedTasks", fields: [createdBy], references: [id], onDelete: Cascade)
   labels      TaskLabel[]
+  assignees   TaskAssignee[]
 
   @@index([householdId, status], map: "Task_household_status_idx")
-  @@index([householdId, assigneeId], map: "Task_household_assignee_idx")
-  @@index([assigneeId, status], map: "Task_assignee_status_idx")
   @@map("tasks")
 }
 
@@ -241,4 +238,16 @@ model TaskLabel {
 
   @@id([taskId, labelId])
   @@map("task_labels")
+}
+
+model TaskAssignee {
+  taskId String @map("task_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId], map: "TaskAssignee_user_idx")
+  @@map("task_assignees")
 }

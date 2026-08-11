@@ -148,7 +148,7 @@ describe('tasks CRUD API contract', () => {
     expect(body.title).toBe('买菜');
     expect(body.status).toBe('pending');
     expect(body.priority).toBe('medium');
-    expect(body.assigneeId).toBeNull();
+    expect(body.assigneeIds).toEqual([]);
     expect(body.dueDate).toBeNull();
     expect(body.householdId).toBe(householdId);
     expect(body.createdBy).toBe(owner.userId);
@@ -164,7 +164,7 @@ describe('tasks CRUD API contract', () => {
       description: '详细描述',
       status: 'in_progress',
       priority: 'high',
-      assigneeId: member.userId,
+      assigneeIds: [member.userId],
       dueDate: tomorrow,
     });
     expect(response.statusCode).toBe(201);
@@ -173,8 +173,19 @@ describe('tasks CRUD API contract', () => {
     expect(body.description).toBe('详细描述');
     expect(body.status).toBe('in_progress');
     expect(body.priority).toBe('high');
-    expect(body.assigneeId).toBe(member.userId);
+    expect(body.assigneeIds).toEqual([member.userId]);
     expect(body.dueDate).toBe(tomorrow);
+  });
+
+  test('creates a task with multiple assignees', async () => {
+    const response = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: '共同任务',
+      assigneeIds: [owner.userId, member.userId],
+    });
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body.assigneeIds).toHaveLength(2);
+    expect(body.assigneeIds).toEqual(expect.arrayContaining([owner.userId, member.userId]));
   });
 
   test('retrieves a task by ID', async () => {
@@ -228,15 +239,16 @@ describe('tasks CRUD API contract', () => {
   });
 
   test('filters tasks by assignee', async () => {
-    await taskApi(owner.accessToken, householdId, 'POST', '', { title: '我的任务', assigneeId: owner.userId });
-    await taskApi(owner.accessToken, householdId, 'POST', '', { title: '成员任务', assigneeId: member.userId });
+    await taskApi(owner.accessToken, householdId, 'POST', '', { title: '我的任务', assigneeIds: [owner.userId] });
+    await taskApi(owner.accessToken, householdId, 'POST', '', { title: '成员任务', assigneeIds: [member.userId] });
+    await taskApi(owner.accessToken, householdId, 'POST', '', { title: '共同任务', assigneeIds: [owner.userId, member.userId] });
     await taskApi(owner.accessToken, householdId, 'POST', '', { title: '未分配' });
 
     const response = await taskApi(owner.accessToken, householdId, 'GET', `?assigneeId=${encodeURIComponent(member.userId)}`);
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body.tasks).toHaveLength(1);
-    expect(body.tasks[0].title).toBe('成员任务');
+    expect(body.tasks).toHaveLength(2);
+    expect(body.tasks.map((t: { title: string }) => t.title).sort()).toEqual(['共同任务', '成员任务']);
   });
 
   test('updates a task (owner can edit any task)', async () => {
@@ -260,29 +272,35 @@ describe('tasks CRUD API contract', () => {
     expect(body.priority).toBe('urgent');
   });
 
-  test('updates assignee to another household member', async () => {
+  test('updates assignees to other household members', async () => {
     const created = await taskApi(owner.accessToken, householdId, 'POST', '', { title: '分配测试' });
     const taskId = (created.json() as { id: string }).id;
 
     const response = await taskApi(owner.accessToken, householdId, 'PUT', `/${encodeURIComponent(taskId)}`, {
-      assigneeId: member.userId,
+      assigneeIds: [owner.userId, member.userId],
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json().assigneeId).toBe(member.userId);
+    expect(response.json().assigneeIds).toEqual(expect.arrayContaining([owner.userId, member.userId]));
+
+    // A second update replaces the full set rather than appending.
+    const narrowed = await taskApi(owner.accessToken, householdId, 'PUT', `/${encodeURIComponent(taskId)}`, {
+      assigneeIds: [member.userId],
+    });
+    expect(narrowed.json().assigneeIds).toEqual([member.userId]);
   });
 
-  test('clears assignee when set to null', async () => {
+  test('clears assignees when set to an empty array', async () => {
     const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
       title: '取消分配',
-      assigneeId: member.userId,
+      assigneeIds: [member.userId],
     });
     const taskId = (created.json() as { id: string }).id;
 
     const response = await taskApi(owner.accessToken, householdId, 'PUT', `/${encodeURIComponent(taskId)}`, {
-      assigneeId: null,
+      assigneeIds: [],
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json().assigneeId).toBeNull();
+    expect(response.json().assigneeIds).toEqual([]);
   });
 
   test('clears due date when set to empty string', async () => {
@@ -386,12 +404,12 @@ describe('tasks CRUD API contract', () => {
   test('rejects non-household-member as assignee', async () => {
     const response = await taskApi(owner.accessToken, householdId, 'POST', '', {
       title: '无效分配',
-      assigneeId: outsider.userId,
+      assigneeIds: [outsider.userId],
     });
     expect(response.statusCode).toBe(400);
     const body = response.json();
     expect(body.error.code).toBe('VALIDATION_FAILED');
-    expect(body.error.details[0].field).toBe('assigneeId');
+    expect(body.error.details[0].field).toBe('assigneeIds');
   });
 
   test('rejects invalid status value on create', async () => {

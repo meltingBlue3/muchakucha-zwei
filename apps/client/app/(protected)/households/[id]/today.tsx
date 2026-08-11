@@ -279,7 +279,7 @@ export default function TodayRoute() {
                     <TaskCard
                       key={task.id}
                       task={task}
-                      assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
+                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
                       onPress={handleTaskPress}
                       onStatusChange={handleTaskStatusChange}
                       statusChanging={statusChangingTaskId === task.id}
@@ -334,7 +334,7 @@ export default function TodayRoute() {
                     <TaskCard
                       key={task.id}
                       task={task}
-                      assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
+                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
                       onPress={handleTaskPress}
                       onStatusChange={handleTaskStatusChange}
                       statusChanging={statusChangingTaskId === task.id}
@@ -367,7 +367,7 @@ export default function TodayRoute() {
                     <TaskCard
                       key={task.id}
                       task={task}
-                      assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
+                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
                       onPress={handleTaskPress}
                       onStatusChange={handleTaskStatusChange}
                       statusChanging={statusChangingTaskId === task.id}
@@ -388,7 +388,7 @@ export default function TodayRoute() {
                     <TaskCard
                       key={task.id}
                       task={task}
-                      assigneeName={task.assigneeId ? (memberNameMap.get(task.assigneeId) ?? '') : ''}
+                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
                       onPress={handleTaskPress}
                       onStatusChange={handleTaskStatusChange}
                       statusChanging={statusChangingTaskId === task.id}

@@ -30,7 +30,7 @@ export interface TaskInput {
   description: string;
   status: string;
   priority: string;
-  assigneeId: string;
+  assigneeIds: string[];
   dueDate: string;
 }
 
@@ -39,7 +39,7 @@ const EMPTY_TASK: TaskInput = {
   description: '',
   status: 'pending',
   priority: 'medium',
-  assigneeId: '',
+  assigneeIds: [],
   dueDate: '',
 };
 
@@ -64,7 +64,7 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
         description: initial.description ?? '',
         status: initial.status,
         priority: initial.priority,
-        assigneeId: initial.assigneeId ?? '',
+        assigneeIds: initial.assigneeIds ?? [],
         dueDate: initial.dueDate?.split('T')[0] ?? '',
       };
     }
@@ -92,9 +92,7 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
     // Always include optional fields so the backend can clear them
     // (the update endpoint treats absent/undefined as "no change").
     data.description = (form.description ?? '').trim();
-    if (form.assigneeId) {
-      data.assigneeId = form.assigneeId;
-    }
+    data.assigneeIds = form.assigneeIds;
     if (form.dueDate !== '') {
       // Convert through new Date() so local midnight is mapped to UTC —
       // never hardcode Z, which would treat the local date as UTC midnight.
@@ -189,37 +187,51 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
         </View>
       </Stack>
 
-      {/* Assignee */}
+      {/* Assignees (multiple allowed) */}
       <Stack gap={1}>
-        <Text variant="label">负责人（可选）</Text>
+        <Text variant="label">负责人（可选，可多选）</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           <Pressable
-            onPress={() => updateField('assigneeId', '')}
+            onPress={() => updateField('assigneeIds', [])}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: form.assigneeIds.length === 0 }}
             style={({ pressed }) => [
-              chipStyle(form.assigneeId === ''),
+              chipStyle(form.assigneeIds.length === 0),
               { opacity: pressed ? 0.7 : 1 },
             ]}
             accessibilityLabel="未分配"
           >
-            <Text variant="bodySm" color={chipTextColor(form.assigneeId === '')}>
+            <Text variant="bodySm" color={chipTextColor(form.assigneeIds.length === 0)}>
               未分配
             </Text>
           </Pressable>
-          {members.map((m) => (
-            <Pressable
-              key={m.userId}
-              onPress={() => updateField('assigneeId', m.userId)}
-              style={({ pressed }) => [
-                chipStyle(form.assigneeId === m.userId),
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
-              accessibilityLabel={`分配给 ${m.displayName}`}
-            >
-              <Text variant="bodySm" color={chipTextColor(form.assigneeId === m.userId)}>
-                {m.displayName}
-              </Text>
-            </Pressable>
-          ))}
+          {members.map((m) => {
+            const selected = form.assigneeIds.includes(m.userId);
+            return (
+              <Pressable
+                key={m.userId}
+                onPress={() =>
+                  updateField(
+                    'assigneeIds',
+                    selected
+                      ? form.assigneeIds.filter((id) => id !== m.userId)
+                      : [...form.assigneeIds, m.userId],
+                  )
+                }
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: selected }}
+                style={({ pressed }) => [
+                  chipStyle(selected),
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+                accessibilityLabel={`分配给 ${m.displayName}`}
+              >
+                <Text variant="bodySm" color={chipTextColor(selected)}>
+                  {m.displayName}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       </Stack>
 

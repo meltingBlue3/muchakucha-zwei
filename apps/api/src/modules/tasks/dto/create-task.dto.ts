@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { IsIn, IsOptional, IsString, IsUUID, Length, MaxLength } from 'class-validator';
+import { IsArray, IsIn, IsOptional, IsString, IsUUID, Length, MaxLength } from 'class-validator';
 import { LabelResponseDto } from '../../labels/dto/create-label.dto.js';
 
 export const TASK_STATUSES = ['pending', 'in_progress', 'completed'] as const;
@@ -33,11 +32,11 @@ export class CreateTaskDto {
   @IsIn(TASK_PRIORITIES)
   priority?: TaskPriority;
 
-  @ApiPropertyOptional({ description: '负责人成员 ID（必须是当前家庭成员）' })
-  @Transform(({ value }) => (value === '' ? undefined : value))
+  @ApiPropertyOptional({ description: '负责人成员 ID 列表（每个 ID 必须是当前家庭成员）', type: [String] })
   @IsOptional()
-  @IsUUID('4')
-  assigneeId?: string;
+  @IsArray()
+  @IsUUID('4', { each: true })
+  assigneeIds?: string[];
 
   @ApiPropertyOptional({ description: '截止日期' })
   @IsOptional()
@@ -52,7 +51,7 @@ export class TaskResponseDto {
   @ApiProperty({ nullable: true }) description!: string | null;
   @ApiProperty({ enum: TASK_STATUSES }) status!: TaskStatus;
   @ApiProperty({ enum: TASK_PRIORITIES }) priority!: TaskPriority;
-  @ApiProperty({ nullable: true }) assigneeId!: string | null;
+  @ApiProperty({ type: [String] }) assigneeIds!: string[];
   @ApiProperty({ nullable: true }) dueDate!: string | null;
   @ApiProperty() createdBy!: string;
   @ApiProperty() createdAt!: string;

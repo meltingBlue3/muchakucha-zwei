@@ -241,7 +241,7 @@ export interface CreateTaskDto {
   description?: string;
   status?: string;
   priority?: string;
-  assigneeId?: string;
+  assigneeIds?: string[];
   dueDate?: string;
 }
 
@@ -250,7 +250,7 @@ export interface UpdateTaskDto {
   description?: string;
   status?: string;
   priority?: string;
-  assigneeId?: string;
+  assigneeIds?: string[];
   dueDate?: string;
 }
 
@@ -261,7 +261,7 @@ export interface TaskResponseDto {
   description?: string | null;
   status: string;
   priority: string;
-  assigneeId?: string | null;
+  assigneeIds: string[];
   dueDate?: string | null;
   createdBy: string;
   createdAt: string;

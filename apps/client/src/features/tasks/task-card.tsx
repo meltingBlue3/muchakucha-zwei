@@ -13,13 +13,13 @@ const BADGE_PADDING_V_OUTLINE = 1;
 
 interface TaskCardProps {
   task: TaskResponseDto;
-  assigneeName?: string;
+  assigneeNames?: string[];
   onPress: (task: TaskResponseDto) => void;
   onStatusChange?: (task: TaskResponseDto) => void;
   statusChanging?: boolean;
 }
 
-export function TaskCard({ task, assigneeName, onPress, onStatusChange, statusChanging = false }: TaskCardProps) {
+export function TaskCard({ task, assigneeNames, onPress, onStatusChange, statusChanging = false }: TaskCardProps) {
   const activeTheme = useTheme<Theme>();
   const overdue = isOverdue(task.dueDate ?? null);
   const canToggle = onStatusChange !== undefined;
@@ -141,9 +141,9 @@ export function TaskCard({ task, assigneeName, onPress, onStatusChange, statusCh
               截止：{formatDueDate(task.dueDate ?? null)}
             </Text>
           )}
-          {assigneeName !== undefined && assigneeName !== '' && (
+          {assigneeNames !== undefined && assigneeNames.length > 0 && (
             <Text variant="caption" color="inkMuted">
-              负责人：{assigneeName}
+              负责人：{assigneeNames.join('、')}
             </Text>
           )}
         </View>

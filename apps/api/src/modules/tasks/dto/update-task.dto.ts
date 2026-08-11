@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { IsArray, IsIn, IsOptional, IsString, IsUUID, Length, MaxLength } from 'class-validator';
 import { TASK_PRIORITIES, TASK_STATUSES } from './create-task.dto.js';
 
 export class UpdateTaskDto {
@@ -27,10 +27,11 @@ export class UpdateTaskDto {
   @IsIn(TASK_PRIORITIES)
   priority?: string;
 
-  @ApiPropertyOptional({ description: '负责人成员 ID（传空字符串或 null 可清除）' })
+  @ApiPropertyOptional({ description: '负责人成员 ID 列表（传空数组可清除全部负责人）', type: [String] })
   @IsOptional()
-  @IsString()
-  assigneeId?: string;
+  @IsArray()
+  @IsUUID('4', { each: true })
+  assigneeIds?: string[];
 
   @ApiPropertyOptional({ description: '截止日期' })
   @IsOptional()

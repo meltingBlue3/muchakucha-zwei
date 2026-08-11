@@ -80,9 +80,9 @@ export default function TaskDetailRoute() {
     );
   }
 
-  const assigneeName = task.assigneeId
-    ? (members.find((m) => m.userId === task.assigneeId)?.displayName ?? '未知成员')
-    : '未分配';
+  const assigneeNames = task.assigneeIds.map(
+    (uid) => members.find((m) => m.userId === uid)?.displayName ?? '未知成员',
+  );
   const overdue = isOverdue(task.dueDate ?? null) && task.status !== 'completed';
 
   return (
@@ -150,7 +150,7 @@ export default function TaskDetailRoute() {
 
         <Stack gap={1}>
           <Text variant="label" color="inkMuted">负责人</Text>
-          <Text variant="body">{assigneeName}</Text>
+          <Text variant="body">{assigneeNames.length > 0 ? assigneeNames.join('、') : '未分配'}</Text>
         </Stack>
 
         {task.description !== null && task.description !== '' && (
