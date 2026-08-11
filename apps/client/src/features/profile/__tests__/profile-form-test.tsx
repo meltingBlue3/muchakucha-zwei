@@ -157,7 +157,13 @@ describe('current-device logout contract', () => {
 
     await fireEvent.press(view.getByRole('button', { name: '退出登录' }));
     expect(view.getByText('退出这台设备？')).toBeTruthy();
-    await fireEvent.press(view.getByRole('button', { name: '退出登录' }));
+    // The trigger button is unmounted once the confirm step is showing —
+    // it must not still be reachable, and there must be exactly one
+    // confirm affordance (previously both stayed mounted with the same
+    // "退出登录" label, which was ambiguous for screen readers and easy to
+    // misclick).
+    expect(view.queryByRole('button', { name: '退出登录' })).toBeNull();
+    await fireEvent.press(view.getByRole('button', { name: '确认退出登录' }));
     await waitFor(() => expect(onLoggedOut).toHaveBeenCalledTimes(1));
     expect(apiClient.logout).toHaveBeenCalledWith('current-access-token', expect.any(AbortSignal));
     expect(order).toEqual(['server', 'local', 'route']);
@@ -178,7 +184,7 @@ describe('current-device logout contract', () => {
       </MuchakuchaThemeProvider>,
     );
     await fireEvent.press(view.getByRole('button', { name: '退出登录' }));
-    await fireEvent.press(view.getByRole('button', { name: '退出登录' }));
+    await fireEvent.press(view.getByRole('button', { name: '确认退出登录' }));
     expect(await view.findByText('暂时无法退出。请检查网络后重试。')).toBeTruthy();
     expect(sessionTransport.clear).not.toHaveBeenCalled();
   });
