@@ -99,7 +99,7 @@ export default function EditNoteRoute() {
         <Stack gap={4}>
           <Text variant="heading">笔记</Text>
           <Text>{error ?? '笔记未找到。'}</Text>
-          <Pressable onPress={() => router.back()}>
+          <Pressable onPress={() => router.back()} hitSlop={activeTheme.spacing[4]}>
             <Text variant="label" color="coral">
               返回笔记列表
             </Text>
@@ -131,6 +131,7 @@ export default function EditNoteRoute() {
           {!confirmDelete ? (
             <Pressable
               onPress={() => setConfirmDelete(true)}
+              hitSlop={activeTheme.spacing[1]}
               style={({ pressed }) => ({
                 alignItems: 'center',
                 paddingVertical: activeTheme.spacing[3],
@@ -154,6 +155,7 @@ export default function EditNoteRoute() {
                 <Pressable
                   onPress={() => setConfirmDelete(false)}
                   disabled={deleting}
+                  hitSlop={activeTheme.spacing[1]}
                   style={({ pressed }) => ({
                     flex: 1,
                     alignItems: 'center',
@@ -170,6 +172,7 @@ export default function EditNoteRoute() {
                 <Pressable
                   onPress={handleDelete}
                   disabled={deleting}
+                  hitSlop={activeTheme.spacing[1]}
                   style={({ pressed }) => ({
                     flex: 1,
                     alignItems: 'center',

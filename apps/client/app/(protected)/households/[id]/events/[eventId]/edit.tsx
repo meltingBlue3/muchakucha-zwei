@@ -109,7 +109,7 @@ export default function EditEventRoute() {
           <Stack gap={4}>
             <Text variant="heading">事件</Text>
             <Text>{error ?? '事件未找到。'}</Text>
-            <Pressable onPress={() => router.back()}>
+            <Pressable onPress={() => router.back()} hitSlop={activeTheme.spacing[4]}>
               <Text variant="label" color="coral">
                 返回日历
               </Text>
@@ -146,6 +146,7 @@ export default function EditEventRoute() {
             {!confirmDelete ? (
               <Pressable
                 onPress={() => setConfirmDelete(true)}
+                hitSlop={activeTheme.spacing[1]}
                 style={({ pressed }) => ({
                   alignItems: 'center',
                   paddingVertical: activeTheme.spacing[3],
@@ -169,6 +170,7 @@ export default function EditEventRoute() {
                   <Pressable
                     onPress={() => setConfirmDelete(false)}
                     disabled={deleting}
+                    hitSlop={activeTheme.spacing[1]}
                     style={({ pressed }) => ({
                       flex: 1,
                       alignItems: 'center',
@@ -185,6 +187,7 @@ export default function EditEventRoute() {
                   <Pressable
                     onPress={handleDelete}
                     disabled={deleting}
+                    hitSlop={activeTheme.spacing[1]}
                     style={({ pressed }) => ({
                       flex: 1,
                       alignItems: 'center',

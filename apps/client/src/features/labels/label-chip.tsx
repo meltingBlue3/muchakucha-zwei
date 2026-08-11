@@ -39,7 +39,7 @@ export function LabelChip({ label, onRemove, small = false }: LabelChipProps) {
         style={{
           width: small ? 8 : 10,
           height: small ? 8 : 10,
-          borderRadius: 5,
+          borderRadius: activeTheme.borderRadii.full,
           backgroundColor: label.color,
         }}
       />

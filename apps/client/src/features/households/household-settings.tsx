@@ -1,8 +1,16 @@
 import type { GetHouseholdResponseDto, InvitationListItemDto } from '@muchakucha/api-client';
 import { ApiClientError } from '@muchakucha/api-client';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { HouseholdApi } from './household-api';
+import {
+  canLeave,
+  canRemove as canRemoveMember,
+  canTransferOwnership,
+  governanceAction,
+  useMemberGovernance,
+} from './member-governance';
 import {
   AppShell,
   HouseholdContextNote,
@@ -96,6 +104,19 @@ export function HouseholdSettings({
   const [invitationListLoading, setInvitationListLoading] = useState(false);
   const [invitationListError, setInvitationListError] = useState<string | undefined>(undefined);
   const [resendingId, setResendingId] = useState<string | undefined>(undefined);
+
+  // ---- Member governance ----
+  // Hooks must run unconditionally (before the loading/error/inconsistent
+  // early returns below), so actorRole falls back to 'MEMBER' — the most
+  // restrictive role — until the roster has actually loaded.
+  const currentMember = viewState.kind === 'ready'
+    ? viewState.data.members.find((m) => m.isCurrentUser)
+    : undefined;
+  const actorRole = currentMember?.role ?? 'MEMBER';
+  const actorIsOwner = viewState.kind === 'ready' && currentMember !== undefined
+    ? currentMember.membershipId === viewState.data.ownerMembershipId
+    : false;
+  const governance = useMemberGovernance(householdId, actorRole, householdName);
 
   // Populate the rename input when data loads.
   const renameInitialized = useRef(false);
@@ -218,52 +239,58 @@ export function HouseholdSettings({
     setInviteSubmitting(false);
   };
 
-  useEffect(() => {
-    mountedRef.current = true;
-    const controller = new AbortController();
-    abortRef.current = controller;
+  // Refetch whenever this screen regains focus (e.g. returning from a
+  // role-change, removal, or ownership-transfer confirmation screen), not
+  // just on first mount — otherwise the roster shows stale data after a
+  // governance mutation elsewhere in the stack.
+  useFocusEffect(
+    useCallback(() => {
+      mountedRef.current = true;
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-    const load = async () => {
-      const accessToken = deps.getAccessToken();
-      if (accessToken === null) {
-        if (mountedRef.current) {
-          setViewState({ kind: 'error', message: GENERIC_ERROR });
-        }
-        return;
-      }
-
-      try {
-        const household = await deps.householdApi.getHousehold(
-          accessToken,
-          householdId,
-          controller.signal,
-        );
-        if (!mountedRef.current) return;
-
-        // Inconsistent state: no owner.
-        if (household.members.length === 0 || household.ownerMembershipId === null) {
-          setViewState({
-            kind: 'inconsistent',
-            message: '暂时无法显示成员。请刷新；如果问题持续，请稍后再试。',
-          });
+      const load = async () => {
+        const accessToken = deps.getAccessToken();
+        if (accessToken === null) {
+          if (mountedRef.current) {
+            setViewState({ kind: 'error', message: GENERIC_ERROR });
+          }
           return;
         }
 
-        setViewState({ kind: 'ready', data: household });
-      } catch (error: unknown) {
-        if (!mountedRef.current) return;
-        if (error instanceof Error && error.name === 'AbortError') return;
-        setViewState({ kind: 'error', message: GENERIC_ERROR });
-      }
-    };
+        try {
+          const household = await deps.householdApi.getHousehold(
+            accessToken,
+            householdId,
+            controller.signal,
+          );
+          if (!mountedRef.current) return;
 
-    void load();
+          // Inconsistent state: no owner.
+          if (household.members.length === 0 || household.ownerMembershipId === null) {
+            setViewState({
+              kind: 'inconsistent',
+              message: '暂时无法显示成员。请刷新；如果问题持续，请稍后再试。',
+            });
+            return;
+          }
 
-    return () => {
-      mountedRef.current = false;
-      controller.abort();
-    };
-  }, [deps, householdId]);
+          setViewState({ kind: 'ready', data: household });
+        } catch (error: unknown) {
+          if (!mountedRef.current) return;
+          if (error instanceof Error && error.name === 'AbortError') return;
+          setViewState({ kind: 'error', message: GENERIC_ERROR });
+        }
+      };
+
+      void load();
+
+      return () => {
+        mountedRef.current = false;
+        controller.abort();
+      };
+    }, [deps, householdId]),
+  );
 
   // ---- Load invitation list when data is ready and showInvite is enabled ----
   useEffect(() => {
@@ -492,9 +519,35 @@ export function HouseholdSettings({
         </Stack>
 
         <Stack>
-          {data.members.map((member) => (
-            <MemberRow key={member.membershipId} member={member} />
-          ))}
+          {data.members.map((member) => {
+            const targetIsOwner = member.membershipId === data.ownerMembershipId;
+            const action = governanceAction(actorRole, actorIsOwner, member.role, targetIsOwner, member.isCurrentUser);
+            const removable = canRemoveMember(actorRole, member.role, targetIsOwner, member.isCurrentUser) && governance.remove !== undefined;
+            const transferable = canTransferOwnership(actorRole, actorIsOwner, member.isCurrentUser) && governance.transfer !== undefined;
+            const leaveable = actorIsOwner && !member.isCurrentUser
+              && canLeave(actorRole, actorIsOwner, data.members.length - 1) && governance.leave !== undefined;
+
+            const onRoleAction = action === 'promote'
+              ? () => governance.promote?.(member.membershipId, member.displayName)
+              : action === 'demote'
+                ? () => governance.demote?.(member.membershipId, member.displayName)
+                : () => undefined;
+
+            return (
+              <MemberRow
+                key={member.membershipId}
+                member={member}
+                {...(action === 'none' ? {} : { roleAction: action })}
+                onRoleAction={onRoleAction}
+                canRemoveMember={removable}
+                onRemove={() => governance.remove?.(member.membershipId, member.displayName, member.role)}
+                canTransferTo={transferable}
+                onTransfer={() => governance.transfer?.(member.membershipId, member.displayName)}
+                canLeaveTo={leaveable}
+                onLeaveTo={() => governance.leave?.(member.membershipId, member.displayName)}
+              />
+            );
+          })}
         </Stack>
 
         {/* Invitation list — visible to owner/admin when showInvite is enabled */}

@@ -135,6 +135,7 @@ export default function EditTaskRoute() {
                 <Pressable
                   onPress={() => setConfirmDelete(true)}
                   disabled={deleting}
+                  hitSlop={activeTheme.spacing[1]}
                   style={({ pressed }) => ({
                     alignItems: 'center',
                     paddingVertical: activeTheme.spacing[3],
@@ -158,6 +159,7 @@ export default function EditTaskRoute() {
                     <Pressable
                       onPress={() => setConfirmDelete(false)}
                       disabled={deleting}
+                      hitSlop={activeTheme.spacing[1]}
                       style={({ pressed }) => ({
                         flex: 1,
                         alignItems: 'center',
@@ -174,6 +176,7 @@ export default function EditTaskRoute() {
                     <Pressable
                       onPress={handleDelete}
                       disabled={deleting}
+                      hitSlop={activeTheme.spacing[1]}
                       style={({ pressed }) => ({
                         flex: 1,
                         alignItems: 'center',

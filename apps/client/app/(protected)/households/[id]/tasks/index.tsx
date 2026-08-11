@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
@@ -141,9 +141,14 @@ export default function TaskListRoute() {
     setRefreshing(false);
   }, [fetchData]);
 
-  useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+  // Refetch whenever this screen regains focus (e.g. returning from
+  // create/edit), not just on first mount — otherwise the list shows
+  // stale data after a mutation elsewhere in the stack.
+  useFocusEffect(
+    useCallback(() => {
+      void fetchData();
+    }, [fetchData]),
+  );
 
   const handleTaskPress = useCallback(
     (task: TaskResponseDto) => {
@@ -234,6 +239,7 @@ export default function TaskListRoute() {
           <Pressable
             onPress={handleCreateTask}
             accessibilityLabel="创建任务"
+            hitSlop={activeTheme.spacing[2]}
             style={({ pressed }) => ({
               backgroundColor: activeTheme.colors.coral,
               paddingHorizontal: activeTheme.spacing[4],
@@ -254,6 +260,9 @@ export default function TaskListRoute() {
             <Pressable
               key={f.key}
               onPress={() => setFilter(f.key)}
+              hitSlop={activeTheme.spacing[2]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: filter === f.key }}
               style={({ pressed }) => ({
                 paddingHorizontal: activeTheme.spacing[3],
                 paddingVertical: activeTheme.spacing[2],
@@ -276,6 +285,9 @@ export default function TaskListRoute() {
             <Pressable
               key={p.key}
               onPress={() => setPriorityFilter(p.key)}
+              hitSlop={activeTheme.spacing[3]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: priorityFilter === p.key }}
               style={({ pressed }) => ({
                 paddingHorizontal: activeTheme.spacing[3],
                 paddingVertical: activeTheme.spacing[1],
@@ -299,6 +311,9 @@ export default function TaskListRoute() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
             <Pressable
               onPress={() => setAssigneeFilter('all')}
+              hitSlop={activeTheme.spacing[3]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: assigneeFilter === 'all' }}
               style={({ pressed }) => ({
                 paddingHorizontal: activeTheme.spacing[3],
                 paddingVertical: activeTheme.spacing[1],
@@ -318,6 +333,9 @@ export default function TaskListRoute() {
               <Pressable
                 key={m.userId}
                 onPress={() => setAssigneeFilter(m.userId)}
+                hitSlop={activeTheme.spacing[3]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: assigneeFilter === m.userId }}
                 style={({ pressed }) => ({
                   paddingHorizontal: activeTheme.spacing[3],
                   paddingVertical: activeTheme.spacing[1],
@@ -342,6 +360,9 @@ export default function TaskListRoute() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], alignItems: 'center' }}>
             <Pressable
               onPress={() => setLabelFilter('all')}
+              hitSlop={activeTheme.spacing[3]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: labelFilter === 'all' }}
               style={({ pressed }) => ({
                 paddingHorizontal: activeTheme.spacing[3],
                 paddingVertical: activeTheme.spacing[1],
@@ -361,6 +382,9 @@ export default function TaskListRoute() {
               <Pressable
                 key={l.id}
                 onPress={() => setLabelFilter(labelFilter === l.id ? 'all' : l.id)}
+                hitSlop={activeTheme.spacing[3]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: labelFilter === l.id }}
                 style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -375,7 +399,7 @@ export default function TaskListRoute() {
                 })}
                 accessibilityLabel={`筛选标签：${l.name}`}
               >
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: l.color }} />
+                <View style={{ width: 8, height: 8, borderRadius: activeTheme.borderRadii.full, backgroundColor: l.color }} />
                 <Text variant="caption" style={{ color: labelFilter === l.id ? l.color : activeTheme.colors.inkMuted }}>
                   {l.name}
                 </Text>
@@ -399,7 +423,12 @@ export default function TaskListRoute() {
             borderRadius: activeTheme.borderRadii.md,
           }}>
             <Text variant="bodySm" color="destructive">{error}</Text>
-            <Pressable onPress={() => void fetchData()} style={{ marginTop: activeTheme.spacing[2] }}>
+            <Pressable
+              onPress={() => void fetchData()}
+              hitSlop={activeTheme.spacing[3]}
+              accessibilityLabel="重试加载任务"
+              style={{ marginTop: activeTheme.spacing[2], alignSelf: 'flex-start' }}
+            >
               <Text variant="label" color="coral">重试</Text>
             </Pressable>
           </View>

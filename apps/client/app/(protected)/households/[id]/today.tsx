@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
@@ -127,9 +127,14 @@ export default function TodayRoute() {
     setRefreshing(false);
   }, [fetchData]);
 
-  useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+  // Refetch whenever this screen regains focus (e.g. returning from a
+  // task/event action elsewhere), not just on first mount — otherwise
+  // Today shows stale data after a mutation elsewhere in the stack.
+  useFocusEffect(
+    useCallback(() => {
+      void fetchData();
+    }, [fetchData]),
+  );
 
   const handleEventPress = useCallback(
     (event: EventResponseDto) => {
@@ -242,7 +247,12 @@ export default function TodayRoute() {
             borderRadius: activeTheme.borderRadii.md,
           }}>
             <Text variant="bodySm" color="destructive">{error}</Text>
-            <Pressable onPress={() => void fetchData()} style={{ marginTop: activeTheme.spacing[2] }}>
+            <Pressable
+              onPress={() => void fetchData()}
+              hitSlop={activeTheme.spacing[3]}
+              accessibilityLabel="重试加载今日数据"
+              style={{ marginTop: activeTheme.spacing[2], alignSelf: 'flex-start' }}
+            >
               <Text variant="label" color="coral">重试</Text>
             </Pressable>
           </View>

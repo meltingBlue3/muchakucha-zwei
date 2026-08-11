@@ -203,20 +203,25 @@ export async function leaveHouseholdApi(
 /**
  * Hook that provides governance action callbacks for the member list.
  *
- * Promotion (MEMBER->ADMIN) returns a direct API call handler.
- * Demotion (ADMIN->MEMBER) navigates to the dedicated confirmation page
- * per D-10 safe-action-first contract.
+ * Promotion (MEMBER->ADMIN) navigates to the dedicated confirmation page.
+ * Demotion (ADMIN->MEMBER) navigates to the same page, which branches on
+ * the passed-through current role per D-10 safe-action-first contract.
  * Removal navigates to the dedicated D-10 consequence confirmation page.
  * Transfer navigates to the D-10 ownership transfer page.
  * Leave navigates to the D-11 owner-leave page.
+ *
+ * All destination pages read display name / role / household name from
+ * query params (falling back to generic text if absent), so callers must
+ * pass the target member's current data through.
  */
 export interface UseMemberGovernanceResult {
-  promote: ((membershipId: string) => void) | undefined;
-  demote: ((membershipId: string) => void) | undefined;
-  remove: ((membershipId: string) => void) | undefined;
-  transfer: ((membershipId: string) => void) | undefined;
+  promote: ((membershipId: string, displayName: string) => void) | undefined;
+  demote: ((membershipId: string, displayName: string) => void) | undefined;
+  remove: ((membershipId: string, displayName: string, targetRole: 'OWNER' | 'ADMIN' | 'MEMBER') => void) | undefined;
+  /** Only available to the current owner — an admin cannot transfer ownership. */
+  transfer: ((successorMembershipId: string, successorDisplayName: string) => void) | undefined;
   /** Navigate to the owner-leave confirmation page. Only available for the current owner. */
-  leave: ((successorMembershipId: string) => void) | undefined;
+  leave: ((successorMembershipId: string, successorDisplayName: string) => void) | undefined;
   /** Whether any governance mutation is pending. */
   isBusy: boolean;
 }
@@ -224,68 +229,74 @@ export interface UseMemberGovernanceResult {
 export function useMemberGovernance(
   householdId: string,
   actorRole: 'OWNER' | 'ADMIN' | 'MEMBER',
+  householdName: string,
 ): UseMemberGovernanceResult {
   const router = useRouter();
 
-  const promote = useCallback(
-    (membershipId: string) => {
+  const gotoRole = useCallback(
+    (membershipId: string, displayName: string, currentRole: 'ADMIN' | 'MEMBER') => {
       void router.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        `/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/role` as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (`/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/role` +
+          `?displayName=${encodeURIComponent(displayName)}&role=${encodeURIComponent(currentRole)}`) as any,
       );
     },
     [router, householdId],
+  );
+
+  const promote = useCallback(
+    (membershipId: string, displayName: string) => gotoRole(membershipId, displayName, 'MEMBER'),
+    [gotoRole],
   );
 
   const demote = useCallback(
-    (membershipId: string) => {
-      void router.push(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        `/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/role` as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      );
-    },
-    [router, householdId],
+    (membershipId: string, displayName: string) => gotoRole(membershipId, displayName, 'ADMIN'),
+    [gotoRole],
   );
 
   const remove = useCallback(
-    (membershipId: string) => {
+    (membershipId: string, displayName: string, targetRole: 'OWNER' | 'ADMIN' | 'MEMBER') => {
       void router.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        `/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/remove` as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (`/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/remove` +
+          `?displayName=${encodeURIComponent(displayName)}&role=${encodeURIComponent(targetRole)}`) as any,
       );
     },
     [router, householdId],
   );
 
   const transfer = useCallback(
-    (membershipId: string) => {
+    (successorMembershipId: string, successorDisplayName: string) => {
       void router.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        `/households/${encodeURIComponent(householdId)}/ownership/transfer?successorMembershipId=${encodeURIComponent(membershipId)}` as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (`/households/${encodeURIComponent(householdId)}/ownership/transfer?successorMembershipId=${encodeURIComponent(successorMembershipId)}` +
+          `&successorDisplayName=${encodeURIComponent(successorDisplayName)}&householdName=${encodeURIComponent(householdName)}`) as any,
       );
     },
-    [router, householdId],
+    [router, householdId, householdName],
   );
 
   const leave = useCallback(
-    (successorMembershipId: string) => {
+    (successorMembershipId: string, successorDisplayName: string) => {
       void router.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        `/households/${encodeURIComponent(householdId)}/ownership/leave?successorMembershipId=${encodeURIComponent(successorMembershipId)}` as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (`/households/${encodeURIComponent(householdId)}/ownership/leave?successorMembershipId=${encodeURIComponent(successorMembershipId)}` +
+          `&successorDisplayName=${encodeURIComponent(successorDisplayName)}&householdName=${encodeURIComponent(householdName)}`) as any,
       );
     },
-    [router, householdId],
+    [router, householdId, householdName],
   );
 
-  // When actor role is MEMBER, return undefined callbacks.
-  if (actorRole === 'MEMBER') {
-    return { promote: undefined, demote: undefined, remove: undefined, transfer: undefined, leave: undefined, isBusy: false };
-  }
+  // MEMBER cannot govern anyone; only the OWNER can transfer or leave-with-handoff.
+  const isMember = actorRole === 'MEMBER';
+  const isOwner = actorRole === 'OWNER';
 
-  return { promote, demote, remove, transfer, leave, isBusy: false };
+  return {
+    promote: isMember ? undefined : promote,
+    demote: isMember ? undefined : demote,
+    remove: isMember ? undefined : remove,
+    transfer: isOwner ? transfer : undefined,
+    leave: isOwner ? leave : undefined,
+    isBusy: false,
+  };
 }

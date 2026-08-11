@@ -158,3 +158,15 @@ export const theme = createTheme({
 export type Theme = typeof theme;
 export type Space = keyof Theme['spacing'];
 export type TextVariant = keyof Theme['textVariants'];
+
+/**
+ * Curated palette offered when a member picks a label color. Labels carry
+ * arbitrary user-assigned colors (not semantic theme colors), so this lives
+ * here as a design-system-owned constant rather than inlined in feature/route
+ * files, matching the theme's raw-value ownership boundary.
+ */
+export const labelColorPresets: string[] = [
+  '#B94736', '#E07050', '#277A72', '#4A9E94',
+  '#6B5B95', '#8B7DC4', '#D4A030', '#E8C252',
+  '#3B7DD8', '#6BA3E0', '#7B4B8A', '#A87BB5',
+];

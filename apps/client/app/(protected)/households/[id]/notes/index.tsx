@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { NoteResponseDto } from '@muchakucha/api-client';
@@ -57,9 +57,14 @@ export default function NotesListRoute() {
     }
   }, [householdId]);
 
-  useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+  // Refetch whenever this screen regains focus (e.g. returning from
+  // create/edit), not just on first mount — otherwise the list shows
+  // stale data after a mutation elsewhere in the stack.
+  useFocusEffect(
+    useCallback(() => {
+      void fetchData();
+    }, [fetchData]),
+  );
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -127,6 +132,7 @@ export default function NotesListRoute() {
             <Pressable
               onPress={handleCreateNote}
               accessibilityLabel="创建笔记"
+              hitSlop={activeTheme.spacing[2]}
               style={({ pressed }) => ({
                 backgroundColor: activeTheme.colors.coral,
                 paddingHorizontal: activeTheme.spacing[4],
@@ -154,7 +160,12 @@ export default function NotesListRoute() {
               borderRadius: activeTheme.borderRadii.md,
             }}>
               <Text variant="bodySm" color="destructive">{error}</Text>
-              <Pressable onPress={() => void fetchData()} style={{ marginTop: activeTheme.spacing[2] }}>
+              <Pressable
+                onPress={() => void fetchData()}
+                hitSlop={activeTheme.spacing[3]}
+                accessibilityLabel="重试加载笔记"
+                style={{ marginTop: activeTheme.spacing[2], alignSelf: 'flex-start' }}
+              >
                 <Text variant="label" color="coral">重试</Text>
               </Pressable>
             </View>

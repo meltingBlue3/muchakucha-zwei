@@ -20,13 +20,6 @@ export default function RevokeInvitationPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  // Check auth state - if not authenticated, redirect
-  const sessionState = sessionStateStore.get();
-  if (sessionState.kind !== 'authenticated') {
-    router.replace('/login');
-    return null;
-  }
-
   const handleSafeAction = useCallback(() => {
     router.back();
   }, [router]);
@@ -52,6 +45,16 @@ export default function RevokeInvitationPage() {
       setBusy(false);
     }
   }, [householdId, invitationId, router]);
+
+  // Check auth state — redirect if not authenticated. This must run after
+  // every hook above: an early return before a hook call changes the hook
+  // count between renders and crashes React ("Rendered fewer hooks than
+  // expected").
+  const sessionState = sessionStateStore.get();
+  if (sessionState.kind !== 'authenticated') {
+    router.replace('/login');
+    return null;
+  }
 
   return (
     <>

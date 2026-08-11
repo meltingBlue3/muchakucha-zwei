@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import Calendar from 'lucide-react-native/icons/calendar';
@@ -8,12 +8,11 @@ import ListTodo from 'lucide-react-native/icons/list-todo';
 import Tag from 'lucide-react-native/icons/tag';
 import Sunrise from 'lucide-react-native/icons/sunrise';
 
-import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../src/features/households/household-context';
-import { HouseholdSettings } from '../../../../src/features/households/household-settings';
 import {
   AccessChangedPanel,
   AppShell,
+  HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../src/ui/household-components';
 import { Stack, Text } from '../../../../src/ui/primitives';
@@ -38,14 +37,6 @@ export default function HouseholdDetailRoute() {
   // Derive the household name from context for the header.
   const householdName = currentHousehold?.name ?? '';
 
-  const deps = useMemo(
-    () => ({
-      householdApi: sessionApiClient,
-      getAccessToken: () => sessionTransport.getAccessToken(),
-    }),
-    [],
-  );
-
   const handleSwitch = useCallback(async (householdId: string) => {
     if (householdId === currentHouseholdId) {
       setSwitcherOpen(false);
@@ -57,6 +48,34 @@ export default function HouseholdDetailRoute() {
     }
     setSwitcherOpen(false);
   }, [currentHouseholdId, switchHousehold, router]);
+
+  // These must be declared before the early returns below — a hook called
+  // only on some renders (e.g. only once `viewState` leaves 'accessChanged')
+  // changes the hook count between renders and crashes React ("Rendered
+  // fewer hooks than expected"). `id` may still be empty/undefined here;
+  // that's fine, these closures aren't invoked until the ready branch below
+  // actually renders the buttons that use them.
+  const activeTheme = useTheme<Theme>();
+
+  const handleOpenToday = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/today`);
+  }, [router, id]);
+
+  const handleOpenCalendar = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/events`);
+  }, [router, id]);
+
+  const handleOpenTasks = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/tasks`);
+  }, [router, id]);
+
+  const handleOpenNotes = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/notes`);
+  }, [router, id]);
+
+  const handleOpenLabels = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/labels`);
+  }, [router, id]);
 
   // ---- AccessChanged or member lost access ----
   if (viewState === 'accessChanged') {
@@ -88,33 +107,16 @@ export default function HouseholdDetailRoute() {
     );
   }
 
-  const activeTheme = useTheme<Theme>();
-
-  const handleOpenToday = useCallback(() => {
-    void router.push(`/households/${encodeURIComponent(id)}/today`);
-  }, [router, id]);
-
-  const handleOpenCalendar = useCallback(() => {
-    void router.push(`/households/${encodeURIComponent(id)}/events`);
-  }, [router, id]);
-
-  const handleOpenTasks = useCallback(() => {
-    void router.push(`/households/${encodeURIComponent(id)}/tasks`);
-  }, [router, id]);
-
-  const handleOpenNotes = useCallback(() => {
-    void router.push(`/households/${encodeURIComponent(id)}/notes`);
-  }, [router, id]);
-
-  const handleOpenLabels = useCallback(() => {
-    void router.push(`/households/${encodeURIComponent(id)}/labels`);
-  }, [router, id]);
-
   return (
     <>
       {/* Calendar quick-access */}
       <AppShell accessibilityLabel="家庭详情" title="首页" showProfile>
         <Stack gap={4}>
+          <HouseholdHeader
+            householdName={householdName}
+            onOpenSwitcher={() => setSwitcherOpen(true)}
+          />
+
           {/* Today quick-access */}
           <Pressable
             onPress={handleOpenToday}
@@ -275,13 +277,6 @@ export default function HouseholdDetailRoute() {
               进入 ›
             </Text>
           </Pressable>
-
-          <HouseholdSettings
-            deps={deps}
-            householdId={id}
-            householdName={householdName}
-            onOpenSwitcher={() => setSwitcherOpen(true)}
-          />
         </Stack>
       </AppShell>
       <HouseholdSwitcher

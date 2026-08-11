@@ -8,11 +8,12 @@ import { DateField } from '../../ui/date-field';
 import { LabelPicker } from '../labels/label-picker';
 import { toDateIso } from './calendar-utils';
 
-type EventInput = Omit<CreateEventDto, 'startTime' | 'endTime'> & {
+type EventInput = Omit<CreateEventDto, 'startTime' | 'endTime' | 'allDay'> & {
   startDate: string;
   startTime: string;
   endDate: string;
   endTime: string;
+  allDay: boolean;
 };
 
 const EMPTY_INPUT: EventInput = {

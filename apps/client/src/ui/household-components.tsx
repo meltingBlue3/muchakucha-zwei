@@ -12,10 +12,15 @@ import Clock from 'lucide-react-native/icons/clock';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import Ban from 'lucide-react-native/icons/ban';
 import Mail from 'lucide-react-native/icons/mail';
+import CircleArrowUp from 'lucide-react-native/icons/circle-arrow-up';
+import CircleArrowDown from 'lucide-react-native/icons/circle-arrow-down';
+import UserMinus from 'lucide-react-native/icons/user-minus';
+import LogOut from 'lucide-react-native/icons/log-out';
 
 import { useRouter } from 'expo-router';
 import React, { forwardRef, useCallback, useRef } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -23,7 +28,7 @@ import {
   ScrollView,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   Button,
@@ -150,29 +155,34 @@ export const AppShell = ({
           </View>
         </View>
       ) : null}
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingHorizontal: theme.layout.mobileInset,
-          paddingVertical: theme.spacing[6],
-          maxWidth: Platform.OS === 'web' ? theme.layout.householdMaxWidth : undefined,
-          alignSelf: Platform.OS === 'web' ? 'center' : undefined,
-          width: '100%',
-        }}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          onRefresh !== undefined ? (
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[theme.colors.coral]}
-              tintColor={theme.colors.coral}
-            />
-          ) : undefined
-        }
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
       >
-        {children}
-      </ScrollView>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingHorizontal: theme.layout.mobileInset,
+            paddingVertical: theme.spacing[6],
+            maxWidth: Platform.OS === 'web' ? theme.layout.householdMaxWidth : undefined,
+            alignSelf: Platform.OS === 'web' ? 'center' : undefined,
+            width: '100%',
+          }}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            onRefresh !== undefined ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[theme.colors.coral]}
+                tintColor={theme.colors.coral}
+              />
+            ) : undefined
+          }
+        >
+          {children}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -308,6 +318,10 @@ interface HouseholdSwitcherProps {
 export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
   ({ households, currentHouseholdId, onSelect, onCreateNew, visible, onClose }, ref) => {
     const headingRef = useRef<View>(null);
+    // The panel is pinned flush to the physical bottom edge (see the height:'75%'
+    // comment below), which on Android puts the "创建家庭" button right under the
+    // gesture-nav bar unless we pad for it explicitly.
+    const insets = useSafeAreaInsets();
 
     const handleSelect = useCallback((id: string) => {
       onSelect(id);
@@ -325,9 +339,13 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
         style={{
           backgroundColor: theme.colors.surface,
           borderRadius: Platform.OS === 'web' ? theme.borderRadii.lg : 0,
-          maxHeight: Platform.OS === 'web'
-            ? theme.layout.switcherMaxHeight
-            : '75%' as unknown as number,
+          // Native needs a definite (not max-only) height here: the header
+          // above is intrinsically sized and the household ScrollView below
+          // is flex:1, so without a concrete height to allocate, Yoga gives
+          // the ScrollView 0px and only the header renders.
+          ...(Platform.OS === 'web'
+            ? { maxHeight: theme.layout.switcherMaxHeight }
+            : { height: '75%' as unknown as number }),
           width: Platform.OS === 'web' ? theme.layout.switcherWidth : '100%',
           ...(Platform.OS === 'web'
             ? { boxShadow: theme.elevation.softWeb as string }
@@ -395,7 +413,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
               ) : null}
             </Pressable>
           ))}
-          <View style={{ padding: theme.spacing[4] }}>
+          <View style={{ padding: theme.spacing[4], paddingBottom: theme.spacing[4] + insets.bottom }}>
             <Button label="创建家庭" onPress={onCreateNew} />
           </View>
         </ScrollView>
@@ -540,72 +558,176 @@ export const RoleBadge = ({ role }: RoleBadgeProps) => {
 
 interface MemberRowProps {
   member: GetHouseholdMemberDto;
+  /** Present when the actor may promote (target is MEMBER) or demote (target is ADMIN) this member. */
+  roleAction?: 'promote' | 'demote';
+  onRoleAction?: () => void;
+  canRemoveMember?: boolean;
+  onRemove?: () => void;
+  /** Only ever true for the current owner acting on a non-self member. */
+  canTransferTo?: boolean;
+  onTransfer?: () => void;
+  /** Owner-leave-with-handoff, using this member as successor. */
+  canLeaveTo?: boolean;
+  onLeaveTo?: () => void;
 }
 
-export const MemberRow = ({ member }: MemberRowProps) => {
+export const MemberRow = ({
+  member,
+  roleAction,
+  onRoleAction,
+  canRemoveMember = false,
+  onRemove,
+  canTransferTo = false,
+  onTransfer,
+  canLeaveTo = false,
+  onLeaveTo,
+}: MemberRowProps) => {
   const roleLabel = ROLE_LABELS[member.role] ?? member.role;
   const avatarChar = [...member.displayName.trim().normalize('NFC')][0] ?? '?';
+  const hasActions = roleAction !== undefined || canRemoveMember || canTransferTo || canLeaveTo;
 
   return (
     <View
-      accessibilityLabel={`${member.displayName}，${roleLabel}${member.isCurrentUser ? '，本人' : ''}`}
       style={{
-        alignItems: 'center',
         borderBottomColor: theme.colors.border,
         borderBottomWidth: theme.borderWidths.default,
-        flexDirection: 'row',
-        gap: theme.spacing[3],
-        minHeight: 72,
         paddingVertical: theme.spacing[2],
       }}
     >
-      {/* Avatar placeholder */}
       <View
-        accessibilityLabel={`${member.displayName}的头像`}
+        accessibilityLabel={`${member.displayName}，${roleLabel}${member.isCurrentUser ? '，本人' : ''}`}
         style={{
           alignItems: 'center',
-          backgroundColor: theme.colors.surfaceMuted,
-          borderRadius: theme.borderRadii.full,
-          height: theme.controlSizes.touchTarget,
-          justifyContent: 'center',
-          width: theme.controlSizes.touchTarget,
+          flexDirection: 'row',
+          gap: theme.spacing[3],
+          minHeight: 72,
         }}
       >
-        <Text
-          style={{ fontWeight: '600' as const }}
-          variant="body"
+        {/* Avatar placeholder */}
+        <View
+          accessibilityLabel={`${member.displayName}的头像`}
+          style={{
+            alignItems: 'center',
+            backgroundColor: theme.colors.surfaceMuted,
+            borderRadius: theme.borderRadii.full,
+            height: theme.controlSizes.touchTarget,
+            justifyContent: 'center',
+            width: theme.controlSizes.touchTarget,
+          }}
         >
-          {avatarChar}
-        </Text>
-      </View>
-
-      {/* Name, email, role */}
-      <Stack gap={1} style={{ flex: 1 }}>
-        <Inline gap={2} style={{ alignItems: 'center' }}>
           <Text
-            numberOfLines={1}
+            style={{ fontWeight: '600' as const }}
             variant="body"
           >
-            {member.displayName}
+            {avatarChar}
           </Text>
-          {member.isCurrentUser ? (
+        </View>
+
+        {/* Name, email, role */}
+        <Stack gap={1} style={{ flex: 1 }}>
+          <Inline gap={2} style={{ alignItems: 'center' }}>
             <Text
-              style={{ fontWeight: '600' as const }}
-              variant="bodySm"
+              numberOfLines={1}
+              variant="body"
             >
-              我
+              {member.displayName}
             </Text>
+            {member.isCurrentUser ? (
+              <Text
+                style={{ fontWeight: '600' as const }}
+                variant="bodySm"
+              >
+                我
+              </Text>
+            ) : null}
+          </Inline>
+          <Text
+            numberOfLines={1}
+            variant="caption"
+          >
+            {member.email}
+          </Text>
+        </Stack>
+
+        <RoleBadge role={member.role} />
+      </View>
+
+      {hasActions ? (
+        <Inline gap={1} style={{ paddingLeft: theme.controlSizes.touchTarget + theme.spacing[3] }}>
+          {roleAction !== undefined ? (
+            <Pressable
+              accessibilityLabel={`${roleAction === 'promote' ? '提升' : '降级'} ${member.displayName}`}
+              accessibilityRole="button"
+              onPress={onRoleAction}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
+                borderRadius: theme.borderRadii.md,
+                justifyContent: 'center',
+                minHeight: theme.controlSizes.touchTarget,
+                minWidth: theme.controlSizes.touchTarget,
+              })}
+            >
+              {roleAction === 'promote' ? (
+                <CircleArrowUp color={theme.colors.coral} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+              ) : (
+                <CircleArrowDown color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+              )}
+            </Pressable>
+          ) : null}
+          {canTransferTo ? (
+            <Pressable
+              accessibilityLabel={`转让所有权给 ${member.displayName}`}
+              accessibilityRole="button"
+              onPress={onTransfer}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
+                borderRadius: theme.borderRadii.md,
+                justifyContent: 'center',
+                minHeight: theme.controlSizes.touchTarget,
+                minWidth: theme.controlSizes.touchTarget,
+              })}
+            >
+              <Crown color={theme.colors.coral} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+            </Pressable>
+          ) : null}
+          {canRemoveMember ? (
+            <Pressable
+              accessibilityLabel={`移除 ${member.displayName}`}
+              accessibilityRole="button"
+              onPress={onRemove}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
+                borderRadius: theme.borderRadii.md,
+                justifyContent: 'center',
+                minHeight: theme.controlSizes.touchTarget,
+                minWidth: theme.controlSizes.touchTarget,
+              })}
+            >
+              <UserMinus color={theme.colors.destructive} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+            </Pressable>
+          ) : null}
+          {canLeaveTo ? (
+            <Pressable
+              accessibilityLabel={`离开家庭，所有权转让给 ${member.displayName}`}
+              accessibilityRole="button"
+              onPress={onLeaveTo}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
+                borderRadius: theme.borderRadii.md,
+                justifyContent: 'center',
+                minHeight: theme.controlSizes.touchTarget,
+                minWidth: theme.controlSizes.touchTarget,
+              })}
+            >
+              <LogOut color={theme.colors.destructive} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+            </Pressable>
           ) : null}
         </Inline>
-        <Text
-          numberOfLines={1}
-          variant="caption"
-        >
-          {member.email}
-        </Text>
-      </Stack>
-
-      <RoleBadge role={member.role} />
+      ) : null}
     </View>
   );
 };

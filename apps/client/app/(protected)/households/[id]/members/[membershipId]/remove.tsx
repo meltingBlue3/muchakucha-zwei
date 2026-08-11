@@ -39,13 +39,6 @@ export default function RemoveMemberPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  // Check auth state — redirect if not authenticated.
-  const sessionState = sessionStateStore.get();
-  if (sessionState.kind !== 'authenticated') {
-    router.replace('/login');
-    return null;
-  }
-
   const handleRemove = useCallback(async () => {
     const accessToken = sessionTransport.getAccessToken();
     if (accessToken === null) return;
@@ -71,6 +64,16 @@ export default function RemoveMemberPage() {
   const handleSafeAction = useCallback(() => {
     router.back();
   }, [router]);
+
+  // Check auth state — redirect if not authenticated. This must run after
+  // every hook above: an early return before a hook call changes the hook
+  // count between renders and crashes React ("Rendered fewer hooks than
+  // expected").
+  const sessionState = sessionStateStore.get();
+  if (sessionState.kind !== 'authenticated') {
+    router.replace('/login');
+    return null;
+  }
 
   const isAdminTarget = targetRole === 'ADMIN';
 

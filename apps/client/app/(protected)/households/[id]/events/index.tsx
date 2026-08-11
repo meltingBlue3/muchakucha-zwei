@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto } from '@muchakucha/api-client';
@@ -105,9 +105,14 @@ export default function CalendarRoute() {
     setRefreshing(false);
   }, [fetchEvents]);
 
-  useEffect(() => {
-    void fetchEvents();
-  }, [fetchEvents]);
+  // Refetch whenever this screen regains focus (e.g. returning from
+  // create/edit), not just on first mount — otherwise the list shows
+  // stale data after a mutation elsewhere in the stack.
+  useFocusEffect(
+    useCallback(() => {
+      void fetchEvents();
+    }, [fetchEvents]),
+  );
 
   // Extract unique labels from loaded events
   const availableLabels = useMemo(() => {
@@ -217,6 +222,7 @@ export default function CalendarRoute() {
           <Pressable
             onPress={handleCreateEvent}
             accessibilityLabel="创建事件"
+            hitSlop={activeTheme.spacing[2]}
             style={({ pressed }) => ({
               backgroundColor: activeTheme.colors.coral,
               paddingHorizontal: activeTheme.spacing[4],
@@ -247,6 +253,9 @@ export default function CalendarRoute() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], alignItems: 'center' }}>
             <Pressable
               onPress={() => setLabelFilter('all')}
+              hitSlop={activeTheme.spacing[3]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: labelFilter === 'all' }}
               style={({ pressed }) => ({
                 paddingHorizontal: activeTheme.spacing[3],
                 paddingVertical: activeTheme.spacing[1],
@@ -266,6 +275,9 @@ export default function CalendarRoute() {
               <Pressable
                 key={l.id}
                 onPress={() => setLabelFilter(labelFilter === l.id ? 'all' : l.id)}
+                hitSlop={activeTheme.spacing[3]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: labelFilter === l.id }}
                 style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -280,7 +292,7 @@ export default function CalendarRoute() {
                 })}
                 accessibilityLabel={`筛选标签：${l.name}`}
               >
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: l.color }} />
+                <View style={{ width: 8, height: 8, borderRadius: activeTheme.borderRadii.full, backgroundColor: l.color }} />
                 <Text variant="caption" style={{ color: labelFilter === l.id ? l.color : activeTheme.colors.inkMuted }}>
                   {l.name}
                 </Text>
@@ -314,7 +326,9 @@ export default function CalendarRoute() {
               </Text>
               <Pressable
                 onPress={() => void fetchEvents()}
-                style={{ marginTop: activeTheme.spacing[2] }}
+                hitSlop={activeTheme.spacing[3]}
+                accessibilityLabel="重试加载事件"
+                style={{ marginTop: activeTheme.spacing[2], alignSelf: 'flex-start' }}
               >
                 <Text variant="label" color="coral">
                   重试

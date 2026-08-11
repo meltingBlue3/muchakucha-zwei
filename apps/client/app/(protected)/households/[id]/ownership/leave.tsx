@@ -45,13 +45,6 @@ export default function LeaveHouseholdPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  // Check auth state — redirect if not authenticated.
-  const sessionState = sessionStateStore.get();
-  if (sessionState.kind !== 'authenticated') {
-    router.replace('/login');
-    return null;
-  }
-
   const handleConfirm = useCallback(async () => {
     const accessToken = sessionTransport.getAccessToken();
     if (accessToken === null) return;
@@ -90,6 +83,16 @@ export default function LeaveHouseholdPage() {
     setError(undefined);
     setStage('final');
   }, []);
+
+  // Check auth state — redirect if not authenticated. This must run after
+  // every hook above: an early return before a hook call changes the hook
+  // count between renders and crashes React ("Rendered fewer hooks than
+  // expected").
+  const sessionState = sessionStateStore.get();
+  if (sessionState.kind !== 'authenticated') {
+    router.replace('/login');
+    return null;
+  }
 
   // ---- Stage 1: Consequence summary ----
 

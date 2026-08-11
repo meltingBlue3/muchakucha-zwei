@@ -33,13 +33,6 @@ export default function ChangeMemberRolePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
-  // Check auth state — redirect if not authenticated.
-  const sessionState = sessionStateStore.get();
-  if (sessionState.kind !== 'authenticated') {
-    router.replace('/login');
-    return null;
-  }
-
   const isPromotion = currentRole === 'MEMBER';
   const newRole: 'ADMIN' | 'MEMBER' = isPromotion ? 'ADMIN' : 'MEMBER';
 
@@ -69,6 +62,16 @@ export default function ChangeMemberRolePage() {
   const handleSafeAction = useCallback(() => {
     router.back();
   }, [router]);
+
+  // Check auth state — redirect if not authenticated. This must run after
+  // every hook above: an early return before a hook call changes the hook
+  // count between renders and crashes React ("Rendered fewer hooks than
+  // expected").
+  const sessionState = sessionStateStore.get();
+  if (sessionState.kind !== 'authenticated') {
+    router.replace('/login');
+    return null;
+  }
 
   // ---- Promotion: direct confirmation (no destructive styling) ----
   if (isPromotion) {

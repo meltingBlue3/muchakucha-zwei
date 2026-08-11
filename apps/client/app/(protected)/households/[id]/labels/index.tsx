@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { LabelResponseDto } from '@muchakucha/api-client';
@@ -14,13 +14,9 @@ import {
   HouseholdSwitcher,
 } from '../../../../../src/ui/household-components';
 import { Stack, Text, Heading } from '../../../../../src/ui/primitives';
-import type { Theme } from '../../../../../src/ui/theme';
+import { labelColorPresets, type Theme } from '../../../../../src/ui/theme';
 
-const PRESET_COLORS = [
-  '#B94736', '#E07050', '#277A72', '#4A9E94',
-  '#6B5B95', '#8B7DC4', '#D4A030', '#E8C252',
-  '#3B7DD8', '#6BA3E0', '#7B4B8A', '#A87BB5',
-];
+const PRESET_COLORS = labelColorPresets;
 
 export default function LabelsIndexRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -79,9 +75,14 @@ export default function LabelsIndexRoute() {
     }
   }, [householdId]);
 
-  useEffect(() => {
-    void fetchLabels();
-  }, [fetchLabels]);
+  // Refetch whenever this screen regains focus (e.g. returning from
+  // create/edit), not just on first mount — otherwise the list shows
+  // stale data after a mutation elsewhere in the stack.
+  useFocusEffect(
+    useCallback(() => {
+      void fetchLabels();
+    }, [fetchLabels]),
+  );
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -257,11 +258,14 @@ export default function LabelsIndexRoute() {
                   <Pressable
                     key={color}
                     onPress={() => setNewColor(color)}
-                    accessibilityLabel={`选择颜色`}
+                    accessibilityLabel={`选择颜色 ${color}`}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: newColor === color }}
+                    hitSlop={activeTheme.spacing[3]}
                     style={{
                       width: 28,
                       height: 28,
-                      borderRadius: 14,
+                      borderRadius: activeTheme.borderRadii.full,
                       backgroundColor: color,
                       borderWidth: newColor === color ? 3 : 0,
                       borderColor: activeTheme.colors.ink,
@@ -346,11 +350,14 @@ export default function LabelsIndexRoute() {
                       <Pressable
                         key={color}
                         onPress={() => setEditColor(color)}
-                        accessibilityLabel={`选择颜色`}
+                        accessibilityLabel={`选择颜色 ${color}`}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: editColor === color }}
+                        hitSlop={activeTheme.spacing[3]}
                         style={{
                           width: 24,
                           height: 24,
-                          borderRadius: 12,
+                          borderRadius: activeTheme.borderRadii.full,
                           backgroundColor: color,
                           borderWidth: editColor === color ? 3 : 0,
                           borderColor: activeTheme.colors.ink,
@@ -366,6 +373,7 @@ export default function LabelsIndexRoute() {
                     <Pressable
                       onPress={() => handleStartEdit(label)}
                       disabled={confirmDeleteId === label.id}
+                      hitSlop={activeTheme.spacing[2]}
                       style={({ pressed }) => ({
                         padding: activeTheme.spacing[2],
                         opacity: pressed ? 0.7 : 1,
@@ -377,18 +385,19 @@ export default function LabelsIndexRoute() {
                     {confirmDeleteId === label.id ? (
                       <View style={{ flexDirection: 'row', gap: activeTheme.spacing[1], alignItems: 'center' }}>
                         <Text variant="caption" color="destructive">确定删除？</Text>
-                        <Pressable onPress={handleDelete} disabled={deleting} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
+                        <Pressable onPress={handleDelete} disabled={deleting} hitSlop={activeTheme.spacing[4]} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
                           <Text variant="caption" color="destructive" style={{ fontWeight: '600' as const }}>
                             {deleting ? '删除中…' : '确认'}
                           </Text>
                         </Pressable>
-                        <Pressable onPress={() => setConfirmDeleteId(null)} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
+                        <Pressable onPress={() => setConfirmDeleteId(null)} hitSlop={activeTheme.spacing[4]} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
                           <Text variant="caption" color="inkMuted">取消</Text>
                         </Pressable>
                       </View>
                     ) : (
                       <Pressable
                         onPress={() => setConfirmDeleteId(label.id)}
+                        hitSlop={activeTheme.spacing[2]}
                         style={({ pressed }) => ({
                           padding: activeTheme.spacing[2],
                           opacity: pressed ? 0.7 : 1,
