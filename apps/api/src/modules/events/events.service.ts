@@ -364,6 +364,17 @@ export class EventsService {
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the event creator, admin, or owner can delete this event.' });
     }
 
+    // A generated occurrence must be cancelled, not removed: the generator
+    // dedupes on the row itself, so a missing row reads as "not yet
+    // generated" and the occurrence would come back on the next tick (D-07).
+    if (event.recurrenceRuleId !== null) {
+      await this.prisma.event.update({
+        where: { id: eventId },
+        data: { cancelledAt: new Date() },
+      });
+      return;
+    }
+
     await this.prisma.event.delete({ where: { id: eventId } });
   }
 

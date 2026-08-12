@@ -96,7 +96,7 @@ async function taskItemApi(
 async function eventApi(
   accessToken: string,
   householdId: string,
-  method: 'GET' | 'POST' | 'PUT',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string = '',
   payload?: unknown,
 ): Promise<{ statusCode: number; json: () => any }> {
@@ -376,6 +376,78 @@ describe('series template isolation', () => {
     expect(state.regenerated.every((row) => row.priority === 'medium')).toBe(true);
     // The single-occurrence edit itself must survive untouched.
     expect(state.first).toMatchObject({ title: 'Edited once', status: 'completed', priority: 'urgent' });
+  });
+});
+
+describe('deleting a single occurrence', () => {
+  test('cancels a recurring task instead of hard-deleting it, so no run resurrects it', async () => {
+    const owner = await insertActor('occurrence-delete-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const startsOn = new Date().toISOString().slice(0, 10);
+    const created = await taskApi(owner.accessToken, householdId, 'POST', {
+      title: 'Deletable daily task',
+      recurrence: { freq: 'daily', startsOn, timezone: 'UTC', startTimeLocal: '08:00' },
+    });
+    expect(created.statusCode).toBe(201);
+    const recurrenceRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    const ordered = ((await taskApi(owner.accessToken, householdId, 'GET')).json() as {
+      tasks: Array<{ id: string; occurrenceDate: string }>;
+    }).tasks.sort((left, right) => left.occurrenceDate.localeCompare(right.occurrenceDate));
+    const target = ordered[3]!;
+
+    const deleted = await taskItemApi(owner.accessToken, householdId, 'DELETE', `/${target.id}`);
+    expect(deleted.statusCode).toBe(204);
+
+    // Rewind the watermark so the walk genuinely re-enumerates the removed
+    // occurrence's date — the exact tick that used to bring it back.
+    await withDatabase((client) => client.query(
+      `UPDATE "recurrence_rules" SET "materialized_through" = $2::date - 1 WHERE "id" = $1`,
+      [recurrenceRuleId, target.occurrenceDate],
+    ));
+    const materializer = app.get(RecurrenceMaterializerService);
+    await materializer.materializeRule(recurrenceRuleId);
+
+    const rows = await withDatabase(async (client) => (await client.query<{ id: string; status: string }>(
+      `SELECT "id", "status" FROM "tasks" WHERE "recurrence_rule_id" = $1 AND "occurrence_date" = $2::date`,
+      [recurrenceRuleId, target.occurrenceDate],
+    )).rows);
+    expect(rows).toEqual([{ id: target.id, status: 'cancelled' }]);
+  });
+
+  test('cancels a recurring event instead of hard-deleting it, so no run resurrects it', async () => {
+    const owner = await insertActor('occurrence-delete-event-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const response = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Deletable weekly event',
+      startTime: '2026-08-18T01:00:00.000Z',
+      endTime: '2026-08-18T02:30:00.000Z',
+      recurrence: {
+        freq: 'weekly', byWeekday: [2, 4], startsOn: '2026-08-18', count: 6, timezone: 'Asia/Shanghai',
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    const recurrenceRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    const events = ((await eventApi(owner.accessToken, householdId, 'GET')).json() as {
+      events: Array<{ id: string; occurrenceDate: string }>;
+    }).events.sort((left, right) => left.occurrenceDate.localeCompare(right.occurrenceDate));
+    const target = events[2]!;
+
+    const deleted = await eventApi(owner.accessToken, householdId, 'DELETE', `/${target.id}`);
+    expect(deleted.statusCode).toBe(204);
+
+    await withDatabase((client) => client.query(
+      `UPDATE "recurrence_rules" SET "materialized_through" = $2::date - 1 WHERE "id" = $1`,
+      [recurrenceRuleId, target.occurrenceDate],
+    ));
+    const materializer = app.get(RecurrenceMaterializerService);
+    await materializer.materializeRule(recurrenceRuleId);
+
+    const rows = await withDatabase(async (client) => (await client.query<{ id: string; cancelled: boolean }>(
+      `SELECT "id", ("cancelled_at" IS NOT NULL) AS "cancelled" FROM "events"
+       WHERE "recurrence_rule_id" = $1 AND "occurrence_date" = $2::date`,
+      [recurrenceRuleId, target.occurrenceDate],
+    )).rows);
+    expect(rows).toEqual([{ id: target.id, cancelled: true }]);
   });
 });
 

@@ -403,6 +403,17 @@ export class TasksService {
       });
     }
 
+    // A generated occurrence must be cancelled, not removed: the generator
+    // dedupes on the row itself, so a missing row reads as "not yet
+    // generated" and the occurrence would come back on the next tick (D-07).
+    if (task.recurrenceRuleId !== null) {
+      await this.prisma.task.update({
+        where: { id: taskId },
+        data: { status: 'cancelled' },
+      });
+      return;
+    }
+
     await this.prisma.task.delete({ where: { id: taskId } });
   }
 
