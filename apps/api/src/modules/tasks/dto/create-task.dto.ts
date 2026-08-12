@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsIn, IsOptional, IsString, IsUUID, Length, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsIn, IsOptional, IsString, IsUUID, Length, MaxLength, ValidateNested } from 'class-validator';
 import { LabelResponseDto } from '../../labels/dto/create-label.dto.js';
+import { RecurrenceDto, RecurrenceResponseDto } from '../../recurrence/dto/recurrence.dto.js';
 
 export const TASK_STATUSES = ['pending', 'in_progress', 'completed'] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -42,6 +44,12 @@ export class CreateTaskDto {
   @IsOptional()
   @IsString()
   dueDate?: string;
+
+  @ApiPropertyOptional({ description: '重复规则；省略即普通一次性任务', type: () => RecurrenceDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RecurrenceDto)
+  recurrence?: RecurrenceDto;
 }
 
 export class TaskResponseDto {
@@ -53,6 +61,9 @@ export class TaskResponseDto {
   @ApiProperty({ enum: TASK_PRIORITIES }) priority!: TaskPriority;
   @ApiProperty({ type: [String] }) assigneeIds!: string[];
   @ApiProperty({ nullable: true }) dueDate!: string | null;
+  @ApiProperty({ nullable: true }) recurrenceRuleId!: string | null;
+  @ApiProperty({ nullable: true }) occurrenceDate!: string | null;
+  @ApiProperty({ type: () => RecurrenceResponseDto, nullable: true }) recurrence!: RecurrenceResponseDto | null;
   @ApiProperty() createdBy!: string;
   @ApiProperty() createdAt!: string;
   @ApiProperty() updatedAt!: string;
@@ -67,4 +78,7 @@ export class TaskListResponseDto {
 
   @ApiProperty()
   total!: number;
+
+  @ApiProperty({ nullable: true })
+  materializedThrough!: string | null;
 }

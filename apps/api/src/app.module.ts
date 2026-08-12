@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { EventsModule } from './modules/events/events.module.js';
+import { RecurrenceModule } from './modules/recurrence/recurrence.module.js';
 import { TasksModule } from './modules/tasks/tasks.module.js';
 import { NotesModule } from './modules/notes/notes.module.js';
 import { LabelsModule } from './modules/labels/labels.module.js';
@@ -33,6 +34,7 @@ export class AppModule {
         AuthModule.register(environment),
         UsersModule.register(environment),
         HouseholdsModule.register(environment),
+        RecurrenceModule,
         EventsModule,
         TasksModule,
         NotesModule,

@@ -25,6 +25,7 @@ model User {
   sentInvitations     Invitation[]
   createdEvents       Event[]
   createdTasks        Task[]          @relation("CreatedTasks")
+  createdRecurrenceRules RecurrenceRule[] @relation("CreatedRecurrenceRules")
   taskAssignments     TaskAssignee[]
   createdNotes        Note[]
   createdLabels       Label[]
@@ -40,6 +41,7 @@ model Household {
   invitations       Invitation[]
   events            Event[]
   tasks             Task[]
+  recurrenceRules   RecurrenceRule[]
   notes             Note[]
   labels            Label[]
   ownerMembership   Membership?  @relation("HouseholdOwner", fields: [ownerMembershipId], references: [id], onDelete: SetNull)
@@ -140,14 +142,19 @@ model Event {
   createdBy   String     @map("created_by") @db.Uuid
   createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  recurrenceRuleId String? @map("recurrence_rule_id") @db.Uuid
+  occurrenceDate DateTime? @map("occurrence_date") @db.Date
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
 
   household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
   creator     User         @relation(fields: [createdBy], references: [id], onDelete: Cascade)
   labels      EventLabel[]
+  recurrenceRule RecurrenceRule? @relation(fields: [recurrenceRuleId], references: [id], onDelete: SetNull)
 
   @@index([householdId, startTime], map: "Event_household_start_idx")
   @@index([householdId, endTime], map: "Event_household_end_idx")
   @@index([createdBy], map: "Event_created_by_idx")
+  @@unique([recurrenceRuleId, occurrenceDate], map: "Event_rule_occurrence_key")
   @@map("events")
 }
 
@@ -162,14 +169,45 @@ model Task {
   createdBy   String     @map("created_by") @db.Uuid
   createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  recurrenceRuleId String? @map("recurrence_rule_id") @db.Uuid
+  occurrenceDate DateTime? @map("occurrence_date") @db.Date
 
   household   Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
   creator     User           @relation("CreatedTasks", fields: [createdBy], references: [id], onDelete: Cascade)
   labels      TaskLabel[]
   assignees   TaskAssignee[]
+  recurrenceRule RecurrenceRule? @relation(fields: [recurrenceRuleId], references: [id], onDelete: SetNull)
 
   @@index([householdId, status], map: "Task_household_status_idx")
+  @@unique([recurrenceRuleId, occurrenceDate], map: "Task_rule_occurrence_key")
   @@map("tasks")
+}
+
+model RecurrenceRule {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId         String    @map("household_id") @db.Uuid
+  freq                String    @db.VarChar(10)
+  interval            Int       @default(1)
+  byWeekday           Int[]     @map("by_weekday")
+  startsOn            DateTime  @map("starts_on") @db.Date
+  endsOn              DateTime? @map("ends_on") @db.Date
+  count               Int?
+  timezone            String    @db.VarChar(64)
+  materializedThrough DateTime? @map("materialized_through") @db.Date
+  startTimeLocal      String?   @map("start_time_local") @db.VarChar(5)
+  durationMinutes     Int?      @map("duration_minutes")
+  createdBy           String    @map("created_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  creator   User      @relation("CreatedRecurrenceRules", fields: [createdBy], references: [id], onDelete: Cascade)
+  events    Event[]
+  tasks     Task[]
+
+  @@index([householdId], map: "RecurrenceRule_household_idx")
+  @@index([materializedThrough], map: "RecurrenceRule_materialized_through_idx")
+  @@map("recurrence_rules")
 }
 
 model PasswordResetToken {

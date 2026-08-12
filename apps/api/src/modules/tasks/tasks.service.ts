@@ -8,6 +8,8 @@ import type {
   TaskListResponseDto,
 } from './dto/create-task.dto.js';
 import type { UpdateTaskDto } from './dto/update-task.dto.js';
+import { RecurrenceMaterializerService } from '../recurrence/recurrence-materializer.service.js';
+import { formatIsoDate, localDateTimeToInstant, parseIsoDate } from '../recurrence/recurrence-date.js';
 
 const TITLE_MIN = 1;
 const TITLE_MAX = 200;
@@ -25,6 +27,13 @@ interface TaskRow {
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
+  recurrenceRuleId: string | null;
+  occurrenceDate: Date | null;
+  recurrenceRule: {
+    id: string; freq: string; interval: number; byWeekday: number[]; startsOn: Date; endsOn: Date | null;
+    count: number | null; timezone: string; materializedThrough: Date | null; startTimeLocal: string | null;
+    durationMinutes: number | null;
+  } | null;
   labels: Array<{
     label: {
       id: string;
@@ -46,7 +55,10 @@ interface ListFilters {
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly materializer: RecurrenceMaterializerService,
+  ) {}
 
   // ---- Authorization helpers ----
 
@@ -118,18 +130,63 @@ export class TasksService {
       }
     }
 
+    if (input.recurrence?.endsOn !== undefined && input.recurrence.count !== undefined) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [{ field: 'recurrence.endsOn', codes: ['ends_on_and_count_mutually_exclusive'], message: '结束日期与重复次数只能二选一。' }],
+      });
+    }
+
+    if (input.recurrence !== undefined) {
+      const recurrence = input.recurrence;
+      const startsOn = parseIsoDate(recurrence.startsOn);
+      const startTime = recurrence.startTimeLocal ?? null;
+      const hour = startTime === null ? 0 : Number(startTime.slice(0, 2));
+      const minute = startTime === null ? 0 : Number(startTime.slice(3, 5));
+      const created = await this.prisma.$transaction(async (tx) => {
+        const rule = await tx.recurrenceRule.create({
+          data: {
+            householdId,
+            freq: recurrence.freq,
+            interval: recurrence.interval ?? 1,
+            byWeekday: recurrence.byWeekday ?? [],
+            startsOn: new Date(`${recurrence.startsOn}T00:00:00.000Z`),
+            endsOn: recurrence.endsOn === undefined ? null : new Date(`${recurrence.endsOn}T00:00:00.000Z`),
+            count: recurrence.count ?? null,
+            timezone: recurrence.timezone,
+            startTimeLocal: startTime,
+            durationMinutes: recurrence.durationMinutes ?? null,
+            createdBy: actorId,
+          },
+        });
+        const task = await tx.task.create({
+          data: {
+            householdId,
+            title: trimmedTitle,
+            description: input.description?.trim() || null,
+            status: input.status ?? 'pending',
+            priority: input.priority ?? 'medium',
+            dueDate: localDateTimeToInstant(startsOn, hour, minute, recurrence.timezone),
+            createdBy: actorId,
+            recurrenceRuleId: rule.id,
+            occurrenceDate: new Date(`${recurrence.startsOn}T00:00:00.000Z`),
+            assignees: { create: assigneeIds.map((userId) => ({ userId })) },
+          },
+        });
+        return { taskId: task.id, ruleId: rule.id };
+      });
+      await this.materializer.materializeRule(created.ruleId);
+      const task = await this.prisma.task.findUniqueOrThrow({
+        where: { id: created.taskId },
+        include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+      });
+      return this.toResponse(task);
+    }
+
     const task = await this.prisma.task.create({
-      data: {
-        householdId,
-        title: trimmedTitle,
-        description: input.description?.trim() || null,
-        status: input.status ?? 'pending',
-        priority: input.priority ?? 'medium',
-        dueDate,
-        createdBy: actorId,
-        assignees: { create: assigneeIds.map((userId) => ({ userId })) },
-      },
-      include: { labels: { include: { label: true } }, assignees: true },
+      data: { householdId, title: trimmedTitle, description: input.description?.trim() || null, status: input.status ?? 'pending', priority: input.priority ?? 'medium', dueDate, createdBy: actorId, assignees: { create: assigneeIds.map((userId) => ({ userId })) } },
+      include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
     });
 
     return this.toResponse(task);
@@ -152,7 +209,7 @@ export class TasksService {
       this.prisma.task.findMany({
         where: where as any,
         orderBy: [{ priority: 'asc' }, { dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
-        include: { labels: { include: { label: true } }, assignees: true },
+        include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
       }),
       this.prisma.task.count({ where: where as any }),
     ]);
@@ -160,6 +217,10 @@ export class TasksService {
     return {
       tasks: tasks.map((t) => this.toResponse(t)),
       total,
+      materializedThrough: tasks.reduce<string | null>((latest, task) => {
+        const value = task.recurrenceRule?.materializedThrough?.toISOString().slice(0, 10) ?? null;
+        return value !== null && (latest === null || value > latest) ? value : latest;
+      }, null),
     };
   }
 
@@ -173,7 +234,7 @@ export class TasksService {
 
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
-      include: { labels: { include: { label: true } }, assignees: true },
+      include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
     });
     if (task === null || task.householdId !== householdId) {
       throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found.' });
@@ -285,7 +346,7 @@ export class TasksService {
     const updated = await this.prisma.task.update({
       where: { id: taskId },
       data,
-      include: { labels: { include: { label: true } }, assignees: true },
+      include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
     });
 
     return this.toResponse(updated);
@@ -326,6 +387,21 @@ export class TasksService {
       priority: row.priority as TaskPriority,
       assigneeIds: row.assignees.map((a) => a.userId),
       dueDate: row.dueDate?.toISOString() ?? null,
+      recurrenceRuleId: row.recurrenceRuleId,
+      occurrenceDate: row.occurrenceDate?.toISOString().slice(0, 10) ?? null,
+      recurrence: row.recurrenceRule === null ? null : {
+        id: row.recurrenceRule.id,
+        freq: row.recurrenceRule.freq,
+        interval: row.recurrenceRule.interval,
+        byWeekday: row.recurrenceRule.byWeekday,
+        startsOn: formatIsoDate(parseIsoDate(row.recurrenceRule.startsOn.toISOString().slice(0, 10))),
+        endsOn: row.recurrenceRule.endsOn?.toISOString().slice(0, 10) ?? null,
+        count: row.recurrenceRule.count,
+        timezone: row.recurrenceRule.timezone,
+        materializedThrough: row.recurrenceRule.materializedThrough?.toISOString().slice(0, 10) ?? null,
+        startTimeLocal: row.recurrenceRule.startTimeLocal,
+        durationMinutes: row.recurrenceRule.durationMinutes,
+      },
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
