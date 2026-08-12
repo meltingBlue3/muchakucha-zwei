@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type { CreateEventDto, EventResponseDto, EventListResponseDto } from './dto/create-event.dto.js';
 import type { UpdateEventDto } from './dto/update-event.dto.js';
@@ -56,6 +56,8 @@ interface EventRow {
 
 @Injectable()
 export class EventsService {
+  private readonly logger = new Logger(EventsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly materializer: RecurrenceMaterializerService,
@@ -205,7 +207,15 @@ export class EventsService {
         return { eventId: template.id, ruleId: rule.id };
       });
 
-      await this.materializer.materializeRule(created.ruleId);
+      // The rule and its first occurrence are already committed. D-03's
+      // immediate generation is a latency optimisation, not a correctness
+      // invariant — the scheduler catches up — so a transient failure here
+      // must not report a 500 for a series that was in fact saved.
+      try {
+        await this.materializer.materializeRule(created.ruleId);
+      } catch (error: unknown) {
+        this.logger.error(`immediate materialization failed for rule ${created.ruleId}`, error);
+      }
       const event = await this.prisma.event.findUniqueOrThrow({
         where: { id: created.eventId },
         include: { labels: { include: { label: true } }, recurrenceRule: true },

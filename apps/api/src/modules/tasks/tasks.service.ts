@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type {
   CreateTaskDto,
@@ -61,6 +61,8 @@ interface ListFilters {
 
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly materializer: RecurrenceMaterializerService,
@@ -206,7 +208,13 @@ export class TasksService {
         });
         return { taskId: task.id, ruleId: rule.id };
       });
-      await this.materializer.materializeRule(created.ruleId);
+      // See EventsService.create: the series is already committed, so a
+      // transient materialization failure must not surface as a 500.
+      try {
+        await this.materializer.materializeRule(created.ruleId);
+      } catch (error: unknown) {
+        this.logger.error(`immediate materialization failed for rule ${created.ruleId}`, error);
+      }
       const task = await this.prisma.task.findUniqueOrThrow({
         where: { id: created.taskId },
         include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
