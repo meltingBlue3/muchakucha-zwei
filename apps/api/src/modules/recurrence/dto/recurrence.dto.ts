@@ -151,3 +151,14 @@ export class UpdateSeriesDto {
   @IsOptional() @ValidateNested() @Type(() => RecurrenceDto)
   recurrence?: RecurrenceDto;
 }
+
+export class DeleteSeriesQueryDto {
+  @ApiProperty({ enum: SERIES_SCOPES })
+  @IsString() @IsIn(SERIES_SCOPES)
+  scope!: SeriesScope;
+}
+
+export class SeriesMutationResponseDto {
+  @ApiProperty()
+  recurrenceRuleId!: string;
+}

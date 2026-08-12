@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { RecurrenceMaterializerService } from './recurrence-materializer.service.js';
+import { addDays, formatIsoDate, parseIsoDate } from './recurrence-date.js';
+import type { SeriesScope, UpdateSeriesDto } from './dto/recurrence.dto.js';
 
 type TransactionClient = Prisma.TransactionClient;
 type RecurrenceKind = 'event' | 'task';
@@ -17,10 +19,8 @@ interface ResolvedOccurrence {
 export class RecurrenceService {
   constructor(
     private readonly prisma: PrismaService,
-    materializer: RecurrenceMaterializerService,
-  ) {
-    void materializer;
-  }
+    private readonly materializer: RecurrenceMaterializerService,
+  ) {}
 
   private async resolveActorRole(actorId: string, householdId: string): Promise<ActorRole | null> {
     const membership = await this.prisma.membership.findUnique({
@@ -83,6 +83,171 @@ export class RecurrenceService {
         await tx.task.update({ where: { id: occurrenceId }, data: { status: 'cancelled' } });
       } else {
         await tx.event.update({ where: { id: occurrenceId }, data: { cancelledAt: new Date() } });
+      }
+    });
+  }
+
+  async updateSeriesFromOccurrence(
+    actorId: string,
+    householdId: string,
+    kind: RecurrenceKind,
+    occurrenceId: string,
+    input: UpdateSeriesDto,
+  ): Promise<{ recurrenceRuleId: string }> {
+    const role = await this.resolveActorRole(actorId, householdId);
+    if (role === null) {
+      throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
+    }
+
+    const newRuleId = await this.prisma.$transaction(async (tx) => {
+      const occurrence = await this.resolveRuleForOccurrence(tx, kind, householdId, occurrenceId);
+      if (!this.canMutate(role, occurrence.createdBy, actorId)) {
+        throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can update this series.' });
+      }
+
+      const splitDate = occurrence.occurrenceDate;
+      const splitCalendarDate = parseIsoDate(splitDate.toISOString().slice(0, 10));
+      await tx.recurrenceRule.update({
+        where: { id: occurrence.rule.id },
+        data: { endsOn: new Date(`${formatIsoDate(addDays(splitCalendarDate, -1))}T00:00:00.000Z`) },
+      });
+
+      const recurrence = input.recurrence;
+      if (recurrence?.endsOn !== undefined && recurrence.count !== undefined) {
+        throw new BadRequestException({
+          code: 'VALIDATION_FAILED',
+          message: 'Request validation failed.',
+          details: [{ field: 'recurrence.endsOn', codes: ['ends_on_and_count_mutually_exclusive'] }],
+        });
+      }
+
+      const elapsedCount = kind === 'task'
+        ? await tx.task.count({ where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { lt: splitDate } } })
+        : await tx.event.count({ where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { lt: splitDate } } });
+      const inheritedCount = occurrence.rule.count === null
+        ? null
+        : Math.max(occurrence.rule.count - elapsedCount, 0) || null;
+      const createdRule = await tx.recurrenceRule.create({
+        data: {
+          householdId: occurrence.rule.householdId,
+          createdBy: occurrence.rule.createdBy,
+          freq: recurrence?.freq ?? occurrence.rule.freq,
+          interval: recurrence?.interval ?? occurrence.rule.interval,
+          byWeekday: recurrence?.byWeekday ?? occurrence.rule.byWeekday,
+          startsOn: splitDate,
+          endsOn: recurrence === undefined
+            ? occurrence.rule.endsOn
+            : recurrence.endsOn === undefined ? null : new Date(`${recurrence.endsOn}T00:00:00.000Z`),
+          count: recurrence === undefined ? inheritedCount : recurrence.count ?? null,
+          timezone: recurrence?.timezone ?? occurrence.rule.timezone,
+          startTimeLocal: recurrence?.startTimeLocal ?? occurrence.rule.startTimeLocal,
+          durationMinutes: recurrence?.durationMinutes ?? occurrence.rule.durationMinutes,
+          materializedThrough: null,
+        },
+      });
+
+      if (kind === 'task') {
+        const template = await tx.task.findUniqueOrThrow({
+          where: { id: occurrenceId },
+          include: { assignees: true, labels: true },
+        });
+        await tx.task.deleteMany({
+          where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: splitDate } },
+        });
+        const assigneeIds = input.assigneeIds ?? template.assignees.map(({ userId }) => userId);
+        if (assigneeIds.length > 0) {
+          const memberCount = await tx.membership.count({
+            where: { householdId, userId: { in: [...new Set(assigneeIds)] } },
+          });
+          if (memberCount !== new Set(assigneeIds).size) {
+            throw new BadRequestException({
+              code: 'VALIDATION_FAILED',
+              message: 'Request validation failed.',
+              details: [{ field: 'assigneeIds', codes: ['not_household_member'] }],
+            });
+          }
+        }
+        const newTemplate = await tx.task.create({
+          data: {
+            householdId: occurrence.rule.householdId,
+            createdBy: occurrence.rule.createdBy,
+            recurrenceRuleId: createdRule.id,
+            occurrenceDate: splitDate,
+            title: input.title?.trim() ?? template.title,
+            description: input.description === undefined ? template.description : input.description.trim() || null,
+            status: input.status ?? template.status,
+            priority: input.priority ?? template.priority,
+            dueDate: input.dueDate === undefined ? template.dueDate : new Date(input.dueDate),
+            assignees: { create: [...new Set(assigneeIds)].map((userId) => ({ userId })) },
+            labels: { create: template.labels.map(({ labelId }) => ({ labelId })) },
+          },
+        });
+        void newTemplate;
+      } else {
+        const template = await tx.event.findUniqueOrThrow({
+          where: { id: occurrenceId },
+          include: { labels: true },
+        });
+        await tx.event.deleteMany({
+          where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: splitDate } },
+        });
+        await tx.event.create({
+          data: {
+            householdId: occurrence.rule.householdId,
+            createdBy: occurrence.rule.createdBy,
+            recurrenceRuleId: createdRule.id,
+            occurrenceDate: splitDate,
+            title: input.title?.trim() ?? template.title,
+            description: input.description === undefined ? template.description : input.description.trim() || null,
+            startTime: input.startTime === undefined ? template.startTime : new Date(input.startTime),
+            endTime: input.endTime === undefined ? template.endTime : new Date(input.endTime),
+            allDay: input.allDay ?? template.allDay,
+            location: input.location === undefined ? template.location : input.location.trim() || null,
+            labels: { create: template.labels.map(({ labelId }) => ({ labelId })) },
+          },
+        });
+      }
+      return createdRule.id;
+    });
+
+    await this.materializer.materializeRule(newRuleId);
+    return { recurrenceRuleId: newRuleId };
+  }
+
+  async deleteSeriesFromOccurrence(
+    actorId: string,
+    householdId: string,
+    kind: RecurrenceKind,
+    occurrenceId: string,
+    scope: SeriesScope,
+  ): Promise<void> {
+    if (scope === 'this_only') {
+      await this.cancelOccurrence(actorId, householdId, kind, occurrenceId);
+      return;
+    }
+
+    const role = await this.resolveActorRole(actorId, householdId);
+    if (role === null) {
+      throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const occurrence = await this.resolveRuleForOccurrence(tx, kind, householdId, occurrenceId);
+      if (!this.canMutate(role, occurrence.createdBy, actorId)) {
+        throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can delete this series.' });
+      }
+      const splitCalendarDate = parseIsoDate(occurrence.occurrenceDate.toISOString().slice(0, 10));
+      await tx.recurrenceRule.update({
+        where: { id: occurrence.rule.id },
+        data: { endsOn: new Date(`${formatIsoDate(addDays(splitCalendarDate, -1))}T00:00:00.000Z`) },
+      });
+      if (kind === 'task') {
+        await tx.task.deleteMany({
+          where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: occurrence.occurrenceDate } },
+        });
+      } else {
+        await tx.event.deleteMany({
+          where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: occurrence.occurrenceDate } },
+        });
       }
     });
   }
