@@ -260,7 +260,7 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 3/8 plans executed
+**Plans:** 4/8 plans executed
 
 Plans:
 **Wave 1**
@@ -274,7 +274,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 07-04-PLAN.md — 「仅此一次」语义、cancelled 状态归一与「此后所有」原子拆系列 + /series 子资源
+- [x] 07-04-PLAN.md — 「仅此一次」语义、cancelled 状态归一与「此后所有」原子拆系列 + /series 子资源
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
