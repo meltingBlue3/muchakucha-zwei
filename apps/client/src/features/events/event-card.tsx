@@ -2,8 +2,9 @@ import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
-import { Stack, Text } from '../../ui/primitives';
+import { Inline, Stack, Text } from '../../ui/primitives';
 import { LabelChip } from '../labels/label-chip';
+import { RecurrenceBadge } from '../recurrence/recurrence-badge';
 import { formatDateRange } from './calendar-utils';
 
 interface EventCardProps {
@@ -17,7 +18,7 @@ export function EventCard({ event, onPress }: EventCardProps) {
   return (
     <Pressable
       onPress={() => onPress(event)}
-      accessibilityLabel={`事件：${event.title}`}
+      accessibilityLabel={`事件：${event.title}${event.recurrenceRuleId == null ? '' : '，重复'}`}
       style={({ pressed }) => ({
         backgroundColor: activeTheme.colors.surface,
         borderRadius: activeTheme.borderRadii.md,
@@ -31,9 +32,12 @@ export function EventCard({ event, onPress }: EventCardProps) {
         <Text variant="label" numberOfLines={1}>
           {event.title}
         </Text>
-        <Text variant="caption">
-          {formatDateRange(event.startTime, event.endTime, event.allDay)}
-        </Text>
+        <Inline gap={1}>
+          <Text variant="caption">
+            {formatDateRange(event.startTime, event.endTime, event.allDay)}
+          </Text>
+          {event.recurrenceRuleId != null && <RecurrenceBadge />}
+        </Inline>
         {event.location !== null && event.location !== '' && (
           <Text variant="bodySm" numberOfLines={1}>
             📍 {event.location}

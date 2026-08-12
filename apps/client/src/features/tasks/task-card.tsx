@@ -1,11 +1,13 @@
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { TaskResponseDto } from '@muchakucha/api-client';
+import Ban from 'lucide-react-native/icons/ban';
 import Circle from 'lucide-react-native/icons/circle';
 import CircleCheckBig from 'lucide-react-native/icons/circle-check-big';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text } from '../../ui/primitives';
 import { LabelChip } from '../labels/label-chip';
+import { RecurrenceBadge } from '../recurrence/recurrence-badge';
 import { statusLabel, priorityLabel, formatDueDate, isOverdue } from './task-utils';
 
 const BADGE_PADDING_V = 2;
@@ -21,7 +23,8 @@ interface TaskCardProps {
 
 export function TaskCard({ task, assigneeNames, onPress, onStatusChange, statusChanging = false }: TaskCardProps) {
   const activeTheme = useTheme<Theme>();
-  const overdue = isOverdue(task.dueDate ?? null);
+  const cancelled = task.status === 'cancelled';
+  const overdue = !cancelled && isOverdue(task.dueDate ?? null);
   const canToggle = onStatusChange !== undefined;
 
   const statusColors: Record<string, string> = {
@@ -40,32 +43,51 @@ export function TaskCard({ task, assigneeNames, onPress, onStatusChange, statusC
   return (
     <Pressable
       onPress={() => onPress(task)}
-      accessibilityLabel={`任务：${task.title}`}
+      accessibilityLabel={`任务：${task.title}${task.recurrenceRuleId == null ? '' : '，重复'}`}
       style={({ pressed }) => ({
         backgroundColor: activeTheme.colors.surface,
         borderRadius: activeTheme.borderRadii.md,
         padding: activeTheme.spacing[4],
         borderWidth: 1,
         borderColor: activeTheme.colors.border,
-        opacity: task.status === 'completed' ? 0.6 : pressed ? 0.8 : 1,
+        opacity: task.status === 'completed' || cancelled ? 0.6 : pressed ? 0.8 : 1,
       })}
     >
       <Stack gap={2}>
         {/* Top row: status + priority + toggle */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2], flex: 1 }}>
-            <View
-              style={{
-                backgroundColor: statusColors[task.status] ?? activeTheme.colors.border,
-                paddingHorizontal: activeTheme.spacing[2],
-                paddingVertical: BADGE_PADDING_V,
-                borderRadius: activeTheme.borderRadii.sm,
-              }}
-            >
-              <Text variant="caption" color="surface">
-                {statusLabel(task.status)}
-              </Text>
-            </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[2], flex: 1 }}>
+            {cancelled ? (
+              <View
+                style={{
+                  alignItems: 'center',
+                  backgroundColor: activeTheme.colors.surfaceMuted,
+                  borderRadius: activeTheme.borderRadii.sm,
+                  flexDirection: 'row',
+                  gap: activeTheme.spacing[1],
+                  paddingHorizontal: activeTheme.spacing[2],
+                  paddingVertical: BADGE_PADDING_V,
+                }}
+              >
+                <Ban color={activeTheme.colors.inkMuted} size={14} strokeWidth={2} />
+                <Text variant="caption" color="inkMuted">
+                  已取消
+                </Text>
+              </View>
+            ) : (
+              <View
+                style={{
+                  backgroundColor: statusColors[task.status] ?? activeTheme.colors.border,
+                  paddingHorizontal: activeTheme.spacing[2],
+                  paddingVertical: BADGE_PADDING_V,
+                  borderRadius: activeTheme.borderRadii.sm,
+                }}
+              >
+                <Text variant="caption" color="surface">
+                  {statusLabel(task.status)}
+                </Text>
+              </View>
+            )}
             <View
               style={{
                 backgroundColor: 'transparent',
@@ -85,22 +107,26 @@ export function TaskCard({ task, assigneeNames, onPress, onStatusChange, statusC
                 逾期
               </Text>
             )}
+            {task.recurrenceRuleId != null && <RecurrenceBadge />}
           </View>
           {canToggle && (
             <Pressable
               onPress={() => onStatusChange?.(task)}
-              disabled={statusChanging}
+              disabled={statusChanging || cancelled}
               accessibilityLabel={
-                task.status === 'completed'
+                cancelled
+                  ? '这次重复已取消'
+                  : task.status === 'completed'
                   ? '重新打开任务'
                   : task.status === 'in_progress'
                     ? '完成任务'
                     : '开始任务'
               }
               accessibilityRole="button"
+              accessibilityState={{ disabled: statusChanging || cancelled }}
               hitSlop={activeTheme.spacing[2]}
               style={({ pressed }) => ({
-                opacity: statusChanging ? 0.5 : pressed ? 0.7 : 1,
+                opacity: statusChanging || cancelled ? 0.5 : pressed ? 0.7 : 1,
                 padding: activeTheme.spacing[1],
               })}
             >
@@ -129,7 +155,7 @@ export function TaskCard({ task, assigneeNames, onPress, onStatusChange, statusC
         <Text
           variant="label"
           numberOfLines={1}
-          style={task.status === 'completed' ? { textDecorationLine: 'line-through' } : undefined}
+          style={task.status === 'completed' || cancelled ? { textDecorationLine: 'line-through' } : undefined}
         >
           {task.title}
         </Text>
