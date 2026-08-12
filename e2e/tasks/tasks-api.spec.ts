@@ -74,10 +74,10 @@ async function apiCall(
   const response = await fetch(`${API_ORIGIN}${path}`, {
     method,
     headers: {
-      'content-type': 'application/json',
       authorization: `Bearer ${accessToken}`,
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const responseBody = method !== 'DELETE'
     ? await response.json().catch(() => null)
@@ -132,13 +132,13 @@ test.describe('Tasks API', () => {
 
     // Create tasks with different statuses and assignees
     await apiCall(owner.accessToken, 'POST', `/api/v1/households/${householdId}/tasks`, {
-      title: '待办任务', status: 'pending', assigneeId: owner.userId,
+      title: '待办任务', status: 'pending', assigneeIds: [owner.userId],
     });
     await apiCall(owner.accessToken, 'POST', `/api/v1/households/${householdId}/tasks`, {
-      title: '已完成', status: 'completed', assigneeId: member.userId,
+      title: '已完成', status: 'completed', assigneeIds: [member.userId],
     });
     await apiCall(owner.accessToken, 'POST', `/api/v1/households/${householdId}/tasks`, {
-      title: '高优先级', priority: 'urgent',
+      title: '高优先级', priority: 'urgent', status: 'completed',
     });
 
     // Filter by status

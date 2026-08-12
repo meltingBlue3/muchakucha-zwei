@@ -307,6 +307,7 @@ export function RecurrencePicker({
               accessibilityLabel={frequency.label}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected, disabled }}
+              aria-checked={selected}
               disabled={disabled}
               onPress={() => selectFrequency(frequency.value)}
               style={({ pressed }) => [chipStyle(selected), { opacity: pressed ? 0.7 : 1 }]}
@@ -330,6 +331,7 @@ export function RecurrencePicker({
                   accessibilityLabel={WEEKDAY_LABELS[weekday]}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: selected, disabled }}
+                  aria-checked={selected}
                   disabled={disabled}
                   hitSlop={activeTheme.spacing[1]}
                   onPress={() => toggleWeekday(weekday)}
@@ -363,6 +365,7 @@ export function RecurrencePicker({
                   accessibilityLabel={ending.label}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: selected, disabled }}
+                  aria-checked={selected}
                   disabled={disabled}
                   onPress={() => selectEnding(ending.value)}
                   style={({ pressed }) => [chipStyle(selected), { opacity: pressed ? 0.7 : 1 }]}

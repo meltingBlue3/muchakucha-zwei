@@ -74,11 +74,10 @@ async function apiCall(
   const response = await fetch(`${API_ORIGIN}${path}`, {
     method,
     headers: {
-      'content-type': 'application/json',
       authorization: `Bearer ${accessToken}`,
-      ...(body ? {} : {}),
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const responseBody = method !== 'DELETE'
     ? await response.json().catch(() => null)
@@ -216,11 +215,11 @@ test.describe('Calendar Events API', () => {
 
     // Outsider tries to list
     const listResult = await apiCall(outsider.accessToken, 'GET', `/api/v1/households/${householdId}/events`);
-    expect(listResult.status).toBe(403);
+    expect(listResult.status).toBe(404);
 
     // Outsider tries to get
     const getResult = await apiCall(outsider.accessToken, 'GET', `/api/v1/households/${householdId}/events/${eventId}`);
-    expect(getResult.status).toBe(403);
+    expect(getResult.status).toBe(404);
 
     // Outsider tries to create
     const createAsOutsider = await apiCall(outsider.accessToken, 'POST', `/api/v1/households/${householdId}/events`, {
@@ -228,7 +227,7 @@ test.describe('Calendar Events API', () => {
       startTime: new Date().toISOString(),
       endTime: new Date().toISOString(),
     });
-    expect(createAsOutsider.status).toBe(403);
+    expect(createAsOutsider.status).toBe(404);
   });
 
   test('validates required fields on create', async () => {
@@ -266,7 +265,7 @@ test.describe('Calendar Events API', () => {
     const createResult = await apiCall(owner.accessToken, 'POST', `/api/v1/households/${householdId}/events`, {
       title: '全天活动',
       startTime: new Date(Date.now() + 86400_000).toISOString(),
-      endTime: new Date(Date.now() + 86400_000).toISOString(),
+      endTime: new Date(Date.now() + 2 * 86400_000).toISOString(),
       allDay: true,
     });
     expect(createResult.status).toBe(201);

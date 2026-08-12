@@ -213,6 +213,7 @@ export default function EditTaskRoute() {
 
       if (scope === 'this_only') {
         await sessionApiClient.updateTask(token, householdId, taskId, pendingSeriesAction.data);
+        await sessionApiClient.tagTask(token, householdId, taskId, { labelIds: selectedLabelIds });
       } else {
         await sessionApiClient.updateTaskSeries(
           token,
@@ -221,7 +222,6 @@ export default function EditTaskRoute() {
           taskSeriesUpdate(pendingSeriesAction.data),
         );
       }
-      await sessionApiClient.tagTask(token, householdId, taskId, { labelIds: selectedLabelIds });
       setPendingSeriesAction(null);
       router.back();
     } catch (caught: unknown) {

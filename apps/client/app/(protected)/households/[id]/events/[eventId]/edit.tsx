@@ -156,10 +156,10 @@ export default function EditEventRoute() {
 
       if (scope === 'this_only') {
         await sessionApiClient.updateEvent(token, id, eventId, pendingSeriesAction.data);
+        await sessionApiClient.tagEvent(token, id, eventId, { labelIds: selectedLabelIds });
       } else {
         await sessionApiClient.updateEventSeries(token, id, eventId, pendingSeriesAction.data);
       }
-      await sessionApiClient.tagEvent(token, id, eventId, { labelIds: selectedLabelIds });
       setPendingSeriesAction(null);
       router.back();
     } catch (caught: unknown) {
