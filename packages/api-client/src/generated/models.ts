@@ -244,6 +244,26 @@ export interface RecurrenceResponseDto {
   durationMinutes?: number | null;
 }
 
+export type SeriesScope = 'this_only' | 'this_and_following';
+
+export interface UpdateSeriesDto {
+  title?: string;
+  description?: string;
+  status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  assigneeIds?: string[];
+  dueDate?: string;
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  location?: string;
+  recurrence?: RecurrenceDto;
+}
+
+export interface SeriesMutationResponseDto {
+  recurrenceRuleId: string;
+}
+
 export interface EventResponseDto {
   id: string;
   householdId: string;

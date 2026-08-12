@@ -73,6 +73,26 @@ async function taskApi(
   return response as { statusCode: number; json: () => any };
 }
 
+async function taskItemApi(
+  accessToken: string,
+  householdId: string,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  path: string,
+  payload?: unknown,
+): Promise<{ statusCode: number; json: () => any }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const response = await (app.getHttpAdapter().getInstance() as any).inject({
+    method,
+    url: `/api/v1/households/${encodeURIComponent(householdId)}/tasks${path}`,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      ...(payload === undefined ? {} : { 'content-type': 'application/json' }),
+    },
+    ...(payload === undefined ? {} : { payload }),
+  });
+  return response as { statusCode: number; json: () => any };
+}
+
 async function eventApi(
   accessToken: string,
   householdId: string,
@@ -289,5 +309,193 @@ describe('recurring events', () => {
     const response = await eventApi(outsider.accessToken, householdId, 'POST', '', recurringEvent);
     expect(response.statusCode).toBe(404);
     expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
+  });
+});
+
+describe('series scope operations', () => {
+  async function createDailySeries(
+    owner: ActorFixture,
+    householdId: string,
+    title: string,
+  ): Promise<{ recurrenceRuleId: string; tasks: Array<{ id: string; occurrenceDate: string; title: string; status: string }> }> {
+    const created = await taskApi(owner.accessToken, householdId, 'POST', {
+      title,
+      recurrence: {
+        freq: 'daily',
+        startsOn: '2026-08-20',
+        count: 7,
+        timezone: 'UTC',
+        startTimeLocal: '08:00',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const recurrenceRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    const listed = await taskApi(owner.accessToken, householdId, 'GET');
+    const tasks = (listed.json() as { tasks: Array<{ id: string; occurrenceDate: string; title: string; status: string }> }).tasks
+      .sort((left, right) => left.occurrenceDate.localeCompare(right.occurrenceDate));
+    return { recurrenceRuleId, tasks };
+  }
+
+  test('keeps this_only edits isolated and never regenerates a cancelled occurrence', async () => {
+    const owner = await insertActor('scope-once-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const series = await createDailySeries(owner, householdId, 'Daily original');
+    const edited = series.tasks[1]!;
+    const cancelled = series.tasks[2]!;
+
+    const editResponse = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${edited.id}`, {
+      title: 'Edited once',
+    });
+    expect(editResponse.statusCode).toBe(200);
+    const directCancel = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${series.tasks[0]!.id}`, {
+      status: 'cancelled',
+    });
+    expect(directCancel.statusCode).toBe(200);
+
+    const cancelResponse = await taskItemApi(
+      owner.accessToken,
+      householdId,
+      'DELETE',
+      `/${cancelled.id}/series?scope=this_only`,
+    );
+    expect(cancelResponse.statusCode).toBe(204);
+    const materializer = app.get(RecurrenceMaterializerService);
+    expect(await materializer.materializeRule(series.recurrenceRuleId)).toBe(0);
+
+    const after = (await taskApi(owner.accessToken, householdId, 'GET')).json() as {
+      tasks: Array<{ id: string; occurrenceDate: string; title: string; status: string }>;
+    };
+    expect(after.tasks.find((task) => task.id === edited.id)?.title).toBe('Edited once');
+    expect(after.tasks.filter((task) => task.id !== edited.id).every((task) => task.title === 'Daily original')).toBe(true);
+    expect(after.tasks.filter((task) => task.occurrenceDate === cancelled.occurrenceDate)).toEqual([
+      expect.objectContaining({ id: cancelled.id, status: 'cancelled' }),
+    ]);
+  });
+
+  test('atomically splits this_and_following while preserving historical rows', async () => {
+    const owner = await insertActor('scope-split-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const series = await createDailySeries(owner, householdId, 'Old series');
+    const split = series.tasks[3]!;
+    const historicalBefore = await withDatabase(async (client) => (
+      await client.query(
+        `SELECT "id", "title", "status", "updated_at" FROM "tasks"
+         WHERE "recurrence_rule_id" = $1 AND "occurrence_date" < $2::date ORDER BY "occurrence_date"`,
+        [series.recurrenceRuleId, split.occurrenceDate],
+      )
+    ).rows);
+
+    const response = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${split.id}/series`, {
+      title: 'New weekday series',
+      recurrence: {
+        freq: 'weekly',
+        byWeekday: [1, 3, 5],
+        startsOn: split.occurrenceDate,
+        count: 4,
+        timezone: 'UTC',
+        startTimeLocal: '08:00',
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const state = await withDatabase(async (client) => {
+      const oldRule = await client.query(`SELECT "ends_on"::text AS "ends_on" FROM "recurrence_rules" WHERE "id" = $1`, [series.recurrenceRuleId]);
+      const newRule = await client.query(`SELECT "starts_on"::text AS "starts_on", "by_weekday" FROM "recurrence_rules" WHERE "id" = $1`, [newRuleId]);
+      const oldFuture = await client.query(
+        `SELECT "id" FROM "tasks" WHERE "recurrence_rule_id" = $1 AND "occurrence_date" >= $2::date`,
+        [series.recurrenceRuleId, split.occurrenceDate],
+      );
+      const newTasks = await client.query(
+        `SELECT "id", "title" FROM "tasks" WHERE "recurrence_rule_id" = $1 ORDER BY "occurrence_date"`,
+        [newRuleId],
+      );
+      const historicalAfter = await client.query(
+        `SELECT "id", "title", "status", "updated_at" FROM "tasks"
+         WHERE "recurrence_rule_id" = $1 AND "occurrence_date" < $2::date ORDER BY "occurrence_date"`,
+        [series.recurrenceRuleId, split.occurrenceDate],
+      );
+      return { oldRule: oldRule.rows[0], newRule: newRule.rows[0], oldFuture: oldFuture.rows, newTasks: newTasks.rows, historicalAfter: historicalAfter.rows };
+    });
+    const expectedEnd = new Date(`${split.occurrenceDate}T00:00:00.000Z`);
+    expectedEnd.setUTCDate(expectedEnd.getUTCDate() - 1);
+    expect(state.oldRule.ends_on).toBe(expectedEnd.toISOString().slice(0, 10));
+    expect(state.newRule.starts_on).toBe(split.occurrenceDate);
+    expect(state.newRule.by_weekday).toEqual([1, 3, 5]);
+    expect(state.oldFuture).toHaveLength(0);
+    expect(state.newTasks.length).toBeGreaterThan(0);
+    expect(state.newTasks.every((task) => task.title === 'New weekday series')).toBe(true);
+    expect(state.historicalAfter).toEqual(historicalBefore);
+  });
+
+  test('rolls back the old ends_on and future rows when successor creation fails', async () => {
+    const owner = await insertActor('scope-rollback-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const series = await createDailySeries(owner, householdId, 'Rollback series');
+    const split = series.tasks[3]!;
+    const before = await withDatabase(async (client) => {
+      const rule = await client.query(`SELECT "ends_on" FROM "recurrence_rules" WHERE "id" = $1`, [series.recurrenceRuleId]);
+      const future = await client.query(
+        `SELECT "id" FROM "tasks" WHERE "recurrence_rule_id" = $1 AND "occurrence_date" >= $2::date ORDER BY "id"`,
+        [series.recurrenceRuleId, split.occurrenceDate],
+      );
+      return { ends_on: rule.rows[0].ends_on, future: future.rows };
+    });
+    const response = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${split.id}/series`, {
+      recurrence: {
+        freq: 'daily',
+        startsOn: split.occurrenceDate,
+        endsOn: '2026-09-01',
+        count: 2,
+        timezone: 'UTC',
+      },
+    });
+    expect(response.statusCode).toBe(400);
+    const after = await withDatabase(async (client) => {
+      const rule = await client.query(`SELECT "ends_on" FROM "recurrence_rules" WHERE "id" = $1`, [series.recurrenceRuleId]);
+      const future = await client.query(
+        `SELECT "id" FROM "tasks" WHERE "recurrence_rule_id" = $1 AND "occurrence_date" >= $2::date ORDER BY "id"`,
+        [series.recurrenceRuleId, split.occurrenceDate],
+      );
+      return { ends_on: rule.rows[0].ends_on, future: future.rows };
+    });
+    expect(after.ends_on).toEqual(before.ends_on);
+    expect(after.future).toEqual(before.future);
+  });
+
+  test('rejects /series for a one-time task', async () => {
+    const owner = await insertActor('scope-ordinary-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const created = await taskApi(owner.accessToken, householdId, 'POST', { title: 'One time only' });
+    const taskId = (created.json() as { id: string }).id;
+    const response = await taskItemApi(owner.accessToken, householdId, 'DELETE', `/${taskId}/series?scope=this_only`);
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+
+  test('returns 404 across households and 403 for a member editing another creator series', async () => {
+    const owner = await insertActor('scope-auth-owner@example.test');
+    const member = await insertActor('scope-auth-member@example.test');
+    const otherOwner = await insertActor('scope-auth-other@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const otherHouseholdId = await createHousehold(otherOwner.accessToken);
+    await addMemberViaDb(householdId, member);
+    const series = await createDailySeries(owner, householdId, 'Protected series');
+
+    const crossHousehold = await taskItemApi(
+      otherOwner.accessToken,
+      otherHouseholdId,
+      'DELETE',
+      `/${series.tasks[0]!.id}/series?scope=this_only`,
+    );
+    expect(crossHousehold.statusCode).toBe(404);
+    const forbidden = await taskItemApi(
+      member.accessToken,
+      householdId,
+      'DELETE',
+      `/${series.tasks[0]!.id}/series?scope=this_and_following`,
+    );
+    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.json().error.code).toBe('FORBIDDEN');
   });
 });

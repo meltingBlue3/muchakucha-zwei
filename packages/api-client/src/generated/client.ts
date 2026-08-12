@@ -32,6 +32,9 @@ import type {
   LeaveHouseholdDto,
   CreateEventDto,
   UpdateEventDto,
+  UpdateSeriesDto,
+  SeriesMutationResponseDto,
+  SeriesScope,
   EventResponseDto,
   EventListResponseDto,
   CreateTaskDto,
@@ -423,6 +426,38 @@ export class ApiClient {
     );
   }
 
+  async updateEventSeries(
+    accessToken: string,
+    householdId: string,
+    eventId: string,
+    body: UpdateSeriesDto,
+    signal?: AbortSignal,
+  ): Promise<SeriesMutationResponseDto> {
+    return this.authenticated<SeriesMutationResponseDto>(
+      'PUT',
+      `/api/v1/households/${encodeURIComponent(householdId)}/events/${encodeURIComponent(eventId)}/series`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async deleteEventSeries(
+    accessToken: string,
+    householdId: string,
+    eventId: string,
+    scope: SeriesScope,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'DELETE',
+      `/api/v1/households/${encodeURIComponent(householdId)}/events/${encodeURIComponent(eventId)}/series?scope=${encodeURIComponent(scope)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   async createTask(
     accessToken: string,
     householdId: string,
@@ -500,6 +535,38 @@ export class ApiClient {
     return this.authenticated<void>(
       'DELETE',
       `/api/v1/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async updateTaskSeries(
+    accessToken: string,
+    householdId: string,
+    taskId: string,
+    body: UpdateSeriesDto,
+    signal?: AbortSignal,
+  ): Promise<SeriesMutationResponseDto> {
+    return this.authenticated<SeriesMutationResponseDto>(
+      'PUT',
+      `/api/v1/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}/series`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async deleteTaskSeries(
+    accessToken: string,
+    householdId: string,
+    taskId: string,
+    scope: SeriesScope,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'DELETE',
+      `/api/v1/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}/series?scope=${encodeURIComponent(scope)}`,
       accessToken,
       undefined,
       signal,

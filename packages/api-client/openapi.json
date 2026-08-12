@@ -986,6 +986,142 @@
         ]
       }
     },
+    "/api/v1/households/{householdId}/events/{eventId}/series": {
+      "put": {
+        "operationId": "updateEventSeries",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSeriesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesMutationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "recurrence"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteEventSeries",
+        "parameters": [
+          {
+            "name": "scope",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "this_only",
+                "this_and_following"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "recurrence"
+        ]
+      }
+    },
+    "/api/v1/households/{householdId}/tasks/{taskId}/series": {
+      "put": {
+        "operationId": "updateTaskSeries",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSeriesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesMutationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "recurrence"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteTaskSeries",
+        "parameters": [
+          {
+            "name": "scope",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "this_only",
+                "this_and_following"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "recurrence"
+        ]
+      }
+    },
     "/api/v1/households/{householdId}/events": {
       "post": {
         "operationId": "createEvent",
@@ -2523,6 +2659,74 @@
           "timezone"
         ]
       },
+      "UpdateSeriesDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 5000
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "urgent"
+            ]
+          },
+          "assigneeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dueDate": {
+            "type": "string"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "allDay": {
+            "type": "boolean"
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/RecurrenceDto"
+          }
+        }
+      },
+      "SeriesMutationResponseDto": {
+        "type": "object",
+        "properties": {
+          "recurrenceRuleId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "recurrenceRuleId"
+        ]
+      },
       "CreateEventDto": {
         "type": "object",
         "properties": {
@@ -2828,7 +3032,8 @@
             "enum": [
               "pending",
               "in_progress",
-              "completed"
+              "completed",
+              "cancelled"
             ],
             "default": "pending"
           },
@@ -2886,7 +3091,8 @@
             "enum": [
               "pending",
               "in_progress",
-              "completed"
+              "completed",
+              "cancelled"
             ]
           },
           "priority": {

@@ -109,7 +109,10 @@ export class RecurrenceService {
       const splitCalendarDate = parseIsoDate(splitDate.toISOString().slice(0, 10));
       await tx.recurrenceRule.update({
         where: { id: occurrence.rule.id },
-        data: { endsOn: new Date(`${formatIsoDate(addDays(splitCalendarDate, -1))}T00:00:00.000Z`) },
+        data: {
+          endsOn: new Date(`${formatIsoDate(addDays(splitCalendarDate, -1))}T00:00:00.000Z`),
+          count: null,
+        },
       });
 
       const recurrence = input.recurrence;
@@ -238,7 +241,10 @@ export class RecurrenceService {
       const splitCalendarDate = parseIsoDate(occurrence.occurrenceDate.toISOString().slice(0, 10));
       await tx.recurrenceRule.update({
         where: { id: occurrence.rule.id },
-        data: { endsOn: new Date(`${formatIsoDate(addDays(splitCalendarDate, -1))}T00:00:00.000Z`) },
+        data: {
+          endsOn: new Date(`${formatIsoDate(addDays(splitCalendarDate, -1))}T00:00:00.000Z`),
+          count: null,
+        },
       });
       if (kind === 'task') {
         await tx.task.deleteMany({

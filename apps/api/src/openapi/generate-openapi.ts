@@ -252,6 +252,26 @@ export interface RecurrenceResponseDto {
   durationMinutes?: number | null;
 }
 
+export type SeriesScope = 'this_only' | 'this_and_following';
+
+export interface UpdateSeriesDto {
+  title?: string;
+  description?: string;
+  status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  assigneeIds?: string[];
+  dueDate?: string;
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  location?: string;
+  recurrence?: RecurrenceDto;
+}
+
+export interface SeriesMutationResponseDto {
+  recurrenceRuleId: string;
+}
+
 export interface EventResponseDto {
   id: string;
   householdId: string;
@@ -409,6 +429,9 @@ import type {
   LeaveHouseholdDto,
   CreateEventDto,
   UpdateEventDto,
+  UpdateSeriesDto,
+  SeriesMutationResponseDto,
+  SeriesScope,
   EventResponseDto,
   EventListResponseDto,
   CreateTaskDto,
@@ -800,6 +823,38 @@ export class ApiClient {
     );
   }
 
+  async updateEventSeries(
+    accessToken: string,
+    householdId: string,
+    eventId: string,
+    body: UpdateSeriesDto,
+    signal?: AbortSignal,
+  ): Promise<SeriesMutationResponseDto> {
+    return this.authenticated<SeriesMutationResponseDto>(
+      'PUT',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/events/\${encodeURIComponent(eventId)}/series\`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async deleteEventSeries(
+    accessToken: string,
+    householdId: string,
+    eventId: string,
+    scope: SeriesScope,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'DELETE',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/events/\${encodeURIComponent(eventId)}/series?scope=\${encodeURIComponent(scope)}\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   async createTask(
     accessToken: string,
     householdId: string,
@@ -877,6 +932,38 @@ export class ApiClient {
     return this.authenticated<void>(
       'DELETE',
       \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async updateTaskSeries(
+    accessToken: string,
+    householdId: string,
+    taskId: string,
+    body: UpdateSeriesDto,
+    signal?: AbortSignal,
+  ): Promise<SeriesMutationResponseDto> {
+    return this.authenticated<SeriesMutationResponseDto>(
+      'PUT',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}/series\`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async deleteTaskSeries(
+    accessToken: string,
+    householdId: string,
+    taskId: string,
+    scope: SeriesScope,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'DELETE',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}/series?scope=\${encodeURIComponent(scope)}\`,
       accessToken,
       undefined,
       signal,
@@ -1273,6 +1360,17 @@ async function generate(): Promise<void> {
       || leaveHouseholdPath?.security === undefined
       || document.components?.schemas?.LeaveHouseholdDto === undefined) {
       throw new Error('OpenAPI leaveHousehold operation or schemas are missing or unstable.');
+    }
+
+    const eventSeriesPath = document.paths['/api/v1/households/{householdId}/events/{eventId}/series'];
+    const taskSeriesPath = document.paths['/api/v1/households/{householdId}/tasks/{taskId}/series'];
+    if (eventSeriesPath?.put?.operationId !== 'updateEventSeries'
+      || eventSeriesPath.delete?.operationId !== 'deleteEventSeries'
+      || taskSeriesPath?.put?.operationId !== 'updateTaskSeries'
+      || taskSeriesPath.delete?.operationId !== 'deleteTaskSeries'
+      || document.components?.schemas?.UpdateSeriesDto === undefined
+      || document.components.schemas.SeriesMutationResponseDto === undefined) {
+      throw new Error('OpenAPI series mutation operations or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });
