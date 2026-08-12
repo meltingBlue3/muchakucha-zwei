@@ -74,6 +74,13 @@
 - [x] **SAFE-04**: 服务端必须支持 Refresh Token 轮换、撤销和重放检测，并且数据库只保存 Token 哈希。
 - [ ] **SAFE-05**: 已发布的 v1 移动客户端必须能够在约定兼容窗口内继续使用升级后的 `/api/v1` 服务。
 
+### Advanced Calendar and Tasks
+
+- [ ] **RECR-01**: 用户可以创建符合明确重复规则的周期事件和周期任务。
+- [ ] **RECR-02**: 用户可以编辑或删除单次发生项、当前及未来发生项或整个系列。
+
+> **2026-08-12：从 v2 提前纳入本里程碑。** 原本安排在"专门后续阶段"（见下方 Out of Scope 历史行），现已作为 Phase 7 插入 ROADMAP.md，与 Phase 6 并行推进，不再是 v2 待定项。
+
 ## v2 Requirements
 
 ### Authentication
@@ -90,8 +97,6 @@
 
 ### Advanced Calendar and Tasks
 
-- **RECR-01**: 用户可以创建符合明确重复规则的周期事件和周期任务。
-- **RECR-02**: 用户可以编辑或删除单次发生项、当前及未来发生项或整个系列。
 - **SYNC-01**: 用户可以按明确的冲突规则与系统日历同步选定事件。
 - **OFFL-01**: 用户可以离线创建和编辑数据，并在恢复连接后处理同步冲突。
 
@@ -113,7 +118,6 @@
 | 一个任务同时分配多人 | 责任边界模糊；第一版采用单一负责人 |
 | 第一版实时同步所有资源 | 在验证实际实时需求前，不引入 WebSocket 生命周期与冲突复杂度 |
 | 第一版完整离线写入 | 需要独立冲突模型，先保证可靠的在线闭环 |
-| 第一版周期事件 | 需要系列、发生项例外及时区规则，安排在专门后续阶段 |
 
 ## Traceability
 
@@ -166,13 +170,15 @@ Roadmap 创建时填充。每个 v1 需求必须且只能映射到一个阶段�
 | EXPR-04 | Phase 6 | Pending |
 | EXPR-05 | Phase 6 | Pending |
 | SAFE-05 | Phase 6 | Pending |
+| RECR-01 | Phase 7 | Pending |
+| RECR-02 | Phase 7 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 45 total
-- Mapped to phases: 45
+- v1 requirements: 47 total
+- Mapped to phases: 47
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-31*
-*Last updated: 2026-07-31 after project research*
+*Last updated: 2026-08-12 — pulled RECR-01/RECR-02 forward from v2 into v1 scope as Phase 7 (see Phase 7 note above); removed the now-superseded "第一版周期事件" Out of Scope row*
