@@ -3,9 +3,15 @@ import { Pressable, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { CreateTaskDto, TaskResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
-import { Stack, Text } from '../../ui/primitives';
+import { Spinner, Stack, Text } from '../../ui/primitives';
 import { DateField } from '../../ui/date-field';
 import { LabelPicker } from '../labels/label-picker';
+import {
+  RecurrencePicker,
+  recurrenceErrorsFromApi,
+  recurrenceInputFromResponse,
+  type RecurrenceInput,
+} from '../recurrence/recurrence-picker';
 
 const STATUSES = [
   { value: 'pending', label: '待办' },
@@ -32,6 +38,7 @@ export interface TaskInput {
   priority: string;
   assigneeIds: string[];
   dueDate: string;
+  recurrence: RecurrenceInput | null;
 }
 
 const EMPTY_TASK: TaskInput = {
@@ -41,6 +48,7 @@ const EMPTY_TASK: TaskInput = {
   priority: 'medium',
   assigneeIds: [],
   dueDate: '',
+  recurrence: null,
 };
 
 interface TaskFormProps {
@@ -71,15 +79,19 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
         priority: initial.priority,
         assigneeIds: (initial.assigneeIds ?? []).filter((uid) => currentMemberIds.has(uid)),
         dueDate: initial.dueDate?.split('T')[0] ?? '',
+        recurrence: recurrenceInputFromResponse(initial.recurrence),
       };
     }
     return { ...EMPTY_TASK };
   });
   const [error, setError] = useState<string | null>(null);
+  const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, string>>({});
+  const [recurrenceValid, setRecurrenceValid] = useState(true);
 
   const updateField = useCallback(<K extends keyof TaskInput>(key: K, value: TaskInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
+    if (key === 'recurrence') setRecurrenceErrors({});
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -87,11 +99,13 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
       setError('请输入任务标题。');
       return;
     }
+    if (!recurrenceValid) return;
 
     const data: CreateTaskDto = {
       title: form.title.trim(),
       status: form.status,
       priority: form.priority,
+      ...(form.recurrence === null ? {} : { recurrence: form.recurrence }),
     };
 
     // Always include optional fields so the backend can clear them
@@ -106,8 +120,17 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
       data.dueDate = ''; // clears the due date
     }
 
-    await onSubmit(data);
-  }, [form, onSubmit]);
+    try {
+      await onSubmit(data);
+    } catch (submitError: unknown) {
+      const fieldErrors = recurrenceErrorsFromApi(submitError);
+      if (Object.keys(fieldErrors).length > 0) {
+        setRecurrenceErrors(fieldErrors);
+      } else {
+        setError('重复规则没有保存成功。请检查网络后重试。');
+      }
+    }
+  }, [form, onSubmit, recurrenceValid]);
 
   const inputStyle = {
     backgroundColor: activeTheme.colors.surface,
@@ -151,6 +174,30 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
       {/* Status */}
       <Stack gap={1}>
         <Text variant="label">状态</Text>
+        {form.status === 'cancelled' && (
+          <View style={{ alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap' }}>
+            <View
+              accessibilityLabel="已取消"
+              accessibilityRole="radio"
+              accessibilityState={{ checked: true, disabled: true }}
+              style={chipStyle(true)}
+            >
+              <Text variant="bodySm" color={chipTextColor(true)}>已取消</Text>
+            </View>
+            <Pressable
+              accessibilityLabel="恢复这一次"
+              accessibilityRole="button"
+              onPress={() => updateField('status', 'pending')}
+              style={({ pressed }) => ({
+                justifyContent: 'center',
+                minHeight: activeTheme.controlSizes.touchTarget,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text variant="label" color="link">恢复这一次</Text>
+            </Pressable>
+          </View>
+        )}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {STATUSES.map((s) => (
             <Pressable
@@ -242,12 +289,23 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
 
       {/* Due date */}
       <DateField
+        disabled={isSubmitting}
         value={form.dueDate}
         onChange={(v) => updateField('dueDate', v)}
         mode="date"
         label="截止日期（可选）"
         placeholder="YYYY-MM-DD"
         accessibilityLabel="截止日期"
+      />
+
+      {/* Description */}
+      <RecurrencePicker
+        disabled={isSubmitting}
+        errors={recurrenceErrors}
+        onChange={(next) => updateField('recurrence', next)}
+        onValidityChange={setRecurrenceValid}
+        startDate={form.dueDate}
+        value={form.recurrence}
       />
 
       {/* Description */}
@@ -325,10 +383,14 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
                 : activeTheme.colors.coral,
           })}
           accessibilityLabel={submitLabel}
+          accessibilityState={{ busy: isSubmitting, disabled: isSubmitting }}
         >
-          <Text variant="button" color="surface">
-            {isSubmitting ? '保存中…' : submitLabel}
-          </Text>
+          <View style={{ alignItems: 'center', flexDirection: 'row', gap: activeTheme.spacing[2] }}>
+            {isSubmitting && <Spinner label="保存中" />}
+            <Text variant="button" color="surface">
+              {isSubmitting ? '保存中…' : submitLabel}
+            </Text>
+          </View>
         </Pressable>
       </View>
     </Stack>

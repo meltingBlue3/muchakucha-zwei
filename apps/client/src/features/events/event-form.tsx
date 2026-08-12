@@ -3,17 +3,24 @@ import { Pressable, Switch, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
-import { Stack, Text } from '../../ui/primitives';
+import { Spinner, Stack, Text } from '../../ui/primitives';
 import { DateField } from '../../ui/date-field';
 import { LabelPicker } from '../labels/label-picker';
+import {
+  RecurrencePicker,
+  recurrenceErrorsFromApi,
+  recurrenceInputFromResponse,
+  type RecurrenceInput,
+} from '../recurrence/recurrence-picker';
 import { toDateIso } from './calendar-utils';
 
-type EventInput = Omit<CreateEventDto, 'startTime' | 'endTime' | 'allDay'> & {
+type EventInput = Omit<CreateEventDto, 'startTime' | 'endTime' | 'allDay' | 'recurrence'> & {
   startDate: string;
   startTime: string;
   endDate: string;
   endTime: string;
   allDay: boolean;
+  recurrence: RecurrenceInput | null;
 };
 
 const EMPTY_INPUT: EventInput = {
@@ -25,6 +32,7 @@ const EMPTY_INPUT: EventInput = {
   endTime: '10:00',
   allDay: false,
   location: '',
+  recurrence: null,
 };
 
 interface EventFormProps {
@@ -53,15 +61,19 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
         endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
         allDay: initial.allDay,
         location: initial.location ?? '',
+        recurrence: recurrenceInputFromResponse(initial.recurrence),
       };
     }
     return { ...EMPTY_INPUT };
   });
   const [error, setError] = useState<string | null>(null);
+  const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, string>>({});
+  const [recurrenceValid, setRecurrenceValid] = useState(true);
 
   const updateField = useCallback(<K extends keyof EventInput>(key: K, value: EventInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
+    if (key === 'recurrence') setRecurrenceErrors({});
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -69,6 +81,7 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
       setError('请输入事件标题。');
       return;
     }
+    if (!recurrenceValid) return;
 
     // Validate end is after start
     const startDateTime = new Date(
@@ -98,14 +111,24 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
       startTime,
       endTime,
       allDay: form.allDay,
+      ...(form.recurrence === null ? {} : { recurrence: form.recurrence }),
     };
     // Always include optional fields so the backend can clear them
     // (the update endpoint treats absent/undefined as "no change").
     data.description = (form.description ?? '').trim();
     data.location = (form.location ?? '').trim();
 
-    await onSubmit(data);
-  }, [form, onSubmit]);
+    try {
+      await onSubmit(data);
+    } catch (submitError: unknown) {
+      const fieldErrors = recurrenceErrorsFromApi(submitError);
+      if (Object.keys(fieldErrors).length > 0) {
+        setRecurrenceErrors(fieldErrors);
+      } else {
+        setError('重复规则没有保存成功。请检查网络后重试。');
+      }
+    }
+  }, [form, onSubmit, recurrenceValid]);
 
   const inputStyle = {
     backgroundColor: activeTheme.colors.surface,
@@ -151,6 +174,7 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
         <Text variant="label">开始</Text>
         <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
           <DateField
+            disabled={isSubmitting}
             value={form.startDate}
             onChange={(v) => updateField('startDate', v)}
             mode="date"
@@ -159,6 +183,7 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
           />
           {!form.allDay && (
             <DateField
+              disabled={isSubmitting}
               value={form.startTime}
               onChange={(v) => updateField('startTime', v)}
               mode="time"
@@ -174,6 +199,7 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
         <Text variant="label">结束</Text>
         <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
           <DateField
+            disabled={isSubmitting}
             value={form.endDate}
             onChange={(v) => updateField('endDate', v)}
             mode="date"
@@ -182,6 +208,7 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
           />
           {!form.allDay && (
             <DateField
+              disabled={isSubmitting}
               value={form.endTime}
               onChange={(v) => updateField('endTime', v)}
               mode="time"
@@ -191,6 +218,16 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
           )}
         </View>
       </Stack>
+
+      {/* Location */}
+      <RecurrencePicker
+        disabled={isSubmitting}
+        errors={recurrenceErrors}
+        onChange={(next) => updateField('recurrence', next)}
+        onValidityChange={setRecurrenceValid}
+        startDate={form.startDate}
+        value={form.recurrence}
+      />
 
       {/* Location */}
       <Stack gap={1}>
@@ -281,10 +318,12 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
                 : activeTheme.colors.coral,
           })}
           accessibilityLabel={submitLabel}
+          accessibilityState={{ busy: isSubmitting, disabled: isSubmitting }}
         >
-          <Text variant="button" color="surface">
-            {isSubmitting ? '保存中…' : submitLabel}
-          </Text>
+          <View style={{ alignItems: 'center', flexDirection: 'row', gap: activeTheme.spacing[2] }}>
+            {isSubmitting && <Spinner label="保存中" />}
+            <Text variant="button" color="surface">{isSubmitting ? '保存中…' : submitLabel}</Text>
+          </View>
         </Pressable>
       </View>
     </Stack>

@@ -1,4 +1,4 @@
-import type { RecurrenceDto } from '@muchakucha/api-client';
+import type { RecurrenceDto, RecurrenceResponseDto } from '@muchakucha/api-client';
 import { useTheme } from '@shopify/restyle';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
@@ -33,6 +33,56 @@ const COUNT_ERROR = '重复次数需要在 1 到 1000 之间。';
 const DATE_REQUIRED_ERROR = '请选择重复的截止日期。';
 const DATE_ORDER_ERROR = '截止日期必须晚于开始日期。';
 const TIMEZONE_ERROR = '无法识别当前设备的时区。请检查系统时区设置后重试。';
+
+export function recurrenceInputFromResponse(
+  response: RecurrenceResponseDto | null | undefined,
+): RecurrenceInput | null {
+  if (response === null || response === undefined) return null;
+  return {
+    freq: response.freq,
+    interval: response.interval,
+    byWeekday: [...response.byWeekday],
+    startsOn: response.startsOn,
+    timezone: response.timezone,
+    ...(response.endsOn === null || response.endsOn === undefined
+      ? {}
+      : { endsOn: response.endsOn }),
+    ...(response.count === null || response.count === undefined ? {} : { count: response.count }),
+    ...(response.startTimeLocal === null || response.startTimeLocal === undefined
+      ? {}
+      : { startTimeLocal: response.startTimeLocal }),
+    ...(response.durationMinutes === null || response.durationMinutes === undefined
+      ? {}
+      : { durationMinutes: response.durationMinutes }),
+  };
+}
+
+export function recurrenceErrorsFromApi(error: unknown): Record<string, string> {
+  if (typeof error !== 'object' || error === null || !('body' in error)) return {};
+  const body = (error as { body?: unknown }).body;
+  if (typeof body !== 'object' || body === null || !('error' in body)) return {};
+  const apiError = (body as { error?: { code?: string; details?: unknown } }).error;
+  if (apiError?.code !== 'VALIDATION_FAILED' || !Array.isArray(apiError.details)) return {};
+
+  const messages: Record<string, string> = {};
+  for (const detail of apiError.details) {
+    if (typeof detail !== 'object' || detail === null || !('field' in detail)) continue;
+    const field = (detail as { field?: unknown }).field;
+    if (typeof field !== 'string' || !field.startsWith('recurrence.')) continue;
+    const leaf = field.slice('recurrence.'.length);
+    messages[field] =
+      leaf === 'endsOn'
+        ? DATE_REQUIRED_ERROR
+        : leaf === 'count'
+          ? COUNT_ERROR
+          : leaf === 'timezone'
+            ? TIMEZONE_ERROR
+            : leaf === 'byWeekday'
+              ? '至少需要选择一天。'
+              : '重复规则没有保存成功。请检查网络后重试。';
+  }
+  return messages;
+}
 
 function selectedEnding(value: RecurrenceInput | null): EndingMode {
   if (value?.endsOn !== undefined) return 'date';

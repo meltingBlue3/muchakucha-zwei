@@ -1,8 +1,9 @@
-import type { RecurrenceDto } from '@muchakucha/api-client';
+import type { RecurrenceDto, TaskResponseDto } from '@muchakucha/api-client';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useState } from 'react';
 
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
+import { TaskForm } from '../../tasks/task-form';
 import { RecurrencePicker } from '../recurrence-picker';
 
 jest.mock('../../../ui/date-field', () => ({
@@ -176,5 +177,83 @@ describe('RecurrencePicker', () => {
     await fireEvent.changeText(countInput, '0');
     await fireEvent.changeText(countInput, '12');
     await waitFor(() => expect(onValidityChange).toHaveBeenLastCalledWith(true));
+  });
+});
+
+describe('task form recurrence integration', () => {
+  test('keeps the pre-recurrence request body unchanged when recurrence is off', async () => {
+    const onSubmit = jest.fn().mockResolvedValue(undefined);
+    const view = await render(
+      <MuchakuchaThemeProvider>
+        <TaskForm
+          isSubmitting={false}
+          members={[]}
+          onCancel={jest.fn()}
+          onSubmit={onSubmit}
+          submitLabel="保存"
+        />
+      </MuchakuchaThemeProvider>,
+    );
+    await fireEvent.changeText(view.getByLabelText('任务标题'), '普通任务');
+    await fireEvent.press(view.getByLabelText('保存'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(expect.not.objectContaining({ recurrence: expect.anything() }));
+  });
+
+  test('submits a selected recurrence and restores a cancelled occurrence', async () => {
+    const initial: TaskResponseDto = {
+      id: 'task-1',
+      householdId: 'household-1',
+      title: '重复任务',
+      description: null,
+      status: 'cancelled',
+      priority: 'medium',
+      assigneeIds: [],
+      dueDate: '2026-08-12T00:00:00.000Z',
+      recurrenceRuleId: 'rule-1',
+      occurrenceDate: '2026-08-12',
+      recurrence: {
+        id: 'rule-1',
+        freq: 'weekly',
+        interval: 1,
+        byWeekday: [3],
+        startsOn: '2026-08-12',
+        endsOn: null,
+        count: 10,
+        timezone: 'Asia/Shanghai',
+      },
+      createdBy: 'user-1',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+      labels: [],
+    };
+    const onSubmit = jest.fn().mockResolvedValue(undefined);
+    const view = await render(
+      <MuchakuchaThemeProvider>
+        <TaskForm
+          initial={initial}
+          isSubmitting={false}
+          members={[]}
+          onCancel={jest.fn()}
+          onSubmit={onSubmit}
+          submitLabel="保存"
+        />
+      </MuchakuchaThemeProvider>,
+    );
+
+    expect(view.getByLabelText('已取消').props.accessibilityState).toEqual({
+      checked: true,
+      disabled: true,
+    });
+    expect(view.getByLabelText('每周').props.accessibilityState.checked).toBe(true);
+    await fireEvent.press(view.getByLabelText('恢复这一次'));
+    await fireEvent.press(view.getByLabelText('保存'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'pending',
+        recurrence: expect.objectContaining({ freq: 'weekly', count: 10 }),
+      }),
+    );
   });
 });
