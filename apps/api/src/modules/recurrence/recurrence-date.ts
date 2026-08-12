@@ -223,8 +223,30 @@ function offsetMinutesAt(instant: number, timeZone: string): number {
   return match[1] === '-' ? -minutes : minutes;
 }
 
+/**
+ * Resolves a local wall time to an instant.
+ *
+ * DST policy (RFC 5545 §3.3.5):
+ *
+ * - **Nonexistent times (spring-forward gap).** `2027-03-14 02:30` does not
+ *   exist in `America/New_York`; clocks jump 02:00 EST → 03:00 EDT. Such a
+ *   time is shifted FORWARD by the length of the gap, so it resolves to
+ *   03:30 EDT. Returning the naive two-pass result instead would land at
+ *   01:30 EST — an hour *earlier* than the requested wall time.
+ * - **Ambiguous times (fall-back overlap).** `2027-11-07 01:30` happens twice.
+ *   The FIRST (pre-transition, still-DST) occurrence is used, which is what
+ *   the two-pass resolution naturally yields.
+ */
 export function localDateTimeToInstant(date: CalendarDate, hour: number, minute: number, timeZone: string): Date {
   const naive = Date.UTC(date.year, date.month - 1, date.day, hour, minute);
+  // Pass 1 uses the offset in effect at the naive instant (the offset BEFORE a
+  // transition), pass 2 re-resolves at that candidate.
   const first = naive - offsetMinutesAt(naive, timeZone) * 60_000;
-  return new Date(naive - offsetMinutesAt(first, timeZone) * 60_000);
+  const resolved = naive - offsetMinutesAt(first, timeZone) * 60_000;
+  // A valid wall time is a fixed point: re-applying the offset in effect at
+  // `resolved` must reproduce `resolved`. Inside a spring-forward gap no fixed
+  // point exists, and `first` is exactly the requested wall time shifted
+  // forward by the gap — the RFC 5545 answer.
+  const isFixedPoint = naive - offsetMinutesAt(resolved, timeZone) * 60_000 === resolved;
+  return new Date(isFixedPoint ? resolved : first);
 }

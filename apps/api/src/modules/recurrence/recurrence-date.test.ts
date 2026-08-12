@@ -212,6 +212,23 @@ describe('recurrence calendar dates', () => {
     expectLocalRoundTrip(parseIsoDate('2027-06-15'), 9, 30, 'Asia/Shanghai');
   });
 
+  test('shifts a nonexistent spring-forward wall time forward by the gap', () => {
+    // 2027-03-14 02:30 does not exist in New York: 02:00 EST jumps to 03:00
+    // EDT. RFC 5545 shifts it forward by the gap, so it lands on 03:30 EDT
+    // (07:30Z) — never on 01:30 EST (06:30Z), an hour before what was asked.
+    const instant = localDateTimeToInstant(parseIsoDate('2027-03-14'), 2, 30, 'America/New_York');
+    expect(instant.toISOString()).toBe('2027-03-14T07:30:00.000Z');
+    expect(localParts(instant, 'America/New_York')).toMatchObject({ hour: '03', minute: '30' });
+  });
+
+  test('resolves an ambiguous fall-back wall time to its first occurrence', () => {
+    // 2027-11-07 01:30 happens twice in New York: 01:30 EDT (05:30Z) and then
+    // 01:30 EST (06:30Z). The earlier, still-DST one wins.
+    const instant = localDateTimeToInstant(parseIsoDate('2027-11-07'), 1, 30, 'America/New_York');
+    expect(instant.toISOString()).toBe('2027-11-07T05:30:00.000Z');
+    expectLocalRoundTrip(parseIsoDate('2027-11-07'), 1, 30, 'America/New_York');
+  });
+
   test('round-trips a UTC wall time, whose offset Intl renders as a bare "GMT"', () => {
     expect(localDateTimeToInstant(parseIsoDate('2027-03-14'), 2, 30, 'UTC').toISOString())
       .toBe('2027-03-14T02:30:00.000Z');
