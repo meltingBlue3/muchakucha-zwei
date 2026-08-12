@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: blocked_on_human_checkpoint
-stopped_at: Completed 07-05-PLAN.md
-last_updated: "2026-08-12T03:24:16.305Z"
+stopped_at: Completed 07-06-PLAN.md
+last_updated: "2026-08-12T03:35:44.223Z"
 last_activity: 2026-08-06
 last_activity_desc: most recent commit (`f2969a4`, EAS build config); session history before this reconciliation pass stopped tracking at 2026-08-04
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 48
-  completed_plans: 44
+  completed_plans: 45
   percent: 14
 current_phase: 02
 current_phase_name: household-member-collaboration
@@ -21,7 +21,7 @@ current_phase_name: household-member-collaboration
 
 ## Current Position
 
-**Phase 07 progress:** Plans 07-01 through 07-05 complete (5/8); recurrence persistence, materialization, cancellation-aware reads, atomic series mutation semantics, generated contracts, and accessible recurrence form controls are implemented.
+**Phase 07 progress:** Plans 07-01 through 07-06 complete (6/8); recurrence persistence, materialization, cancellation-aware reads, atomic series mutation semantics, accessible recurrence forms, recurring-instance presentation, and cancellation-safe Today filtering are implemented.
 
 **Phase (GSD-tracked):** 02 (household-member-collaboration) — 12/13 plans complete, blocked on `02-13` (Android acceptance)
 **Reconciled 2026-08-11:** Direct source verification shows implementation has actually progressed through Phases 3, 4, and most of 5 — see `.planning/ROADMAP.md` for the full per-phase breakdown. `gsd-tools` still reports current_phase=02 because no `.planning/phases/03-*` through `05-*` PLAN.md/SUMMARY.md artifacts exist on disk (that work was done directly on `main`, outside `/gsd-discuss-phase` → `/gsd-plan-phase` → `/gsd-execute-phase`). This field is left at 02 deliberately — it is the earliest phase with real unresolved GSD-tracked work (a pending human checkpoint), consistent with `/gsd-progress`'s own Route 0 resume-incomplete-phase logic.
@@ -73,8 +73,8 @@ Pick one:
 
 ## Session
 
-**Last session:** 2026-08-12T03:23:58.243Z
-**Stopped at:** Completed 07-05-PLAN.md
+**Last session:** 2026-08-12T03:35:44.215Z
+**Stopped at:** Completed 07-06-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -113,6 +113,7 @@ Pick one:
 | Phase 07 P03 | 9min | 3 tasks | 10 files |
 | Phase 07 P04 | 17min | 3 tasks | 11 files |
 | Phase 07 P05 | 15min | 3 tasks | 7 files |
+| Phase 07 P06 | 18min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -194,3 +195,5 @@ Pick one:
 - [Phase 07]: A null recurrence is conditionally omitted, preserving byte-compatible one-time form submissions. — Existing non-recurring event and task requests remain unchanged.
 - [Phase 07]: Existing recurrence responses normalize synchronously into generated RecurrenceDto inputs. — Editing never flashes a false non-recurring state and exact optional fields remain valid.
 - [Phase 07]: DateField owns the shared disabled interaction contract. — All date inputs truthfully lock while recurrence forms submit on native and Web.
+- [Phase 07]: Recurrence remains a single rendering path: cards only decorate the existing time or badge row with a muted icon. — Recurring presentation stays compatible with ordinary card geometry and rendering.
+- [Phase 07]: Cancelled tasks are rejected before every Today deadline classifier and return no next status. — A cancellation guard before classification and mutation prevents Today leakage and accidental resurrection.
