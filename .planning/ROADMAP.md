@@ -260,12 +260,12 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 8 plans in 6 waves
+**Plans:** 1/8 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Tracer：每日重复任务端到端（schema + 手写迁移 + 纯日期模块 + 嵌套 DTO + 生成器 + TasksService）
+- [x] 07-01-PLAN.md — Tracer：每日重复任务端到端（schema + 手写迁移 + 纯日期模块 + 嵌套 DTO + 生成器 + TasksService）
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

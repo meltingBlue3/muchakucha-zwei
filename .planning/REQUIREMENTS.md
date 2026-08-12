@@ -76,7 +76,7 @@
 
 ### Advanced Calendar and Tasks
 
-- [ ] **RECR-01**: 用户可以创建符合明确重复规则的周期事件和周期任务。
+- [x] **RECR-01**: 用户可以创建符合明确重复规则的周期事件和周期任务。
 - [ ] **RECR-02**: 用户可以编辑或删除单次发生项、当前及未来发生项或整个系列。
 
 > **2026-08-12：从 v2 提前纳入本里程碑。** 原本安排在"专门后续阶段"（见下方 Out of Scope 历史行），现已作为 Phase 7 插入 ROADMAP.md，与 Phase 6 并行推进，不再是 v2 待定项。
@@ -170,7 +170,7 @@ Roadmap 创建时填充。每个 v1 需求必须且只能映射到一个阶段�
 | EXPR-04 | Phase 6 | Pending |
 | EXPR-05 | Phase 6 | Pending |
 | SAFE-05 | Phase 6 | Pending |
-| RECR-01 | Phase 7 | Pending |
+| RECR-01 | Phase 7 | Complete |
 | RECR-02 | Phase 7 | Pending |
 
 **Coverage:**
