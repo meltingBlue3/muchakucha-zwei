@@ -6,14 +6,13 @@ import { ApiClientError } from '@muchakucha/api-client';
 import type {
   TaskResponseDto,
   GetHouseholdMemberDto,
-  RecurrenceDto,
   UpdateSeriesDto,
 } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
 import { TaskForm } from '../../../../../../src/features/tasks/task-form';
-import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
+import { seriesScopeModeFor } from '../../../../../../src/features/recurrence/series-scope-mode';
 import {
   SeriesScopeSheet,
   type SeriesScope,
@@ -31,15 +30,6 @@ import type { CreateTaskDto } from '@muchakucha/api-client';
 type PendingSeriesAction =
   | { kind: 'save'; data: CreateTaskDto; mode: SeriesScopeMode }
   | { kind: 'delete'; mode: 'delete' };
-
-function recurrenceChanged(
-  current: TaskResponseDto['recurrence'],
-  next: RecurrenceDto | undefined,
-): boolean {
-  const normalizedCurrent = recurrenceInputFromResponse(current);
-  const normalizedNext = next ?? null;
-  return JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedNext);
-}
 
 const SERIES_FAILURE = '没有完成。这个重复安排没有发生任何改变，请重试。';
 const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后可以看到最新的安排。';
@@ -125,9 +115,7 @@ export default function EditTaskRoute() {
       setPendingSeriesAction({
         data,
         kind: 'save',
-        mode: recurrenceChanged(task.recurrence, data.recurrence)
-          ? 'rule-change'
-          : 'edit',
+        mode: seriesScopeModeFor(task.recurrence, data.recurrence),
       });
       return;
     }

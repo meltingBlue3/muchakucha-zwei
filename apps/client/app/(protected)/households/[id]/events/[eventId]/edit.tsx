@@ -3,11 +3,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import { ApiClientError } from '@muchakucha/api-client';
-import type { CreateEventDto, EventResponseDto, RecurrenceDto } from '@muchakucha/api-client';
+import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { EventForm } from '../../../../../../src/features/events/event-form';
-import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
+import { seriesScopeModeFor } from '../../../../../../src/features/recurrence/series-scope-mode';
 import {
   SeriesScopeSheet,
   type SeriesScope,
@@ -20,15 +20,6 @@ import type { Theme } from '../../../../../../src/ui/theme';
 type PendingSeriesAction =
   | { kind: 'save'; data: CreateEventDto; mode: SeriesScopeMode }
   | { kind: 'delete'; mode: 'delete' };
-
-function recurrenceChanged(
-  current: EventResponseDto['recurrence'],
-  next: RecurrenceDto | undefined,
-): boolean {
-  const normalizedCurrent = recurrenceInputFromResponse(current);
-  const normalizedNext = next ?? null;
-  return JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedNext);
-}
 
 const SERIES_FAILURE = '没有完成。这个重复安排没有发生任何改变，请重试。';
 const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后可以看到最新的安排。';
@@ -78,9 +69,7 @@ export default function EditEventRoute() {
         setPendingSeriesAction({
           data,
           kind: 'save',
-          mode: recurrenceChanged(event.recurrence, data.recurrence)
-            ? 'rule-change'
-            : 'edit',
+          mode: seriesScopeModeFor(event.recurrence, data.recurrence),
         });
         return;
       }

@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { theme } from '../../../ui/theme';
+import { seriesScopeModeFor } from '../series-scope-mode';
 import {
   SeriesScopeSheet,
   type SeriesScope,
@@ -154,6 +155,95 @@ describe('SeriesScopeSheet', () => {
 
     expect(view.queryByText('保存这次改动？')).toBeNull();
     expect(view.queryByText('仅此一次')).toBeNull();
+  });
+
+  test('classifies an unchanged rule on a mid-series occurrence as a plain edit', () => {
+    // The rule starts on 2026-08-12; the picker anchors the form value's
+    // startsOn to the occurrence being edited (2026-08-16). Nothing about the
+    // rule changed, so 仅此一次 must stay reachable.
+    const rule = {
+      id: 'rule-1',
+      freq: 'daily',
+      interval: 1,
+      byWeekday: [],
+      startsOn: '2026-08-12',
+      endsOn: null,
+      count: null,
+      timezone: 'Asia/Shanghai',
+      materializedThrough: '2026-11-10',
+      startTimeLocal: '08:30',
+      durationMinutes: 60,
+    };
+
+    expect(seriesScopeModeFor(rule, {
+      freq: 'daily',
+      interval: 1,
+      byWeekday: [],
+      startsOn: '2026-08-16',
+      timezone: 'Asia/Shanghai',
+      startTimeLocal: '08:30',
+      durationMinutes: 60,
+    })).toBe('edit');
+  });
+
+  test('classifies a weekly rule whose first occurrence trails startsOn as a plain edit', () => {
+    const rule = {
+      id: 'rule-2',
+      freq: 'weekly',
+      interval: 1,
+      byWeekday: [2, 4],
+      startsOn: '2026-08-12',
+      endsOn: null,
+      count: 6,
+      timezone: 'Asia/Shanghai',
+      materializedThrough: '2026-11-10',
+      startTimeLocal: null,
+      durationMinutes: null,
+    };
+
+    expect(seriesScopeModeFor(rule, {
+      freq: 'weekly',
+      byWeekday: [4, 2],
+      startsOn: '2026-08-13',
+      count: 6,
+      timezone: 'Asia/Shanghai',
+    })).toBe('edit');
+  });
+
+  test('still reports a rule change when the recurrence itself differs', () => {
+    const rule = {
+      id: 'rule-3',
+      freq: 'daily',
+      interval: 1,
+      byWeekday: [],
+      startsOn: '2026-08-12',
+      endsOn: null,
+      count: null,
+      timezone: 'Asia/Shanghai',
+      materializedThrough: null,
+      startTimeLocal: null,
+      durationMinutes: null,
+    };
+
+    expect(seriesScopeModeFor(rule, {
+      freq: 'weekly',
+      byWeekday: [1],
+      startsOn: '2026-08-16',
+      timezone: 'Asia/Shanghai',
+    })).toBe('rule-change');
+    expect(seriesScopeModeFor(rule, {
+      freq: 'daily',
+      interval: 2,
+      startsOn: '2026-08-16',
+      timezone: 'Asia/Shanghai',
+    })).toBe('rule-change');
+    expect(seriesScopeModeFor(rule, {
+      freq: 'daily',
+      startsOn: '2026-08-16',
+      count: 10,
+      timezone: 'Asia/Shanghai',
+    })).toBe('rule-change');
+    expect(seriesScopeModeFor(rule, undefined)).toBe('rule-change');
   });
 
   test('keeps every action at the primary control height', async () => {
