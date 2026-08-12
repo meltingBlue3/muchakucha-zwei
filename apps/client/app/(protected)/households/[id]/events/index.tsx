@@ -15,7 +15,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../../src/ui/household-components';
-import { Stack, Text } from '../../../../../src/ui/primitives';
+import { Stack, StatusPanel, Text } from '../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../src/ui/theme';
 
 export default function CalendarRoute() {
@@ -37,6 +37,7 @@ export default function CalendarRoute() {
   const [selectedDateIso, setSelectedDateIso] = useState<string | null>(toDateIso(today));
   const [events, setEvents] = useState<EventResponseDto[]>([]);
   const [eventsByDate, setEventsByDate] = useState<Map<string, number>>(new Map());
+  const [materializedThrough, setMaterializedThrough] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -73,6 +74,7 @@ export default function CalendarRoute() {
       const { start, end } = toDateRangeIso(year, month);
       const result = await sessionApiClient.listEvents(token, householdId, start, end);
       setEvents(result.events);
+      setMaterializedThrough(result.materializedThrough ?? null);
 
       // Build events-by-date map
       const byDate = new Map<string, number>();
@@ -138,6 +140,12 @@ export default function CalendarRoute() {
       return true;
     });
   }, [events, selectedDateIso, labelFilter]);
+
+  const beyondGenerationWindow =
+    labelFilter === 'all' &&
+    materializedThrough !== null &&
+    selectedDateIso !== null &&
+    selectedDateIso > materializedThrough;
 
   const handlePrevMonth = useCallback(() => {
     if (month === 0) {
@@ -338,9 +346,18 @@ export default function CalendarRoute() {
           )}
 
           {!loading && error === null && selectedDateEvents.length === 0 && (
-            <Text variant="bodySm" color="inkMuted">
-              {labelFilter !== 'all' ? '没有符合筛选条件的事件。' : '这一天没有事件。'}
-            </Text>
+            beyondGenerationWindow ? (
+              <StatusPanel
+                action={null}
+                body="重复安排会按 90 天窗口自动补齐。稍后再看这里，或先查看更近的日期。"
+                heading="更远的重复还没生成"
+                kind="offline"
+              />
+            ) : (
+              <Text variant="bodySm" color="inkMuted">
+                {labelFilter !== 'all' ? '没有符合筛选条件的事件。' : '还没有事件。'}
+              </Text>
+            )
           )}
 
           {selectedDateEvents.map((event) => (

@@ -16,7 +16,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../../src/ui/household-components';
-import { Stack, Text } from '../../../../../src/ui/primitives';
+import { Stack, StatusPanel, Text } from '../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../src/ui/theme';
 
 type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
@@ -51,6 +51,7 @@ export default function TaskListRoute() {
   } = useHouseholdContext();
 
   const [tasks, setTasks] = useState<TaskResponseDto[]>([]);
+  const [materializedThrough, setMaterializedThrough] = useState<string | null>(null);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +135,7 @@ export default function TaskListRoute() {
         sessionApiClient.getHousehold(token, householdId),
       ]);
       setTasks(tasksResult.tasks);
+      setMaterializedThrough(tasksResult.materializedThrough ?? null);
       setMembers(householdResult.members);
     } catch (err) {
       setError('无法加载任务，请检查网络连接后重试。');
@@ -192,6 +194,15 @@ export default function TaskListRoute() {
   const handleCreateTask = useCallback(() => {
     void router.push(`/households/${encodeURIComponent(householdId!)}/tasks/new`);
   }, [router, householdId]);
+
+  const todayIso = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+  const beyondGenerationWindow =
+    activeFilterCount === 0 &&
+    materializedThrough !== null &&
+    todayIso > materializedThrough;
 
   const handleSwitch = useCallback(async (householdId: string) => {
     if (householdId === currentHouseholdId) {
@@ -507,9 +518,18 @@ export default function TaskListRoute() {
 
         {/* Task list */}
         {!loading && error === null && filteredTasks.length === 0 && (
-          <Text variant="bodySm" color="inkMuted">
-            {filter === 'all' ? '还没有任务。点击上方按钮创建第一个任务。' : '没有符合筛选条件的任务。'}
-          </Text>
+          beyondGenerationWindow ? (
+            <StatusPanel
+              action={null}
+              body="重复安排会按 90 天窗口自动补齐。稍后再看这里，或先查看更近的日期。"
+              heading="更远的重复还没生成"
+              kind="offline"
+            />
+          ) : (
+            <Text variant="bodySm" color="inkMuted">
+              {activeFilterCount === 0 ? '还没有任务。点击上方按钮创建第一个任务。' : '没有符合筛选条件的任务。'}
+            </Text>
+          )
         )}
 
         {filteredTasks.map((task) => (
