@@ -79,8 +79,8 @@ describe('recurrence summary formatting', () => {
 });
 
 describe('RecurrenceSummary', () => {
-  test('renders summary, clamp explanation, and timezone note together', () => {
-    const view = render(
+  test('renders summary, clamp explanation, and timezone note together', async () => {
+    const view = await render(
       <MuchakuchaThemeProvider>
         <RecurrenceSummary
           rule={{ ...baseRule, freq: 'monthly', startsOn: '2026-08-31', timezone: 'Asia/Tokyo' }}
