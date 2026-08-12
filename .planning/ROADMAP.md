@@ -253,6 +253,26 @@ Plans:
 **Total remaining plans: 15 formally tracked** (1 in Phase 2, 1 in Phase 3, 1 in Phase 4, 3 in Phase 5, 3 in Phase 6) — **plus a backlog of untracked work**: a shared Android-acceptance session covering Phases 2–4, retroactive GSD plan/summary artifacts for Phase 5, its missing test suite, and its label-filter feature.
 **Estimated plans saved vs. original methodology: ~40-50**
 
+### Phase 7: 周期性重复事件与任务
+
+**Goal:** As a household member who manages the family schedule, I want to set a recurrence rule (daily, selected weekdays, weekly, monthly, or yearly) on an event or task, so that I don't have to manually recreate the same item over and over.
+**Mode:** mvp
+**UI hint:** yes
+**Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
+**Requirements:** RECR-01, RECR-02
+**Plans:** 8 plans in 6 waves
+
+Plans:
+
+- [ ] 07-01-PLAN.md — Tracer：每日重复任务端到端（schema + 手写迁移 + 纯日期模块 + 嵌套 DTO + 生成器 + TasksService）
+- [ ] 07-02-PLAN.md — 完整规则词汇表（每周/每月/每年 + D-09 月末钳位 + D-10 DST）与滚动生成 worker
+- [ ] 07-03-PLAN.md — 事件侧重复、已取消事件读路径过滤、列表生成水位线与手写 OpenAPI 客户端契约
+- [ ] 07-04-PLAN.md — 「仅此一次」语义、cancelled 状态归一与「此后所有」原子拆系列 + /series 子资源
+- [ ] 07-05-PLAN.md — RecurrencePicker 与中文摘要，接入事件表单与任务表单
+- [ ] 07-06-PLAN.md — 重复徽标、详情页重复信息块、已取消状态三重表达与今日待办排除
+- [ ] 07-07-PLAN.md — SeriesScopeSheet 范围选择弹层、两个编辑页接线与生成窗口专用空态
+- [ ] 07-08-PLAN.md — Web 端到端旅程、事件侧无障碍审计（补 Phase 3 缺口）与 Android 真机验收
+
 ---
 *Roadmap created: 2026-07-31*
 *Last updated: 2026-08-11 — reconciled Phases 3-5 status against source code and test files (see verification notes above); `.planning` artifacts had fallen behind actual implementation*
