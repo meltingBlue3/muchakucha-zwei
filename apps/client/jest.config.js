@@ -40,6 +40,14 @@ module.exports = {
   testEnvironmentOptions: {
     customExportConditions: ['require', 'react-native'],
   },
-  testMatch: ['<rootDir>/src/**/__tests__/**/*-test.[jt]s?(x)'],
+  // Deliberately does NOT use the `<rootDir>` tag: Jest's Windows glob
+  // normalization (replacePathSepForGlob) converts `\` to `/` everywhere
+  // except when followed by one of `$()+.?^{}` — so a rootDir containing a
+  // dot-directory segment (e.g. a git worktree under `.claude/worktrees/…`)
+  // leaves one literal backslash before that segment, which no longer
+  // matches the forward-slash-normalized candidate file paths and silently
+  // yields zero test matches. A `**/`-anchored relative glob sidesteps the
+  // rootDir substitution entirely and matches the same file set.
+  testMatch: ['**/src/**/__tests__/**/*-test.[jt]s?(x)'],
   watchman: false,
 };
