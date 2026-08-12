@@ -260,7 +260,7 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 6/8 plans executed
+**Plans:** 7/8 plans executed
 
 Plans:
 **Wave 1**
@@ -283,7 +283,7 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 07-06-PLAN.md — 重复徽标、详情页重复信息块、已取消状态三重表达与今日待办排除
-- [ ] 07-07-PLAN.md — SeriesScopeSheet 范围选择弹层、两个编辑页接线与生成窗口专用空态
+- [x] 07-07-PLAN.md — SeriesScopeSheet 范围选择弹层、两个编辑页接线与生成窗口专用空态
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
