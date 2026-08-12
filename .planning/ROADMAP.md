@@ -260,7 +260,7 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 15 plans (7/8 executed; 07-09…07-15 added 2026-08-13 as the D-11…D-20 addendum)
+**Plans:** 9/15 plans executed
 
 Plans:
 **Wave 1**
@@ -291,8 +291,8 @@ Plans:
 
 **Wave 7** *(addendum D-11…D-20; independent of the pending 07-08 checkpoint)*
 
-- [ ] 07-09-PLAN.md — 按频率提前量 + 按规则时区的生成窗口、水位线只增不减、1 小时 tick 与创建即标准检查
-- [ ] 07-10-PLAN.md — 客户端「仅看周期性」筛选与生成窗口两状态改造（生成落后 / 更远日期注记）
+- [x] 07-09-PLAN.md — 按频率提前量 + 按规则时区的生成窗口、水位线只增不减、1 小时 tick 与创建即标准检查
+- [x] 07-10-PLAN.md — 客户端「仅看周期性」筛选与生成窗口两状态改造（生成落后 / 更远日期注记）
 
 **Wave 8** *(blocked on 07-09)*
 
