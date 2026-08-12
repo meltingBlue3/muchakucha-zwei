@@ -36,7 +36,7 @@ function Harness({
           setValue(next);
           onChangeSpy?.(next);
         }}
-        onValidityChange={onValidityChange}
+        {...(onValidityChange === undefined ? {} : { onValidityChange })}
         startDate={startDate}
         value={value}
       />
@@ -81,7 +81,7 @@ describe('RecurrencePicker', () => {
 
     expect(view.getByLabelText('星期三').props.accessibilityState.checked).toBe(true);
     const announcement = view.getByText('至少需要选择一天。');
-    expect(announcement.parent?.props.accessibilityLiveRegion).toBe('polite');
+    expect(announcement.props.accessibilityLiveRegion).toBe('polite');
   });
 
   test('clears the other ending value whenever the ending mode changes', async () => {
@@ -89,16 +89,19 @@ describe('RecurrencePicker', () => {
     const view = await render(<Harness onChangeSpy={onChange} />);
     await fireEvent.press(view.getByLabelText('每天'));
     await fireEvent.press(view.getByLabelText('截止日期'));
-    await fireEvent.changeText(view.getByLabelText('截止日期'), '2027-08-12');
+    const dateInput = view.getAllByLabelText('截止日期').find((node) => node.props.value !== undefined)!;
+    await fireEvent.changeText(dateInput, '2027-08-12');
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ endsOn: '2027-08-12' }));
 
     await fireEvent.press(view.getByLabelText('重复次数'));
-    expect(view.queryByLabelText('截止日期')).toBeNull();
-    expect(view.getByLabelText('重复次数').props.value).toBe('10');
+    expect(view.getAllByLabelText('截止日期')).toHaveLength(1);
+    expect(
+      view.getAllByLabelText('重复次数').find((node) => node.props.value !== undefined)?.props.value,
+    ).toBe('10');
     expect(onChange).toHaveBeenLastCalledWith(expect.not.objectContaining({ endsOn: expect.anything() }));
 
     await fireEvent.press(view.getByLabelText('截止日期'));
-    expect(view.queryByLabelText('重复次数')).toBeNull();
+    expect(view.getAllByLabelText('重复次数')).toHaveLength(1);
     expect(onChange).toHaveBeenLastCalledWith(expect.not.objectContaining({ count: expect.anything() }));
   });
 
@@ -107,7 +110,8 @@ describe('RecurrencePicker', () => {
     const view = await render(<Harness onValidityChange={onValidityChange} />);
     await fireEvent.press(view.getByLabelText('每天'));
     await fireEvent.press(view.getByLabelText('重复次数'));
-    await fireEvent.changeText(view.getByLabelText('重复次数'), count);
+    const countInput = view.getAllByLabelText('重复次数').find((node) => node.props.value !== undefined)!;
+    await fireEvent.changeText(countInput, count);
 
     expect(view.getByText('重复次数需要在 1 到 1000 之间。')).toBeTruthy();
     expect(onValidityChange).toHaveBeenLastCalledWith(false);
@@ -120,7 +124,8 @@ describe('RecurrencePicker', () => {
     await fireEvent.press(view.getByLabelText('截止日期'));
     expect(view.getByText('请选择重复的截止日期。')).toBeTruthy();
 
-    await fireEvent.changeText(view.getByLabelText('截止日期'), '2026-08-11');
+    const dateInput = view.getAllByLabelText('截止日期').find((node) => node.props.value !== undefined)!;
+    await fireEvent.changeText(dateInput, '2026-08-11');
     expect(view.getByText('截止日期必须晚于开始日期。')).toBeTruthy();
     expect(onValidityChange).toHaveBeenLastCalledWith(false);
   });
@@ -150,8 +155,9 @@ describe('RecurrencePicker', () => {
     for (const control of [...view.getAllByRole('radio'), ...view.getAllByRole('checkbox')]) {
       expect(control.props.accessibilityState.disabled).toBe(true);
     }
-    expect(view.getByLabelText('重复次数').props.accessibilityState.disabled).toBe(true);
-    expect(view.getByLabelText('重复次数').props.value).toBe('10');
+    const countInput = view.getAllByLabelText('重复次数').find((node) => node.props.value !== undefined)!;
+    expect(countInput.props.accessibilityState.disabled).toBe(true);
+    expect(countInput.props.value).toBe('10');
   });
 
   test('never renders interval controls or recurrence implementation vocabulary', async () => {
@@ -166,8 +172,9 @@ describe('RecurrencePicker', () => {
     const view = await render(<Harness onValidityChange={onValidityChange} />);
     await fireEvent.press(view.getByLabelText('每天'));
     await fireEvent.press(view.getByLabelText('重复次数'));
-    await fireEvent.changeText(view.getByLabelText('重复次数'), '0');
-    await fireEvent.changeText(view.getByLabelText('重复次数'), '12');
+    const countInput = view.getAllByLabelText('重复次数').find((node) => node.props.value !== undefined)!;
+    await fireEvent.changeText(countInput, '0');
+    await fireEvent.changeText(countInput, '12');
     await waitFor(() => expect(onValidityChange).toHaveBeenLastCalledWith(true));
   });
 });

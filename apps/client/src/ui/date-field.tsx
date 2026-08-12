@@ -54,6 +54,8 @@ type DateFieldProps = {
   placeholder?: string;
   /** Accessibility label for the pressable field. */
   accessibilityLabel?: string;
+  /** Prevents opening or changing the picker while a parent form is submitting. */
+  disabled?: boolean;
 };
 
 export function DateField({
@@ -63,6 +65,7 @@ export function DateField({
   label,
   placeholder,
   accessibilityLabel,
+  disabled = false,
 }: DateFieldProps) {
   const activeTheme = useTheme<Theme>();
   const [show, setShow] = useState(false);
@@ -118,6 +121,7 @@ export function DateField({
       <View style={{ flex: 1 }}>
         {label !== undefined ? <Text variant="label">{label}</Text> : null}
         <input
+          disabled={disabled}
           type={mode}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -139,8 +143,10 @@ export function DateField({
       ) : null}
       <Pressable
         onPress={() => setShow((prev) => !prev)}
+        disabled={disabled}
         accessibilityLabel={accessibilityLabel ?? label ?? (mode === 'date' ? '日期' : '时间')}
         accessibilityRole="button"
+        accessibilityState={{ disabled }}
         style={[fieldStyle, { flex: 1 }]}
       >
         <Text
