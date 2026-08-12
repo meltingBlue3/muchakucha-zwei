@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: blocked_on_human_checkpoint
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-08-12T02:26:54.692Z"
+stopped_at: Completed 07-03-PLAN.md
+last_updated: "2026-08-12T02:39:35.704Z"
 last_activity: 2026-08-06
 last_activity_desc: most recent commit (`f2969a4`, EAS build config); session history before this reconciliation pass stopped tracking at 2026-08-04
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 48
-  completed_plans: 41
+  completed_plans: 42
   percent: 14
 current_phase: 02
 current_phase_name: household-member-collaboration
@@ -21,7 +21,7 @@ current_phase_name: household-member-collaboration
 
 ## Current Position
 
-**Phase 07 progress:** Plans 07-01 and 07-02 complete (2/8); recurring task storage, the four-frequency calendar walk, and the rolling materialization worker are implemented.
+**Phase 07 progress:** Plans 07-01 through 07-03 complete (3/8); recurring task/event materialization, cancellation-aware event reads, household watermarks, and generated client contracts are implemented.
 
 **Phase (GSD-tracked):** 02 (household-member-collaboration) — 12/13 plans complete, blocked on `02-13` (Android acceptance)
 **Reconciled 2026-08-11:** Direct source verification shows implementation has actually progressed through Phases 3, 4, and most of 5 — see `.planning/ROADMAP.md` for the full per-phase breakdown. `gsd-tools` still reports current_phase=02 because no `.planning/phases/03-*` through `05-*` PLAN.md/SUMMARY.md artifacts exist on disk (that work was done directly on `main`, outside `/gsd-discuss-phase` → `/gsd-plan-phase` → `/gsd-execute-phase`). This field is left at 02 deliberately — it is the earliest phase with real unresolved GSD-tracked work (a pending human checkpoint), consistent with `/gsd-progress`'s own Route 0 resume-incomplete-phase logic.
@@ -73,8 +73,8 @@ Pick one:
 
 ## Session
 
-**Last session:** 2026-08-12T02:26:54.685Z
-**Stopped at:** Completed 07-02-PLAN.md
+**Last session:** 2026-08-12T02:39:35.696Z
+**Stopped at:** Completed 07-03-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -110,6 +110,7 @@ Pick one:
 | Phase 01 P27 | 6h 20m | 1 human checkpoint | Android acceptance and 3 fixes |
 | Phase 07 P01 | 20min | 2 tasks | 12 files |
 | Phase 07 P02 | 12min | 2 tasks | 7 files |
+| Phase 07 P03 | 9min | 3 tasks | 10 files |
 
 ## Decisions
 
@@ -183,3 +184,5 @@ Pick one:
 - [Phase 07]: Selected option-a: store startTimeLocal and durationMinutes on RecurrenceRule so scheduling data survives occurrence deletion.
 - [Phase 07]: Weekly recurrence uses Sunday=0 through Saturday=6, matching the client calendar header.
 - [Phase 07]: Seed recurring tasks on the first calendar-valid occurrence when startsOn is not selected.
+- [Phase 07]: Event recurrence derives wall-clock time and duration from the submitted event interval. — Generated occurrences preserve local schedule semantics and constant duration.
+- [Phase 07]: Household list watermarks use the minimum materializedThrough across all rules. — A lagging series must keep the household watermark conservative.
