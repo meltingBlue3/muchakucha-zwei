@@ -10,6 +10,17 @@ import { CalendarMonth } from '../../../../../src/features/events/calendar-month
 import { EventCard } from '../../../../../src/features/events/event-card';
 import { toDateIso, toDateRangeIso } from '../../../../../src/features/events/calendar-utils';
 import {
+  applyRecurringFilter,
+  classifyGenerationWindow,
+  GENERATION_AHEAD_NOTE,
+  GENERATION_BEHIND_BODY,
+  GENERATION_BEHIND_HEADING,
+  RECURRING_EMPTY_EVENTS,
+  RECURRING_FILTERS,
+  recurringFilterAccessibilityLabel,
+  type RecurringFilterKey,
+} from '../../../../../src/features/recurrence/recurring-filter';
+import {
   AccessChangedPanel,
   AppShell,
   HouseholdHeader,
@@ -42,6 +53,7 @@ export default function CalendarRoute() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [labelFilter, setLabelFilter] = useState<string>('all');
+  const [recurringFilter, setRecurringFilter] = useState<RecurringFilterKey>('all');
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   const handleSwitch = useCallback(async (householdId: string) => {
@@ -129,23 +141,31 @@ export default function CalendarRoute() {
     return [...seen.values()];
   }, [events]);
 
-  // Filter events for selected date (with optional label filter)
+  // Filter events for selected date (with optional label and recurring filters)
   const selectedDateEvents = useMemo(() => {
     if (selectedDateIso === null) return [];
-    return events.filter((e) => {
+    let result = events.filter((e) => {
       const eventStart = toDateIso(new Date(e.startTime));
       const eventEnd = toDateIso(new Date(e.endTime));
       if (!(selectedDateIso >= eventStart && selectedDateIso <= eventEnd)) return false;
       if (labelFilter !== 'all' && !(e.labels ?? []).some((l) => l.id === labelFilter)) return false;
       return true;
     });
-  }, [events, selectedDateIso, labelFilter]);
+    result = applyRecurringFilter(result, recurringFilter);
+    return result;
+  }, [events, selectedDateIso, labelFilter, recurringFilter]);
 
-  const beyondGenerationWindow =
-    labelFilter === 'all' &&
-    materializedThrough !== null &&
-    selectedDateIso !== null &&
-    selectedDateIso > materializedThrough;
+  const todayIso = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const generationWindow = classifyGenerationWindow({
+    materializedThrough,
+    todayIso,
+    viewedDateIso: selectedDateIso,
+    filtersActive: labelFilter !== 'all' || recurringFilter !== 'all',
+  });
 
   const handlePrevMonth = useCallback(() => {
     if (month === 0) {
@@ -256,6 +276,42 @@ export default function CalendarRoute() {
           onSelectDate={handleSelectDate}
         />
 
+        {/* Recurring filter — always rendered (unlike the label filter row
+            below): a household can't know in advance whether it has any
+            recurring series, so a conditional row would make the entry
+            point appear and disappear unpredictably. Independent radiogroup
+            from the label filter row — the two must not merge into one
+            group or one row. */}
+        <View
+          accessibilityRole="radiogroup"
+          accessibilityLabel="重复筛选"
+          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], alignItems: 'center' }}
+        >
+          {RECURRING_FILTERS.map((f) => (
+            <Pressable
+              key={f.key}
+              onPress={() => setRecurringFilter(f.key)}
+              hitSlop={activeTheme.spacing[3]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: recurringFilter === f.key }}
+              style={({ pressed }) => ({
+                paddingHorizontal: activeTheme.spacing[3],
+                paddingVertical: activeTheme.spacing[1],
+                borderRadius: activeTheme.borderRadii.full,
+                borderWidth: 1,
+                borderColor: recurringFilter === f.key ? activeTheme.colors.coral : activeTheme.colors.border,
+                backgroundColor: 'transparent',
+                opacity: pressed ? 0.7 : 1,
+              })}
+              accessibilityLabel={recurringFilterAccessibilityLabel(f.key)}
+            >
+              <Text variant="caption" color={recurringFilter === f.key ? 'coral' : 'inkMuted'}>
+                {f.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
         {/* Label filter */}
         {availableLabels.length > 0 && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], alignItems: 'center' }}>
@@ -346,17 +402,28 @@ export default function CalendarRoute() {
           )}
 
           {!loading && error === null && selectedDateEvents.length === 0 && (
-            beyondGenerationWindow ? (
+            generationWindow === 'behind' ? (
               <StatusPanel
                 action={null}
-                body="重复安排会按 90 天窗口自动补齐。稍后再看这里，或先查看更近的日期。"
-                heading="更远的重复还没生成"
+                body={GENERATION_BEHIND_BODY}
+                heading={GENERATION_BEHIND_HEADING}
                 kind="offline"
               />
             ) : (
-              <Text variant="bodySm" color="inkMuted">
-                {labelFilter !== 'all' ? '没有符合筛选条件的事件。' : '还没有事件。'}
-              </Text>
+              <Stack gap={1}>
+                <Text variant="bodySm" color="inkMuted">
+                  {recurringFilter === 'recurring'
+                    ? RECURRING_EMPTY_EVENTS
+                    : labelFilter !== 'all'
+                      ? '没有符合筛选条件的事件。'
+                      : '还没有事件。'}
+                </Text>
+                {generationWindow === 'ahead' && (
+                  <Text variant="caption" color="inkMuted">
+                    {GENERATION_AHEAD_NOTE}
+                  </Text>
+                )}
+              </Stack>
             )
           )}
 
