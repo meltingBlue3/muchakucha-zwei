@@ -3,14 +3,25 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { GetHouseholdMemberDto, TaskResponseDto } from '@muchakucha/api-client';
+import Ban from 'lucide-react-native/icons/ban';
 import Pencil from 'lucide-react-native/icons/pencil';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { LabelChip } from '../../../../../../src/features/labels/label-chip';
+import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
+import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
 import { formatDueDate, isOverdue, priorityLabel, statusLabel } from '../../../../../../src/features/tasks/task-utils';
 import { AppShell } from '../../../../../../src/ui/household-components';
 import { Heading, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
+
+function currentTimeZone(fallback: string): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 export default function TaskDetailRoute() {
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId: string }>();
@@ -83,7 +94,13 @@ export default function TaskDetailRoute() {
   const assigneeNames = (task.assigneeIds ?? []).map(
     (uid) => members.find((m) => m.userId === uid)?.displayName ?? '未知成员',
   );
-  const overdue = isOverdue(task.dueDate ?? null) && task.status !== 'completed';
+  const cancelled = task.status === 'cancelled';
+  const overdue = isOverdue(task.dueDate ?? null) && task.status !== 'completed' && !cancelled;
+  const recurrence = recurrenceInputFromResponse(task.recurrence);
+  const recurrenceSummary =
+    recurrence === null
+      ? null
+      : formatRecurrenceSummary(recurrence, currentTimeZone(recurrence.timezone));
 
   return (
     <AppShell accessibilityLabel="任务详情" title="任务详情" showBack showProfile>
@@ -115,13 +132,23 @@ export default function TaskDetailRoute() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], alignItems: 'center' }}>
           <View
             style={{
-              backgroundColor: task.status === 'completed' || task.status === 'in_progress' ? activeTheme.colors.teal : activeTheme.colors.border,
+              alignItems: 'center',
+              backgroundColor: cancelled
+                ? activeTheme.colors.surfaceMuted
+                : task.status === 'completed' || task.status === 'in_progress'
+                  ? activeTheme.colors.teal
+                  : activeTheme.colors.border,
+              flexDirection: 'row',
+              gap: activeTheme.spacing[1],
               paddingHorizontal: activeTheme.spacing[3],
               paddingVertical: activeTheme.spacing[1],
               borderRadius: activeTheme.borderRadii.full,
             }}
           >
-            <Text variant="caption" color="surface">{statusLabel(task.status)}</Text>
+            {cancelled && <Ban color={activeTheme.colors.inkMuted} size={14} strokeWidth={2} />}
+            <Text variant="caption" color={cancelled ? 'inkMuted' : 'surface'}>
+              {cancelled ? '已取消' : statusLabel(task.status)}
+            </Text>
           </View>
           <View
             style={{
@@ -147,6 +174,22 @@ export default function TaskDetailRoute() {
             {task.dueDate !== null && task.dueDate !== undefined && task.dueDate !== '' ? formatDueDate(task.dueDate) : '未设置'}
           </Text>
         </Stack>
+
+        {task.recurrenceRuleId != null && recurrenceSummary !== null && (
+          <Stack gap={1}>
+            <Text variant="label" color="inkMuted">重复</Text>
+            <Text variant="body">{recurrenceSummary.summary}</Text>
+            {recurrenceSummary.clampNote !== null && (
+              <Text variant="caption" color="inkMuted">{recurrenceSummary.clampNote}</Text>
+            )}
+            {recurrenceSummary.timeZoneNote !== null && (
+              <Text variant="caption" color="inkMuted">{recurrenceSummary.timeZoneNote}</Text>
+            )}
+            {cancelled && (
+              <Text variant="caption" color="inkMuted">这次重复已取消。</Text>
+            )}
+          </Stack>
+        )}
 
         <Stack gap={1}>
           <Text variant="label" color="inkMuted">负责人</Text>

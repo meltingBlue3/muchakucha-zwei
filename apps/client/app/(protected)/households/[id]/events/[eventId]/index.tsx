@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto } from '@muchakucha/api-client';
+import Ban from 'lucide-react-native/icons/ban';
 import Pencil from 'lucide-react-native/icons/pencil';
 import MapPin from 'lucide-react-native/icons/map-pin';
 
@@ -10,6 +11,8 @@ import { sessionApiClient, sessionTransport } from '../../../../../../src/featur
 import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { formatTime } from '../../../../../../src/features/events/calendar-utils';
 import { AppShell } from '../../../../../../src/ui/household-components';
+import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
+import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
 import { Heading, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
@@ -17,6 +20,14 @@ function formatFullDateTime(iso: string, allDay: boolean): string {
   const d = new Date(iso);
   const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return allDay ? dateStr : `${dateStr} ${formatTime(iso)}`;
+}
+
+function currentTimeZone(fallback: string): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export default function EventDetailRoute() {
@@ -82,11 +93,37 @@ export default function EventDetailRoute() {
     );
   }
 
+  const recurrence = recurrenceInputFromResponse(event.recurrence);
+  const recurrenceSummary =
+    recurrence === null
+      ? null
+      : formatRecurrenceSummary(recurrence, currentTimeZone(recurrence.timezone));
+  const cancelled = event.cancelledAt != null;
+
   return (
     <AppShell accessibilityLabel="事件详情" title="事件详情" showBack showProfile>
       <Stack gap={5}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: activeTheme.spacing[3] }}>
-          <Heading style={{ flex: 1 }}>{event.title}</Heading>
+          <Stack gap={2} style={{ flex: 1 }}>
+            <Heading>{event.title}</Heading>
+            {cancelled && (
+              <View
+                style={{
+                  alignItems: 'center',
+                  alignSelf: 'flex-start',
+                  backgroundColor: activeTheme.colors.surfaceMuted,
+                  borderRadius: activeTheme.borderRadii.sm,
+                  flexDirection: 'row',
+                  gap: activeTheme.spacing[1],
+                  paddingHorizontal: activeTheme.spacing[2],
+                  paddingVertical: activeTheme.spacing[1],
+                }}
+              >
+                <Ban color={activeTheme.colors.inkMuted} size={14} strokeWidth={2} />
+                <Text variant="caption" color="inkMuted">已取消</Text>
+              </View>
+            )}
+          </Stack>
           <Pressable
             onPress={handleEdit}
             accessibilityLabel="编辑事件"
@@ -132,6 +169,22 @@ export default function EventDetailRoute() {
           <Text variant="label" color="inkMuted">结束</Text>
           <Text variant="body">{formatFullDateTime(event.endTime, event.allDay)}</Text>
         </Stack>
+
+        {event.recurrenceRuleId != null && recurrenceSummary !== null && (
+          <Stack gap={1}>
+            <Text variant="label" color="inkMuted">重复</Text>
+            <Text variant="body">{recurrenceSummary.summary}</Text>
+            {recurrenceSummary.clampNote !== null && (
+              <Text variant="caption" color="inkMuted">{recurrenceSummary.clampNote}</Text>
+            )}
+            {recurrenceSummary.timeZoneNote !== null && (
+              <Text variant="caption" color="inkMuted">{recurrenceSummary.timeZoneNote}</Text>
+            )}
+            {cancelled && (
+              <Text variant="caption" color="inkMuted">这次重复已取消。</Text>
+            )}
+          </Stack>
+        )}
 
         {event.location !== null && event.location !== '' && (
           <Stack gap={1}>
