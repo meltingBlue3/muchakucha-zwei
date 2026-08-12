@@ -263,14 +263,30 @@ Plans:
 **Plans:** 8 plans in 6 waves
 
 Plans:
+**Wave 1**
 
 - [ ] 07-01-PLAN.md — Tracer：每日重复任务端到端（schema + 手写迁移 + 纯日期模块 + 嵌套 DTO + 生成器 + TasksService）
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 07-02-PLAN.md — 完整规则词汇表（每周/每月/每年 + D-09 月末钳位 + D-10 DST）与滚动生成 worker
 - [ ] 07-03-PLAN.md — 事件侧重复、已取消事件读路径过滤、列表生成水位线与手写 OpenAPI 客户端契约
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 07-04-PLAN.md — 「仅此一次」语义、cancelled 状态归一与「此后所有」原子拆系列 + /series 子资源
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 07-05-PLAN.md — RecurrencePicker 与中文摘要，接入事件表单与任务表单
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 07-06-PLAN.md — 重复徽标、详情页重复信息块、已取消状态三重表达与今日待办排除
 - [ ] 07-07-PLAN.md — SeriesScopeSheet 范围选择弹层、两个编辑页接线与生成窗口专用空态
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 07-08-PLAN.md — Web 端到端旅程、事件侧无障碍审计（补 Phase 3 缺口）与 Android 真机验收
 
 ---

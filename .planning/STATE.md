@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
+status: blocked_on_human_checkpoint
+stopped_at: Phase 07 UI-SPEC approved
+last_updated: "2026-08-12T01:50:40.998Z"
+last_activity: 2026-08-06
+last_activity_desc: most recent commit (`f2969a4`, EAS build config); session history before this reconciliation pass stopped tracking at 2026-08-04
+progress:
+  total_phases: 5
+  completed_phases: 1
+  total_plans: 48
+  completed_plans: 39
 current_phase: 02
 current_phase_name: household-member-collaboration
-status: blocked_on_human_checkpoint
-stopped_at: Android acceptance checkpoints pending across Phases 2-4 (2026-08-11)
-last_updated: "2026-08-11T00:00:00.000Z"
-last_activity: 2026-08-06
-last_activity_desc: EAS build config + client navigation header (feature work continued past Phase 2 in code, ahead of GSD tracking)
-progress:
-  total_phases: 2
-  completed_phases: 1
-  total_plans: 40
-  completed_plans: 39
 ---
 
 # Project State
@@ -43,6 +43,10 @@ See `.planning/PROJECT.md` for the project definition and `.planning/ROADMAP.md`
 - Build one shared branded design system across Android, iOS and Web.
 - Organize delivery as six vertical MVP phases.
 
+## Roadmap Evolution
+
+- Phase 7 added: 周期性重复事件与任务 (recurring events & tasks — daily/weekly-on-selected-weekdays/monthly/yearly repetition for events and tasks). Extends the original six-phase plan. Depends on Phase 3 (calendar) and Phase 4 (tasks), not Phase 6 — runs in parallel with Phase 6 release-readiness work and the pending Android acceptance backlog, not blocked by them. Not yet planned (`/gsd-plan-phase 7` pending); directory `.planning/phases/07-recurring-events-tasks/`.
+
 ## Open Concerns
 
 - iOS simulator and final App Store validation require access to macOS, although EAS cloud builds can be initiated from Windows.
@@ -59,15 +63,16 @@ None hard-blocking — all current blockers are the pending human Android accept
 ## Next Action
 
 Pick one:
+
 1. **Close out the Android-acceptance backlog** — run one real-device session covering `02-13`, `03-04`, and `04-04` together (`/gsd-execute-phase 02` picks up `02-13` first; `03-04`/`04-04` have no formal PLAN.md to execute against since those phase directories are empty — see below).
 2. **Formally close Phase 5** — since no GSD artifacts exist for it, treat it as needing retroactive planning: write CONTEXT/PLAN/SUMMARY docs for the already-implemented 05-01/05-02 work, then plan and execute 05-03 (test suite + label-filter feature + accessibility + Android acceptance). `/gsd-plan-phase 5` or `/gsd-add-tests` are candidate entry points.
 3. Note: Phase 3 and 4 also lack `.planning/phases/03-*`/`04-*` PLAN.md/SUMMARY.md files even though their code is verified complete via direct source inspection (see ROADMAP.md notes, 2026-08-11) — only Phase 3 had a stray `.continue-here.md` handoff. If strict GSD tracking parity matters going forward, those phases may also need retroactive artifacts.
 
 ## Session
 
-**Last session:** 2026-08-04T17:44:45.255Z (prior GSD-tracked session; work continued in git afterward without corresponding STATE.md updates until this reconciliation)
-**Stopped at:** Reconciliation pass 2026-08-11 — STATE.md and ROADMAP.md updated to match verified source/test state for Phases 3-5; no code changes made.
-**Resume file:** .planning/phases/02-household-member-collaboration/02-UI-SPEC.md (for `02-13` Android acceptance)
+**Last session:** 2026-08-11T20:33:42.294Z
+**Stopped at:** Phase 07 UI-SPEC approved
+**Resume file:** .planning/phases/07-recurring-events-tasks/07-UI-SPEC.md
 
 ## Performance Metrics
 
