@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   addDays,
+  currentCalendarDateIn,
   daysInMonth,
   formatIsoDate,
   localDateTimeToInstant,
@@ -233,5 +234,29 @@ describe('recurrence calendar dates', () => {
     expect(localDateTimeToInstant(parseIsoDate('2027-03-14'), 2, 30, 'UTC').toISOString())
       .toBe('2027-03-14T02:30:00.000Z');
     expectLocalRoundTrip(parseIsoDate('2027-03-14'), 2, 30, 'UTC');
+  });
+
+  test('returns the next calendar date for a UTC+14 zone before the UTC date has rolled over', () => {
+    expect(currentCalendarDateIn('Pacific/Kiritimati', new Date('2026-08-12T11:00:00Z')))
+      .toEqual({ year: 2026, month: 8, day: 13 });
+  });
+
+  test('returns the previous calendar date for a UTC-11 zone after the UTC date has already rolled over', () => {
+    expect(currentCalendarDateIn('Pacific/Midway', new Date('2026-08-12T05:00:00Z')))
+      .toEqual({ year: 2026, month: 8, day: 11 });
+  });
+
+  test('returns the UTC calendar date for the UTC zone itself', () => {
+    expect(currentCalendarDateIn('UTC', new Date('2026-08-12T11:00:00Z')))
+      .toEqual({ year: 2026, month: 8, day: 12 });
+  });
+
+  test('returns the local calendar date across the New York spring DST transition day', () => {
+    expect(currentCalendarDateIn('America/New_York', new Date('2026-03-08T12:00:00Z')))
+      .toEqual({ year: 2026, month: 3, day: 8 });
+  });
+
+  test('throws rather than silently falling back to UTC for an unresolvable time zone', () => {
+    expect(() => currentCalendarDateIn('Not/AZone', new Date('2026-08-12T11:00:00Z'))).toThrow();
   });
 });
