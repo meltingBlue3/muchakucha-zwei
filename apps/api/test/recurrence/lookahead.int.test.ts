@@ -273,4 +273,76 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
     const listed = await listTasks(actor, householdId);
     expect(listed.materializedThrough).toBe(activeWatermark);
   });
+
+  test('a daily rule starting today materializes exactly 1 row, dated today — creation is a standard generation check (D-12)', async () => {
+    const actor = await insertActor('create-daily-today@example.test');
+    const householdId = await createHousehold(actor.accessToken);
+    const today = currentCalendarDateIn('UTC');
+
+    const { ruleId } = await createRecurringTask(actor, householdId, {
+      freq: 'daily',
+      startsOn: formatIsoDate(today),
+      timezone: 'UTC',
+    });
+
+    const dates = await taskOccurrenceDates(ruleId);
+    expect(dates).toEqual([formatIsoDate(today)]);
+  });
+
+  test('a weekly rule created outside its lookahead window keeps only the D-17 seed row, with the watermark trailing behind it', async () => {
+    const actor = await insertActor('create-weekly-outside@example.test');
+    const householdId = await createHousehold(actor.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const startsOn = addDays(today, 10);
+    const startsOnWeekday = new Date(Date.UTC(startsOn.year, startsOn.month - 1, startsOn.day)).getUTCDay();
+
+    const { ruleId } = await createRecurringTask(actor, householdId, {
+      freq: 'weekly',
+      startsOn: formatIsoDate(startsOn),
+      byWeekday: [startsOnWeekday],
+      timezone: 'UTC',
+    });
+
+    // Only the D-17 seed row exists — the next generation-eligible occurrence
+    // (7 days after startsOn) is outside the 6-day weekly lookahead measured
+    // from today, not from startsOn.
+    const dates = await taskOccurrenceDates(ruleId);
+    expect(dates).toEqual([formatIsoDate(startsOn)]);
+    // The watermark reflects the lookahead horizon actually checked (today+6),
+    // which trails behind the seed row's future date — that gap is expected,
+    // since the seed row is not produced by the lookahead walk at all.
+    expect(await watermarkOf(ruleId)).toBe(formatIsoDate(addDays(today, 6)));
+  });
+
+  test('the create response contract still exposes a usable task id and recurrence id (D-17)', async () => {
+    const actor = await insertActor('create-response-contract@example.test');
+    const householdId = await createHousehold(actor.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const startsOn = addDays(today, 10);
+    const startsOnWeekday = new Date(Date.UTC(startsOn.year, startsOn.month - 1, startsOn.day)).getUTCDay();
+
+    const response = await app.getHttpAdapter().getInstance().inject({
+      method: 'POST',
+      url: `/api/v1/households/${householdId}/tasks`,
+      headers: { authorization: `Bearer ${actor.accessToken}`, 'content-type': 'application/json' },
+      payload: {
+        title: 'Response contract task',
+        recurrence: {
+          freq: 'weekly',
+          startsOn: formatIsoDate(startsOn),
+          byWeekday: [startsOnWeekday],
+          timezone: 'UTC',
+        },
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    const body = response.json() as { id: string; recurrence: { id: string } | null };
+    // The seed row's id is what the client immediately uses for tagTask —
+    // this must remain populated regardless of how far the lookahead window
+    // trails behind the seed row's occurrence date.
+    expect(typeof body.id).toBe('string');
+    expect(body.id.length).toBeGreaterThan(0);
+    expect(typeof body.recurrence?.id).toBe('string');
+    expect(body.recurrence!.id.length).toBeGreaterThan(0);
+  });
 });

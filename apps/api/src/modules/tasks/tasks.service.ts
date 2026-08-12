@@ -197,6 +197,15 @@ export class TasksService {
             createdBy: actorId,
           },
         });
+        // D-17: this seed row is a deliberate exception to D-11's lookahead —
+        // it is written unconditionally, not gated by the horizon check that
+        // governs every later occurrence. Removing it would break three
+        // things: the materializer discriminates a rule as task-owned vs.
+        // event-owned by which relation has an existing row, so a rule with
+        // zero rows could never generate again; assignees/labels are copied
+        // from this row as the fan-out template, so there would be nothing
+        // to copy from; and POST's response contract returns this row's id,
+        // which the client uses to attach labels immediately after create.
         const task = await tx.task.create({
           data: {
             householdId,
