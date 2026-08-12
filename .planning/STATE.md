@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: blocked_on_human_checkpoint
-stopped_at: Phase 07 UI-SPEC approved
-last_updated: "2026-08-12T02:11:40.968Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-08-12T02:12:10.754Z"
 last_activity: 2026-08-06
 last_activity_desc: most recent commit (`f2969a4`, EAS build config); session history before this reconciliation pass stopped tracking at 2026-08-04
 progress:
@@ -20,6 +20,8 @@ current_phase_name: household-member-collaboration
 # Project State
 
 ## Current Position
+
+**Phase 07 progress:** Plan 07-01 complete (1/8); recurring task storage and the daily materialization tracer are implemented.
 
 **Phase (GSD-tracked):** 02 (household-member-collaboration) — 12/13 plans complete, blocked on `02-13` (Android acceptance)
 **Reconciled 2026-08-11:** Direct source verification shows implementation has actually progressed through Phases 3, 4, and most of 5 — see `.planning/ROADMAP.md` for the full per-phase breakdown. `gsd-tools` still reports current_phase=02 because no `.planning/phases/03-*` through `05-*` PLAN.md/SUMMARY.md artifacts exist on disk (that work was done directly on `main`, outside `/gsd-discuss-phase` → `/gsd-plan-phase` → `/gsd-execute-phase`). This field is left at 02 deliberately — it is the earliest phase with real unresolved GSD-tracked work (a pending human checkpoint), consistent with `/gsd-progress`'s own Route 0 resume-incomplete-phase logic.
@@ -71,9 +73,9 @@ Pick one:
 
 ## Session
 
-**Last session:** 2026-08-12T02:11:40.960Z
-**Stopped at:** Phase 07 UI-SPEC approved
-**Resume file:** .planning/phases/07-recurring-events-tasks/07-UI-SPEC.md
+**Last session:** 2026-08-12T02:12:10.746Z
+**Stopped at:** Completed 07-01-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -106,6 +108,7 @@ Pick one:
 | Phase 01 P25 | 16min | 2 tasks | 8 files |
 | Phase 01 P26 | 11min | 2 tasks | 16 files |
 | Phase 01 P27 | 6h 20m | 1 human checkpoint | Android acceptance and 3 fixes |
+| Phase 07 P01 | 20min | 2 tasks | 12 files |
 
 ## Decisions
 
@@ -176,3 +179,4 @@ Pick one:
 - [Phase 01]: Use one deterministic SMTP/HTTP mailbox process for the complete Playwright run when the pinned Mailpit image is unavailable.
 - [Phase 01]: Bypass throttling only when NODE_ENV=test and Playwright explicitly sets E2E_DISABLE_RATE_LIMITS=true; production and integration security tests retain real limits.
 - [Phase 01]: Use a disposable tmpfs-backed PostgreSQL 18 fallback for verification without changing the committed Compose image pin.
+- [Phase 07]: Selected option-a: store startTimeLocal and durationMinutes on RecurrenceRule so scheduling data survives occurrence deletion.
