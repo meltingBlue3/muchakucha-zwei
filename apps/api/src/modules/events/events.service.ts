@@ -14,6 +14,11 @@ import {
 const TITLE_MIN = 1;
 const TITLE_MAX = 200;
 
+/** UTC midnight for "today" — the boundary IN-04's ended-rule filter uses. */
+function utcMidnightToday(): Date {
+  return new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+}
+
 interface EventRow {
   id: string;
   householdId: string;
@@ -284,9 +289,13 @@ export class EventsService {
         include: { labels: { include: { label: true } }, recurrenceRule: true },
       }),
       this.prisma.event.count({ where: where as any }),
+      // D-13's monotonic watermark means an ended rule's watermark is frozen
+      // in the past forever. Counting it into the household _min would
+      // permanently under-report generation coverage for every rule that is
+      // still active — scope the aggregate to rules that can still advance.
       this.prisma.recurrenceRule.aggregate({
         _min: { materializedThrough: true },
-        where: { householdId },
+        where: { householdId, OR: [{ endsOn: null }, { endsOn: { gte: utcMidnightToday() } }] },
       }),
     ]);
 

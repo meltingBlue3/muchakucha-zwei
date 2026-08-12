@@ -4,6 +4,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import {
   RECURRENCE_MAX_INSTANCES_PER_RUN,
   addDays,
+  compareDates,
   currentCalendarDateIn,
   formatIsoDate,
   localDateTimeToInstant,
@@ -76,9 +77,22 @@ export class RecurrenceMaterializerService {
     const prefilter = databaseDate(addDays(utcToday, RECURRENCE_MAX_LOOKAHEAD_DAYS + 1));
     const dueRules = await this.prisma.recurrenceRule.findMany({
       where: {
-        OR: [
-          { materializedThrough: null },
-          { materializedThrough: { lt: prefilter } },
+        AND: [
+          {
+            OR: [
+              { materializedThrough: null },
+              { materializedThrough: { lt: prefilter } },
+            ],
+          },
+          // IN-04: a rule whose endsOn has passed can never become due again —
+          // its watermark is frozen (D-13 monotonicity) and re-scanning it on
+          // every tick forever is pure waste, worse once the tick is hourly.
+          {
+            OR: [
+              { endsOn: null },
+              { endsOn: { gte: databaseDate(utcToday) } },
+            ],
+          },
         ],
       },
       select: { id: true },
@@ -150,13 +164,19 @@ export class RecurrenceMaterializerService {
       // Never claim coverage past what this run actually wrote — a truncated
       // run must leave the remainder due so the next tick picks it up.
       const truncated = occurrences.length === RECURRENCE_MAX_INSTANCES_PER_RUN;
+      const runWatermark = truncated ? occurrences[occurrences.length - 1]! : horizon;
+      const existing = rule.materializedThrough === null ? null : calendarDate(rule.materializedThrough);
+      // D-13: the watermark is forward-only. A narrower D-11 lookahead window
+      // must not make a rule's watermark regress — generation never deletes
+      // rows, so the watermark must not claim it did either. A rule that was
+      // materialized further out under the old 90-day window keeps reporting
+      // that (larger, still-true) coverage.
+      const nextWatermark = existing !== null && compareDates(existing, runWatermark) > 0
+        ? existing
+        : runWatermark;
       await tx.recurrenceRule.update({
         where: { id: ruleId },
-        data: {
-          materializedThrough: databaseDate(
-            truncated ? occurrences[occurrences.length - 1]! : horizon,
-          ),
-        },
+        data: { materializedThrough: databaseDate(nextWatermark) },
       });
       return { skipped: false, created };
     });

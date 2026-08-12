@@ -5,6 +5,7 @@ import * as argon2 from 'argon2';
 import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { createApplication } from '../../src/main.js';
+import { RecurrenceMaterializerService } from '../../src/modules/recurrence/recurrence-materializer.service.js';
 import {
   addDays,
   currentCalendarDateIn,
@@ -84,6 +85,26 @@ async function taskOccurrenceDates(ruleId: string): Promise<string[]> {
     );
     return result.rows.map((row) => row.occurrence_date);
   });
+}
+
+async function watermarkOf(ruleId: string): Promise<string | null> {
+  return withDatabase(async (client) => {
+    const result = await client.query<{ materialized_through: string | null }>(
+      `SELECT materialized_through::text FROM recurrence_rules WHERE id = $1`,
+      [ruleId],
+    );
+    return result.rows[0]!.materialized_through;
+  });
+}
+
+async function listTasks(actor: ActorFixture, householdId: string): Promise<{ materializedThrough: string | null }> {
+  const response = await app.getHttpAdapter().getInstance().inject({
+    method: 'GET',
+    url: `/api/v1/households/${householdId}/tasks`,
+    headers: { authorization: `Bearer ${actor.accessToken}` },
+  });
+  expect(response.statusCode).toBe(200);
+  return response.json() as { materializedThrough: string | null };
 }
 
 beforeAll(async () => {
@@ -173,5 +194,83 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
 
     const dates = await taskOccurrenceDates(ruleId);
     expect(dates).toEqual([formatIsoDate(today), formatIsoDate(addDays(today, 6))]);
+  });
+
+  test('a watermark ahead of the new horizon never regresses (D-13)', async () => {
+    const actor = await insertActor('watermark-monotonic@example.test');
+    const householdId = await createHousehold(actor.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const { ruleId } = await createRecurringTask(actor, householdId, {
+      freq: 'daily',
+      startsOn: formatIsoDate(today),
+      timezone: 'UTC',
+    });
+
+    // Simulate a rule that was materialized under the old 90-day window.
+    const aheadWatermark = formatIsoDate(addDays(today, 90));
+    await withDatabase((client) => client.query(
+      `UPDATE recurrence_rules SET materialized_through = $2::date WHERE id = $1`,
+      [ruleId, aheadWatermark],
+    ));
+    const rowsBefore = await taskOccurrenceDates(ruleId);
+
+    const materializer = app.get(RecurrenceMaterializerService);
+    expect((await materializer.materializeRule(ruleId)).created).toBe(0);
+
+    expect(await watermarkOf(ruleId)).toBe(aheadWatermark);
+    expect(await taskOccurrenceDates(ruleId)).toEqual(rowsBefore);
+  });
+
+  test('a rule whose endsOn has passed is never selected by materializeAllDue (IN-04)', async () => {
+    const actor = await insertActor('ended-rule-excluded@example.test');
+    const householdId = await createHousehold(actor.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const { ruleId } = await createRecurringTask(actor, householdId, {
+      freq: 'daily',
+      startsOn: formatIsoDate(addDays(today, -10)),
+      timezone: 'UTC',
+    });
+
+    // Force the rule into an "already ended, never materialized" state — the
+    // state a rule reaches after D-13's monotonic guard freezes it.
+    await withDatabase((client) => client.query(
+      `UPDATE recurrence_rules SET ends_on = $2::date, materialized_through = NULL WHERE id = $1`,
+      [ruleId, formatIsoDate(addDays(today, -1))],
+    ));
+
+    const materializer = app.get(RecurrenceMaterializerService);
+    expect(await materializer.materializeAllDue()).toBe(0);
+    expect(await watermarkOf(ruleId)).toBeNull();
+  });
+
+  test('the household watermark only reflects rules that can still advance', async () => {
+    const actor = await insertActor('household-watermark-active-only@example.test');
+    const householdId = await createHousehold(actor.accessToken);
+    const today = currentCalendarDateIn('UTC');
+
+    const active = await createRecurringTask(actor, householdId, {
+      freq: 'daily',
+      startsOn: formatIsoDate(today),
+      timezone: 'UTC',
+    });
+    const ended = await createRecurringTask(actor, householdId, {
+      freq: 'daily',
+      startsOn: formatIsoDate(addDays(today, -30)),
+      timezone: 'UTC',
+    });
+    // Freeze the second rule's watermark far in the past, as a rule whose
+    // endsOn already passed would be under D-13's monotonic guard.
+    const staleWatermark = formatIsoDate(addDays(today, -20));
+    await withDatabase((client) => client.query(
+      `UPDATE recurrence_rules SET ends_on = $2::date, materialized_through = $2::date WHERE id = $1`,
+      [ended.ruleId, staleWatermark],
+    ));
+
+    const activeWatermark = await watermarkOf(active.ruleId);
+    expect(activeWatermark).not.toBeNull();
+    expect(activeWatermark).not.toBe(staleWatermark);
+
+    const listed = await listTasks(actor, householdId);
+    expect(listed.materializedThrough).toBe(activeWatermark);
   });
 });
