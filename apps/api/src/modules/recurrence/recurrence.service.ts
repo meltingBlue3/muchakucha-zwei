@@ -130,6 +130,32 @@ export class RecurrenceService {
       const inheritedCount = occurrence.rule.count === null
         ? null
         : Math.max(occurrence.rule.count - elapsedCount, 0) || null;
+
+      // Resolve the successor series' template BEFORE creating the rule: the
+      // rule carries the template fields the materializer generates from, so
+      // they must agree with the first instance row written below.
+      const taskSource = kind === 'task'
+        ? await tx.task.findUniqueOrThrow({
+          where: { id: occurrenceId },
+          include: { assignees: true, labels: true },
+        })
+        : null;
+      const eventSource = kind === 'event'
+        ? await tx.event.findUniqueOrThrow({
+          where: { id: occurrenceId },
+          include: { labels: true },
+        })
+        : null;
+      const nextTitle = input.title?.trim() ?? (kind === 'task' ? taskSource!.title : eventSource!.title);
+      const nextDescription = input.description === undefined
+        ? (kind === 'task' ? taskSource!.description : eventSource!.description)
+        : input.description.trim() || null;
+      const nextPriority = input.priority ?? (kind === 'task' ? taskSource!.priority : 'medium');
+      const nextLocation = kind === 'event'
+        ? (input.location === undefined ? eventSource!.location : input.location.trim() || null)
+        : null;
+      const nextAllDay = kind === 'event' ? (input.allDay ?? eventSource!.allDay) : false;
+
       const createdRule = await tx.recurrenceRule.create({
         data: {
           householdId: occurrence.rule.householdId,
@@ -145,15 +171,17 @@ export class RecurrenceService {
           timezone: recurrence?.timezone ?? occurrence.rule.timezone,
           startTimeLocal: recurrence?.startTimeLocal ?? occurrence.rule.startTimeLocal,
           durationMinutes: recurrence?.durationMinutes ?? occurrence.rule.durationMinutes,
+          templateTitle: nextTitle,
+          templateDescription: nextDescription,
+          templatePriority: nextPriority,
+          templateLocation: nextLocation,
+          templateAllDay: nextAllDay,
           materializedThrough: null,
         },
       });
 
       if (kind === 'task') {
-        const template = await tx.task.findUniqueOrThrow({
-          where: { id: occurrenceId },
-          include: { assignees: true, labels: true },
-        });
+        const template = taskSource!;
         await tx.task.deleteMany({
           where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: splitDate } },
         });
@@ -170,27 +198,23 @@ export class RecurrenceService {
             });
           }
         }
-        const newTemplate = await tx.task.create({
+        await tx.task.create({
           data: {
             householdId: occurrence.rule.householdId,
             createdBy: occurrence.rule.createdBy,
             recurrenceRuleId: createdRule.id,
             occurrenceDate: splitDate,
-            title: input.title?.trim() ?? template.title,
-            description: input.description === undefined ? template.description : input.description.trim() || null,
+            title: nextTitle,
+            description: nextDescription,
             status: input.status ?? template.status,
-            priority: input.priority ?? template.priority,
+            priority: nextPriority,
             dueDate: input.dueDate === undefined ? template.dueDate : new Date(input.dueDate),
             assignees: { create: [...new Set(assigneeIds)].map((userId) => ({ userId })) },
             labels: { create: template.labels.map(({ labelId }) => ({ labelId })) },
           },
         });
-        void newTemplate;
       } else {
-        const template = await tx.event.findUniqueOrThrow({
-          where: { id: occurrenceId },
-          include: { labels: true },
-        });
+        const template = eventSource!;
         await tx.event.deleteMany({
           where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: splitDate } },
         });
@@ -200,12 +224,12 @@ export class RecurrenceService {
             createdBy: occurrence.rule.createdBy,
             recurrenceRuleId: createdRule.id,
             occurrenceDate: splitDate,
-            title: input.title?.trim() ?? template.title,
-            description: input.description === undefined ? template.description : input.description.trim() || null,
+            title: nextTitle,
+            description: nextDescription,
             startTime: input.startTime === undefined ? template.startTime : new Date(input.startTime),
             endTime: input.endTime === undefined ? template.endTime : new Date(input.endTime),
-            allDay: input.allDay ?? template.allDay,
-            location: input.location === undefined ? template.location : input.location.trim() || null,
+            allDay: nextAllDay,
+            location: nextLocation,
             labels: { create: template.labels.map(({ labelId }) => ({ labelId })) },
           },
         });

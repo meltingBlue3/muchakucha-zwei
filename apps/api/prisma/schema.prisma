@@ -196,6 +196,14 @@ model RecurrenceRule {
   materializedThrough DateTime? @map("materialized_through") @db.Date
   startTimeLocal      String?   @map("start_time_local") @db.VarChar(5)
   durationMinutes     Int?      @map("duration_minutes")
+  // Series-level template. Generated occurrences read their field values from
+  // here, never from a sibling instance row — instances are independently
+  // editable (D-02/D-07) and must not become a template for future rows.
+  templateTitle       String    @map("template_title") @db.VarChar(200)
+  templateDescription String?   @map("template_description") @db.Text
+  templatePriority    String    @default("medium") @map("template_priority") @db.VarChar(10)
+  templateLocation    String?   @map("template_location") @db.VarChar(255)
+  templateAllDay      Boolean   @default(false) @map("template_all_day")
   createdBy           String    @map("created_by") @db.Uuid
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)

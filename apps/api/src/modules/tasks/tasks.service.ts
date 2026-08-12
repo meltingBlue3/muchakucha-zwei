@@ -184,6 +184,9 @@ export class TasksService {
             timezone: recurrence.timezone,
             startTimeLocal: startTime,
             durationMinutes: recurrence.durationMinutes ?? null,
+            templateTitle: trimmedTitle,
+            templateDescription: input.description?.trim() || null,
+            templatePriority: input.priority ?? 'medium',
             createdBy: actorId,
           },
         });

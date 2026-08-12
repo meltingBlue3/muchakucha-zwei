@@ -172,7 +172,7 @@ describe('daily task recurrence tracer', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json().error.code).toBe('VALIDATION_FAILED');
     await expect(withDatabase((client) => client.query(
-      `INSERT INTO "recurrence_rules" ("household_id", "freq", "starts_on", "ends_on", "count", "timezone", "created_by") VALUES ($1, 'daily', $2, $2, 2, 'UTC', $3)`,
+      `INSERT INTO "recurrence_rules" ("household_id", "freq", "starts_on", "ends_on", "count", "timezone", "template_title", "created_by") VALUES ($1, 'daily', $2, $2, 2, 'UTC', 'Invalid recurrence', $3)`,
       [householdId, startsOn, owner.userId],
     ))).rejects.toThrow();
   });
@@ -309,6 +309,73 @@ describe('recurring events', () => {
     const response = await eventApi(outsider.accessToken, householdId, 'POST', '', recurringEvent);
     expect(response.statusCode).toBe(404);
     expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
+  });
+});
+
+describe('series template isolation', () => {
+  test('generates later occurrences from the rule template, never from an edited earlier instance', async () => {
+    const owner = await insertActor('template-isolation-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const startsOn = new Date().toISOString().slice(0, 10);
+    const created = await taskApi(owner.accessToken, householdId, 'POST', {
+      title: 'Daily original',
+      recurrence: { freq: 'daily', startsOn, timezone: 'UTC', startTimeLocal: '08:00' },
+    });
+    expect(created.statusCode).toBe(201);
+    const { recurrenceRuleId, id: firstTaskId } = created.json() as { recurrenceRuleId: string; id: string };
+
+    // The earliest surviving instance is exactly the row the materializer used
+    // to treat as a mutable template. Edit it the way D-07 allows ("仅此一次")
+    // and complete it the way D-04 expects.
+    const edited = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${firstTaskId}`, {
+      title: 'Edited once',
+      status: 'completed',
+      priority: 'urgent',
+    });
+    expect(edited.statusCode).toBe(200);
+
+    // Simulate the rolling horizon advancing: drop the tail of the series and
+    // rewind the watermark so the next run genuinely has rows to generate.
+    const cutoff = await withDatabase(async (client) => {
+      const boundary = await client.query<{ occurrence_date: string }>(
+        `SELECT "occurrence_date"::text AS "occurrence_date" FROM "tasks"
+         WHERE "recurrence_rule_id" = $1 ORDER BY "occurrence_date" ASC OFFSET 10 LIMIT 1`,
+        [recurrenceRuleId],
+      );
+      const cut = boundary.rows[0]!.occurrence_date;
+      await client.query(
+        `DELETE FROM "tasks" WHERE "recurrence_rule_id" = $1 AND "occurrence_date" > $2::date`,
+        [recurrenceRuleId, cut],
+      );
+      await client.query(
+        `UPDATE "recurrence_rules" SET "materialized_through" = $2::date WHERE "id" = $1`,
+        [recurrenceRuleId, cut],
+      );
+      return cut;
+    });
+
+    const materializer = app.get(RecurrenceMaterializerService);
+    expect(await materializer.materializeRule(recurrenceRuleId)).toBeGreaterThan(0);
+
+    const state = await withDatabase(async (client) => {
+      const regenerated = await client.query<{ title: string; status: string; priority: string }>(
+        `SELECT "title", "status", "priority" FROM "tasks"
+         WHERE "recurrence_rule_id" = $1 AND "occurrence_date" > $2::date`,
+        [recurrenceRuleId, cutoff],
+      );
+      const first = await client.query<{ title: string; status: string; priority: string }>(
+        `SELECT "title", "status", "priority" FROM "tasks" WHERE "id" = $1`,
+        [firstTaskId],
+      );
+      return { regenerated: regenerated.rows, first: first.rows[0]! };
+    });
+
+    expect(state.regenerated.length).toBeGreaterThan(0);
+    expect(state.regenerated.every((row) => row.title === 'Daily original')).toBe(true);
+    expect(state.regenerated.every((row) => row.status === 'pending')).toBe(true);
+    expect(state.regenerated.every((row) => row.priority === 'medium')).toBe(true);
+    // The single-occurrence edit itself must survive untouched.
+    expect(state.first).toMatchObject({ title: 'Edited once', status: 'completed', priority: 'urgent' });
   });
 });
 

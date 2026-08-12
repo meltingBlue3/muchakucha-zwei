@@ -181,6 +181,10 @@ export class EventsService {
             timezone: recurrence.timezone,
             startTimeLocal,
             durationMinutes,
+            templateTitle: trimmedTitle,
+            templateDescription: input.description?.trim() || null,
+            templateLocation: input.location?.trim() || null,
+            templateAllDay: input.allDay ?? false,
             createdBy: actorId,
           },
         });

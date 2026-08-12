@@ -104,14 +104,18 @@ export class RecurrenceMaterializerService {
   ): Promise<number> {
     const time = localTime(rule.startTimeLocal);
     const result = await tx.task.createMany({
+      // Field values come from the rule's series template, never from a
+      // sibling instance: instances are independently editable (D-02/D-07),
+      // and a generated occurrence always starts its own life as `pending`
+      // regardless of how any other occurrence was completed or cancelled.
       data: occurrences.map((occurrence) => ({
         householdId: rule.householdId,
-        title: template.title,
-        description: template.description,
-        status: template.status,
-        priority: template.priority,
+        title: rule.templateTitle,
+        description: rule.templateDescription,
+        status: 'pending',
+        priority: rule.templatePriority,
         dueDate: localDateTimeToInstant(occurrence, time.hour, time.minute, rule.timezone),
-        createdBy: template.createdBy,
+        createdBy: rule.createdBy,
         recurrenceRuleId: rule.id,
         occurrenceDate: databaseDate(occurrence),
       })),
@@ -138,13 +142,13 @@ export class RecurrenceMaterializerService {
         const startTime = localDateTimeToInstant(occurrence, time.hour, time.minute, rule.timezone);
         return {
           householdId: rule.householdId,
-          title: template.title,
-          description: template.description,
+          title: rule.templateTitle,
+          description: rule.templateDescription,
           startTime,
           endTime: new Date(startTime.getTime() + durationMs),
-          allDay: template.allDay,
-          location: template.location,
-          createdBy: template.createdBy,
+          allDay: rule.templateAllDay,
+          location: rule.templateLocation,
+          createdBy: rule.createdBy,
           recurrenceRuleId: rule.id,
           occurrenceDate: databaseDate(occurrence),
         };
