@@ -9,7 +9,13 @@ import type {
 } from './dto/create-task.dto.js';
 import type { UpdateTaskDto } from './dto/update-task.dto.js';
 import { RecurrenceMaterializerService } from '../recurrence/recurrence-materializer.service.js';
-import { formatIsoDate, localDateTimeToInstant, parseIsoDate } from '../recurrence/recurrence-date.js';
+import {
+  addDays,
+  formatIsoDate,
+  localDateTimeToInstant,
+  parseIsoDate,
+  walkOccurrences,
+} from '../recurrence/recurrence-date.js';
 
 const TITLE_MIN = 1;
 const TITLE_MAX = 200;
@@ -141,6 +147,27 @@ export class TasksService {
     if (input.recurrence !== undefined) {
       const recurrence = input.recurrence;
       const startsOn = parseIsoDate(recurrence.startsOn);
+      const interval = recurrence.interval ?? 1;
+      const firstOccurrence = walkOccurrences({
+        freq: recurrence.freq,
+        interval,
+        byWeekday: recurrence.byWeekday ?? [],
+        startsOn,
+        endsOn: recurrence.endsOn === undefined ? null : parseIsoDate(recurrence.endsOn),
+        count: recurrence.count ?? null,
+      }, { horizon: addDays(startsOn, Math.max(7, interval * 7)) })[0];
+      if (firstOccurrence === undefined) {
+        throw new BadRequestException({
+          code: 'VALIDATION_FAILED',
+          message: 'Request validation failed.',
+          details: [{
+            field: 'recurrence.endsOn',
+            codes: ['no_occurrence_in_range'],
+            message: '重复规则在结束日期前没有可生成的日期。',
+          }],
+        });
+      }
+      const firstOccurrenceIso = formatIsoDate(firstOccurrence);
       const startTime = recurrence.startTimeLocal ?? null;
       const hour = startTime === null ? 0 : Number(startTime.slice(0, 2));
       const minute = startTime === null ? 0 : Number(startTime.slice(3, 5));
@@ -149,7 +176,7 @@ export class TasksService {
           data: {
             householdId,
             freq: recurrence.freq,
-            interval: recurrence.interval ?? 1,
+            interval,
             byWeekday: recurrence.byWeekday ?? [],
             startsOn: new Date(`${recurrence.startsOn}T00:00:00.000Z`),
             endsOn: recurrence.endsOn === undefined ? null : new Date(`${recurrence.endsOn}T00:00:00.000Z`),
@@ -167,10 +194,10 @@ export class TasksService {
             description: input.description?.trim() || null,
             status: input.status ?? 'pending',
             priority: input.priority ?? 'medium',
-            dueDate: localDateTimeToInstant(startsOn, hour, minute, recurrence.timezone),
+            dueDate: localDateTimeToInstant(firstOccurrence, hour, minute, recurrence.timezone),
             createdBy: actorId,
             recurrenceRuleId: rule.id,
-            occurrenceDate: new Date(`${recurrence.startsOn}T00:00:00.000Z`),
+            occurrenceDate: new Date(`${firstOccurrenceIso}T00:00:00.000Z`),
             assignees: { create: assigneeIds.map((userId) => ({ userId })) },
           },
         });

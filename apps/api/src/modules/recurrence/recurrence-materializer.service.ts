@@ -1,10 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
-import { addDays, formatIsoDate, localDateTimeToInstant, parseIsoDate, walkOccurrences, type CalendarDate } from './recurrence-date.js';
+import {
+  RECURRENCE_MAX_INSTANCES_PER_RUN,
+  addDays,
+  formatIsoDate,
+  localDateTimeToInstant,
+  parseIsoDate,
+  walkOccurrences,
+  type CalendarDate,
+} from './recurrence-date.js';
 
 export const RECURRENCE_HORIZON_DAYS = 90;
-export const RECURRENCE_MAX_INSTANCES_PER_RUN = 400;
+export { RECURRENCE_MAX_INSTANCES_PER_RUN } from './recurrence-date.js';
 export const RECURRENCE_LOCK_NAMESPACE = 1_907_070_1;
 
 type TransactionClient = Prisma.TransactionClient;
@@ -25,6 +33,25 @@ function localTime(value: string | null): { hour: number; minute: number } {
 @Injectable()
 export class RecurrenceMaterializerService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async materializeAllDue(): Promise<number> {
+    const today = parseIsoDate(new Date().toISOString().slice(0, 10));
+    const horizon = databaseDate(addDays(today, RECURRENCE_HORIZON_DAYS));
+    const dueRules = await this.prisma.recurrenceRule.findMany({
+      where: {
+        OR: [
+          { materializedThrough: null },
+          { materializedThrough: { lt: horizon } },
+        ],
+      },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+
+    let created = 0;
+    for (const rule of dueRules) created += await this.materializeRule(rule.id);
+    return created;
+  }
 
   async materializeRule(ruleId: string): Promise<number> {
     return this.prisma.$transaction(async (tx) => {
@@ -51,6 +78,7 @@ export class RecurrenceMaterializerService {
       const occurrences = walkOccurrences({
         freq: rule.freq,
         interval: rule.interval,
+        byWeekday: rule.byWeekday,
         startsOn: calendarDate(rule.startsOn),
         endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn),
         count: rule.count,
