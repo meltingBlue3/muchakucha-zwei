@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import {
@@ -17,6 +17,17 @@ export const RECURRENCE_LOCK_NAMESPACE = 1_907_070_1;
 
 type TransactionClient = Prisma.TransactionClient;
 
+export interface MaterializationResult {
+  /**
+   * True when another writer held the rule's advisory lock, so this call
+   * generated nothing and the other writer is responsible for the work.
+   * Distinguishing it from a genuine no-op is what lets a caller explain a
+   * series that momentarily shows only its first occurrence.
+   */
+  skipped: boolean;
+  created: number;
+}
+
 function calendarDate(value: Date): CalendarDate {
   return parseIsoDate(value.toISOString().slice(0, 10));
 }
@@ -32,6 +43,8 @@ function localTime(value: string | null): { hour: number; minute: number } {
 
 @Injectable()
 export class RecurrenceMaterializerService {
+  private readonly logger = new Logger(RecurrenceMaterializerService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async materializeAllDue(): Promise<number> {
@@ -49,19 +62,22 @@ export class RecurrenceMaterializerService {
     });
 
     let created = 0;
-    for (const rule of dueRules) created += await this.materializeRule(rule.id);
+    for (const rule of dueRules) created += (await this.materializeRule(rule.id)).created;
     return created;
   }
 
-  async materializeRule(ruleId: string): Promise<number> {
+  async materializeRule(ruleId: string): Promise<MaterializationResult> {
     return this.prisma.$transaction(async (tx) => {
       const lock = await tx.$queryRaw<Array<{ locked: boolean }>>`
         SELECT pg_try_advisory_xact_lock(${RECURRENCE_LOCK_NAMESPACE}, hashtext(${ruleId})) AS locked
       `;
-      if (lock[0]?.locked !== true) return 0;
+      if (lock[0]?.locked !== true) {
+        this.logger.warn(`materialization skipped: rule ${ruleId} is locked by another writer`);
+        return { skipped: true, created: 0 };
+      }
 
       const rule = await tx.recurrenceRule.findUnique({ where: { id: ruleId } });
-      if (rule === null) return 0;
+      if (rule === null) return { skipped: false, created: 0 };
 
       const taskTemplate = await tx.task.findFirst({
         where: { recurrenceRuleId: ruleId },
@@ -71,7 +87,7 @@ export class RecurrenceMaterializerService {
         where: { recurrenceRuleId: ruleId },
         orderBy: { occurrenceDate: 'asc' },
       });
-      if (taskTemplate === null && eventTemplate === null) return 0;
+      if (taskTemplate === null && eventTemplate === null) return { skipped: false, created: 0 };
 
       const today = parseIsoDate(new Date().toISOString().slice(0, 10));
       const horizon = addDays(today, RECURRENCE_HORIZON_DAYS);
@@ -106,7 +122,7 @@ export class RecurrenceMaterializerService {
           ),
         },
       });
-      return created;
+      return { skipped: false, created };
     });
   }
 

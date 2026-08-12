@@ -148,7 +148,7 @@ describe('daily task recurrence tracer', () => {
     expect(body.materializedThrough).toBe(created.recurrence.materializedThrough);
 
     const materializer = app.get(RecurrenceMaterializerService);
-    expect(await materializer.materializeRule(created.recurrenceRuleId!)).toBe(0);
+    expect((await materializer.materializeRule(created.recurrenceRuleId!)).created).toBe(0);
     const rerun = await taskApi(owner.accessToken, householdId, 'GET');
     expect((rerun.json() as { total: number }).total).toBe(5);
   });
@@ -355,7 +355,7 @@ describe('series template isolation', () => {
     });
 
     const materializer = app.get(RecurrenceMaterializerService);
-    expect(await materializer.materializeRule(recurrenceRuleId)).toBeGreaterThan(0);
+    expect((await materializer.materializeRule(recurrenceRuleId)).created).toBeGreaterThan(0);
 
     const state = await withDatabase(async (client) => {
       const regenerated = await client.query<{ title: string; status: string; priority: string }>(
@@ -496,7 +496,7 @@ describe('per-instance association edits', () => {
       );
     });
     const materializer = app.get(RecurrenceMaterializerService);
-    expect(await materializer.materializeRule(recurrenceRuleId)).toBeGreaterThan(0);
+    expect((await materializer.materializeRule(recurrenceRuleId)).created).toBeGreaterThan(0);
 
     const after = await withDatabase(async (client) => (await client.query<{ count: string }>(
       `SELECT COUNT(*)::text AS "count" FROM "task_assignees" WHERE "task_id" = $1`,
@@ -554,7 +554,7 @@ describe('series scope operations', () => {
     );
     expect(cancelResponse.statusCode).toBe(204);
     const materializer = app.get(RecurrenceMaterializerService);
-    expect(await materializer.materializeRule(series.recurrenceRuleId)).toBe(0);
+    expect((await materializer.materializeRule(series.recurrenceRuleId)).created).toBe(0);
 
     const after = (await taskApi(owner.accessToken, householdId, 'GET')).json() as {
       tasks: Array<{ id: string; occurrenceDate: string; title: string; status: string }>;

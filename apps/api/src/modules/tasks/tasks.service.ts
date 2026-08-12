@@ -211,7 +211,10 @@ export class TasksService {
       // See EventsService.create: the series is already committed, so a
       // transient materialization failure must not surface as a 500.
       try {
-        await this.materializer.materializeRule(created.ruleId);
+        const materialization = await this.materializer.materializeRule(created.ruleId);
+        if (materialization.skipped) {
+          this.logger.warn(`rule ${created.ruleId} was locked at create time; the scheduler will generate it`);
+        }
       } catch (error: unknown) {
         this.logger.error(`immediate materialization failed for rule ${created.ruleId}`, error);
       }

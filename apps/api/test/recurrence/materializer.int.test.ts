@@ -201,7 +201,7 @@ describe('rolling recurrence materializer', () => {
 
     // First run: capped, so the watermark must admit it only covers the rows
     // actually written rather than jumping to the horizon.
-    expect(await materializer.materializeRule(ruleId)).toBe(RECURRENCE_MAX_INSTANCES_PER_RUN);
+    expect((await materializer.materializeRule(ruleId)).created).toBe(RECURRENCE_MAX_INSTANCES_PER_RUN);
     expect(await watermarkOf()).toBe(
       formatIsoDate(addDays(seriesStart, RECURRENCE_MAX_INSTANCES_PER_RUN - 1)),
     );
@@ -209,7 +209,7 @@ describe('rolling recurrence materializer', () => {
 
     // Subsequent runs must keep extending instead of stalling forever.
     let runs = 1;
-    while (await materializer.materializeRule(ruleId) > 0) {
+    while ((await materializer.materializeRule(ruleId)).created > 0) {
       runs += 1;
       expect(runs).toBeLessThan(10);
     }

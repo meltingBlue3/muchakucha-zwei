@@ -212,7 +212,10 @@ export class EventsService {
       // invariant — the scheduler catches up — so a transient failure here
       // must not report a 500 for a series that was in fact saved.
       try {
-        await this.materializer.materializeRule(created.ruleId);
+        const materialization = await this.materializer.materializeRule(created.ruleId);
+        if (materialization.skipped) {
+          this.logger.warn(`rule ${created.ruleId} was locked at create time; the scheduler will generate it`);
+        }
       } catch (error: unknown) {
         this.logger.error(`immediate materialization failed for rule ${created.ruleId}`, error);
       }
