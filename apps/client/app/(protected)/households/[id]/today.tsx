@@ -32,6 +32,35 @@ function isToday(iso: string | null): boolean {
   return toDateIso(new Date(iso)) === todayIso();
 }
 
+export function partitionTodayTasks(tasks: TaskResponseDto[]) {
+  const overdueTasks: TaskResponseDto[] = [];
+  const todayTasks: TaskResponseDto[] = [];
+  const approachingTasks: TaskResponseDto[] = [];
+  const otherUpcomingTasks: TaskResponseDto[] = [];
+
+  for (const task of tasks) {
+    if (task.status === 'completed' || task.status === 'cancelled') continue;
+    if (isOverdue(task.dueDate ?? null)) {
+      overdueTasks.push(task);
+    } else if (isToday(task.dueDate ?? null) || task.dueDate === null || task.dueDate === '') {
+      todayTasks.push(task);
+    } else if (isApproachingDeadline(task.dueDate ?? null, 7)) {
+      approachingTasks.push(task);
+    } else {
+      otherUpcomingTasks.push(task);
+    }
+  }
+
+  return { overdueTasks, todayTasks, approachingTasks, otherUpcomingTasks };
+}
+
+export function nextTaskStatus(status: string): 'pending' | 'in_progress' | 'completed' | null {
+  if (status === 'cancelled') return null;
+  if (status === 'pending') return 'in_progress';
+  if (status === 'in_progress') return 'completed';
+  return 'pending';
+}
+
 export default function TodayRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -66,32 +95,10 @@ export default function TodayRoute() {
   }, [members]);
 
   // Split tasks into groups
-  const { overdueTasks, todayTasks, approachingTasks, otherUpcomingTasks } = useMemo(() => {
-    const overdue: TaskResponseDto[] = [];
-    const dueToday: TaskResponseDto[] = [];
-    const approaching: TaskResponseDto[] = [];
-    const other: TaskResponseDto[] = [];
-
-    for (const task of tasks) {
-      if (task.status === 'completed') continue;
-      if (isOverdue(task.dueDate ?? null)) {
-        overdue.push(task);
-      } else if (isToday(task.dueDate ?? null) || task.dueDate === null || task.dueDate === '') {
-        dueToday.push(task);
-      } else if (isApproachingDeadline(task.dueDate ?? null, 7)) {
-        approaching.push(task);
-      } else {
-        other.push(task);
-      }
-    }
-
-    return {
-      overdueTasks: overdue,
-      todayTasks: dueToday,
-      approachingTasks: approaching,
-      otherUpcomingTasks: other,
-    };
-  }, [tasks]);
+  const { overdueTasks, todayTasks, approachingTasks, otherUpcomingTasks } = useMemo(
+    () => partitionTodayTasks(tasks),
+    [tasks],
+  );
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === '') return;
@@ -156,10 +163,8 @@ export default function TodayRoute() {
 
   const handleTaskStatusChange = useCallback(async (task: TaskResponseDto) => {
     if (householdId === undefined || householdId === '') return;
-    const nextStatus =
-      task.status === 'pending' ? 'in_progress'
-        : task.status === 'in_progress' ? 'completed'
-        : 'pending';
+    const nextStatus = nextTaskStatus(task.status);
+    if (nextStatus === null) return;
     setStatusChangingTaskId(task.id);
     try {
       const token = await sessionTransport.getAccessToken();
