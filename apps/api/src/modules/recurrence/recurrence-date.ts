@@ -210,8 +210,15 @@ function offsetMinutesAt(instant: number, timeZone: string): number {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).formatToParts(new Date(instant));
   const zone = parts.find((part) => part.type === 'timeZoneName')?.value;
+  // Intl renders a zero offset as the bare string "GMT" (or "UTC" in some ICU
+  // builds), which the offset pattern below deliberately does not match.
+  if (zone === 'GMT' || zone === 'UTC') return 0;
   const match = /^GMT([+-])(\d{2}):(\d{2})$/.exec(zone ?? '');
-  if (match === null) return 0;
+  // Anything else is unparsed, not UTC. Silently treating it as UTC would
+  // reinterpret every occurrence in that zone by whole hours with no log line.
+  if (match === null) {
+    throw new Error(`unresolvable UTC offset for time zone ${timeZone} (got ${String(zone)})`);
+  }
   const minutes = Number(match[2]) * 60 + Number(match[3]);
   return match[1] === '-' ? -minutes : minutes;
 }

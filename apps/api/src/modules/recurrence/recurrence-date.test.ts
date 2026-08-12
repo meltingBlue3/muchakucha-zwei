@@ -211,4 +211,10 @@ describe('recurrence calendar dates', () => {
   test('round-trips a non-DST Asia/Shanghai date', () => {
     expectLocalRoundTrip(parseIsoDate('2027-06-15'), 9, 30, 'Asia/Shanghai');
   });
+
+  test('round-trips a UTC wall time, whose offset Intl renders as a bare "GMT"', () => {
+    expect(localDateTimeToInstant(parseIsoDate('2027-03-14'), 2, 30, 'UTC').toISOString())
+      .toBe('2027-03-14T02:30:00.000Z');
+    expectLocalRoundTrip(parseIsoDate('2027-03-14'), 2, 30, 'UTC');
+  });
 });
