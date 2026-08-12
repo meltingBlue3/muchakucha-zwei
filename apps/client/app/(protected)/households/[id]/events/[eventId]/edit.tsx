@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import { ApiClientError } from '@muchakucha/api-client';
-import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
+import type { CreateEventDto, EventResponseDto, UpdateSeriesDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { EventForm } from '../../../../../../src/features/events/event-form';
@@ -23,6 +23,26 @@ type PendingSeriesAction =
 
 const SERIES_FAILURE = '没有完成。这个重复安排没有发生任何改变，请重试。';
 const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后可以看到最新的安排。';
+
+/**
+ * Projects the form payload onto the series-update contract by naming every
+ * forwarded field. The two types are structurally assignable today, so passing
+ * a CreateEventDto straight through compiles — but the global validation pipe
+ * runs with forbidNonWhitelisted, so the first field added to CreateEventDto
+ * would turn every 此后所有 edit into a runtime 400 with no compile-time
+ * signal.
+ */
+function eventSeriesUpdate(data: CreateEventDto): UpdateSeriesDto {
+  return {
+    title: data.title,
+    ...(data.description === undefined ? {} : { description: data.description }),
+    startTime: data.startTime,
+    endTime: data.endTime,
+    ...(data.allDay === undefined ? {} : { allDay: data.allDay }),
+    ...(data.location === undefined ? {} : { location: data.location }),
+    ...(data.recurrence === undefined ? {} : { recurrence: data.recurrence }),
+  };
+}
 
 export default function EditEventRoute() {
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
@@ -147,7 +167,12 @@ export default function EditEventRoute() {
         await sessionApiClient.updateEvent(token, id, eventId, pendingSeriesAction.data);
         await sessionApiClient.tagEvent(token, id, eventId, { labelIds: selectedLabelIds });
       } else {
-        await sessionApiClient.updateEventSeries(token, id, eventId, pendingSeriesAction.data);
+        await sessionApiClient.updateEventSeries(
+          token,
+          id,
+          eventId,
+          eventSeriesUpdate(pendingSeriesAction.data),
+        );
       }
       setPendingSeriesAction(null);
       router.back();
