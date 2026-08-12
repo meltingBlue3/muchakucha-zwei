@@ -379,6 +379,61 @@ describe('series template isolation', () => {
   });
 });
 
+describe('per-instance association edits', () => {
+  test('does not re-apply the template assignees to instances a later run did not create', async () => {
+    const owner = await insertActor('assignee-fanout-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const startsOn = new Date().toISOString().slice(0, 10);
+    const created = await taskApi(owner.accessToken, householdId, 'POST', {
+      title: 'Weekly chore',
+      assigneeIds: [owner.userId],
+      recurrence: { freq: 'daily', startsOn, timezone: 'UTC', startTimeLocal: '08:00' },
+    });
+    expect(created.statusCode).toBe(201);
+    const recurrenceRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const listed = (await taskApi(owner.accessToken, householdId, 'GET')).json() as {
+      tasks: Array<{ id: string; occurrenceDate: string; assigneeIds: string[] }>;
+    };
+    const ordered = listed.tasks.sort((left, right) => left.occurrenceDate.localeCompare(right.occurrenceDate));
+    const unassigned = ordered[2]!;
+    expect(unassigned.assigneeIds).toEqual([owner.userId]);
+
+    const removal = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${unassigned.id}`, {
+      assigneeIds: [],
+    });
+    expect(removal.statusCode).toBe(200);
+    expect((removal.json() as { assigneeIds: string[] }).assigneeIds).toEqual([]);
+
+    // Force a run that genuinely creates rows, the way the scheduler does once
+    // the horizon advances.
+    await withDatabase(async (client) => {
+      const boundary = await client.query<{ occurrence_date: string }>(
+        `SELECT "occurrence_date"::text AS "occurrence_date" FROM "tasks"
+         WHERE "recurrence_rule_id" = $1 ORDER BY "occurrence_date" ASC OFFSET 10 LIMIT 1`,
+        [recurrenceRuleId],
+      );
+      const cut = boundary.rows[0]!.occurrence_date;
+      await client.query(
+        `DELETE FROM "tasks" WHERE "recurrence_rule_id" = $1 AND "occurrence_date" > $2::date`,
+        [recurrenceRuleId, cut],
+      );
+      await client.query(
+        `UPDATE "recurrence_rules" SET "materialized_through" = $2::date WHERE "id" = $1`,
+        [recurrenceRuleId, cut],
+      );
+    });
+    const materializer = app.get(RecurrenceMaterializerService);
+    expect(await materializer.materializeRule(recurrenceRuleId)).toBeGreaterThan(0);
+
+    const after = await withDatabase(async (client) => (await client.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS "count" FROM "task_assignees" WHERE "task_id" = $1`,
+      [unassigned.id],
+    )).rows[0]!.count);
+    expect(after).toBe('0');
+  });
+});
+
 describe('series scope operations', () => {
   async function createDailySeries(
     owner: ActorFixture,

@@ -117,7 +117,7 @@ export class RecurrenceMaterializerService {
     occurrences: CalendarDate[],
   ): Promise<number> {
     const time = localTime(rule.startTimeLocal);
-    const result = await tx.task.createMany({
+    const created = await tx.task.createManyAndReturn({
       // Field values come from the rule's series template, never from a
       // sibling instance: instances are independently editable (D-02/D-07),
       // and a generated occurrence always starts its own life as `pending`
@@ -133,14 +133,16 @@ export class RecurrenceMaterializerService {
         recurrenceRuleId: rule.id,
         occurrenceDate: databaseDate(occurrence),
       })),
+      select: { id: true },
       skipDuplicates: true,
     });
-    const taskIds = (await tx.task.findMany({
-      where: { recurrenceRuleId: rule.id },
-      select: { id: true },
-    })).map(({ id }) => id);
-    await this.materializeTaskAssociations(tx, template.id, taskIds);
-    return result.count;
+    // Only rows written by THIS run may receive the template's associations.
+    // Fanning out over every instance of the series re-inserted assignees and
+    // labels a user had deliberately removed from an individual occurrence.
+    if (created.length > 0) {
+      await this.materializeTaskAssociations(tx, template.id, created.map(({ id }) => id));
+    }
+    return created.length;
   }
 
   private async materializeEventOccurrences(
@@ -151,7 +153,7 @@ export class RecurrenceMaterializerService {
   ): Promise<number> {
     const time = localTime(rule.startTimeLocal);
     const durationMs = (rule.durationMinutes ?? 0) * 60_000;
-    const result = await tx.event.createMany({
+    const created = await tx.event.createManyAndReturn({
       data: occurrences.map((occurrence) => {
         const startTime = localDateTimeToInstant(occurrence, time.hour, time.minute, rule.timezone);
         return {
@@ -167,17 +169,20 @@ export class RecurrenceMaterializerService {
           occurrenceDate: databaseDate(occurrence),
         };
       }),
+      select: { id: true },
       skipDuplicates: true,
     });
-    const eventIds = (await tx.event.findMany({ where: { recurrenceRuleId: rule.id }, select: { id: true } })).map(({ id }) => id);
+    // Same rule as tasks: label fan-out is limited to rows written by this run,
+    // so a label removed from one occurrence stays removed.
+    if (created.length === 0) return 0;
     const labels = await tx.eventLabel.findMany({ where: { eventId: template.id }, select: { labelId: true } });
     if (labels.length > 0) {
       await tx.eventLabel.createMany({
-        data: eventIds.flatMap((eventId) => labels.map(({ labelId }) => ({ eventId, labelId }))),
+        data: created.flatMap(({ id }) => labels.map(({ labelId }) => ({ eventId: id, labelId }))),
         skipDuplicates: true,
       });
     }
-    return result.count;
+    return created.length;
   }
 
   private async materializeTaskAssociations(tx: TransactionClient, templateTaskId: string, newTaskIds: string[]): Promise<void> {
