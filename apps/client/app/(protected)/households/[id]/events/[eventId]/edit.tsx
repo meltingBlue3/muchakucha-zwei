@@ -2,13 +2,36 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
-import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
+import { ApiClientError } from '@muchakucha/api-client';
+import type { CreateEventDto, EventResponseDto, RecurrenceDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { EventForm } from '../../../../../../src/features/events/event-form';
+import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
+import {
+  SeriesScopeSheet,
+  type SeriesScope,
+  type SeriesScopeMode,
+} from '../../../../../../src/features/recurrence/series-scope-sheet';
 import { AppShell } from '../../../../../../src/ui/household-components';
 import { Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
+
+type PendingSeriesAction =
+  | { kind: 'save'; data: CreateEventDto; mode: SeriesScopeMode }
+  | { kind: 'delete'; mode: 'delete' };
+
+function recurrenceChanged(
+  current: EventResponseDto['recurrence'],
+  next: RecurrenceDto | undefined,
+): boolean {
+  const normalizedCurrent = recurrenceInputFromResponse(current);
+  const normalizedNext = next ?? null;
+  return JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedNext);
+}
+
+const SERIES_FAILURE = '没有完成。这个重复安排没有发生任何改变，请重试。';
+const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后可以看到最新的安排。';
 
 export default function EditEventRoute() {
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
@@ -21,10 +44,13 @@ export default function EditEventRoute() {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [pendingSeriesAction, setPendingSeriesAction] = useState<PendingSeriesAction | null>(null);
+  const [seriesSubmitting, setSeriesSubmitting] = useState<SeriesScope | null>(null);
+  const [seriesError, setSeriesError] = useState<string | null>(null);
 
-  const fetchEvent = useCallback(async () => {
+  const fetchEvent = useCallback(async (showLoading = true) => {
     if (id === undefined || eventId === undefined) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
@@ -35,9 +61,9 @@ export default function EditEventRoute() {
       setEvent(result);
       setSelectedLabelIds((result.labels ?? []).map((l) => l.id));
     } catch {
-      setError('无法加载事件。');
+      if (showLoading) setError('无法加载事件。');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [id, eventId]);
 
@@ -47,6 +73,17 @@ export default function EditEventRoute() {
 
   const handleSubmit = useCallback(
     async (data: CreateEventDto) => {
+      if (event?.recurrenceRuleId != null) {
+        setSeriesError(null);
+        setPendingSeriesAction({
+          data,
+          kind: 'save',
+          mode: recurrenceChanged(event.recurrence, data.recurrence)
+            ? 'rule-change'
+            : 'edit',
+        });
+        return;
+      }
       setIsSubmitting(true);
       setError(null);
       try {
@@ -66,7 +103,7 @@ export default function EditEventRoute() {
         setIsSubmitting(false);
       }
     },
-    [id, eventId, router, selectedLabelIds],
+    [event, id, eventId, router, selectedLabelIds],
   );
 
   const handleDelete = useCallback(async () => {
@@ -89,6 +126,53 @@ export default function EditEventRoute() {
       setDeleting(false);
     }
   }, [id, eventId, router]);
+
+  const openDelete = useCallback(() => {
+    if (event?.recurrenceRuleId != null) {
+      setSeriesError(null);
+      setPendingSeriesAction({ kind: 'delete', mode: 'delete' });
+      return;
+    }
+    setConfirmDelete(true);
+  }, [event]);
+
+  const handleSeriesSelect = useCallback(async (scope: SeriesScope) => {
+    if (pendingSeriesAction === null || id === undefined || eventId === undefined) return;
+    setSeriesSubmitting(scope);
+    setSeriesError(null);
+    try {
+      const token = await sessionTransport.getAccessToken();
+      if (token === null) {
+        setSeriesError('登录已过期。');
+        return;
+      }
+
+      if (pendingSeriesAction.kind === 'delete') {
+        await sessionApiClient.deleteEventSeries(token, id, eventId, scope);
+        setPendingSeriesAction(null);
+        router.dismissTo(`/households/${encodeURIComponent(id)}/events`);
+        return;
+      }
+
+      if (scope === 'this_only') {
+        await sessionApiClient.updateEvent(token, id, eventId, pendingSeriesAction.data);
+      } else {
+        await sessionApiClient.updateEventSeries(token, id, eventId, pendingSeriesAction.data);
+      }
+      await sessionApiClient.tagEvent(token, id, eventId, { labelIds: selectedLabelIds });
+      setPendingSeriesAction(null);
+      router.back();
+    } catch (caught: unknown) {
+      setSeriesError(
+        caught instanceof ApiClientError && caught.status === 404
+          ? SERIES_MISSING
+          : SERIES_FAILURE,
+      );
+      await fetchEvent(false);
+    } finally {
+      setSeriesSubmitting(null);
+    }
+  }, [eventId, fetchEvent, id, pendingSeriesAction, router, selectedLabelIds]);
 
   const handleCancel = useCallback(() => {
     router.back();
@@ -144,7 +228,7 @@ export default function EditEventRoute() {
           <View style={{ marginTop: activeTheme.spacing[4], borderTopWidth: 1, borderTopColor: activeTheme.colors.border, paddingTop: activeTheme.spacing[4] }}>
             {!confirmDelete ? (
               <Pressable
-                onPress={() => setConfirmDelete(true)}
+                onPress={openDelete}
                 hitSlop={activeTheme.spacing[1]}
                 style={({ pressed }) => ({
                   alignItems: 'center',
@@ -205,6 +289,17 @@ export default function EditEventRoute() {
               </Stack>
             )}
           </View>
+          <SeriesScopeSheet
+            error={seriesError}
+            mode={pendingSeriesAction?.mode ?? 'edit'}
+            onClose={() => {
+              setPendingSeriesAction(null);
+              setSeriesError(null);
+            }}
+            onSelect={(scope) => void handleSeriesSelect(scope)}
+            submitting={seriesSubmitting}
+            visible={pendingSeriesAction !== null}
+          />
         </Stack>
     </AppShell>
   );

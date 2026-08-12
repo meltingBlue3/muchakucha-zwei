@@ -3,11 +3,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import { ApiClientError } from '@muchakucha/api-client';
-import type { TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
+import type {
+  TaskResponseDto,
+  GetHouseholdMemberDto,
+  RecurrenceDto,
+  UpdateSeriesDto,
+} from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
 import { TaskForm } from '../../../../../../src/features/tasks/task-form';
+import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
+import {
+  SeriesScopeSheet,
+  type SeriesScope,
+  type SeriesScopeMode,
+} from '../../../../../../src/features/recurrence/series-scope-sheet';
 import {
   AccessChangedPanel,
   AppShell,
@@ -16,6 +27,40 @@ import {
 import { Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 import type { CreateTaskDto } from '@muchakucha/api-client';
+
+type PendingSeriesAction =
+  | { kind: 'save'; data: CreateTaskDto; mode: SeriesScopeMode }
+  | { kind: 'delete'; mode: 'delete' };
+
+function recurrenceChanged(
+  current: TaskResponseDto['recurrence'],
+  next: RecurrenceDto | undefined,
+): boolean {
+  const normalizedCurrent = recurrenceInputFromResponse(current);
+  const normalizedNext = next ?? null;
+  return JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedNext);
+}
+
+const SERIES_FAILURE = '没有完成。这个重复安排没有发生任何改变，请重试。';
+const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后可以看到最新的安排。';
+
+function taskSeriesUpdate(data: CreateTaskDto): UpdateSeriesDto {
+  const status = data.status;
+  const priority = data.priority;
+  return {
+    title: data.title,
+    ...(data.description === undefined ? {} : { description: data.description }),
+    ...(status === 'pending' || status === 'in_progress' || status === 'completed' || status === 'cancelled'
+      ? { status }
+      : {}),
+    ...(priority === 'low' || priority === 'medium' || priority === 'high' || priority === 'urgent'
+      ? { priority }
+      : {}),
+    ...(data.assigneeIds === undefined ? {} : { assigneeIds: data.assigneeIds }),
+    ...(data.dueDate === undefined ? {} : { dueDate: data.dueDate }),
+    ...(data.recurrence === undefined ? {} : { recurrence: data.recurrence }),
+  };
+}
 
 export default function EditTaskRoute() {
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId: string }>();
@@ -37,6 +82,9 @@ export default function EditTaskRoute() {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [pendingSeriesAction, setPendingSeriesAction] = useState<PendingSeriesAction | null>(null);
+  const [seriesSubmitting, setSeriesSubmitting] = useState<SeriesScope | null>(null);
+  const [seriesError, setSeriesError] = useState<string | null>(null);
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
@@ -46,30 +94,43 @@ export default function EditTaskRoute() {
     [members],
   );
 
-  useEffect(() => {
+  const fetchTask = useCallback(async (showLoading = true) => {
     if (householdId === undefined || householdId === '' || taskId === undefined || taskId === '') return;
-    const fetchData = async () => {
-      try {
-        const token = await sessionTransport.getAccessToken();
-        if (token === null) return;
-        const [taskResult, householdResult] = await Promise.all([
-          sessionApiClient.getTask(token, householdId, taskId),
-          sessionApiClient.getHousehold(token, householdId),
-        ]);
-        setTask(taskResult);
-        setMembers(householdResult.members);
-        setSelectedLabelIds((taskResult.labels ?? []).map((l) => l.id));
-      } catch {
-        // leave empty
-      } finally {
-        setLoading(false);
-      }
-    };
-    void fetchData();
+    if (showLoading) setLoading(true);
+    try {
+      const token = await sessionTransport.getAccessToken();
+      if (token === null) return;
+      const [taskResult, householdResult] = await Promise.all([
+        sessionApiClient.getTask(token, householdId, taskId),
+        sessionApiClient.getHousehold(token, householdId),
+      ]);
+      setTask(taskResult);
+      setMembers(householdResult.members);
+      setSelectedLabelIds((taskResult.labels ?? []).map((l) => l.id));
+    } catch {
+      // Keep the current authoritative snapshot when a silent refresh fails.
+    } finally {
+      if (showLoading) setLoading(false);
+    }
   }, [householdId, taskId]);
+
+  useEffect(() => {
+    void fetchTask();
+  }, [fetchTask]);
 
   const handleSubmit = useCallback(async (data: CreateTaskDto) => {
     if (householdId === undefined || householdId === '' || taskId === undefined || taskId === '') return;
+    if (task?.recurrenceRuleId != null) {
+      setSeriesError(null);
+      setPendingSeriesAction({
+        data,
+        kind: 'save',
+        mode: recurrenceChanged(task.recurrence, data.recurrence)
+          ? 'rule-change'
+          : 'edit',
+      });
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -100,7 +161,7 @@ export default function EditTaskRoute() {
       }
       setSubmitting(false);
     }
-  }, [householdId, taskId, router, selectedLabelIds]);
+  }, [householdId, task, taskId, router, selectedLabelIds]);
 
   const handleDelete = useCallback(async () => {
     if (householdId === undefined || householdId === '' || taskId === undefined || taskId === '') return;
@@ -116,6 +177,64 @@ export default function EditTaskRoute() {
       setDeleting(false);
     }
   }, [householdId, taskId, router]);
+
+  const openDelete = useCallback(() => {
+    if (task?.recurrenceRuleId != null) {
+      setSeriesError(null);
+      setPendingSeriesAction({ kind: 'delete', mode: 'delete' });
+      return;
+    }
+    setConfirmDelete(true);
+  }, [task]);
+
+  const handleSeriesSelect = useCallback(async (scope: SeriesScope) => {
+    if (
+      pendingSeriesAction === null ||
+      householdId === undefined ||
+      householdId === '' ||
+      taskId === undefined ||
+      taskId === ''
+    ) return;
+    setSeriesSubmitting(scope);
+    setSeriesError(null);
+    try {
+      const token = await sessionTransport.getAccessToken();
+      if (token === null) {
+        setSeriesError('登录已过期，请重新登录。');
+        return;
+      }
+
+      if (pendingSeriesAction.kind === 'delete') {
+        await sessionApiClient.deleteTaskSeries(token, householdId, taskId, scope);
+        setPendingSeriesAction(null);
+        router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks`);
+        return;
+      }
+
+      if (scope === 'this_only') {
+        await sessionApiClient.updateTask(token, householdId, taskId, pendingSeriesAction.data);
+      } else {
+        await sessionApiClient.updateTaskSeries(
+          token,
+          householdId,
+          taskId,
+          taskSeriesUpdate(pendingSeriesAction.data),
+        );
+      }
+      await sessionApiClient.tagTask(token, householdId, taskId, { labelIds: selectedLabelIds });
+      setPendingSeriesAction(null);
+      router.back();
+    } catch (caught: unknown) {
+      setSeriesError(
+        caught instanceof ApiClientError && caught.status === 404
+          ? SERIES_MISSING
+          : SERIES_FAILURE,
+      );
+      await fetchTask(false);
+    } finally {
+      setSeriesSubmitting(null);
+    }
+  }, [fetchTask, householdId, pendingSeriesAction, router, selectedLabelIds, taskId]);
 
   if (viewState === 'accessChanged') {
     return (
@@ -165,7 +284,7 @@ export default function EditTaskRoute() {
             <View style={{ marginTop: activeTheme.spacing[4], borderTopWidth: 1, borderTopColor: activeTheme.colors.border, paddingTop: activeTheme.spacing[4] }}>
               {!confirmDelete ? (
                 <Pressable
-                  onPress={() => setConfirmDelete(true)}
+                  onPress={openDelete}
                   disabled={deleting}
                   hitSlop={activeTheme.spacing[1]}
                   style={({ pressed }) => ({
@@ -227,6 +346,17 @@ export default function EditTaskRoute() {
                 </Stack>
               )}
             </View>
+            <SeriesScopeSheet
+              error={seriesError}
+              mode={pendingSeriesAction?.mode ?? 'edit'}
+              onClose={() => {
+                setPendingSeriesAction(null);
+                setSeriesError(null);
+              }}
+              onSelect={(scope) => void handleSeriesSelect(scope)}
+              submitting={seriesSubmitting}
+              visible={pendingSeriesAction !== null}
+            />
           </Stack>
         ) : (
           <Text variant="bodySm" color="inkMuted">任务未找到。</Text>
