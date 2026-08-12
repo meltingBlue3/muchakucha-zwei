@@ -7,6 +7,7 @@ import type {
   TaskStatus,
   TaskListResponseDto,
 } from './dto/create-task.dto.js';
+import { TASK_STATUSES } from './dto/create-task.dto.js';
 import type { UpdateTaskDto } from './dto/update-task.dto.js';
 import { RecurrenceMaterializerService } from '../recurrence/recurrence-materializer.service.js';
 import {
@@ -19,7 +20,6 @@ import {
 
 const TITLE_MIN = 1;
 const TITLE_MAX = 200;
-const VALID_STATUSES: TaskStatus[] = ['pending', 'in_progress', 'completed'];
 const VALID_PRIORITIES: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
 
 interface TaskRow {
@@ -310,7 +310,7 @@ export class TasksService {
     }
 
     if (input.status !== undefined) {
-      if (!VALID_STATUSES.includes(input.status as TaskStatus)) {
+      if (!TASK_STATUSES.includes(input.status as TaskStatus)) {
         throw new BadRequestException({
           code: 'VALIDATION_FAILED',
           message: 'Request validation failed.',

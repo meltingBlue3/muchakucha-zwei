@@ -1,15 +1,21 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
   IsIn,
   IsInt,
+  IsBoolean,
+  IsDateString,
   IsOptional,
   IsString,
   Matches,
   Max,
   MaxLength,
   Min,
+  IsUUID,
+  Length,
+  ValidateNested,
   registerDecorator,
   type ValidationArguments,
   type ValidationOptions,
@@ -19,6 +25,8 @@ export const RECURRENCE_FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'] a
 export const RECURRENCE_WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
 export const RECURRENCE_MAX_COUNT = 1000;
 export const RECURRENCE_MAX_INTERVAL = 52;
+export const SERIES_SCOPES = ['this_only', 'this_and_following'] as const;
+export type SeriesScope = (typeof SERIES_SCOPES)[number];
 
 export function IsIanaTimeZone(validationOptions?: ValidationOptions): PropertyDecorator {
   return (target, propertyKey) => {
@@ -96,4 +104,50 @@ export class RecurrenceResponseDto {
   @ApiProperty({ nullable: true }) materializedThrough!: string | null;
   @ApiProperty({ nullable: true }) startTimeLocal!: string | null;
   @ApiProperty({ nullable: true }) durationMinutes!: number | null;
+}
+
+export class UpdateSeriesDto {
+  @ApiPropertyOptional({ minLength: 1, maxLength: 200 })
+  @IsOptional() @IsString() @Length(1, 200)
+  title?: string;
+
+  @ApiPropertyOptional({ maxLength: 5000 })
+  @IsOptional() @IsString() @MaxLength(5000)
+  description?: string;
+
+  @ApiPropertyOptional({ enum: ['pending', 'in_progress', 'completed', 'cancelled'] })
+  @IsOptional() @IsString() @IsIn(['pending', 'in_progress', 'completed', 'cancelled'])
+  status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+  @ApiPropertyOptional({ enum: ['low', 'medium', 'high', 'urgent'] })
+  @IsOptional() @IsString() @IsIn(['low', 'medium', 'high', 'urgent'])
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional() @IsArray() @IsUUID('4', { each: true })
+  assigneeIds?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional() @IsDateString()
+  dueDate?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional() @IsDateString()
+  startTime?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional() @IsDateString()
+  endTime?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional() @IsBoolean()
+  allDay?: boolean;
+
+  @ApiPropertyOptional({ maxLength: 255 })
+  @IsOptional() @IsString() @MaxLength(255)
+  location?: string;
+
+  @ApiPropertyOptional({ type: () => RecurrenceDto })
+  @IsOptional() @ValidateNested() @Type(() => RecurrenceDto)
+  recurrence?: RecurrenceDto;
 }

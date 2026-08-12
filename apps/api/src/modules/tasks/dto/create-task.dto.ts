@@ -4,7 +4,7 @@ import { IsArray, IsIn, IsOptional, IsString, IsUUID, Length, MaxLength, Validat
 import { LabelResponseDto } from '../../labels/dto/create-label.dto.js';
 import { RecurrenceDto, RecurrenceResponseDto } from '../../recurrence/dto/recurrence.dto.js';
 
-export const TASK_STATUSES = ['pending', 'in_progress', 'completed'] as const;
+export const TASK_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
