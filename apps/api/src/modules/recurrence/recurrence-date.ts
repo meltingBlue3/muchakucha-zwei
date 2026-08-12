@@ -8,10 +8,13 @@ export interface CalendarDate {
 export interface WalkRule {
   freq: string;
   interval: number;
+  byWeekday?: number[];
   startsOn: CalendarDate;
   endsOn?: CalendarDate | null;
   count?: number | null;
 }
+
+export const RECURRENCE_MAX_INSTANCES_PER_RUN = 400;
 
 export function parseIsoDate(iso: string): CalendarDate {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
@@ -57,15 +60,115 @@ export function addDays(from: CalendarDate, amount: number): CalendarDate {
   return { year, month, day };
 }
 
+export function clampDay(year: number, month: number, anchorDay: number): CalendarDate {
+  return { year, month, day: Math.min(anchorDay, daysInMonth(year, month)) };
+}
+
+export function addMonths(from: CalendarDate, months: number, anchorDay: number): CalendarDate {
+  const zeroBasedMonth = from.month - 1 + months;
+  const year = from.year + Math.floor(zeroBasedMonth / 12);
+  const month = ((zeroBasedMonth % 12) + 12) % 12 + 1;
+  return clampDay(year, month, anchorDay);
+}
+
+export function addYears(
+  from: CalendarDate,
+  years: number,
+  anchorMonth: number,
+  anchorDay: number,
+): CalendarDate {
+  return clampDay(from.year + years, anchorMonth, anchorDay);
+}
+
+export function addWeeks(from: CalendarDate, weeks: number): CalendarDate {
+  return addDays(from, weeks * 7);
+}
+
+function weekday(date: CalendarDate): number {
+  return new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay();
+}
+
+export function nextWeekdayOnOrAfter(from: CalendarDate, targetWeekday: number): CalendarDate {
+  const daysAhead = (targetWeekday - weekday(from) + 7) % 7;
+  return addDays(from, daysAhead);
+}
+
+function mayInclude(rule: WalkRule, date: CalendarDate, horizon: CalendarDate): boolean {
+  return compareDates(date, horizon) <= 0 &&
+    (rule.endsOn == null || compareDates(date, rule.endsOn) <= 0);
+}
+
+function appendOccurrence(
+  occurrences: CalendarDate[],
+  rule: WalkRule,
+  date: CalendarDate,
+  horizon: CalendarDate,
+): boolean {
+  if (!mayInclude(rule, date, horizon)) return false;
+  occurrences.push(date);
+  return occurrences.length < RECURRENCE_MAX_INSTANCES_PER_RUN &&
+    (rule.count == null || occurrences.length < rule.count);
+}
+
 export function walkOccurrences(rule: WalkRule, options: { horizon: CalendarDate }): CalendarDate[] {
-  if (rule.freq !== 'daily') throw new Error('unsupported frequency');
   const occurrences: CalendarDate[] = [];
-  let current = rule.startsOn;
-  while (compareDates(current, options.horizon) <= 0 &&
-    (rule.endsOn == null || compareDates(current, rule.endsOn) <= 0) &&
-    (rule.count == null || occurrences.length < rule.count)) {
-    occurrences.push(current);
-    current = addDays(current, rule.interval);
+  if (rule.count !== null && rule.count !== undefined && rule.count <= 0) return occurrences;
+
+  if (rule.freq === 'daily') {
+    let current = rule.startsOn;
+    while (mayInclude(rule, current, options.horizon)) {
+      if (!appendOccurrence(occurrences, rule, current, options.horizon)) break;
+      current = addDays(current, rule.interval);
+    }
+    return occurrences;
+  }
+
+  if (rule.freq === 'weekly') {
+    const startsOnWeekday = weekday(rule.startsOn);
+    const selected = [...new Set(
+      (rule.byWeekday?.length === 0 || rule.byWeekday === undefined)
+        ? [startsOnWeekday]
+        : rule.byWeekday.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
+    )].sort((left, right) => left - right);
+    const firstWeekStart = addDays(rule.startsOn, -startsOnWeekday);
+
+    for (let weekIndex = 0; occurrences.length < RECURRENCE_MAX_INSTANCES_PER_RUN; weekIndex += 1) {
+      const weekStart = addWeeks(firstWeekStart, weekIndex * rule.interval);
+      if (!mayInclude(rule, weekStart, options.horizon) && compareDates(weekStart, options.horizon) > 0) break;
+      for (const selectedWeekday of selected) {
+        const candidate = nextWeekdayOnOrAfter(weekStart, selectedWeekday);
+        if (compareDates(candidate, rule.startsOn) < 0) continue;
+        if (!mayInclude(rule, candidate, options.horizon)) {
+          if (compareDates(candidate, options.horizon) > 0 ||
+            (rule.endsOn != null && compareDates(candidate, rule.endsOn) > 0)) return occurrences;
+          continue;
+        }
+        if (!appendOccurrence(occurrences, rule, candidate, options.horizon)) return occurrences;
+      }
+    }
+    return occurrences;
+  }
+
+  if (rule.freq === 'monthly') {
+    for (let index = 0; index < RECURRENCE_MAX_INSTANCES_PER_RUN; index += 1) {
+      const candidate = addMonths(rule.startsOn, index * rule.interval, rule.startsOn.day);
+      if (!mayInclude(rule, candidate, options.horizon)) break;
+      if (!appendOccurrence(occurrences, rule, candidate, options.horizon)) break;
+    }
+    return occurrences;
+  }
+
+  if (rule.freq === 'yearly') {
+    for (let index = 0; index < RECURRENCE_MAX_INSTANCES_PER_RUN; index += 1) {
+      const candidate = addYears(
+        rule.startsOn,
+        index * rule.interval,
+        rule.startsOn.month,
+        rule.startsOn.day,
+      );
+      if (!mayInclude(rule, candidate, options.horizon)) break;
+      if (!appendOccurrence(occurrences, rule, candidate, options.horizon)) break;
+    }
   }
   return occurrences;
 }
