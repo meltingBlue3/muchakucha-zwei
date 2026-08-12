@@ -260,7 +260,7 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 1/8 plans executed
+**Plans:** 2/8 plans executed
 
 Plans:
 **Wave 1**
@@ -269,7 +269,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 07-02-PLAN.md — 完整规则词汇表（每周/每月/每年 + D-09 月末钳位 + D-10 DST）与滚动生成 worker
+- [x] 07-02-PLAN.md — 完整规则词汇表（每周/每月/每年 + D-09 月末钳位 + D-10 DST）与滚动生成 worker
 - [ ] 07-03-PLAN.md — 事件侧重复、已取消事件读路径过滤、列表生成水位线与手写 OpenAPI 客户端契约
 
 **Wave 3** *(blocked on Wave 2 completion)*
