@@ -143,7 +143,6 @@ describe('SeriesScopeSheet', () => {
   test('keeps the sheet open after failure, announces atomic failure, and re-enables actions', async () => {
     const view = await render(<Harness error={FAILURE_MESSAGE} visible />);
 
-    expect(view.getByText('没有完成')).toBeTruthy();
     expect(view.getByText(FAILURE_MESSAGE)).toBeTruthy();
     for (const label of ['仅此一次', '此后所有', '取消']) {
       expect(view.getByLabelText(label).props.accessibilityState.disabled).toBe(false);

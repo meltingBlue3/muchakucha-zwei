@@ -24,11 +24,11 @@ const MODE_COPY: Record<SeriesScopeMode, { body: string; title: string }> = {
     title: '保存这次改动？',
   },
   delete: {
-    body: '这是一个重复安排。选择要删除的范围。此操作不可撤销。',
+    body: '这是一个重复安排。选择要删除的范围，此操作不可撤销。',
     title: '删除这次重复？',
   },
   'rule-change': {
-    body: '重复规则本身已经改变。选择这次改动的影响范围。',
+    body: '重复规则的更改会影响之后的每一次，不能只改这一次。',
     title: '更改重复规则？',
   },
 };
@@ -215,7 +215,7 @@ export const SeriesScopeSheet = ({
         keyboardShouldPersistTaps="handled"
       >
         <Stack gap={3}>
-          {error ? <Banner title="没有完成">{error}</Banner> : null}
+          {error ? <Banner>{error}</Banner> : null}
           <Heading>{MODE_COPY[mode].title}</Heading>
           <Text variant="bodySm">{MODE_COPY[mode].body}</Text>
           <Text color="inkMuted" variant="caption">
