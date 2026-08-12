@@ -9,6 +9,17 @@ import ListFilter from 'lucide-react-native/icons/list-filter';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
+import {
+  applyRecurringFilter,
+  classifyGenerationWindow,
+  GENERATION_BEHIND_BODY,
+  GENERATION_BEHIND_HEADING,
+  RECURRING_EMPTY_TASKS,
+  RECURRING_FILTER_GROUP_LABEL,
+  RECURRING_FILTERS,
+  recurringFilterAccessibilityLabel,
+  type RecurringFilterKey,
+} from '../../../../../src/features/recurrence/recurring-filter';
 import { TaskCard } from '../../../../../src/features/tasks/task-card';
 import {
   AccessChangedPanel,
@@ -60,6 +71,7 @@ export default function TaskListRoute() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilterKey>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
   const [labelFilter, setLabelFilter] = useState<string>('all');
+  const [recurringFilter, setRecurringFilter] = useState<RecurringFilterKey>('all');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [statusChangingTaskId, setStatusChangingTaskId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -102,11 +114,17 @@ export default function TaskListRoute() {
     if (labelFilter !== 'all') {
       result = result.filter((t) => (t.labels ?? []).some((l) => l.id === labelFilter));
     }
+    result = applyRecurringFilter(result, recurringFilter);
     return result;
-  }, [tasks, filter, priorityFilter, assigneeFilter, labelFilter]);
+  }, [tasks, filter, priorityFilter, assigneeFilter, labelFilter, recurringFilter]);
 
-  const activeFilterCount = [filter !== 'all', priorityFilter !== 'all', assigneeFilter !== 'all', labelFilter !== 'all']
-    .filter(Boolean).length;
+  const activeFilterCount = [
+    filter !== 'all',
+    priorityFilter !== 'all',
+    assigneeFilter !== 'all',
+    labelFilter !== 'all',
+    recurringFilter !== 'all',
+  ].filter(Boolean).length;
 
   const assigneeOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -199,10 +217,12 @@ export default function TaskListRoute() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   }, []);
-  const beyondGenerationWindow =
-    activeFilterCount === 0 &&
-    materializedThrough !== null &&
-    todayIso > materializedThrough;
+  const generationWindow = classifyGenerationWindow({
+    materializedThrough,
+    todayIso,
+    viewedDateIso: null,
+    filtersActive: activeFilterCount > 0,
+  });
 
   const handleSwitch = useCallback(async (householdId: string) => {
     if (householdId === currentHouseholdId) {
@@ -486,6 +506,42 @@ export default function TaskListRoute() {
                   </ScrollView>
                 </Stack>
               )}
+
+              {/* Recurring filter — client-side only (judged by isRecurringInstance),
+                  a radiogroup rather than a checkbox, so screen readers don't
+                  read "all" and "recurring only" as independently selectable */}
+              <Stack gap={1}>
+                <Text variant="caption" color="inkMuted">{RECURRING_FILTER_GROUP_LABEL}</Text>
+                <View
+                  accessibilityRole="radiogroup"
+                  accessibilityLabel="重复筛选"
+                  style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}
+                >
+                  {RECURRING_FILTERS.map((f) => (
+                    <Pressable
+                      key={f.key}
+                      onPress={() => setRecurringFilter(f.key)}
+                      hitSlop={activeTheme.spacing[3]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: recurringFilter === f.key }}
+                      style={({ pressed }) => ({
+                        paddingHorizontal: activeTheme.spacing[3],
+                        paddingVertical: activeTheme.spacing[1],
+                        borderRadius: activeTheme.borderRadii.full,
+                        borderWidth: 1,
+                        borderColor: recurringFilter === f.key ? activeTheme.colors.coral : activeTheme.colors.border,
+                        backgroundColor: 'transparent',
+                        opacity: pressed ? 0.7 : 1,
+                      })}
+                      accessibilityLabel={recurringFilterAccessibilityLabel(f.key)}
+                    >
+                      <Text variant="caption" color={recurringFilter === f.key ? 'coral' : 'inkMuted'}>
+                        {f.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </Stack>
             </Stack>
           )}
         </View>
@@ -518,16 +574,24 @@ export default function TaskListRoute() {
 
         {/* Task list */}
         {!loading && error === null && filteredTasks.length === 0 && (
-          beyondGenerationWindow ? (
+          generationWindow === 'behind' ? (
             <StatusPanel
               action={null}
-              body="重复安排会按 90 天窗口自动补齐。稍后再看这里，或先查看更近的日期。"
-              heading="更远的重复还没生成"
+              body={GENERATION_BEHIND_BODY}
+              heading={GENERATION_BEHIND_HEADING}
               kind="offline"
             />
           ) : (
             <Text variant="bodySm" color="inkMuted">
-              {activeFilterCount === 0 ? '还没有任务。点击上方按钮创建第一个任务。' : '没有符合筛选条件的任务。'}
+              {activeFilterCount === 0
+                ? '还没有任务。点击上方按钮创建第一个任务。'
+                : recurringFilter === 'recurring' &&
+                    filter === 'all' &&
+                    priorityFilter === 'all' &&
+                    assigneeFilter === 'all' &&
+                    labelFilter === 'all'
+                  ? RECURRING_EMPTY_TASKS
+                  : '没有符合筛选条件的任务。'}
             </Text>
           )
         )}
