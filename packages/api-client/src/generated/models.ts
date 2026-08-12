@@ -205,6 +205,7 @@ export interface CreateEventDto {
   endTime: string;
   allDay?: boolean;
   location?: string;
+  recurrence?: RecurrenceDto;
 }
 
 export interface UpdateEventDto {
@@ -214,6 +215,33 @@ export interface UpdateEventDto {
   endTime?: string;
   allDay?: boolean;
   location?: string;
+  recurrence?: RecurrenceDto;
+}
+
+export interface RecurrenceDto {
+  freq: string;
+  interval?: number;
+  byWeekday?: number[];
+  startsOn: string;
+  endsOn?: string;
+  count?: number;
+  timezone: string;
+  startTimeLocal?: string;
+  durationMinutes?: number;
+}
+
+export interface RecurrenceResponseDto {
+  id: string;
+  freq: string;
+  interval: number;
+  byWeekday: number[];
+  startsOn: string;
+  endsOn?: string | null;
+  count?: number | null;
+  timezone: string;
+  materializedThrough?: string | null;
+  startTimeLocal?: string | null;
+  durationMinutes?: number | null;
 }
 
 export interface EventResponseDto {
@@ -225,6 +253,10 @@ export interface EventResponseDto {
   endTime: string;
   allDay: boolean;
   location?: string | null;
+  recurrenceRuleId?: string | null;
+  occurrenceDate?: string | null;
+  cancelledAt?: string | null;
+  recurrence?: RecurrenceResponseDto | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -234,6 +266,7 @@ export interface EventResponseDto {
 export interface EventListResponseDto {
   events: EventResponseDto[];
   total: number;
+  materializedThrough?: string | null;
 }
 
 export interface CreateTaskDto {
@@ -243,6 +276,7 @@ export interface CreateTaskDto {
   priority?: string;
   assigneeIds?: string[];
   dueDate?: string;
+  recurrence?: RecurrenceDto;
 }
 
 export interface UpdateTaskDto {
@@ -252,6 +286,7 @@ export interface UpdateTaskDto {
   priority?: string;
   assigneeIds?: string[];
   dueDate?: string;
+  recurrence?: RecurrenceDto;
 }
 
 export interface TaskResponseDto {
@@ -263,6 +298,9 @@ export interface TaskResponseDto {
   priority: string;
   assigneeIds: string[];
   dueDate?: string | null;
+  recurrenceRuleId?: string | null;
+  occurrenceDate?: string | null;
+  recurrence?: RecurrenceResponseDto | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -272,6 +310,7 @@ export interface TaskResponseDto {
 export interface TaskListResponseDto {
   tasks: TaskResponseDto[];
   total: number;
+  materializedThrough?: string | null;
 }
 
 export interface CreateNoteDto {

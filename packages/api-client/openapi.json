@@ -2466,6 +2466,63 @@
           "successorMembershipId"
         ]
       },
+      "RecurrenceDto": {
+        "type": "object",
+        "properties": {
+          "freq": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ]
+          },
+          "interval": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 52,
+            "default": 1
+          },
+          "byWeekday": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "startsOn": {
+            "type": "string",
+            "example": "2026-08-13"
+          },
+          "endsOn": {
+            "type": "string",
+            "example": "2026-12-31"
+          },
+          "count": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Asia/Shanghai"
+          },
+          "startTimeLocal": {
+            "type": "string",
+            "example": "08:30"
+          },
+          "durationMinutes": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1440
+          }
+        },
+        "required": [
+          "freq",
+          "startsOn",
+          "timezone"
+        ]
+      },
       "CreateEventDto": {
         "type": "object",
         "properties": {
@@ -2496,12 +2553,85 @@
             "type": "string",
             "description": "Optional location",
             "maxLength": 255
+          },
+          "recurrence": {
+            "description": "重复规则；省略即普通一次性事件",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RecurrenceDto"
+              }
+            ]
           }
         },
         "required": [
           "title",
           "startTime",
           "endTime"
+        ]
+      },
+      "RecurrenceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "freq": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ]
+          },
+          "interval": {
+            "type": "number"
+          },
+          "byWeekday": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "startsOn": {
+            "type": "string"
+          },
+          "endsOn": {
+            "type": "object",
+            "nullable": true
+          },
+          "count": {
+            "type": "object",
+            "nullable": true
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "materializedThrough": {
+            "type": "object",
+            "nullable": true
+          },
+          "startTimeLocal": {
+            "type": "object",
+            "nullable": true
+          },
+          "durationMinutes": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "freq",
+          "interval",
+          "byWeekday",
+          "startsOn",
+          "endsOn",
+          "count",
+          "timezone",
+          "materializedThrough",
+          "startTimeLocal",
+          "durationMinutes"
         ]
       },
       "LabelResponseDto": {
@@ -2562,6 +2692,27 @@
           "location": {
             "type": "object"
           },
+          "recurrenceRuleId": {
+            "type": "object",
+            "nullable": true
+          },
+          "occurrenceDate": {
+            "type": "object",
+            "nullable": true
+          },
+          "cancelledAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "recurrence": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RecurrenceResponseDto"
+              }
+            ]
+          },
           "createdBy": {
             "type": "string"
           },
@@ -2585,6 +2736,10 @@
           "startTime",
           "endTime",
           "allDay",
+          "recurrenceRuleId",
+          "occurrenceDate",
+          "cancelledAt",
+          "recurrence",
           "createdBy",
           "createdAt",
           "updatedAt",
@@ -2602,11 +2757,16 @@
           },
           "total": {
             "type": "number"
+          },
+          "materializedThrough": {
+            "type": "object",
+            "nullable": true
           }
         },
         "required": [
           "events",
-          "total"
+          "total",
+          "materializedThrough"
         ]
       },
       "UpdateEventDto": {
@@ -2638,6 +2798,14 @@
             "type": "string",
             "description": "Optional location",
             "maxLength": 255
+          },
+          "recurrence": {
+            "description": "重复规则；省略即不改变当前重复设置",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RecurrenceDto"
+              }
+            ]
           }
         }
       },
@@ -2685,6 +2853,14 @@
           "dueDate": {
             "type": "string",
             "description": "截止日期"
+          },
+          "recurrence": {
+            "description": "重复规则；省略即普通一次性任务",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RecurrenceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -2733,6 +2909,14 @@
           "dueDate": {
             "type": "string",
             "description": "截止日期"
+          },
+          "recurrence": {
+            "description": "重复规则；省略即不改变当前重复设置",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RecurrenceDto"
+              }
+            ]
           }
         }
       },
