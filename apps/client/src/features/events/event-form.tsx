@@ -162,6 +162,7 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text variant="label">全天事件</Text>
         <Switch
+          accessibilityLabel="全天事件"
           value={form.allDay}
           onValueChange={(v) => updateField('allDay', v)}
           trackColor={{ false: activeTheme.colors.border, true: activeTheme.colors.tealSoft }}

@@ -236,6 +236,11 @@ test.describe('recurring event and task journeys', () => {
 
     await dialog.getByLabel('此后所有').click();
     await expect(page).toHaveURL(new RegExp(`/households/${householdId}/events`));
+    await expect.poll(async () => {
+      const events = (await listEvents(account.accessToken, householdId, rangeStart, rangeEnd))
+        .filter((event) => event.title === eventTitle);
+      return events.some((event) => event.recurrenceRuleId !== originalRuleId);
+    }).toBe(true);
     const after = (await listEvents(account.accessToken, householdId, rangeStart, rangeEnd))
       .filter((event) => event.title === eventTitle)
       .sort((left, right) => left.occurrenceDate.localeCompare(right.occurrenceDate));

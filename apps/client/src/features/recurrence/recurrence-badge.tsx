@@ -8,7 +8,7 @@ export function RecurrenceBadge() {
   const activeTheme = useTheme<Theme>();
 
   return (
-    <View accessible accessibilityLabel="重复">
+    <View accessible accessibilityLabel="重复" accessibilityRole="image">
       <Repeat color={activeTheme.colors.inkMuted} size={14} strokeWidth={2} />
     </View>
   );

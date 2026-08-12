@@ -26,7 +26,14 @@ $requiredTests = @(
     'e2e/auth/login-session.spec.ts',
     'e2e/auth/password-reset.spec.ts',
     'e2e/auth/account-actions.spec.ts',
-    'e2e/auth/accessibility.spec.ts'
+    'e2e/auth/accessibility.spec.ts',
+    'apps/api/src/modules/recurrence/recurrence-date.test.ts',
+    'apps/api/test/recurrence/recurrence-rules.int.test.ts',
+    'apps/api/test/recurrence/materializer.int.test.ts',
+    'apps/client/src/features/recurrence/__tests__/recurrence-picker-test.tsx',
+    'apps/client/src/features/recurrence/__tests__/series-scope-dialog-test.tsx',
+    'apps/client/src/features/tasks/__tests__/task-status-test.tsx',
+    'e2e/events/recurrence.spec.ts'
 )
 $forbiddenPattern = '(?im)\.(?:skip|todo)\b|\bIMPLEMENTATION_MISSING\b'
 

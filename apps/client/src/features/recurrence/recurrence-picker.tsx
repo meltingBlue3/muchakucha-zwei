@@ -1,7 +1,7 @@
 import type { RecurrenceDto, RecurrenceResponseDto } from '@muchakucha/api-client';
 import { useTheme } from '@shopify/restyle';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Platform, Pressable, TextInput, View } from 'react-native';
 
 import { DateField } from '../../ui/date-field';
 import { FormMessage, Stack, Text } from '../../ui/primitives';
@@ -109,6 +109,27 @@ function withoutEnding(value: RecurrenceInput): RecurrenceInput {
   delete next.endsOn;
   delete next.count;
   return next;
+}
+
+type WebDirectionalKeyEvent = {
+  currentTarget: EventTarget & HTMLElement;
+  key: string;
+  preventDefault: () => void;
+};
+
+function moveRadioSelection(
+  event: WebDirectionalKeyEvent,
+  currentIndex: number,
+  optionCount: number,
+  select: (nextIndex: number) => void,
+) {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  event.preventDefault();
+  const delta = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+  const nextIndex = (currentIndex + delta + optionCount) % optionCount;
+  select(nextIndex);
+  const group = event.currentTarget.parentElement;
+  setTimeout(() => group?.querySelectorAll<HTMLElement>('[role="radio"]')[nextIndex]?.focus(), 0);
 }
 
 function externalError(errors: Record<string, string>, field: string): string | undefined {
@@ -299,7 +320,7 @@ export function RecurrencePicker({
     <Stack gap={1}>
       <Text variant="label">重复</Text>
       <View accessibilityLabel="重复频率" accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {FREQUENCIES.map((frequency) => {
+        {FREQUENCIES.map((frequency, frequencyIndex) => {
           const selected = frequency.value === null ? value === null : value?.freq === frequency.value;
           return (
             <Pressable
@@ -309,6 +330,14 @@ export function RecurrencePicker({
               accessibilityState={{ checked: selected, disabled }}
               aria-checked={selected}
               disabled={disabled}
+              {...(Platform.OS === 'web' ? {
+                onKeyDown: (event: WebDirectionalKeyEvent) => moveRadioSelection(
+                  event,
+                  frequencyIndex,
+                  FREQUENCIES.length,
+                  (nextIndex) => selectFrequency(FREQUENCIES[nextIndex]!.value),
+                ),
+              } : {})}
               onPress={() => selectFrequency(frequency.value)}
               style={({ pressed }) => [chipStyle(selected), { opacity: pressed ? 0.7 : 1 }]}
             >
@@ -357,7 +386,7 @@ export function RecurrencePicker({
         <>
           <Text variant="label">结束</Text>
           <View accessibilityLabel="重复结束条件" accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {ENDINGS.map((ending) => {
+            {ENDINGS.map((ending, endingIndex) => {
               const selected = endingMode === ending.value;
               return (
                 <Pressable
@@ -367,6 +396,14 @@ export function RecurrencePicker({
                   accessibilityState={{ checked: selected, disabled }}
                   aria-checked={selected}
                   disabled={disabled}
+                  {...(Platform.OS === 'web' ? {
+                    onKeyDown: (event: WebDirectionalKeyEvent) => moveRadioSelection(
+                      event,
+                      endingIndex,
+                      ENDINGS.length,
+                      (nextIndex) => selectEnding(ENDINGS[nextIndex]!.value),
+                    ),
+                  } : {})}
                   onPress={() => selectEnding(ending.value)}
                   style={({ pressed }) => [chipStyle(selected), { opacity: pressed ? 0.7 : 1 }]}
                 >
