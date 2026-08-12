@@ -260,7 +260,7 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 7/8 plans executed
+**Plans:** 15 plans (7/8 executed; 07-09…07-15 added 2026-08-13 as the D-11…D-20 addendum)
 
 Plans:
 **Wave 1**
@@ -288,6 +288,31 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [ ] 07-08-PLAN.md — Web 端到端旅程、事件侧无障碍审计（补 Phase 3 缺口）与 Android 真机验收
+
+**Wave 7** *(addendum D-11…D-20; independent of the pending 07-08 checkpoint)*
+
+- [ ] 07-09-PLAN.md — 按频率提前量 + 按规则时区的生成窗口、水位线只增不减、1 小时 tick 与创建即标准检查
+- [ ] 07-10-PLAN.md — 客户端「仅看周期性」筛选与生成窗口两状态改造（生成落后 / 更远日期注记）
+
+**Wave 8** *(blocked on 07-09)*
+
+- [ ] 07-11-PLAN.md — 服务端 recurring 查询参数（任务与事件）与两处列表 where 的类型化
+
+**Wave 9** *(blocked on 07-11)*
+
+- [ ] 07-12-PLAN.md — 规则列表/详情接口、由规则推算的下一次发生，与规则级「结束此重复」
+
+**Wave 10** *(blocked on 07-12)*
+
+- [ ] 07-13-PLAN.md — 规则级编辑接口 updateRuleFromAnchor（以规则时区的明天为锚的原子拆系列）
+
+**Wave 11** *(blocked on 07-13)*
+
+- [ ] 07-14-PLAN.md — 周期规则列表屏与详情屏、类型徽标与家庭首页入口卡片
+
+**Wave 12** *(blocked on 07-10 and 07-14)*
+
+- [ ] 07-15-PLAN.md — addendum 的 Web 端到端旅程、必需测试清单与验证映射、Android 真机验收
 
 ---
 *Roadmap created: 2026-07-31*
