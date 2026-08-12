@@ -75,6 +75,13 @@ export class RecurrenceMaterializerService {
 
       const today = parseIsoDate(new Date().toISOString().slice(0, 10));
       const horizon = addDays(today, RECURRENCE_HORIZON_DAYS);
+      // Resume at the watermark instead of re-walking the whole history: the
+      // per-run cap truncates the tail of what is emitted, so starting at
+      // `startsOn` every time meant the cap always kept the OLDEST occurrences
+      // and the series silently stopped extending once it grew past the cap.
+      const walkStart = rule.materializedThrough === null
+        ? calendarDate(rule.startsOn)
+        : addDays(calendarDate(rule.materializedThrough), 1);
       const occurrences = walkOccurrences({
         freq: rule.freq,
         interval: rule.interval,
@@ -82,15 +89,22 @@ export class RecurrenceMaterializerService {
         startsOn: calendarDate(rule.startsOn),
         endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn),
         count: rule.count,
-      }, { horizon }).slice(0, RECURRENCE_MAX_INSTANCES_PER_RUN);
+      }, { horizon, from: walkStart });
 
       const created = taskTemplate !== null
         ? await this.materializeTaskOccurrences(tx, rule, taskTemplate, occurrences)
         : await this.materializeEventOccurrences(tx, rule, eventTemplate!, occurrences);
 
+      // Never claim coverage past what this run actually wrote — a truncated
+      // run must leave the remainder due so the next tick picks it up.
+      const truncated = occurrences.length === RECURRENCE_MAX_INSTANCES_PER_RUN;
       await tx.recurrenceRule.update({
         where: { id: ruleId },
-        data: { materializedThrough: databaseDate(horizon) },
+        data: {
+          materializedThrough: databaseDate(
+            truncated ? occurrences[occurrences.length - 1]! : horizon,
+          ),
+        },
       });
       return created;
     });

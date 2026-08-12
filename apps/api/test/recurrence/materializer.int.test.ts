@@ -157,19 +157,68 @@ describe('rolling recurrence materializer', () => {
     expect(await materializer.materializeAllDue()).toBe(0);
   });
 
-  test('caps a count-1000 daily rule at the per-run hard limit', async () => {
+  test('reaches every occurrence of a count-1000 daily rule across successive runs', async () => {
     const actor = await insertActor('bounded-materializer@example.test');
     const householdId = await createHousehold(actor.accessToken);
-    const startsOn = new Date().toISOString().slice(0, 10);
+    const today = parseIsoDate(new Date().toISOString().slice(0, 10));
     const ruleId = await createRecurringTask(actor, householdId, {
       freq: 'daily',
-      startsOn,
+      startsOn: formatIsoDate(today),
       count: 1000,
       timezone: 'UTC',
     });
 
+    // A single run is bounded by both the 90-day horizon and the per-run cap.
+    expect((await taskOccurrenceDates(ruleId)).length).toBeLessThanOrEqual(
+      RECURRENCE_MAX_INSTANCES_PER_RUN,
+    );
+
+    // Age the series so the whole count fits inside the horizon and the
+    // per-run cap genuinely bites: 950 days of history + 90 days of horizon is
+    // more than the 1000 occurrences the rule is allowed to produce.
+    const seriesStart = addDays(today, -950);
+    await withDatabase(async (client) => {
+      await client.query(
+        `DELETE FROM tasks
+         WHERE recurrence_rule_id = $1
+           AND occurrence_date > (SELECT MIN(occurrence_date) FROM tasks WHERE recurrence_rule_id = $1)`,
+        [ruleId],
+      );
+      await client.query(
+        `UPDATE recurrence_rules SET starts_on = $2::date, materialized_through = NULL WHERE id = $1`,
+        [ruleId, formatIsoDate(seriesStart)],
+      );
+    });
+
+    const materializer = app.get(RecurrenceMaterializerService);
+    const watermarkOf = async (): Promise<string> => withDatabase(async (client) => {
+      const result = await client.query<{ materialized_through: string }>(
+        `SELECT materialized_through::text FROM recurrence_rules WHERE id = $1`,
+        [ruleId],
+      );
+      return result.rows[0]!.materialized_through;
+    });
+
+    // First run: capped, so the watermark must admit it only covers the rows
+    // actually written rather than jumping to the horizon.
+    expect(await materializer.materializeRule(ruleId)).toBe(RECURRENCE_MAX_INSTANCES_PER_RUN);
+    expect(await watermarkOf()).toBe(
+      formatIsoDate(addDays(seriesStart, RECURRENCE_MAX_INSTANCES_PER_RUN - 1)),
+    );
+    expect(await watermarkOf()).not.toBe(formatIsoDate(addDays(today, RECURRENCE_HORIZON_DAYS)));
+
+    // Subsequent runs must keep extending instead of stalling forever.
+    let runs = 1;
+    while (await materializer.materializeRule(ruleId) > 0) {
+      runs += 1;
+      expect(runs).toBeLessThan(10);
+    }
+    expect(runs).toBeGreaterThan(1);
+
     const dates = await taskOccurrenceDates(ruleId);
-    expect(dates.length).toBeLessThanOrEqual(RECURRENCE_MAX_INSTANCES_PER_RUN);
+    expect(dates).toHaveLength(1000);
+    expect(dates[0]).toBe(formatIsoDate(seriesStart));
+    expect(dates[dates.length - 1]).toBe(formatIsoDate(addDays(seriesStart, 999)));
   });
 
   test('persists exactly one clamped February occurrence for a monthly 31st rule', async () => {

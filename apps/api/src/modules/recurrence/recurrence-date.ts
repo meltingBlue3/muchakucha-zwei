@@ -16,6 +16,30 @@ export interface WalkRule {
 
 export const RECURRENCE_MAX_INSTANCES_PER_RUN = 400;
 
+/**
+ * Safety net for the candidate enumeration itself. The walk visits every
+ * occurrence from `startsOn` so `count` keeps its absolute series index, while
+ * `options.from` decides which of those are emitted — the enumeration is
+ * therefore longer than the emitted slice for an old rule.
+ */
+export const RECURRENCE_MAX_WALK_STEPS = 20_000;
+
+export interface WalkOptions {
+  horizon: CalendarDate;
+  /**
+   * Lower bound for emitted occurrences (inclusive). Occurrences before it are
+   * still enumerated — so `count` stays anchored to the start of the series —
+   * but they do not consume the per-run cap. Without it the cap always kept
+   * the OLDEST occurrences and long-lived rules stopped extending forever.
+   */
+  from?: CalendarDate;
+}
+
+interface WalkState {
+  /** Occurrences enumerated since `startsOn`, emitted or skipped. */
+  enumerated: number;
+}
+
 export function parseIsoDate(iso: string): CalendarDate {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (match === null) throw new Error('invalid ISO calendar date');
@@ -102,22 +126,28 @@ function appendOccurrence(
   occurrences: CalendarDate[],
   rule: WalkRule,
   date: CalendarDate,
-  horizon: CalendarDate,
+  options: WalkOptions,
+  state: WalkState,
 ): boolean {
-  if (!mayInclude(rule, date, horizon)) return false;
-  occurrences.push(date);
+  if (!mayInclude(rule, date, options.horizon)) return false;
+  state.enumerated += 1;
+  if (options.from === undefined || compareDates(date, options.from) >= 0) {
+    occurrences.push(date);
+  }
   return occurrences.length < RECURRENCE_MAX_INSTANCES_PER_RUN &&
-    (rule.count == null || occurrences.length < rule.count);
+    (rule.count == null || state.enumerated < rule.count);
 }
 
-export function walkOccurrences(rule: WalkRule, options: { horizon: CalendarDate }): CalendarDate[] {
+export function walkOccurrences(rule: WalkRule, options: WalkOptions): CalendarDate[] {
   const occurrences: CalendarDate[] = [];
+  const state: WalkState = { enumerated: 0 };
   if (rule.count !== null && rule.count !== undefined && rule.count <= 0) return occurrences;
 
   if (rule.freq === 'daily') {
     let current = rule.startsOn;
-    while (mayInclude(rule, current, options.horizon)) {
-      if (!appendOccurrence(occurrences, rule, current, options.horizon)) break;
+    for (let step = 0; step < RECURRENCE_MAX_WALK_STEPS; step += 1) {
+      if (!mayInclude(rule, current, options.horizon)) break;
+      if (!appendOccurrence(occurrences, rule, current, options, state)) break;
       current = addDays(current, rule.interval);
     }
     return occurrences;
@@ -132,7 +162,7 @@ export function walkOccurrences(rule: WalkRule, options: { horizon: CalendarDate
     )].sort((left, right) => left - right);
     const firstWeekStart = addDays(rule.startsOn, -startsOnWeekday);
 
-    for (let weekIndex = 0; occurrences.length < RECURRENCE_MAX_INSTANCES_PER_RUN; weekIndex += 1) {
+    for (let weekIndex = 0; weekIndex < RECURRENCE_MAX_WALK_STEPS; weekIndex += 1) {
       const weekStart = addWeeks(firstWeekStart, weekIndex * rule.interval);
       if (!mayInclude(rule, weekStart, options.horizon) && compareDates(weekStart, options.horizon) > 0) break;
       for (const selectedWeekday of selected) {
@@ -143,23 +173,23 @@ export function walkOccurrences(rule: WalkRule, options: { horizon: CalendarDate
             (rule.endsOn != null && compareDates(candidate, rule.endsOn) > 0)) return occurrences;
           continue;
         }
-        if (!appendOccurrence(occurrences, rule, candidate, options.horizon)) return occurrences;
+        if (!appendOccurrence(occurrences, rule, candidate, options, state)) return occurrences;
       }
     }
     return occurrences;
   }
 
   if (rule.freq === 'monthly') {
-    for (let index = 0; index < RECURRENCE_MAX_INSTANCES_PER_RUN; index += 1) {
+    for (let index = 0; index < RECURRENCE_MAX_WALK_STEPS; index += 1) {
       const candidate = addMonths(rule.startsOn, index * rule.interval, rule.startsOn.day);
       if (!mayInclude(rule, candidate, options.horizon)) break;
-      if (!appendOccurrence(occurrences, rule, candidate, options.horizon)) break;
+      if (!appendOccurrence(occurrences, rule, candidate, options, state)) break;
     }
     return occurrences;
   }
 
   if (rule.freq === 'yearly') {
-    for (let index = 0; index < RECURRENCE_MAX_INSTANCES_PER_RUN; index += 1) {
+    for (let index = 0; index < RECURRENCE_MAX_WALK_STEPS; index += 1) {
       const candidate = addYears(
         rule.startsOn,
         index * rule.interval,
@@ -167,7 +197,7 @@ export function walkOccurrences(rule: WalkRule, options: { horizon: CalendarDate
         rule.startsOn.day,
       );
       if (!mayInclude(rule, candidate, options.horizon)) break;
-      if (!appendOccurrence(occurrences, rule, candidate, options.horizon)) break;
+      if (!appendOccurrence(occurrences, rule, candidate, options, state)) break;
     }
   }
   return occurrences;
