@@ -48,6 +48,15 @@ async function createHousehold(accessToken: string): Promise<string> {
   return (response.json() as { id: string }).id;
 }
 
+async function addMemberViaDb(householdId: string, actor: ActorFixture, role: string = 'MEMBER'): Promise<void> {
+  await withDatabase(async (client) => {
+    await client.query(
+      `INSERT INTO "memberships" ("user_id", "household_id", "role") VALUES ($1, $2, $3)`,
+      [actor.userId, householdId, role],
+    );
+  });
+}
+
 async function taskApi(
   accessToken: string,
   householdId: string,
@@ -59,6 +68,26 @@ async function taskApi(
     method,
     url: `/api/v1/households/${householdId}/tasks`,
     headers: { authorization: `Bearer ${accessToken}`, ...(payload === undefined ? {} : { 'content-type': 'application/json' }) },
+    ...(payload === undefined ? {} : { payload }),
+  });
+  return response as { statusCode: number; json: () => any };
+}
+
+async function eventApi(
+  accessToken: string,
+  householdId: string,
+  method: 'GET' | 'POST' | 'PUT',
+  path: string = '',
+  payload?: unknown,
+): Promise<{ statusCode: number; json: () => any }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const response = await (app.getHttpAdapter().getInstance() as any).inject({
+    method,
+    url: `/api/v1/households/${encodeURIComponent(householdId)}/events${path}`,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      ...(payload === undefined ? {} : { 'content-type': 'application/json' }),
+    },
     ...(payload === undefined ? {} : { payload }),
   });
   return response as { statusCode: number; json: () => any };
@@ -136,6 +165,128 @@ describe('daily task recurrence tracer', () => {
       title: 'Forbidden recurrence',
       recurrence: { freq: 'daily', startsOn: new Date().toISOString().slice(0, 10), count: 2, timezone: 'UTC' },
     });
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
+  });
+});
+
+describe('recurring events', () => {
+  const startsOn = '2026-08-18'; // Tuesday
+  const recurringEvent = {
+    title: 'Tuesday and Thursday family event',
+    startTime: '2026-08-18T01:00:00.000Z',
+    endTime: '2026-08-18T02:30:00.000Z',
+    recurrence: {
+      freq: 'weekly',
+      byWeekday: [2, 4],
+      startsOn,
+      count: 6,
+      timezone: 'Asia/Shanghai',
+    },
+  };
+
+  test('materializes six wall-clock occurrences, filters cancellation from lists, and preserves deep links', async () => {
+    const owner = await insertActor('recurring-event-owner@example.test');
+    const member = await insertActor('recurring-event-member@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    await addMemberViaDb(householdId, member);
+
+    const response = await eventApi(owner.accessToken, householdId, 'POST', '', recurringEvent);
+    expect(response.statusCode).toBe(201);
+    const created = response.json() as {
+      recurrenceRuleId: string | null;
+      recurrence: { freq: string; materializedThrough: string };
+    };
+    expect(created.recurrenceRuleId).not.toBeNull();
+    expect(created.recurrence.freq).toBe('weekly');
+
+    const listed = await eventApi(
+      owner.accessToken,
+      householdId,
+      'GET',
+      '?startDate=2026-08-18&endDate=2026-09-10',
+    );
+    expect(listed.statusCode).toBe(200);
+    const listBody = listed.json() as {
+      total: number;
+      materializedThrough: string;
+      events: Array<{ id: string; startTime: string; endTime: string; occurrenceDate: string }>;
+    };
+    expect(listBody.total).toBe(6);
+    expect(listBody.events).toHaveLength(6);
+    expect(listBody.materializedThrough).toBe(created.recurrence.materializedThrough);
+    expect(new Set(listBody.events.map((event) => event.occurrenceDate)).size).toBe(6);
+    expect(listBody.events.every((event) => [2, 4].includes(new Date(`${event.occurrenceDate}T00:00:00.000Z`).getUTCDay()))).toBe(true);
+    expect(listBody.events.every((event) => (
+      new Date(event.endTime).getTime() - new Date(event.startTime).getTime() === 90 * 60_000
+    ))).toBe(true);
+
+    const cancelledId = listBody.events[2]!.id;
+    await withDatabase((client) => client.query(
+      `UPDATE "events" SET "cancelled_at" = CURRENT_TIMESTAMP WHERE "id" = $1`,
+      [cancelledId],
+    ));
+    const afterCancellation = await eventApi(
+      owner.accessToken,
+      householdId,
+      'GET',
+      '?startDate=2026-08-18&endDate=2026-09-10',
+    );
+    const afterBody = afterCancellation.json() as { total: number; events: Array<{ id: string }> };
+    expect(afterBody.total).toBe(5);
+    expect(afterBody.events.some((event) => event.id === cancelledId)).toBe(false);
+
+    const deepLink = await eventApi(owner.accessToken, householdId, 'GET', `/${cancelledId}`);
+    expect(deepLink.statusCode).toBe(200);
+    expect((deepLink.json() as { cancelledAt: string | null }).cancelledAt).not.toBeNull();
+
+    const forbidden = await eventApi(member.accessToken, householdId, 'PUT', `/${listBody.events[0]!.id}`, {
+      title: 'Unauthorized recurring event edit',
+    });
+    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.json().error.code).toBe('FORBIDDEN');
+  });
+
+  test('returns a null household watermark when no recurrence rule exists', async () => {
+    const owner = await insertActor('event-watermark-empty@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const response = await eventApi(owner.accessToken, householdId, 'GET');
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ events: [], total: 0, materializedThrough: null });
+  });
+
+  test('rejects invalid recurrence bounds and timezones with stable validation errors', async () => {
+    const owner = await insertActor('invalid-event-recurrence@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+
+    const mutuallyExclusive = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      ...recurringEvent,
+      recurrence: { ...recurringEvent.recurrence, endsOn: '2026-09-10' },
+    });
+    expect(mutuallyExclusive.statusCode).toBe(400);
+    expect(mutuallyExclusive.json().error.code).toBe('VALIDATION_FAILED');
+    expect(mutuallyExclusive.json().error.details[0].field).toBe('recurrence.endsOn');
+
+    const invalidTimezone = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      ...recurringEvent,
+      recurrence: { ...recurringEvent.recurrence, timezone: 'Not/AZone' },
+    });
+    expect(invalidTimezone.statusCode).toBe(400);
+    expect(invalidTimezone.json().error.code).toBe('VALIDATION_FAILED');
+
+    const excessiveCount = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      ...recurringEvent,
+      recurrence: { ...recurringEvent.recurrence, count: 5000 },
+    });
+    expect(excessiveCount.statusCode).toBe(400);
+    expect(excessiveCount.json().error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('does not disclose a household to a non-member creating recurrence', async () => {
+    const owner = await insertActor('event-household-owner@example.test');
+    const outsider = await insertActor('event-household-outsider@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const response = await eventApi(outsider.accessToken, householdId, 'POST', '', recurringEvent);
     expect(response.statusCode).toBe(404);
     expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
   });
