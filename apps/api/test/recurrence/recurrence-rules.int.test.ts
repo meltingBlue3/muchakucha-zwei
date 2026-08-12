@@ -6,6 +6,7 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { createApplication } from '../../src/main.js';
 import { RecurrenceMaterializerService } from '../../src/modules/recurrence/recurrence-materializer.service.js';
+import { addDays, currentCalendarDateIn, formatIsoDate } from '../../src/modules/recurrence/recurrence-date.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
 const accessSecret = 'test-only-access-secret-that-is-longer-than-thirty-two-bytes';
@@ -127,7 +128,12 @@ describe('daily task recurrence tracer', () => {
   test('creates a recurrence rule and five real task occurrences', async () => {
     const owner = await insertActor('recurrence-owner@example.test');
     const householdId = await createHousehold(owner.accessToken);
-    const startsOn = new Date().toISOString().slice(0, 10);
+    // D-11: daily's lookahead is 0, so only "today" materializes for a rule
+    // starting today. Backdate startsOn so the count-5 walk (startsOn..today)
+    // lands entirely inside the lookahead horizon and all 5 rows generate
+    // immediately, the way this tracer originally asserted.
+    const today = currentCalendarDateIn('Asia/Shanghai');
+    const startsOn = formatIsoDate(addDays(today, -4));
     const response = await taskApi(owner.accessToken, householdId, 'POST', {
       title: 'Daily household task',
       priority: 'high',
@@ -191,11 +197,16 @@ describe('daily task recurrence tracer', () => {
 });
 
 describe('recurring events', () => {
-  const startsOn = '2026-08-18'; // Tuesday
+  // D-11: weekly's lookahead is 6 days, so a rule starting today would only
+  // materialize the current week's remaining occurrences. Backdate startsOn
+  // well past the lookahead horizon so the full count-6 series (2
+  // occurrences/week over ~3 weeks) generates immediately at create time.
+  const eventToday = currentCalendarDateIn('Asia/Shanghai');
+  const startsOn = formatIsoDate(addDays(eventToday, -20));
   const recurringEvent = {
     title: 'Tuesday and Thursday family event',
-    startTime: '2026-08-18T01:00:00.000Z',
-    endTime: '2026-08-18T02:30:00.000Z',
+    startTime: `${startsOn}T01:00:00.000Z`,
+    endTime: `${startsOn}T02:30:00.000Z`,
     recurrence: {
       freq: 'weekly',
       byWeekday: [2, 4],
@@ -224,7 +235,7 @@ describe('recurring events', () => {
       owner.accessToken,
       householdId,
       'GET',
-      '?startDate=2026-08-18&endDate=2026-09-10',
+      `?startDate=${formatIsoDate(addDays(eventToday, -25))}&endDate=${formatIsoDate(addDays(eventToday, 10))}`,
     );
     expect(listed.statusCode).toBe(200);
     const listBody = listed.json() as {
@@ -250,7 +261,7 @@ describe('recurring events', () => {
       owner.accessToken,
       householdId,
       'GET',
-      '?startDate=2026-08-18&endDate=2026-09-10',
+      `?startDate=${formatIsoDate(addDays(eventToday, -25))}&endDate=${formatIsoDate(addDays(eventToday, 10))}`,
     );
     const afterBody = afterCancellation.json() as { total: number; events: Array<{ id: string }> };
     expect(afterBody.total).toBe(5);
@@ -316,7 +327,11 @@ describe('series template isolation', () => {
   test('generates later occurrences from the rule template, never from an edited earlier instance', async () => {
     const owner = await insertActor('template-isolation-owner@example.test');
     const householdId = await createHousehold(owner.accessToken);
-    const startsOn = new Date().toISOString().slice(0, 10);
+    // D-11: daily's lookahead is 0, so backdate startsOn far enough that the
+    // open-ended walk (startsOn..today) produces the >10 rows this test's
+    // OFFSET 10 needs, immediately at create time.
+    const today = currentCalendarDateIn('UTC');
+    const startsOn = formatIsoDate(addDays(today, -15));
     const created = await taskApi(owner.accessToken, householdId, 'POST', {
       title: 'Daily original',
       recurrence: { freq: 'daily', startsOn, timezone: 'UTC', startTimeLocal: '08:00' },
@@ -383,7 +398,10 @@ describe('deleting a single occurrence', () => {
   test('cancels a recurring task instead of hard-deleting it, so no run resurrects it', async () => {
     const owner = await insertActor('occurrence-delete-owner@example.test');
     const householdId = await createHousehold(owner.accessToken);
-    const startsOn = new Date().toISOString().slice(0, 10);
+    // D-11: backdate startsOn so at least the 4 rows this test indexes into
+    // (ordered[3]) exist immediately at create time.
+    const today = currentCalendarDateIn('UTC');
+    const startsOn = formatIsoDate(addDays(today, -15));
     const created = await taskApi(owner.accessToken, householdId, 'POST', {
       title: 'Deletable daily task',
       recurrence: { freq: 'daily', startsOn, timezone: 'UTC', startTimeLocal: '08:00' },
@@ -417,12 +435,16 @@ describe('deleting a single occurrence', () => {
   test('cancels a recurring event instead of hard-deleting it, so no run resurrects it', async () => {
     const owner = await insertActor('occurrence-delete-event-owner@example.test');
     const householdId = await createHousehold(owner.accessToken);
+    // D-11: backdate startsOn so the full count-6 series materializes at
+    // create time instead of stalling at the 6-day weekly lookahead.
+    const today = currentCalendarDateIn('Asia/Shanghai');
+    const startsOn = formatIsoDate(addDays(today, -20));
     const response = await eventApi(owner.accessToken, householdId, 'POST', '', {
       title: 'Deletable weekly event',
-      startTime: '2026-08-18T01:00:00.000Z',
-      endTime: '2026-08-18T02:30:00.000Z',
+      startTime: `${startsOn}T01:00:00.000Z`,
+      endTime: `${startsOn}T02:30:00.000Z`,
       recurrence: {
-        freq: 'weekly', byWeekday: [2, 4], startsOn: '2026-08-18', count: 6, timezone: 'Asia/Shanghai',
+        freq: 'weekly', byWeekday: [2, 4], startsOn, count: 6, timezone: 'Asia/Shanghai',
       },
     });
     expect(response.statusCode).toBe(201);
@@ -455,7 +477,10 @@ describe('per-instance association edits', () => {
   test('does not re-apply the template assignees to instances a later run did not create', async () => {
     const owner = await insertActor('assignee-fanout-owner@example.test');
     const householdId = await createHousehold(owner.accessToken);
-    const startsOn = new Date().toISOString().slice(0, 10);
+    // D-11: backdate startsOn so the >10 rows this test's OFFSET 10 needs
+    // exist immediately at create time.
+    const today = currentCalendarDateIn('UTC');
+    const startsOn = formatIsoDate(addDays(today, -15));
     const created = await taskApi(owner.accessToken, householdId, 'POST', {
       title: 'Weekly chore',
       assigneeIds: [owner.userId],
@@ -512,11 +537,17 @@ describe('series scope operations', () => {
     householdId: string,
     title: string,
   ): Promise<{ recurrenceRuleId: string; tasks: Array<{ id: string; occurrenceDate: string; title: string; status: string }> }> {
+    // D-11: daily's lookahead is 0, so backdate startsOn to today-6 — the
+    // count-7 walk (startsOn..today) lands entirely inside the lookahead
+    // horizon and all 7 rows generate immediately, as this helper's callers
+    // (which index into tasks[0..3]) require.
+    const today = currentCalendarDateIn('UTC');
+    const startsOn = formatIsoDate(addDays(today, -6));
     const created = await taskApi(owner.accessToken, householdId, 'POST', {
       title,
       recurrence: {
         freq: 'daily',
-        startsOn: '2026-08-20',
+        startsOn,
         count: 7,
         timezone: 'UTC',
         startTimeLocal: '08:00',

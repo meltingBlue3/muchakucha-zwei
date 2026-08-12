@@ -6,9 +6,9 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { createApplication } from '../../src/main.js';
 import {
-  RECURRENCE_HORIZON_DAYS,
   RECURRENCE_MAX_INSTANCES_PER_RUN,
   RecurrenceMaterializerService,
+  lookaheadFor,
 } from '../../src/modules/recurrence/recurrence-materializer.service.js';
 import {
   addDays,
@@ -123,7 +123,7 @@ describe('rolling recurrence materializer', () => {
       byWeekday,
       timezone: 'UTC',
     });
-    const horizon = addDays(today, RECURRENCE_HORIZON_DAYS);
+    const horizon = addDays(today, lookaheadFor('weekly'));
     const expected = walkOccurrences({
       freq: 'weekly',
       interval: 1,
@@ -157,7 +157,7 @@ describe('rolling recurrence materializer', () => {
     expect(await materializer.materializeAllDue()).toBe(0);
   });
 
-  test('reaches every occurrence of a count-1000 daily rule across successive runs', async () => {
+  test('a long-backlogged daily rule catches up to its lookahead horizon across truncated runs', async () => {
     const actor = await insertActor('bounded-materializer@example.test');
     const householdId = await createHousehold(actor.accessToken);
     const today = parseIsoDate(new Date().toISOString().slice(0, 10));
@@ -168,14 +168,18 @@ describe('rolling recurrence materializer', () => {
       timezone: 'UTC',
     });
 
-    // A single run is bounded by both the 90-day horizon and the per-run cap.
+    // A single run is bounded by both the per-frequency lookahead horizon and
+    // the per-run cap.
     expect((await taskOccurrenceDates(ruleId)).length).toBeLessThanOrEqual(
       RECURRENCE_MAX_INSTANCES_PER_RUN,
     );
 
-    // Age the series so the whole count fits inside the horizon and the
-    // per-run cap genuinely bites: 950 days of history + 90 days of horizon is
-    // more than the 1000 occurrences the rule is allowed to produce.
+    // Age the series so the per-run cap genuinely bites: 950 days of history
+    // up to today (the daily lookahead horizon, since daily's lookahead is 0)
+    // is more than the 400-row per-run cap. The count of 1000 is deliberately
+    // never reached — occurrences later than today have not entered the
+    // lookahead window yet, so this run intentionally stalls at the horizon,
+    // not at the series' count.
     const seriesStart = addDays(today, -950);
     await withDatabase(async (client) => {
       await client.query(
@@ -205,7 +209,9 @@ describe('rolling recurrence materializer', () => {
     expect(await watermarkOf()).toBe(
       formatIsoDate(addDays(seriesStart, RECURRENCE_MAX_INSTANCES_PER_RUN - 1)),
     );
-    expect(await watermarkOf()).not.toBe(formatIsoDate(addDays(today, RECURRENCE_HORIZON_DAYS)));
+    // daily's lookahead is 0, so the horizon this run could claim is `today`
+    // itself — the truncated run must not claim it early.
+    expect(await watermarkOf()).not.toBe(formatIsoDate(today));
 
     // Subsequent runs must keep extending instead of stalling forever.
     let runs = 1;
@@ -216,9 +222,11 @@ describe('rolling recurrence materializer', () => {
     expect(runs).toBeGreaterThan(1);
 
     const dates = await taskOccurrenceDates(ruleId);
-    expect(dates).toHaveLength(1000);
+    // Bounded by the lookahead horizon (today), not by the series' count of
+    // 1000: seriesStart..today inclusive is 951 dates.
+    expect(dates).toHaveLength(951);
     expect(dates[0]).toBe(formatIsoDate(seriesStart));
-    expect(dates[dates.length - 1]).toBe(formatIsoDate(addDays(seriesStart, 999)));
+    expect(dates[dates.length - 1]).toBe(formatIsoDate(addDays(seriesStart, 950)));
   });
 
   test('persists exactly one clamped February occurrence for a monthly 31st rule', async () => {

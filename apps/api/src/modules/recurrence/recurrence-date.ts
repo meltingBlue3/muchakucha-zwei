@@ -203,6 +203,26 @@ export function walkOccurrences(rule: WalkRule, options: WalkOptions): CalendarD
   return occurrences;
 }
 
+/**
+ * The current calendar date in `timeZone`. D-11 anchors the generation window
+ * on the RULE's local midnight, not the server's — a 0-day daily lookahead in
+ * Asia/Shanghai must produce today's row at 00:00 CST, not at 08:00 CST when
+ * the UTC date finally rolls over.
+ *
+ * `en-CA` renders as YYYY-MM-DD, which `parseIsoDate` already validates. The
+ * default `now` parameter is the only clock-injection seam tests get — do not
+ * turn this into constructor-injected clock plumbing.
+ */
+export function currentCalendarDateIn(timeZone: string, now: Date = new Date()): CalendarDate {
+  const iso = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+  return parseIsoDate(iso);
+}
+
 function offsetMinutesAt(instant: number, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,

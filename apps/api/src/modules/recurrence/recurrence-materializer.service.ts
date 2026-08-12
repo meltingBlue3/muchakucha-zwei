@@ -4,6 +4,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import {
   RECURRENCE_MAX_INSTANCES_PER_RUN,
   addDays,
+  currentCalendarDateIn,
   formatIsoDate,
   localDateTimeToInstant,
   parseIsoDate,
@@ -11,9 +12,26 @@ import {
   type CalendarDate,
 } from './recurrence-date.js';
 
-export const RECURRENCE_HORIZON_DAYS = 90;
 export { RECURRENCE_MAX_INSTANCES_PER_RUN } from './recurrence-date.js';
 export const RECURRENCE_LOCK_NAMESPACE = 1_907_070_1;
+
+// D-11: the lookahead window is per-frequency, not a single fixed number of
+// days. daily=0 means "today" only appears after the rule's own local
+// midnight; weekly=6 means a rule becomes eligible exactly one week minus a
+// day before it is due. monthly/yearly reuse 6 as an adjustable default (the
+// user did not specify one) — not a hard constraint; revisit with real usage
+// feedback.
+export const RECURRENCE_LOOKAHEAD_DAYS: Record<string, number> = {
+  daily: 0,
+  weekly: 6,
+  monthly: 6,
+  yearly: 6,
+};
+export const RECURRENCE_MAX_LOOKAHEAD_DAYS = 6;
+
+export function lookaheadFor(freq: string): number {
+  return RECURRENCE_LOOKAHEAD_DAYS[freq] ?? RECURRENCE_MAX_LOOKAHEAD_DAYS;
+}
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -48,13 +66,19 @@ export class RecurrenceMaterializerService {
   constructor(private readonly prisma: PrismaService) {}
 
   async materializeAllDue(): Promise<number> {
-    const today = parseIsoDate(new Date().toISOString().slice(0, 10));
-    const horizon = databaseDate(addDays(today, RECURRENCE_HORIZON_DAYS));
+    const utcToday = parseIsoDate(new Date().toISOString().slice(0, 10));
+    // Superset prefilter only: this is a SQL-side bound to keep
+    // RecurrenceRule_materialized_through_idx useful, not the exact due
+    // decision. Each rule's exact eligibility depends on its own freq and
+    // timezone and is decided inside materializeRule. A rule's local calendar
+    // date is at most 1 day ahead of the UTC date, so max lookahead + 1 is a
+    // safe superset.
+    const prefilter = databaseDate(addDays(utcToday, RECURRENCE_MAX_LOOKAHEAD_DAYS + 1));
     const dueRules = await this.prisma.recurrenceRule.findMany({
       where: {
         OR: [
           { materializedThrough: null },
-          { materializedThrough: { lt: horizon } },
+          { materializedThrough: { lt: prefilter } },
         ],
       },
       select: { id: true },
@@ -62,7 +86,15 @@ export class RecurrenceMaterializerService {
     });
 
     let created = 0;
-    for (const rule of dueRules) created += (await this.materializeRule(rule.id)).created;
+    for (const rule of dueRules) {
+      try {
+        created += (await this.materializeRule(rule.id)).created;
+      } catch (error: unknown) {
+        // One rule's timezone becoming unresolvable (e.g. an ICU data
+        // change) must not abort the tick for every other household.
+        this.logger.error(`materialization failed for rule ${rule.id}`, error);
+      }
+    }
     return created;
   }
 
@@ -89,8 +121,12 @@ export class RecurrenceMaterializerService {
       });
       if (taskTemplate === null && eventTemplate === null) return { skipped: false, created: 0 };
 
-      const today = parseIsoDate(new Date().toISOString().slice(0, 10));
-      const horizon = addDays(today, RECURRENCE_HORIZON_DAYS);
+      // D-11: horizon is anchored on the RULE's own local calendar date, not
+      // the server's UTC date — a 0-day daily lookahead must produce "today"
+      // at this rule's local midnight, not whenever the server's UTC date
+      // happens to roll over.
+      const today = currentCalendarDateIn(rule.timezone);
+      const horizon = addDays(today, lookaheadFor(rule.freq));
       // Resume at the watermark instead of re-walking the whole history: the
       // per-run cap truncates the tail of what is emitted, so starting at
       // `startsOn` every time meant the cap always kept the OLDEST occurrences
