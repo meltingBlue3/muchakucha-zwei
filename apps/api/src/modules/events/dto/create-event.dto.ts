@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsDateString, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { LabelResponseDto } from '../../labels/dto/create-label.dto.js';
+import { RecurrenceDto, RecurrenceResponseDto } from '../../recurrence/dto/recurrence.dto.js';
 
 export class CreateEventDto {
   @ApiProperty({ description: 'Event title', minLength: 1, maxLength: 200 })
@@ -32,6 +34,12 @@ export class CreateEventDto {
   @IsString()
   @MaxLength(255)
   location?: string;
+
+  @ApiPropertyOptional({ description: '重复规则；省略即普通一次性事件', type: () => RecurrenceDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RecurrenceDto)
+  recurrence?: RecurrenceDto;
 }
 
 export class EventResponseDto {
@@ -59,6 +67,18 @@ export class EventResponseDto {
   @ApiPropertyOptional()
   location?: string | null;
 
+  @ApiProperty({ nullable: true })
+  recurrenceRuleId!: string | null;
+
+  @ApiProperty({ nullable: true })
+  occurrenceDate!: string | null;
+
+  @ApiProperty({ nullable: true })
+  cancelledAt!: string | null;
+
+  @ApiProperty({ type: () => RecurrenceResponseDto, nullable: true })
+  recurrence!: RecurrenceResponseDto | null;
+
   @ApiProperty()
   createdBy!: string;
 
@@ -78,4 +98,7 @@ export class EventListResponseDto {
 
   @ApiProperty()
   total!: number;
+
+  @ApiProperty({ nullable: true })
+  materializedThrough!: string | null;
 }

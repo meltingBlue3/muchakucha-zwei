@@ -232,22 +232,23 @@ export class TasksService {
     if (filters.priority) where.priority = filters.priority;
     if (filters.assigneeId) where.assignees = { some: { userId: filters.assigneeId } };
 
-    const [tasks, total] = await Promise.all([
+    const [tasks, total, watermark] = await Promise.all([
       this.prisma.task.findMany({
         where: where as any,
         orderBy: [{ priority: 'asc' }, { dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
         include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
       }),
       this.prisma.task.count({ where: where as any }),
+      this.prisma.recurrenceRule.aggregate({
+        _min: { materializedThrough: true },
+        where: { householdId },
+      }),
     ]);
 
     return {
       tasks: tasks.map((t) => this.toResponse(t)),
       total,
-      materializedThrough: tasks.reduce<string | null>((latest, task) => {
-        const value = task.recurrenceRule?.materializedThrough?.toISOString().slice(0, 10) ?? null;
-        return value !== null && (latest === null || value > latest) ? value : latest;
-      }, null),
+      materializedThrough: watermark._min.materializedThrough?.toISOString().slice(0, 10) ?? null,
     };
   }
 

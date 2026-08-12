@@ -1,5 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsIn, IsOptional, IsString, IsUUID, Length, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsIn, IsOptional, IsString, IsUUID, Length, MaxLength, ValidateNested } from 'class-validator';
+import { RecurrenceDto } from '../../recurrence/dto/recurrence.dto.js';
 import { TASK_PRIORITIES, TASK_STATUSES } from './create-task.dto.js';
 
 export class UpdateTaskDto {
@@ -37,4 +39,10 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsString()
   dueDate?: string;
+
+  @ApiPropertyOptional({ description: '重复规则；省略即不改变当前重复设置', type: () => RecurrenceDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RecurrenceDto)
+  recurrence?: RecurrenceDto;
 }
