@@ -127,6 +127,11 @@ export class UpdateSeriesDto {
   @IsOptional() @IsArray() @IsUUID('4', { each: true })
   assigneeIds?: string[];
 
+  /** Replaces the labels carried over from the pre-edit occurrence. */
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional() @IsArray() @IsUUID('4', { each: true })
+  labelIds?: string[];
+
   @ApiPropertyOptional()
   @IsOptional() @IsDateString()
   dueDate?: string;

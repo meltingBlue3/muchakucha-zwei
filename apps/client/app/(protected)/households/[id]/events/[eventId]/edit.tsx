@@ -32,9 +32,12 @@ const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后�
  * would turn every 此后所有 edit into a runtime 400 with no compile-time
  * signal.
  */
-function eventSeriesUpdate(data: CreateEventDto): UpdateSeriesDto {
+function eventSeriesUpdate(data: CreateEventDto, labelIds: string[]): UpdateSeriesDto {
   return {
     title: data.title,
+    // Without this the server copies the labels off the pre-edit occurrence
+    // and silently discards the user's label edits.
+    labelIds,
     ...(data.description === undefined ? {} : { description: data.description }),
     startTime: data.startTime,
     endTime: data.endTime,
@@ -171,7 +174,7 @@ export default function EditEventRoute() {
           token,
           id,
           eventId,
-          eventSeriesUpdate(pendingSeriesAction.data),
+          eventSeriesUpdate(pendingSeriesAction.data, selectedLabelIds),
         );
       }
       setPendingSeriesAction(null);

@@ -252,6 +252,7 @@ export interface UpdateSeriesDto {
   status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   assigneeIds?: string[];
+  labelIds?: string[];
   dueDate?: string;
   startTime?: string;
   endTime?: string;

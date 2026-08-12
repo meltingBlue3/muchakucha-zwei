@@ -155,6 +155,24 @@ export class RecurrenceService {
         ? (input.location === undefined ? eventSource!.location : input.location.trim() || null)
         : null;
       const nextAllDay = kind === 'event' ? (input.allDay ?? eventSource!.allDay) : false;
+      // Label edits used to be dropped on this path: the successor always
+      // inherited the pre-edit occurrence's labels, so a removed label came
+      // back on every occurrence of the new series.
+      const nextLabelIds = input.labelIds === undefined
+        ? (kind === 'task' ? taskSource!.labels : eventSource!.labels).map(({ labelId }) => labelId)
+        : [...new Set(input.labelIds)];
+      if (input.labelIds !== undefined && nextLabelIds.length > 0) {
+        const labelCount = await tx.label.count({
+          where: { householdId, id: { in: nextLabelIds } },
+        });
+        if (labelCount !== nextLabelIds.length) {
+          throw new BadRequestException({
+            code: 'VALIDATION_FAILED',
+            message: 'Request validation failed.',
+            details: [{ field: 'labelIds', codes: ['not_household_label'] }],
+          });
+        }
+      }
 
       const createdRule = await tx.recurrenceRule.create({
         data: {
@@ -210,7 +228,7 @@ export class RecurrenceService {
             priority: nextPriority,
             dueDate: input.dueDate === undefined ? template.dueDate : new Date(input.dueDate),
             assignees: { create: [...new Set(assigneeIds)].map((userId) => ({ userId })) },
-            labels: { create: template.labels.map(({ labelId }) => ({ labelId })) },
+            labels: { create: nextLabelIds.map((labelId) => ({ labelId })) },
           },
         });
       } else {
@@ -230,7 +248,7 @@ export class RecurrenceService {
             endTime: input.endTime === undefined ? template.endTime : new Date(input.endTime),
             allDay: nextAllDay,
             location: nextLocation,
-            labels: { create: template.labels.map(({ labelId }) => ({ labelId })) },
+            labels: { create: nextLabelIds.map((labelId) => ({ labelId })) },
           },
         });
       }

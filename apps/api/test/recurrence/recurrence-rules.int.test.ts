@@ -657,6 +657,56 @@ describe('series scope operations', () => {
     expect(after.future).toEqual(before.future);
   });
 
+  test('applies labelIds to the successor series instead of copying the old labels', async () => {
+    const owner = await insertActor('scope-labels-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const createLabel = async (name: string): Promise<string> => {
+      const response = await (app.getHttpAdapter().getInstance() as any).inject({
+        method: 'POST',
+        url: `/api/v1/households/${householdId}/labels`,
+        headers: { authorization: `Bearer ${owner.accessToken}`, 'content-type': 'application/json' },
+        payload: { name, color: '#FF8A65' },
+      });
+      expect(response.statusCode).toBe(201);
+      return (response.json() as { id: string }).id;
+    };
+    const keptLabelId = await createLabel('保留');
+    const droppedLabelId = await createLabel('删除');
+
+    const series = await createDailySeries(owner, householdId, 'Labelled series');
+    const split = series.tasks[3]!;
+    const tagged = await (app.getHttpAdapter().getInstance() as any).inject({
+      method: 'POST',
+      url: `/api/v1/households/${householdId}/tasks/${split.id}/labels`,
+      headers: { authorization: `Bearer ${owner.accessToken}`, 'content-type': 'application/json' },
+      payload: { labelIds: [keptLabelId, droppedLabelId] },
+    });
+    expect(tagged.statusCode).toBeLessThan(300);
+
+    // A label from outside the household must never be attachable this way.
+    // Checked first: a successful split replaces the occurrence row entirely.
+    const rejected = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${split.id}/series`, {
+      labelIds: [randomUUID()],
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().error.details[0].field).toBe('labelIds');
+
+    const response = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${split.id}/series`, {
+      title: 'Labelled series',
+      labelIds: [keptLabelId],
+    });
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const labelIds = await withDatabase(async (client) => (await client.query<{ label_id: string }>(
+      `SELECT DISTINCT tl."label_id" FROM "task_labels" tl
+       JOIN "tasks" t ON t."id" = tl."task_id"
+       WHERE t."recurrence_rule_id" = $1`,
+      [newRuleId],
+    )).rows.map((row) => row.label_id));
+    expect(labelIds).toEqual([keptLabelId]);
+  });
+
   test('rejects malformed path ids with 400 rather than a driver-level 500', async () => {
     const owner = await insertActor('scope-param-validation@example.test');
     const householdId = await createHousehold(owner.accessToken);

@@ -2761,6 +2761,12 @@
               "type": "string"
             }
           },
+          "labelIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "dueDate": {
             "type": "string"
           },

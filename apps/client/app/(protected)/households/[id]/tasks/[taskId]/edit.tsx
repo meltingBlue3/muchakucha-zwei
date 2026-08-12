@@ -34,11 +34,14 @@ type PendingSeriesAction =
 const SERIES_FAILURE = '没有完成。这个重复安排没有发生任何改变，请重试。';
 const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后可以看到最新的安排。';
 
-function taskSeriesUpdate(data: CreateTaskDto): UpdateSeriesDto {
+function taskSeriesUpdate(data: CreateTaskDto, labelIds: string[]): UpdateSeriesDto {
   const status = data.status;
   const priority = data.priority;
   return {
     title: data.title,
+    // Without this the server copies the labels off the pre-edit occurrence
+    // and silently discards the user's label edits.
+    labelIds,
     ...(data.description === undefined ? {} : { description: data.description }),
     ...(status === 'pending' || status === 'in_progress' || status === 'completed' || status === 'cancelled'
       ? { status }
@@ -207,7 +210,7 @@ export default function EditTaskRoute() {
           token,
           householdId,
           taskId,
-          taskSeriesUpdate(pendingSeriesAction.data),
+          taskSeriesUpdate(pendingSeriesAction.data, selectedLabelIds),
         );
       }
       setPendingSeriesAction(null);
