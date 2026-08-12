@@ -260,7 +260,7 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 4/8 plans executed
+**Plans:** 5/8 plans executed
 
 Plans:
 **Wave 1**
@@ -278,7 +278,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 07-05-PLAN.md — RecurrencePicker 与中文摘要，接入事件表单与任务表单
+- [x] 07-05-PLAN.md — RecurrencePicker 与中文摘要，接入事件表单与任务表单
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
