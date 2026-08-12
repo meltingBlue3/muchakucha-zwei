@@ -1,6 +1,5 @@
-import { Body, Controller, Delete, HttpCode, Param, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, HttpCode, Param, ParseUUIDPipe, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsUUID } from 'class-validator';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import {
   DeleteSeriesQueryDto,
@@ -13,10 +12,12 @@ interface AuthenticatedRequest {
   auth: AccessTokenClaims;
 }
 
-class HouseholdIdParam {
-  @IsUUID('4')
-  householdId!: string;
-}
+// Path params are validated with per-parameter pipes rather than a param DTO.
+// TypeScript emits `Object` as the design:paramtypes metadata for an
+// intersection type, and Nest's ValidationPipe exempts `Object` — so a param
+// class's class-validator decorators never run and a malformed id reaches
+// Prisma, surfacing as a 500 instead of a 400.
+const uuidParam = new ParseUUIDPipe({ version: '4' });
 
 @ApiTags('recurrence')
 @ApiBearerAuth()
@@ -30,11 +31,12 @@ export class EventSeriesController {
   @ApiOkResponse({ type: SeriesMutationResponseDto })
   update(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { eventId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('eventId', uuidParam) eventId: string,
     @Body() input: UpdateSeriesDto,
   ): Promise<SeriesMutationResponseDto> {
     return this.recurrenceService.updateSeriesFromOccurrence(
-      request.auth.sub, params.householdId, 'event', params.eventId, input,
+      request.auth.sub, householdId, 'event', eventId, input,
     );
   }
 
@@ -44,11 +46,12 @@ export class EventSeriesController {
   @ApiNoContentResponse()
   delete(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { eventId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('eventId', uuidParam) eventId: string,
     @Query() query: DeleteSeriesQueryDto,
   ): Promise<void> {
     return this.recurrenceService.deleteSeriesFromOccurrence(
-      request.auth.sub, params.householdId, 'event', params.eventId, query.scope,
+      request.auth.sub, householdId, 'event', eventId, query.scope,
     );
   }
 }
@@ -65,11 +68,12 @@ export class TaskSeriesController {
   @ApiOkResponse({ type: SeriesMutationResponseDto })
   update(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { taskId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('taskId', uuidParam) taskId: string,
     @Body() input: UpdateSeriesDto,
   ): Promise<SeriesMutationResponseDto> {
     return this.recurrenceService.updateSeriesFromOccurrence(
-      request.auth.sub, params.householdId, 'task', params.taskId, input,
+      request.auth.sub, householdId, 'task', taskId, input,
     );
   }
 
@@ -79,11 +83,12 @@ export class TaskSeriesController {
   @ApiNoContentResponse()
   delete(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { taskId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('taskId', uuidParam) taskId: string,
     @Query() query: DeleteSeriesQueryDto,
   ): Promise<void> {
     return this.recurrenceService.deleteSeriesFromOccurrence(
-      request.auth.sub, params.householdId, 'task', params.taskId, query.scope,
+      request.auth.sub, householdId, 'task', taskId, query.scope,
     );
   }
 }

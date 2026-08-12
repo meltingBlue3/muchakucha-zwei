@@ -989,7 +989,24 @@
     "/api/v1/households/{householdId}/events/{eventId}/series": {
       "put": {
         "operationId": "updateEventSeries",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1026,6 +1043,22 @@
         "operationId": "deleteEventSeries",
         "parameters": [
           {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "scope",
             "required": true,
             "in": "query",
@@ -1057,7 +1090,24 @@
     "/api/v1/households/{householdId}/tasks/{taskId}/series": {
       "put": {
         "operationId": "updateTaskSeries",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1093,6 +1143,22 @@
       "delete": {
         "operationId": "deleteTaskSeries",
         "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "scope",
             "required": true,

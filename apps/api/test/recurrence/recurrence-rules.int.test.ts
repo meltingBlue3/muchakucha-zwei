@@ -657,6 +657,27 @@ describe('series scope operations', () => {
     expect(after.future).toEqual(before.future);
   });
 
+  test('rejects malformed path ids with 400 rather than a driver-level 500', async () => {
+    const owner = await insertActor('scope-param-validation@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+
+    const badHousehold = await taskItemApi(
+      owner.accessToken,
+      'not-a-uuid',
+      'DELETE',
+      `/${randomUUID()}/series?scope=this_only`,
+    );
+    expect(badHousehold.statusCode).toBe(400);
+
+    const badTask = await taskItemApi(
+      owner.accessToken,
+      householdId,
+      'DELETE',
+      '/not-a-uuid/series?scope=this_only',
+    );
+    expect(badTask.statusCode).toBe(400);
+  });
+
   test('rejects /series for a one-time task', async () => {
     const owner = await insertActor('scope-ordinary-owner@example.test');
     const householdId = await createHousehold(owner.accessToken);
