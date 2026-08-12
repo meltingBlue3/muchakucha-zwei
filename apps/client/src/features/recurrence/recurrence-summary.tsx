@@ -7,6 +7,10 @@ import type { Theme } from '../../ui/theme';
 
 const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'] as const;
 const CLAMP_NOTE = '有些月份没有这一天，会自动改到当月最后一天。';
+// A yearly rule anchored on 2 月 29 日 genuinely clamps to 2 月 28 日 in
+// common years. D-09 requires clamping be explicit rather than silent, and
+// this summary is the only place the user can learn about it.
+const LEAP_DAY_CLAMP_NOTE = '平年没有 2 月 29 日，会自动改到 2 月 28 日。';
 
 export interface FormattedRecurrenceSummary {
   summary: string;
@@ -45,7 +49,7 @@ export function formatRecurrenceSummary(
   rule: RecurrenceDto,
   deviceTimeZone: string,
 ): FormattedRecurrenceSummary {
-  const { day } = dateParts(rule.startsOn);
+  const { month, day } = dateParts(rule.startsOn);
   let summary = frequencySummary(rule);
 
   if (rule.endsOn !== undefined) {
@@ -56,7 +60,11 @@ export function formatRecurrenceSummary(
 
   return {
     summary,
-    clampNote: rule.freq === 'monthly' && day >= 29 ? CLAMP_NOTE : null,
+    clampNote: rule.freq === 'monthly' && day >= 29
+      ? CLAMP_NOTE
+      : rule.freq === 'yearly' && month === 2 && day === 29
+        ? LEAP_DAY_CLAMP_NOTE
+        : null,
     timeZoneNote:
       rule.timezone === deviceTimeZone ? null : `按 ${rule.timezone} 的日期重复。`,
   };

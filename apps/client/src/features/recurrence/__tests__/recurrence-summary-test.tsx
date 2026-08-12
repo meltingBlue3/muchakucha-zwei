@@ -45,6 +45,15 @@ describe('recurrence summary formatting', () => {
     },
   );
 
+  test('explains leap-day clamping for a yearly 2-29 anchor', () => {
+    expect(
+      formatRecurrenceSummary(
+        { ...baseRule, freq: 'yearly', startsOn: '2028-02-29' },
+        'Asia/Shanghai',
+      ).clampNote,
+    ).toBe('平年没有 2 月 29 日，会自动改到 2 月 28 日。');
+  });
+
   test('does not show the monthly note for safe dates or other frequencies', () => {
     expect(
       formatRecurrenceSummary(
