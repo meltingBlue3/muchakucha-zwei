@@ -5,6 +5,7 @@ import {
   daysInMonth,
   formatIsoDate,
   localDateTimeToInstant,
+  nextOccurrenceFor,
   parseIsoDate,
   walkOccurrences,
   type CalendarDate,
@@ -258,5 +259,61 @@ describe('recurrence calendar dates', () => {
 
   test('throws rather than silently falling back to UTC for an unresolvable time zone', () => {
     expect(() => currentCalendarDateIn('Not/AZone', new Date('2026-08-12T11:00:00Z'))).toThrow();
+  });
+});
+
+describe('nextOccurrenceFor', () => {
+  test('returns the nearest selected weekday on or after "from" for a weekly rule', () => {
+    // 2026-08-13 is a Thursday; the rule fires Tue(2)/Thu(4)/Sat(6).
+    const rule: WeeklyRule = {
+      freq: 'weekly',
+      interval: 1,
+      byWeekday: [2, 4, 6],
+      startsOn: parseIsoDate('2026-01-06'),
+    };
+    expect(nextOccurrenceFor(rule, parseIsoDate('2026-08-13'))).toEqual(parseIsoDate('2026-08-13'));
+    expect(nextOccurrenceFor(rule, parseIsoDate('2026-08-14'))).toEqual(parseIsoDate('2026-08-15'));
+  });
+
+  test('clamps a monthly anchor of 31 to the shorter month', () => {
+    const rule: WalkRule = {
+      freq: 'monthly',
+      interval: 1,
+      startsOn: parseIsoDate('2026-01-31'),
+    };
+    // From mid-February, the next monthly candidate is Feb clamped to 28.
+    expect(nextOccurrenceFor(rule, parseIsoDate('2026-02-15'))).toEqual(parseIsoDate('2026-02-28'));
+  });
+
+  test('returns null once a count-bounded rule has been exhausted', () => {
+    const rule: WalkRule = {
+      freq: 'daily',
+      interval: 1,
+      startsOn: parseIsoDate('2026-01-01'),
+      count: 3,
+    };
+    // 2026-01-01, 01-02, 01-03 are the only three occurrences.
+    expect(nextOccurrenceFor(rule, parseIsoDate('2026-01-04'))).toBeNull();
+  });
+
+  test('returns null once "from" is after the rule\'s endsOn', () => {
+    const rule: WalkRule = {
+      freq: 'daily',
+      interval: 1,
+      startsOn: parseIsoDate('2026-01-01'),
+      endsOn: parseIsoDate('2026-01-10'),
+    };
+    expect(nextOccurrenceFor(rule, parseIsoDate('2026-01-11'))).toBeNull();
+  });
+
+  test('still finds a yearly occurrence 300 days after "from", inside the 400-day window', () => {
+    const rule: WalkRule = {
+      freq: 'yearly',
+      interval: 1,
+      startsOn: parseIsoDate('2020-06-01'),
+    };
+    // From 2026-08-13, the next June 1st anniversary is 2027-06-01 — about
+    // 292 days out, comfortably inside the 400-day lookahead.
+    expect(nextOccurrenceFor(rule, parseIsoDate('2026-08-13'))).toEqual(parseIsoDate('2027-06-01'));
   });
 });

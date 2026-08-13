@@ -167,3 +167,38 @@ export class SeriesMutationResponseDto {
   @ApiProperty()
   recurrenceRuleId!: string;
 }
+
+export class RecurrenceRuleListItemDto {
+  @ApiProperty() id!: string;
+  // `kind` has no backing column. It is derived from which instance relation
+  // (tasks vs events) the rule owns. Ending a series or splitting it via
+  // this_and_following can delete every one of a rule's instance rows, at
+  // which point neither relation has any rows to derive from — this returns
+  // null rather than guessing a type the rule can no longer prove it has.
+  @ApiProperty({ enum: ['task', 'event'], nullable: true }) kind!: 'task' | 'event' | null;
+  // The rule's own template title, NOT any instance's title — an instance
+  // can be renamed independently (D-02/D-07) and is not a trustworthy label
+  // for the series itself.
+  @ApiProperty() title!: string;
+  @ApiProperty({ enum: RECURRENCE_FREQUENCIES }) freq!: string;
+  @ApiProperty() interval!: number;
+  @ApiProperty({ type: [Number] }) byWeekday!: number[];
+  @ApiProperty() startsOn!: string;
+  @ApiProperty({ nullable: true }) endsOn!: string | null;
+  @ApiProperty({ nullable: true }) count!: number | null;
+  @ApiProperty() timezone!: string;
+  @ApiProperty({ nullable: true }) startTimeLocal!: string | null;
+  @ApiProperty({ nullable: true }) durationMinutes!: number | null;
+  // Computed by walking the rule from today, not by querying already
+  // generated rows — see `nextOccurrenceFor`. Null means the rule will never
+  // occur again (ended, exhausted count, or endsOn already passed).
+  @ApiProperty({ nullable: true }) nextOccurrenceDate!: string | null;
+}
+
+export class RecurrenceRuleListResponseDto {
+  @ApiProperty({ type: [RecurrenceRuleListItemDto] })
+  rules!: RecurrenceRuleListItemDto[];
+
+  @ApiProperty()
+  total!: number;
+}

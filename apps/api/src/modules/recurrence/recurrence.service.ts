@@ -2,12 +2,39 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { RecurrenceMaterializerService } from './recurrence-materializer.service.js';
-import { addDays, formatIsoDate, parseIsoDate } from './recurrence-date.js';
-import type { SeriesScope, UpdateSeriesDto } from './dto/recurrence.dto.js';
+import {
+  addDays,
+  currentCalendarDateIn,
+  formatIsoDate,
+  nextOccurrenceFor,
+  parseIsoDate,
+  type CalendarDate,
+} from './recurrence-date.js';
+import type {
+  RecurrenceRuleListItemDto,
+  RecurrenceRuleListResponseDto,
+  SeriesScope,
+  UpdateSeriesDto,
+} from './dto/recurrence.dto.js';
 
 type TransactionClient = Prisma.TransactionClient;
 type RecurrenceKind = 'event' | 'task';
 type ActorRole = 'OWNER' | 'ADMIN' | 'MEMBER';
+
+type RuleWithCounts = Prisma.RecurrenceRuleGetPayload<{
+  include: { _count: { select: { tasks: true; events: true } } };
+}>;
+
+function calendarDate(value: Date): CalendarDate {
+  return parseIsoDate(value.toISOString().slice(0, 10));
+}
+
+// Matches recurrence-materializer.service.ts's private helper of the same
+// name. That one isn't exported, so this is a deliberate local duplicate
+// rather than a cross-module import of a private implementation.
+function databaseDate(value: CalendarDate): Date {
+  return new Date(`${formatIsoDate(value)}T00:00:00.000Z`);
+}
 
 interface ResolvedOccurrence {
   occurrenceDate: Date;
@@ -35,6 +62,84 @@ export class RecurrenceService {
   private canMutate(actorRole: ActorRole, creatorId: string, actorId: string): boolean {
     if (actorRole === 'MEMBER') return creatorId === actorId;
     return true;
+  }
+
+  private toListItem(rule: RuleWithCounts): RecurrenceRuleListItemDto {
+    // A rule only ever owns rows in one of the two instance relations. Both
+    // counts at 0 means every generated row has been deleted (e.g. ended or
+    // split away) — the type can no longer be recovered, so null beats a
+    // guess.
+    const kind: 'task' | 'event' | null = rule._count.tasks > 0
+      ? 'task'
+      : rule._count.events > 0 ? 'event' : null;
+    // D-16: `today` must be computed per-rule in the RULE's own time zone —
+    // a list spanning rules in different time zones cannot share one "today".
+    const today = currentCalendarDateIn(rule.timezone);
+    const next = nextOccurrenceFor({
+      freq: rule.freq,
+      interval: rule.interval,
+      byWeekday: rule.byWeekday,
+      startsOn: calendarDate(rule.startsOn),
+      endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn),
+      count: rule.count,
+    }, today);
+    return {
+      id: rule.id,
+      kind,
+      title: rule.templateTitle,
+      freq: rule.freq,
+      interval: rule.interval,
+      byWeekday: rule.byWeekday,
+      startsOn: formatIsoDate(calendarDate(rule.startsOn)),
+      endsOn: rule.endsOn === null ? null : formatIsoDate(calendarDate(rule.endsOn)),
+      count: rule.count,
+      timezone: rule.timezone,
+      startTimeLocal: rule.startTimeLocal,
+      durationMinutes: rule.durationMinutes,
+      nextOccurrenceDate: next === null ? null : formatIsoDate(next),
+    };
+  }
+
+  async listRules(actorId: string, householdId: string): Promise<RecurrenceRuleListResponseDto> {
+    const role = await this.resolveActorRole(actorId, householdId);
+    if (role === null) {
+      throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
+    }
+    const rules = await this.prisma.recurrenceRule.findMany({
+      where: { householdId },
+      include: { _count: { select: { tasks: true, events: true } } },
+    });
+    const items = rules.map((rule) => this.toListItem(rule));
+    // Contract: unresolved (non-null nextOccurrenceDate) rules first, sorted
+    // by that date ascending, tied broken by title; ended/exhausted rules
+    // (null nextOccurrenceDate) after, sorted by title. Ended rules stay in
+    // the list — D-14: "结束" is not "删除".
+    items.sort((left, right) => {
+      if (left.nextOccurrenceDate !== null && right.nextOccurrenceDate !== null) {
+        return left.nextOccurrenceDate === right.nextOccurrenceDate
+          ? left.title.localeCompare(right.title)
+          : left.nextOccurrenceDate.localeCompare(right.nextOccurrenceDate);
+      }
+      if (left.nextOccurrenceDate !== null) return -1;
+      if (right.nextOccurrenceDate !== null) return 1;
+      return left.title.localeCompare(right.title);
+    });
+    return { rules: items, total: items.length };
+  }
+
+  async getRule(actorId: string, householdId: string, ruleId: string): Promise<RecurrenceRuleListItemDto> {
+    const role = await this.resolveActorRole(actorId, householdId);
+    if (role === null) {
+      throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
+    }
+    const rule = await this.prisma.recurrenceRule.findUnique({
+      where: { id: ruleId },
+      include: { _count: { select: { tasks: true, events: true } } },
+    });
+    if (rule === null || rule.householdId !== householdId) {
+      throw new NotFoundException({ code: 'RECURRENCE_RULE_NOT_FOUND', message: 'Recurrence rule not found.' });
+    }
+    return this.toListItem(rule);
   }
 
   private async resolveRuleForOccurrence(
@@ -259,6 +364,32 @@ export class RecurrenceService {
     return { recurrenceRuleId: newRuleId };
   }
 
+  // Shared by deleteSeriesFromOccurrence's this_and_following branch and
+  // endRule (CR-05's lesson: two independent copies of "end a series" drift).
+  // A rule only ever owns rows in one of the two instance relations, so
+  // running both deleteMany calls unconditionally is a deliberate zero-row
+  // no-op on whichever relation the rule doesn't have — this keeps the
+  // shared body from needing to know the rule's kind at all.
+  private async endSeriesAt(tx: TransactionClient, ruleId: string, anchor: Date): Promise<void> {
+    await tx.recurrenceRule.update({
+      where: { id: ruleId },
+      data: {
+        // The series ends the day BEFORE the anchor: the anchor itself is the
+        // first occurrence that no longer belongs to the series.
+        endsOn: databaseDate(addDays(calendarDate(anchor), -1)),
+        // endsOn and count are mutually exclusive bounds; a date bound must
+        // clear the count bound or the rule carries two conflicting ends.
+        count: null,
+      },
+    });
+    await tx.task.deleteMany({
+      where: { recurrenceRuleId: ruleId, occurrenceDate: { gte: anchor } },
+    });
+    await tx.event.deleteMany({
+      where: { recurrenceRuleId: ruleId, occurrenceDate: { gte: anchor } },
+    });
+  }
+
   async deleteSeriesFromOccurrence(
     actorId: string,
     householdId: string,
@@ -280,23 +411,29 @@ export class RecurrenceService {
       if (!this.canMutate(role, occurrence.createdBy, actorId)) {
         throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can delete this series.' });
       }
-      const splitCalendarDate = parseIsoDate(occurrence.occurrenceDate.toISOString().slice(0, 10));
-      await tx.recurrenceRule.update({
-        where: { id: occurrence.rule.id },
-        data: {
-          endsOn: new Date(`${formatIsoDate(addDays(splitCalendarDate, -1))}T00:00:00.000Z`),
-          count: null,
-        },
-      });
-      if (kind === 'task') {
-        await tx.task.deleteMany({
-          where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: occurrence.occurrenceDate } },
-        });
-      } else {
-        await tx.event.deleteMany({
-          where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: occurrence.occurrenceDate } },
-        });
+      await this.endSeriesAt(tx, occurrence.rule.id, occurrence.occurrenceDate);
+    });
+  }
+
+  // Ends a recurrence directly from the rule, with no occurrence to anchor
+  // on. The anchor is tomorrow in the rule's OWN timezone, not today: today's
+  // occurrence may already be completed, and anchoring on today would
+  // silently delete it — contradicting what "end this recurrence" means.
+  async endRule(actorId: string, householdId: string, ruleId: string): Promise<void> {
+    const role = await this.resolveActorRole(actorId, householdId);
+    if (role === null) {
+      throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const rule = await tx.recurrenceRule.findUnique({ where: { id: ruleId } });
+      if (rule === null || rule.householdId !== householdId) {
+        throw new NotFoundException({ code: 'RECURRENCE_RULE_NOT_FOUND', message: 'Recurrence rule not found.' });
       }
+      if (!this.canMutate(role, rule.createdBy, actorId)) {
+        throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can end this series.' });
+      }
+      const anchor = databaseDate(addDays(currentCalendarDateIn(rule.timezone), 1));
+      await this.endSeriesAt(tx, rule.id, anchor);
     });
   }
 }

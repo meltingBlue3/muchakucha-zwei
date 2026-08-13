@@ -265,6 +265,27 @@ export interface SeriesMutationResponseDto {
   recurrenceRuleId: string;
 }
 
+export interface RecurrenceRuleListItemDto {
+  id: string;
+  kind: 'task' | 'event' | null;
+  title: string;
+  freq: string;
+  interval: number;
+  byWeekday: number[];
+  startsOn: string;
+  endsOn: string | null;
+  count: number | null;
+  timezone: string;
+  startTimeLocal: string | null;
+  durationMinutes: number | null;
+  nextOccurrenceDate: string | null;
+}
+
+export interface RecurrenceRuleListResponseDto {
+  rules: RecurrenceRuleListItemDto[];
+  total: number;
+}
+
 export interface EventResponseDto {
   id: string;
   householdId: string;

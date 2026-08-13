@@ -204,6 +204,28 @@ export function walkOccurrences(rule: WalkRule, options: WalkOptions): CalendarD
 }
 
 /**
+ * Computes a rule's next occurrence ON OR AFTER `from` by walking the rule,
+ * not by querying already-generated rows. Under D-11's per-frequency
+ * lookahead a healthy weekly rule routinely has zero future instance rows —
+ * the generation window only materializes what's due soon, but "when is this
+ * rule due next" is a question about the RULE, independent of how far
+ * generation has run. Querying rows would answer "empty" for a perfectly
+ * healthy rule.
+ *
+ * `lookaheadDays = 400` covers a yearly rule from any `from` date: the walk
+ * only needs to see one year ahead in the worst case, and 400 leaves margin
+ * for a `from` that lands just after this year's anniversary.
+ */
+export function nextOccurrenceFor(
+  rule: WalkRule,
+  from: CalendarDate,
+  lookaheadDays = 400,
+): CalendarDate | null {
+  const occurrences = walkOccurrences(rule, { horizon: addDays(from, lookaheadDays), from });
+  return occurrences[0] ?? null;
+}
+
+/**
  * The current calendar date in `timeZone`. D-11 anchors the generation window
  * on the RULE's local midnight, not the server's — a 0-day daily lookahead in
  * Asia/Shanghai must produce today's row at 00:00 CST, not at 08:00 CST when

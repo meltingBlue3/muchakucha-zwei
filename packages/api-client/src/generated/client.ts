@@ -50,6 +50,8 @@ import type {
   LabelResponseDto,
   LabelListResponseDto,
   TagEntitiesDto,
+  RecurrenceRuleListItemDto,
+  RecurrenceRuleListResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -776,6 +778,52 @@ export class ApiClient {
     return this.authenticated<void>(
       'DELETE',
       `/api/v1/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}/labels/${encodeURIComponent(labelId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  // ---- Recurrence rules ----
+
+  async listRecurrenceRules(
+    accessToken: string,
+    householdId: string,
+    signal?: AbortSignal,
+  ): Promise<RecurrenceRuleListResponseDto> {
+    return this.authenticated<RecurrenceRuleListResponseDto>(
+      'GET',
+      `/api/v1/households/${encodeURIComponent(householdId)}/recurrence-rules`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async getRecurrenceRule(
+    accessToken: string,
+    householdId: string,
+    ruleId: string,
+    signal?: AbortSignal,
+  ): Promise<RecurrenceRuleListItemDto> {
+    return this.authenticated<RecurrenceRuleListItemDto>(
+      'GET',
+      `/api/v1/households/${encodeURIComponent(householdId)}/recurrence-rules/${encodeURIComponent(ruleId)}`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async endRecurrenceRule(
+    accessToken: string,
+    householdId: string,
+    ruleId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/recurrence-rules/${encodeURIComponent(ruleId)}/end`,
       accessToken,
       undefined,
       signal,
