@@ -24,3 +24,10 @@
 - **Impact today: none.** Every write path (`tasks.service`, `events.service`, and this plan's `updateRuleFromAnchor`) passes `recurrence.byWeekday ?? []`, and `walkOccurrences` treats an empty `byWeekday` on a weekly rule as "the weekday of `startsOn`" — sane, documented behaviour. The constraint is merely more permissive than it reads, not wrong in effect.
 - **Scope decision:** tightening it (`coalesce(array_length(...), 0) >= 1`) requires a new Prisma migration, and this plan is explicitly a no-migration plan. It also affects the two create paths equally, so it is not a defect introduced here.
 - **Suggested follow-up:** fold the `coalesce` fix into whichever later phase next touches `recurrence_rules` with a migration.
+
+## Pre-existing `apps/client` typecheck error in `StatusPanel` (`primitives.tsx:510`)
+
+- **Found during:** 07-14 Task 1, running `cd apps/client && pnpm typecheck`
+- **Observed:** `src/ui/primitives.tsx(510,35): error TS2322` — `<Heading ref={headingRef} tabIndex={-1}>` passes `tabIndex` to `Heading`, whose props are `Omit<OwnedTextProps, 'ref'> & RefAttributes<unknown>` and do not include `tabIndex`. It is the **only** error the client typecheck reports.
+- **Scope decision:** `apps/client/src/ui/primitives.tsx` is not in this plan's `files_modified` and `git status --short` confirms it is unmodified here. Adding new files under `src/features/recurrence/` and `app/` cannot influence the types `StatusPanel` resolves. Per the executor's scope-boundary rule this is logged, not fixed — `tabIndex` is a Web-only escape hatch that RN's `Text` typing does not model, and "fixing" it means either widening `OwnedTextProps` (a shared primitive's public surface) or dropping the keyboard-focus affordance `StatusPanel` relies on. Neither belongs in a recurrence-UI plan.
+- **Suggested follow-up:** widen `OwnedTextProps` with the Web-only `tabIndex?: number` (the same escape hatch `recurrence-picker.tsx` already uses on a `View`), in whichever later plan next touches `src/ui/primitives.tsx`.
