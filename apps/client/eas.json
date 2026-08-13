@@ -11,7 +11,7 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_ORIGIN": "http://124.223.222.13:3000"
+        "EXPO_PUBLIC_API_ORIGIN": "http://47.239.220.3:3000"
       }
     },
     "production": {
