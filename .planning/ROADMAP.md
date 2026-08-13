@@ -260,7 +260,7 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 12/15 plans executed
+**Plans:** 13/15 plans executed
 
 Plans:
 **Wave 1**
@@ -308,7 +308,7 @@ Plans:
 
 **Wave 11** *(blocked on 07-13)*
 
-- [ ] 07-14-PLAN.md — 周期规则列表屏与详情屏、类型徽标与家庭首页入口卡片
+- [x] 07-14-PLAN.md — 周期规则列表屏与详情屏、类型徽标与家庭首页入口卡片
 
 **Wave 12** *(blocked on 07-10 and 07-14)*
 
