@@ -24,22 +24,22 @@ muchakucha-zwei/
 ├── apps/
 │   ├── api/                     # NestJS + Fastify 后端
 │   │   ├── prisma/              # 数据库 Schema & 迁移
-│   │   │   └── schema.prisma    # 10 个数据模型
+│   │   │   └── schema.prisma    # 数据模型（用户/家庭/事件/任务/重复规则/笔记/标签）
 │   │   ├── src/
 │   │   │   ├── infrastructure/  # Prisma、邮件适配器
-│   │   │   ├── modules/         # auth、users、households、events、tasks
+│   │   │   ├── modules/         # auth、users、households、events、tasks、recurrence、notes、labels
 │   │   │   └── openapi/         # OpenAPI 自动生成器
-│   │   └── test/                # 集成测试 (199 用例)
+│   │   └── test/                # 集成测试
 │   └── client/                  # Expo 跨平台客户端
 │       ├── app/                 # Expo Router 文件路由
-│       │   └── (protected)/     # 受保护页面（需登录）
+│       │   └── (protected)/     # 受保护页面（需登录，含 recurrence-rules 规则管理页）
 │       └── src/
-│           ├── features/        # 功能模块 (auth, households, events, tasks)
+│           ├── features/        # 功能模块 (auth, households, events, tasks, recurrence, notes, labels, profile)
 │           └── ui/              # 共享 UI 组件 & 主题
 ├── e2e/                         # Playwright E2E 测试
 │   ├── auth/                    # 认证流程
 │   ├── households/              # 家庭协作
-│   ├── events/                  # 日历事件
+│   ├── events/                  # 日历事件、重复规则、无障碍
 │   └── tasks/                   # 任务 & 无障碍
 ├── packages/
 │   └── api-client/              # 自动生成（OpenAPI → TypeScript 客户端）
@@ -53,10 +53,12 @@ muchakucha-zwei/
 
 ```
 User → AuthSession, RefreshToken, EmailVerificationToken, PasswordResetToken
-Household → Membership, Invitation
+Household → Membership, Invitation, Label
 Membership → Role (OWNER / ADMIN / MEMBER)
-Event → 归属 Household，支持全天/定时事件
-Task → 归属 Household，过滤/状态流转/分配
+RecurrenceRule → 归属 Household，按频率（每天/每周/每月/每年）驱动 Event/Task 的滚动生成
+Event → 归属 Household，支持全天/定时事件，可关联 RecurrenceRule 与多个 Label
+Task → 归属 Household，过滤/状态流转/分配，可关联 RecurrenceRule 与多个 Label
+Note → 归属 Household 的共享笔记，可关联多个 Label
 ```
 
 ## 快速开始
@@ -140,7 +142,7 @@ cd apps/client && pnpm web
 
 ```bash
 # API 集成测试
-pnpm test:integration            # 199 用例，14 个测试文件
+pnpm test:integration            # 277 用例，19 个测试文件
 
 # API 类型检查
 cd apps/api && pnpm typecheck
@@ -157,14 +159,15 @@ pnpm openapi:check
 
 ## 功能完成度
 
-| 阶段 | 进度 | 完成率 |
+| 阶段 | 进度 | 状态 |
 |------|------|--------|
-| Phase 1: 安全账户入口 | ✅ 完成 | 27/27 |
-| Phase 2: 家庭组与成员协作 | 🔄 进行中 | 12/13（待 Android 真机验收） |
-| Phase 3: 共享家庭日历 | ✅ 完成 | 4/4 |
-| Phase 4: 任务与今日视图 | ✅ 完成 | 4/4（待 Android 真机验收） |
-| Phase 5: 笔记与标签整理 | 待开始 | 0/3 |
-| Phase 6: 发布准备 | 待开始 | 0/3 |
+| Phase 1: 安全账户入口 | 27/27 | ✅ 完成 |
+| Phase 2: 家庭组与成员协作 | 12/13 | 🔄 待 Android 真机验收 |
+| Phase 3: 共享家庭日历 | 3/4 | 🔄 待 Android 真机验收 + 无障碍审计 |
+| Phase 4: 任务与今日视图 | 3/4 | 🔄 待 Android 真机验收（其余门禁均绿） |
+| Phase 5: 笔记与标签整理 | ~2/3（代码完成，未走 GSD 流程） | ⚠️ 零自动化测试、缺"按标签筛选"能力、未跑门禁 |
+| Phase 6: 跨平台完成度与发布准备 | 0/3 | 待开始 |
+| Phase 7: 周期性重复事件与任务 | 15/15 | ✅ 完成（含 Android 真机验收） |
 
 ### 已实现功能
 
@@ -173,11 +176,13 @@ pnpm openapi:check
 - **共享日历**：月视图、日期列表、全天/定时事件、创建/编辑/删除、时区安全 timestamptz 建模
 - **任务管理**：状态流转（pending → in_progress → completed）、优先级、负责人分配、过滤排序
 - **今日视图**：逾期任务高亮、今日事件、今日待办、即将到来 — 一站式聚合
+- **周期性重复**：事件与任务均支持每天/每周（多选星期几）/每月/每年重复，月末自动钳位、DST 正确处理；「仅此一次」与「此后所有」两种编辑/删除范围由服务端强制执行；重复规则管理页（列表 + 详情）支持规则级编辑与「结束此重复」
+- **笔记与标签**：家庭共享笔记的创建/查看/编辑/删除；标签的创建/重命名/着色/删除；事件与任务可打标签（⚠️ 尚不支持按标签筛选列表，且此功能未走完整测试门禁 — 见下方测试覆盖）
 
 ### 测试覆盖
 
-- **API 集成测试**：14 文件 · 199 用例（认证、用户、家庭、事件、任务、安全边界）
-- **Playwright E2E**：认证流程、家庭协作矩阵、日历 API、任务 API、无障碍审计
+- **API 集成测试**：19 文件 · 277 用例（认证、用户、家庭、事件、任务、周期性重复、安全边界）—— 笔记与标签模块目前**没有**集成测试覆盖
+- **Playwright E2E**：认证流程、家庭协作矩阵、日历 API、任务 API、周期性重复的 Web 端到端旅程与重复规则管理页、无障碍审计
 - **客户端单元测试**：Jest + Testing Library
 
 ## 生产部署

@@ -249,6 +249,7 @@ Plans:
 | 4. 任务与今日视图 | 3/4 | 🔄 Android acceptance pending (all other gates green) | — |
 | 5. 笔记与标签整理 | ~2/3 (code only, untracked) | ⚠️ Code done outside GSD flow — zero tests, label-filter gap, no gates run | — |
 | 6. 跨平台完成度与发布准备 | 0/3 | Not started | — |
+| 7. 周期性重复事件与任务 | 15/15 | ✅ Complete | 2026-08-14 |
 
 **Total remaining plans: 15 formally tracked** (1 in Phase 2, 1 in Phase 3, 1 in Phase 4, 3 in Phase 5, 3 in Phase 6) — **plus a backlog of untracked work**: a shared Android-acceptance session covering Phases 2–4, retroactive GSD plan/summary artifacts for Phase 5, its missing test suite, and its label-filter feature.
 **Estimated plans saved vs. original methodology: ~40-50**
