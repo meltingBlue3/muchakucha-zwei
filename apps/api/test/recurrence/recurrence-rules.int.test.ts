@@ -6,7 +6,7 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { createApplication } from '../../src/main.js';
 import { RecurrenceMaterializerService } from '../../src/modules/recurrence/recurrence-materializer.service.js';
-import { addDays, currentCalendarDateIn, formatIsoDate } from '../../src/modules/recurrence/recurrence-date.js';
+import { addDays, currentCalendarDateIn, formatIsoDate, parseIsoDate } from '../../src/modules/recurrence/recurrence-date.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
 const accessSecret = 'test-only-access-secret-that-is-longer-than-thirty-two-bytes';
@@ -320,6 +320,32 @@ describe('recurring events', () => {
     const response = await eventApi(outsider.accessToken, householdId, 'POST', '', recurringEvent);
     expect(response.statusCode).toBe(404);
     expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
+  });
+
+  // CR-01 regression: a recurring event whose derived duration exceeds 24h
+  // used to reach Prisma and violate recurrence_rules.duration_minutes'
+  // <= 1440 DB CHECK, surfacing as an opaque 500 with the event unsaved.
+  test('rejects a recurring event whose span exceeds 24 hours with a 400, not a 500', async () => {
+    const owner = await insertActor('long-span-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+
+    const tooLong = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      ...recurringEvent,
+      startTime: `${startsOn}T01:00:00.000Z`,
+      endTime: `${formatIsoDate(addDays(parseIsoDate(startsOn), 3))}T01:00:00.000Z`,
+    });
+    expect(tooLong.statusCode).toBe(400);
+    expect(tooLong.json().error.code).toBe('VALIDATION_FAILED');
+    expect(tooLong.json().error.details[0].field).toBe('endTime');
+    expect(tooLong.json().error.details[0].codes).toContain('recurring_duration_too_long');
+
+    // At exactly 24h the same request must succeed — the boundary is <=, not <.
+    const exactlyOneDay = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      ...recurringEvent,
+      startTime: `${startsOn}T01:00:00.000Z`,
+      endTime: `${formatIsoDate(addDays(parseIsoDate(startsOn), 1))}T01:00:00.000Z`,
+    });
+    expect(exactlyOneDay.statusCode).toBe(201);
   });
 });
 

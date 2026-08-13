@@ -180,6 +180,23 @@ export class EventsService {
       const minute = Number(timeParts.find((part) => part.type === 'minute')?.value);
       const startTimeLocal = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
       const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60_000);
+      // recurrence_rules.duration_minutes has a DB CHECK of <= 1440 (the same
+      // bound RecurrenceDto.durationMinutes enforces for a client-supplied
+      // value, which this derived-from-start/end path never uses). Without
+      // this guard a >24h span — a multi-day all-day event or an overnight
+      // event — reaches Prisma, violates the CHECK inside the transaction,
+      // and surfaces as an opaque 500 rather than a validation error.
+      if (durationMinutes > 1440) {
+        throw new BadRequestException({
+          code: 'VALIDATION_FAILED',
+          message: 'Request validation failed.',
+          details: [{
+            field: 'endTime',
+            codes: ['recurring_duration_too_long'],
+            message: '重复事件的单次时长不能超过 24 小时。',
+          }],
+        });
+      }
       const occurrenceStart = localDateTimeToInstant(firstOccurrence, hour, minute, recurrence.timezone);
       const occurrenceDate = formatIsoDate(firstOccurrence);
 

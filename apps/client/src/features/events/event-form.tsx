@@ -98,6 +98,15 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
       setError('结束时间必须晚于开始时间。');
       return;
     }
+    // Mirrors the server's recurring_duration_too_long check (a recurring
+    // event's duration_minutes has a DB CHECK of <= 1440): tell the user
+    // before the round trip rather than after a 400 comes back. A
+    // non-recurring event has no such cap — only the recurring branch
+    // derives a per-occurrence duration from this span.
+    if (form.recurrence !== null && endDateTime.getTime() - startDateTime.getTime() > 24 * 60 * 60 * 1000) {
+      setError('重复事件的单次时长不能超过 24 小时。');
+      return;
+    }
 
     // Always convert through new Date() so local date/time is
     // correctly mapped to UTC — never hardcode a Z suffix because
