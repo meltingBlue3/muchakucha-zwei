@@ -87,9 +87,19 @@ export function RecurrenceSummary({ rule, deviceTimeZone }: RecurrenceSummaryPro
         padding: activeTheme.spacing[3],
       }}
     >
+      {/*
+        `ink`, not `teal`. 07-UI-SPEC.md line 254 asks for `color="teal"` on a
+        `tealSoft` block, but that pairing measures 4.24:1 at this 12px caption
+        size and the same spec's Accessibility Contract (line 674) requires
+        ≥4.5:1 for normal text — the two cannot both hold. `ink` on `tealSoft`
+        is 12.2:1 and is the pairing `src/ui/__tests__/contrast-test.ts` already
+        guarantees for this surface. The block still reads as the teal
+        information block; only the text is legible. Caught by the axe
+        assertion in `e2e/events/recurrence-rules.spec.ts`.
+      */}
       <Text
         variant="caption"
-        color="teal"
+        color="ink"
         numberOfLines={2}
         accessibilityLabel={formatted.summary}
       >
