@@ -877,12 +877,14 @@ export class ApiClient {
     status?: string,
     priority?: string,
     assigneeId?: string,
+    recurring?: boolean,
     signal?: AbortSignal,
   ): Promise<TaskListResponseDto> {
     const params = new URLSearchParams();
     if (status) params.set('status', status);
     if (priority) params.set('priority', priority);
     if (assigneeId) params.set('assigneeId', assigneeId);
+    if (recurring !== undefined) params.set('recurring', recurring ? 'true' : 'false');
     const qs = params.toString();
     return this.authenticated<TaskListResponseDto>(
       'GET',
@@ -1372,6 +1374,13 @@ async function generate(): Promise<void> {
       || document.components?.schemas?.UpdateSeriesDto === undefined
       || document.components.schemas.SeriesMutationResponseDto === undefined) {
       throw new Error('OpenAPI series mutation operations or schemas are missing or unstable.');
+    }
+
+    const listTasksParams = document.paths['/api/v1/households/{householdId}/tasks']?.get?.parameters ?? [];
+    const hasRecurringParam = (parameters: unknown): boolean =>
+      Array.isArray(parameters) && parameters.some((parameter) => (parameter as { name?: string }).name === 'recurring');
+    if (!hasRecurringParam(listTasksParams)) {
+      throw new Error('OpenAPI recurring list filter parameters are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });
