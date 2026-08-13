@@ -260,7 +260,7 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 10/15 plans executed
+**Plans:** 11/15 plans executed
 
 Plans:
 **Wave 1**
@@ -300,7 +300,7 @@ Plans:
 
 **Wave 9** *(blocked on 07-11)*
 
-- [ ] 07-12-PLAN.md — 规则列表/详情接口、由规则推算的下一次发生，与规则级「结束此重复」
+- [x] 07-12-PLAN.md — 规则列表/详情接口、由规则推算的下一次发生，与规则级「结束此重复」
 
 **Wave 10** *(blocked on 07-12)*
 
