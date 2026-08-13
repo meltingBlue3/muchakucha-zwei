@@ -5,10 +5,12 @@ slug: recurring-events-tasks
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
 status: validated
 # D-01..D-10 (plans 07-01..07-08) remain fully validated — every ✅ row below was a real green run
-# on 2026-08-12. The D-11..D-20 addendum (plans 07-09..07-15, planned 2026-08-13) adds the ⬜ rows;
-# both flags flip back to true in 07-15 Task 2 once those commands have actually been run.
-nyquist_compliant: false
-wave_0_complete: false
+# on 2026-08-12. The D-11..D-20 addendum (plans 07-09..07-15) was executed and its rows were flipped
+# to ✅ by 07-15 Task 2 on 2026-08-13, each after the named command was actually run; both flags are
+# therefore restored. The two known out-of-scope failures (legacy auth Web E2E cascade; SecLists
+# CRLF on Windows) are logged in deferred-items.md and are not part of this phase's map.
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-08-12
 updated: 2026-08-13
 ---
@@ -83,26 +85,43 @@ Both are recorded here because a ✅ row is only meaningful as of the last run �
 | RECR-01/02 | Event-side axe + keyboard + scope-sheet focus trap / Esc (closes the Phase 3 gap) | e2e | `pnpm test:e2e:web` | `e2e/events/accessibility.spec.ts` | 07-08 T2 | ✅ |
 | — (regression) | OpenAPI hand-maintained client (`packages/api-client`) matches committed tree after recurrence fields added | contract | `pnpm openapi:check` | n/a — existing check | 07-03 T2 / 07-04 T3 | ✅ |
 | — (regression) | Required-test manifest covers all 7 new test files and rejects skip markers | script | `pwsh -File scripts/check-required-tests.ps1` | `scripts/check-required-tests.ps1` | 07-08 T2 | ✅ |
-<!-- Addendum (D-11 … D-20), planned 2026-08-13 by /gsd-plan-phase 07. Rows below are seeded ⬜ and
-     flipped to ✅ by 07-15 Task 2 after each command has actually been run. The 25 rows above are
-     the D-01..D-10 record and must not be edited. -->
-| RECR-01 | `currentCalendarDateIn` across UTC+14 / UTC−11 / a DST transition day (D-11, D-10) | unit | `pnpm --filter api test:quick` | `apps/api/src/modules/recurrence/recurrence-date.test.ts` | 07-09 T1 | ⬜ |
-| RECR-01 | Daily rule materializes on its own timezone's calendar day; weekly 6-day lookahead is inclusive (D-11) | integration | `pnpm --filter api test:integration` | `apps/api/test/recurrence/lookahead.int.test.ts` | 07-09 T1 | ⬜ |
-| RECR-01 | Watermark is forward-only; every pre-existing future instance survives the horizon change (D-13) | integration | `pnpm --filter api test:integration` | same file | 07-09 T2 | ⬜ |
-| RECR-01 | Rules whose `endsOn` has passed leave the scan set and stop poisoning the household `_min` watermark (D-18 / IN-04) | integration | `pnpm --filter api test:integration` | same file | 07-09 T2 | ⬜ |
-| RECR-01 | Create is one standard generation pass: daily yields today only, weekly outside the window yields the seed row only (D-12, D-17) | integration | `pnpm --filter api test:integration` | same file | 07-09 T3 | ⬜ |
-| RECR-01 | `?recurring=true` / `=false` / absent on both task and event lists; non-member still gets 404 (D-15, SAFE-01) | integration | `pnpm --filter api test:integration` | `apps/api/test/recurrence/recurring-filter.int.test.ts` | 07-11 T1 / T2 | ⬜ |
-| RECR-01 | Client recurring-only predicate + generation-window three-state classifier, suppression rules, zero-day-count copy (D-15, D-19) | client unit | `cd apps/client && pnpm test` | `apps/client/src/features/recurrence/__tests__/recurring-filter-test.tsx` | 07-10 T1 | ⬜ |
-| RECR-01 | `nextOccurrenceFor` with count exhausted / `endsOn` past / a yearly rule 300 days out (D-16) | unit | `pnpm --filter api test:quick` | `apps/api/src/modules/recurrence/recurrence-date.test.ts` | 07-12 T1 | ⬜ |
-| RECR-01 | Rule list: a weekly rule with no materialized future rows still reports `nextOccurrenceDate`; `kind` derivation; ordering; no `createdBy` in the response (D-16, D-20) | integration | `pnpm --filter api test:integration` | `apps/api/test/recurrence/recurrence-rules-api.int.test.ts` | 07-12 T1 | ⬜ |
-| RECR-02 | End-this-recurrence: anchor is tomorrow, today survives, `count` cleared, cross-household 404 / MEMBER 403 / idempotent (D-14) | integration | `pnpm --filter api test:integration` | same file | 07-12 T2 | ⬜ |
-| RECR-02 | Rule-scoped edit: atomicity, successor template from `template_*`, seed-row invariant, inheritance, permission matrix (D-16, D-08, D-17) | integration | `pnpm --filter api test:integration` | same file | 07-13 T2 | ⬜ |
-| RECR-01 | Rule-row formatting: null normalization, never-ends suffix, ended row, accessibility label, split-anchor computation (D-16) | client unit | `cd apps/client && pnpm test` | `apps/client/src/features/recurrence/__tests__/recurrence-rule-row-test.tsx` | 07-14 T1 | ⬜ |
-| RECR-01/02 | E2E web: generation timing, recurring-only filter, rule list + detail + end, axe on both new screens (D-11…D-20) | e2e | `pnpm test:e2e:web` | `e2e/events/recurrence-rules.spec.ts` | 07-15 T1 | ⬜ |
-| — (regression) | Hand-maintained OpenAPI client matches the committed tree after the new endpoints and query param | contract | `pnpm openapi:check` | n/a — existing check | 07-11 / 07-12 / 07-13 | ⬜ |
-| — (regression) | Required-test manifest covers the 6 addendum test files and rejects skip markers | script | `pwsh -File scripts/check-required-tests.ps1` | `scripts/check-required-tests.ps1` | 07-15 T2 | ⬜ |
+<!-- Addendum (D-11 … D-20), planned 2026-08-13 by /gsd-plan-phase 07. Rows below were seeded ⬜ and
+     flipped to ✅ by 07-15 Task 2 on 2026-08-13, each after the named command was actually run in
+     this worktree. The 25 rows above are the D-01..D-10 record and must not be edited. -->
+| RECR-01 | `currentCalendarDateIn` across UTC+14 / UTC−11 / a DST transition day (D-11, D-10) | unit | `pnpm --filter api test:quick` | `apps/api/src/modules/recurrence/recurrence-date.test.ts` | 07-09 T1 | ✅ |
+| RECR-01 | Daily rule materializes on its own timezone's calendar day; weekly 6-day lookahead is inclusive (D-11) | integration | `pnpm --filter api test:integration` | `apps/api/test/recurrence/lookahead.int.test.ts` | 07-09 T1 | ✅ |
+| RECR-01 | Watermark is forward-only; every pre-existing future instance survives the horizon change (D-13) | integration | `pnpm --filter api test:integration` | same file | 07-09 T2 | ✅ |
+| RECR-01 | Rules whose `endsOn` has passed leave the scan set and stop poisoning the household `_min` watermark (D-18 / IN-04) | integration | `pnpm --filter api test:integration` | same file | 07-09 T2 | ✅ |
+| RECR-01 | Create is one standard generation pass: daily yields today only, weekly outside the window yields the seed row only (D-12, D-17) | integration | `pnpm --filter api test:integration` | same file | 07-09 T3 | ✅ |
+| RECR-01 | `?recurring=true` / `=false` / absent on both task and event lists; non-member still gets 404 (D-15, SAFE-01) | integration | `pnpm --filter api test:integration` | `apps/api/test/recurrence/recurring-filter.int.test.ts` | 07-11 T1 / T2 | ✅ |
+| RECR-01 | Client recurring-only predicate + generation-window three-state classifier, suppression rules, zero-day-count copy (D-15, D-19) | client unit | `cd apps/client && pnpm test` | `apps/client/src/features/recurrence/__tests__/recurring-filter-test.tsx` | 07-10 T1 | ✅ |
+| RECR-01 | `nextOccurrenceFor` with count exhausted / `endsOn` past / a yearly rule 300 days out (D-16) | unit | `pnpm --filter api test:quick` | `apps/api/src/modules/recurrence/recurrence-date.test.ts` | 07-12 T1 | ✅ |
+| RECR-01 | Rule list: a weekly rule with no materialized future rows still reports `nextOccurrenceDate`; `kind` derivation; ordering; no `createdBy` in the response (D-16, D-20) | integration | `pnpm --filter api test:integration` | `apps/api/test/recurrence/recurrence-rules-api.int.test.ts` | 07-12 T1 | ✅ |
+| RECR-02 | End-this-recurrence: anchor is tomorrow, today survives, `count` cleared, cross-household 404 / MEMBER 403 / idempotent (D-14) | integration | `pnpm --filter api test:integration` | same file | 07-12 T2 | ✅ |
+| RECR-02 | Rule-scoped edit: atomicity, successor template from `template_*`, seed-row invariant, inheritance, permission matrix (D-16, D-08, D-17) | integration | `pnpm --filter api test:integration` | same file | 07-13 T2 | ✅ |
+| RECR-01 | Rule-row formatting: null normalization, never-ends suffix, ended row, accessibility label, split-anchor computation (D-16) | client unit | `cd apps/client && pnpm test` | `apps/client/src/features/recurrence/__tests__/recurrence-rule-row-test.tsx` | 07-14 T1 | ✅ |
+| RECR-01/02 | E2E web: generation timing, recurring-only filter, rule list + detail + end, axe on both new screens (D-11…D-20) | e2e | `pnpm test:e2e:web` | `e2e/events/recurrence-rules.spec.ts` | 07-15 T1 | ✅ |
+| RECR-02 | D-14 anchor is load-bearing, not incidental: mutating `endRule`'s anchor from tomorrow to today turns the E2E "today survives" assertion red | e2e (mutation) | `pnpm test:e2e:web` | `e2e/events/recurrence-rules.spec.ts` | 07-15 T1 | ✅ |
+| — (regression) | Hand-maintained OpenAPI client matches the committed tree after the new endpoints and query param | contract | `pnpm openapi:check` | n/a — existing check | 07-11 / 07-12 / 07-13 | ✅ |
+| — (regression) | Required-test manifest covers the 6 addendum test files and rejects skip markers | script | `pwsh -File scripts/check-required-tests.ps1` | `scripts/check-required-tests.ps1` | 07-15 T2 | ✅ |
+| — (regression) | The audit's own guard still works: absent path rejected, `.skip`/`.todo`/`IMPLEMENTATION_MISSING` rejected | script | `pwsh -File scripts/check-required-tests.ps1 -SelfTest` | `scripts/check-required-tests.ps1` | 07-15 T2 | ✅ |
+| — (regression) | Existing recurrence + event-a11y E2E specs stay green alongside the new one | e2e | `pnpm test:e2e:web` | `e2e/events/recurrence.spec.ts`, `e2e/events/accessibility.spec.ts` | 07-15 T1 | ✅ |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky. The 25 ✅ rows are the D-01..D-10 record from 2026-08-12; the ⬜ rows are the D-11..D-20 addendum awaiting execution. The unrelated legacy auth Web E2E regression remains outside this phase's verification map.*
+*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky. The 25 ✅ rows above the addendum marker are the D-01..D-10 record from 2026-08-12; the 18 addendum rows were run on 2026-08-13 during 07-15 Task 2. The unrelated legacy auth Web E2E regression, and the two SecLists-CRLF integration failures (`test/security/asvs-v5-l1.test.ts`, `test/auth/password-reset.int.test.ts`), remain outside this phase's verification map — both are logged in `deferred-items.md`.*
+
+**07-15 Task 2 run record (2026-08-13, worktree `agent-a12707ad9ce1bf5ff`):**
+
+| Command | Result |
+|---------|--------|
+| `pnpm --filter api test:quick` | 2 files / 34 tests passed |
+| `pnpm --filter api test:integration` (recurrence scope) | 5 files / 73 tests passed |
+| `pnpm --filter api test:integration` (full) | 17/19 files passed; the 2 failures are the pre-existing SecLists CRLF item (`git ls-files --eol` still reports `i/lf w/crlf`), untouched by this phase |
+| `cd apps/client && pnpm test` | 23 suites / 232 passed, 2 skipped (both pre-existing, in `invitation-lifecycle-test.tsx`) |
+| `pnpm openapi:check` | PASS — generated client matches the committed tree |
+| `pwsh -File scripts/check-required-tests.ps1` | PASS — 36 contracts (30 → 36, exactly the 6 addendum files) |
+| `pwsh -File scripts/check-required-tests.ps1 -SelfTest` | PASS |
+| `npx playwright test e2e/events` | 18/18 passed (new spec + `recurrence.spec.ts` + `accessibility.spec.ts` + `calendar-api.spec.ts`) |
+| `pnpm test:e2e:web` (full) | see "Known out-of-scope E2E cascade" in `deferred-items.md`; all Phase 7 specs green |
 
 ---
 
@@ -121,12 +140,13 @@ Both are recorded here because a ✅ row is only meaningful as of the last run �
 
 ### Addendum Wave 0 (D-11 … D-20, planned 2026-08-13)
 
-- [ ] `apps/api/test/recurrence/lookahead.int.test.ts` — per-frequency lookahead, per-rule timezone, watermark monotonicity, ended-rule scan exit, create-time pass (07-09)
-- [ ] `apps/api/test/recurrence/recurring-filter.int.test.ts` — `recurring` query param three-state on both list endpoints (07-11)
-- [ ] `apps/api/test/recurrence/recurrence-rules-api.int.test.ts` — rule list/detail, end-this-recurrence, rule-scoped edit (07-12, 07-13)
-- [ ] `apps/client/src/features/recurrence/__tests__/recurring-filter-test.tsx` — client filter predicate + generation-window classifier (07-10)
-- [ ] `apps/client/src/features/recurrence/__tests__/recurrence-rule-row-test.tsx` — rule-row formatting + split-anchor computation (07-14)
-- [ ] `e2e/events/recurrence-rules.spec.ts` — addendum web journeys + axe on the two new screens (07-15)
+- [x] `apps/api/test/recurrence/lookahead.int.test.ts` — per-frequency lookahead, per-rule timezone, watermark monotonicity, ended-rule scan exit, create-time pass (07-09)
+- [x] `apps/api/test/recurrence/recurring-filter.int.test.ts` — `recurring` query param three-state on both list endpoints (07-11)
+- [x] `apps/api/test/recurrence/recurrence-rules-api.int.test.ts` — rule list/detail, end-this-recurrence, rule-scoped edit (07-12, 07-13)
+- [x] `apps/client/src/features/recurrence/__tests__/recurring-filter-test.tsx` — client filter predicate + generation-window classifier (07-10)
+- [x] `apps/client/src/features/recurrence/__tests__/recurrence-rule-row-test.tsx` — rule-row formatting + split-anchor computation (07-14)
+- [x] `e2e/events/recurrence-rules.spec.ts` — addendum web journeys + axe on the two new screens (07-15)
+- All six are in `scripts/check-required-tests.ps1`'s `$requiredTests` as of 07-15 Task 2, so a later `.skip` / `.todo` / `IMPLEMENTATION_MISSING` on any of them fails the audit rather than silently reducing coverage
 - Framework install: **none needed**; no new dependency is introduced anywhere in the addendum
 - Fixture helpers: keep copying `withDatabase` / `insertActor` / `createHousehold` / `createRecurringTask` per file, following the existing convention — do not refactor to a shared module
 - ⚠ Screens under `apps/client/app/**` are unreachable by the client Jest `testMatch`; all addendum formatting and state-classification logic therefore lives under `apps/client/src/features/recurrence/`, and the two new screens are covered by Playwright instead
@@ -138,6 +158,8 @@ Both are recorded here because a ✅ row is only meaningful as of the last run �
 *None identified — all phase behaviors (including D-09 month-end clamping and D-10 DST handling) have automated coverage via the unit date-math suite. Android real-device acceptance for the recurrence UI follows the same pattern as Phases 2-4 and is tracked as a phase-gate checkpoint, not a manual-only *test*.*
 
 *Addendum: the same holds. Two 07-UI-SPEC.md rows are marked 🧪 backstop (long-text overflow on a rule row; the 5th filter group at 320px + 200% font) — they are visual-regression items confirmed at the 07-15 Task 3 real-device checkpoint, not manual-only tests.*
+
+*07-15 Task 3 is a `checkpoint:human-verify` gate, not a manual-only **test**: everything it looks at (recurring-only filter, merged rule list with text type badges, both two-step inline confirms, the tomorrow anchor) already has automated coverage in the rows above. What the device adds is the physical dimension the Web tier cannot reach — real touch-target size, the system font scaled to 200%, `减少动态效果`, and `forced-colors` — which is exactly what the two 🧪 backstop rows need. It therefore does not belong in this section, and no addendum behavior is verified **only** by a human.*
 
 ---
 
@@ -153,12 +175,14 @@ Both are recorded here because a ✅ row is only meaningful as of the last run �
 
 **Approval:** automated validation complete; Android real-device acceptance remains at the 07-08 Task 3 checkpoint.
 
-### D-11 … D-20 (plans 07-09 … 07-15) — pending execution
+### D-11 … D-20 (plans 07-09 … 07-15) — complete
 
 - [x] Every addendum task has an `<automated>` verify command
 - [x] Sampling continuity: no 3 consecutive addendum tasks without automated verify
 - [x] Addendum Wave 0 names all 6 new test files, each owned by a specific plan/task
 - [x] No watch-mode flags
 - [x] Feedback latency < 5s (quick tier — `recurrence-date.test.ts` stays zero-infrastructure)
-- [ ] All ⬜ rows above flipped to ✅ by real runs (07-15 Task 2)
-- [ ] `nyquist_compliant: true` and `wave_0_complete: true` restored in frontmatter (07-15 Task 2)
+- [x] All ⬜ rows above flipped to ✅ by real runs (07-15 Task 2, 2026-08-13 — see the run record table)
+- [x] `nyquist_compliant: true` and `wave_0_complete: true` restored in frontmatter (07-15 Task 2)
+
+**Approval:** automated validation complete for the addendum. Android real-device acceptance remains open at the 07-15 Task 3 checkpoint, which is where the two 🧪 backstop rows are confirmed.

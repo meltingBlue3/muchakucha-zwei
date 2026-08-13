@@ -33,7 +33,14 @@ $requiredTests = @(
     'apps/client/src/features/recurrence/__tests__/recurrence-picker-test.tsx',
     'apps/client/src/features/recurrence/__tests__/series-scope-dialog-test.tsx',
     'apps/client/src/features/tasks/__tests__/task-status-test.tsx',
-    'e2e/events/recurrence.spec.ts'
+    'e2e/events/recurrence.spec.ts',
+    # Addendum D-11 … D-20 (plans 07-09 … 07-15).
+    'apps/api/test/recurrence/lookahead.int.test.ts',
+    'apps/api/test/recurrence/recurring-filter.int.test.ts',
+    'apps/api/test/recurrence/recurrence-rules-api.int.test.ts',
+    'apps/client/src/features/recurrence/__tests__/recurring-filter-test.tsx',
+    'apps/client/src/features/recurrence/__tests__/recurrence-rule-row-test.tsx',
+    'e2e/events/recurrence-rules.spec.ts'
 )
 $forbiddenPattern = '(?im)\.(?:skip|todo)\b|\bIMPLEMENTATION_MISSING\b'
 
