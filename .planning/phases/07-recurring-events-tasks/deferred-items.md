@@ -31,3 +31,23 @@
 - **Observed:** `src/ui/primitives.tsx(510,35): error TS2322` — `<Heading ref={headingRef} tabIndex={-1}>` passes `tabIndex` to `Heading`, whose props are `Omit<OwnedTextProps, 'ref'> & RefAttributes<unknown>` and do not include `tabIndex`. It is the **only** error the client typecheck reports.
 - **Scope decision:** `apps/client/src/ui/primitives.tsx` is not in this plan's `files_modified` and `git status --short` confirms it is unmodified here. Adding new files under `src/features/recurrence/` and `app/` cannot influence the types `StatusPanel` resolves. Per the executor's scope-boundary rule this is logged, not fixed — `tabIndex` is a Web-only escape hatch that RN's `Text` typing does not model, and "fixing" it means either widening `OwnedTextProps` (a shared primitive's public surface) or dropping the keyboard-focus affordance `StatusPanel` relies on. Neither belongs in a recurrence-UI plan.
 - **Suggested follow-up:** widen `OwnedTextProps` with the Web-only `tabIndex?: number` (the same escape hatch `recurrence-picker.tsx` already uses on a `View`), in whichever later plan next touches `src/ui/primitives.tsx`.
+
+## `role="radio"` without `aria-checked` on the label / priority / assignee filter chips
+
+- **Found during:** 07-08 re-verification, while fixing the same defect on the recurring-filter chips (see SUMMARY deviation 1)
+- **Observed:** the recurring-filter chips were emitting `role="radio"` with no `aria-checked`, a **critical** axe violation (`aria-required-attr`, WCAG 4.1.2). The root cause is that `accessibilityState={{ selected }}` maps to `aria-selected` on react-native-web, and even `accessibilityState={{ checked }}` does not emit `aria-checked` — only an explicit `aria-checked` prop does (this is why `RecurrencePicker` sets both). The **same latent defect** exists on every other filter chip that pairs `accessibilityRole="radio"` with `accessibilityState={{ selected: ... }}`:
+  - `events/index.tsx` — label filter (2 sites)
+  - `tasks/index.tsx` — status, priority, assignee, and label filters (6 sites)
+  - `labels/index.tsx` — colour swatches (2 sites)
+  - `src/ui/household-components.tsx` — household switcher (1 site)
+- **Why it did not fail the audit:** all of these rows render conditionally (e.g. `availableLabels.length > 0`), and the a11y fixture household has no labels/members, so axe never reached them. The recurring-filter row is the only one rendered unconditionally, which is why it was the one caught.
+- **Scope decision:** these chips belong to Phases 3/4, not to this plan's files. Per the executor scope boundary, only the recurring-filter chips (which blocked this plan's own gate) were fixed. Fixing the rest is a mechanical repeat of the same one-line change.
+- **Suggested follow-up:** sweep all `accessibilityRole="radio"`/`"checkbox"` call sites and add the explicit `aria-checked` prop; consider extracting a `FilterChip` primitive so the correct semantics cannot be forgotten. Extend the a11y fixtures to seed at least one label and one extra member so the audit actually reaches these rows.
+
+## `pnpm --filter api dev` cannot boot from a clean checkout (blocks `pnpm test:e2e:web`)
+
+- **Found during:** 07-08 re-verification, first attempt to run `pnpm test:e2e:web` in a fresh worktree
+- **Observed:** `apps/api`'s `dev` script is `tsc -p tsconfig.build.json && node dist/main.js`, which compiles TS but never copies `src/modules/auth/data/` into `dist/`. `password-policy.js` reads `dist/modules/auth/data/common-passwords-top-3000.txt` at import time, so the API exits with `ENOENT` before listening. Because Playwright launches the API through this exact script, `pnpm test:e2e:web` fails at webServer startup with no useful attribution. Only `openapi:generate` performs the `cpSync` of that data directory, so the suite happens to work on any machine where `openapi:generate` was run first — which hides the defect locally and would break a cold CI runner.
+- **Workaround used:** ran the `cpSync` from `openapi:generate` manually once before the E2E run.
+- **Scope decision:** `apps/api/package.json` is not in this plan's `files_modified`, and the fix (a shared `build` script, or a `prebuild`/`postbuild` copy step) affects every consumer of `dev`.
+- **Suggested follow-up:** factor the data copy into a single `build` script that `dev`, `openapi:generate`, and any deploy path all call, so the compiled output is never missing its runtime assets.

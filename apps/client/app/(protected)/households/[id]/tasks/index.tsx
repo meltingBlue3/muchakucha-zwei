@@ -523,7 +523,12 @@ export default function TaskListRoute() {
                       onPress={() => setRecurringFilter(f.key)}
                       hitSlop={activeTheme.spacing[3]}
                       accessibilityRole="radio"
-                      accessibilityState={{ selected: recurringFilter === f.key }}
+                      // role="radio" requires aria-checked (WCAG 4.1.2).
+                      // accessibilityState alone does not emit it on Web, so mirror
+                      // RecurrencePicker: `checked` for native, an explicit
+                      // aria-checked for the Web DOM.
+                      accessibilityState={{ checked: recurringFilter === f.key }}
+                      aria-checked={recurringFilter === f.key}
                       style={({ pressed }) => ({
                         paddingHorizontal: activeTheme.spacing[3],
                         paddingVertical: activeTheme.spacing[1],
