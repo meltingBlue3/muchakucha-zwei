@@ -309,6 +309,19 @@ export class EventsService {
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
 
     const { startDate, endDate, recurring } = filters;
+    // WR-03: an unparseable query string used to reach Prisma as
+    // `startTime.gte: Invalid Date`, which throws inside the query and
+    // surfaces as a 500 — `GET /events?startDate=abc` is a one-line
+    // reproduction. Reject it here instead, before it reaches the `where`.
+    for (const [field, value] of [['startDate', startDate], ['endDate', endDate]] as const) {
+      if (value !== undefined && isNaN(new Date(value).getTime())) {
+        throw new BadRequestException({
+          code: 'VALIDATION_FAILED',
+          message: 'Request validation failed.',
+          details: [{ field, codes: ['invalid_date'] }],
+        });
+      }
+    }
     const where: Prisma.EventWhereInput = { householdId, cancelledAt: null };
     if (startDate || endDate) {
       const startTime: Prisma.DateTimeFilter = {};

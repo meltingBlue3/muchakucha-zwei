@@ -28,7 +28,14 @@ export const RECURRENCE_LOOKAHEAD_DAYS: Record<string, number> = {
   monthly: 6,
   yearly: 6,
 };
-export const RECURRENCE_MAX_LOOKAHEAD_DAYS = 6;
+// WR-10: this used to be the hardcoded literal 6, duplicating the map above
+// by hand. materializeAllDue's SQL prefilter depends on it being a true
+// maximum ("a rule's local calendar date is at most 1 day ahead of the UTC
+// date, so max lookahead + 1 is a safe superset") — raising any entry in
+// the map without updating this literal would silently narrow the
+// prefilter, and the affected rules would just stop being picked up by the
+// tick with no error anywhere. Deriving it makes that impossible.
+export const RECURRENCE_MAX_LOOKAHEAD_DAYS = Math.max(...Object.values(RECURRENCE_LOOKAHEAD_DAYS));
 
 export function lookaheadFor(freq: string): number {
   return RECURRENCE_LOOKAHEAD_DAYS[freq] ?? RECURRENCE_MAX_LOOKAHEAD_DAYS;

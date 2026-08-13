@@ -422,6 +422,49 @@ describe('GET /households/:householdId/recurrence-rules', () => {
     expect(response.statusCode).toBe(404);
     expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
   });
+
+  // WR-05 regression: currentCalendarDateIn throws for a timezone Intl
+  // cannot resolve. materializeAllDue already wraps every rule in
+  // try/catch for exactly this case; toListItem had no equivalent guard,
+  // so one bad row used to 500 the entire household's list — including
+  // the screen you would use to fix or end that rule.
+  test('degrades a rule with an unresolvable timezone instead of 500ing the whole list', async () => {
+    const owner = await insertActor('rules-badtz-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = formatIsoDate(currentCalendarDateIn('UTC'));
+
+    const healthy = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Healthy rule',
+      recurrence: { freq: 'daily', startsOn: today, timezone: 'UTC' },
+    });
+    expect(healthy.statusCode).toBe(201);
+    const healthyRuleId = (healthy.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const broken = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Broken timezone rule',
+      recurrence: { freq: 'daily', startsOn: today, timezone: 'UTC' },
+    });
+    expect(broken.statusCode).toBe(201);
+    const brokenRuleId = (broken.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    // Corrupt the timezone directly in the database — bypasses the DTO's
+    // IsIanaTimeZone validation on purpose, to simulate the ICU-data-drift
+    // scenario materializeAllDue's own comment anticipates.
+    await withDatabase((client) => client.query(
+      `UPDATE recurrence_rules SET timezone = 'Not/AZone' WHERE id = $1`,
+      [brokenRuleId],
+    ));
+
+    const listed = await recurrenceRulesApi(owner.accessToken, householdId, 'GET');
+    expect(listed.statusCode).toBe(200);
+    const body = listed.json() as { rules: RuleListItem[]; total: number };
+    expect(body.total).toBe(2);
+    expect(body.rules.find((rule) => rule.id === brokenRuleId)?.nextOccurrenceDate).toBeNull();
+    expect(body.rules.find((rule) => rule.id === healthyRuleId)?.nextOccurrenceDate).not.toBeNull();
+
+    const detail = await recurrenceRulesApi(owner.accessToken, householdId, 'GET', `/${brokenRuleId}`);
+    expect(detail.statusCode).toBe(200);
+    expect((detail.json() as RuleListItem).nextOccurrenceDate).toBeNull();
+  });
 });
 
 describe('GET /households/:householdId/recurrence-rules/:ruleId', () => {

@@ -2,6 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
+import { ApiClientError } from '@muchakucha/api-client';
 import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import Calendar from 'lucide-react-native/icons/calendar';
 import Clock from 'lucide-react-native/icons/clock';
@@ -175,8 +176,21 @@ export default function TodayRoute() {
         priority: task.priority,
       });
       void fetchData();
-    } catch {
-      // silently ignore - failed status change
+    } catch (caught: unknown) {
+      // WR-14: a 403 (another member's task), a 404 (the occurrence was
+      // cancelled or split away by someone else), or an offline device all
+      // used to look identical — the spinner stops, the card re-renders
+      // unchanged, and the tap silently appears not to have registered.
+      // That ambiguity matters more for a recurring occurrence, which can
+      // legitimately be cancelled or split away by another household
+      // member seconds earlier. Surface it and refetch so the card
+      // reflects authoritative state either way.
+      setError(
+        caught instanceof ApiClientError && caught.status === 403
+          ? '你没有权限修改这个任务。'
+          : '状态没有更新成功，请重试。',
+      );
+      void fetchData();
     } finally {
       setStatusChangingTaskId(null);
     }

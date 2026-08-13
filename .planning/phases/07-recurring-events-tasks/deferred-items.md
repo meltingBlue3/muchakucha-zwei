@@ -1,5 +1,53 @@
 # Deferred Items
 
+## Code review findings deliberately not fixed (07-REVIEW.md)
+
+All 4 critical findings (CR-01..CR-04) and 7 of 14 warnings (WR-02, WR-03,
+WR-05, WR-06, WR-07, WR-10, WR-13, WR-14 — and the short-term half of
+WR-12) were fixed this session. The remainder is deferred, with reasons:
+
+- **WR-01** (recurrence silently ignored on the plain update DTOs) — NOT a
+  safe drop-in fix. The client's own 仅此一次 save path
+  (`edit.tsx`'s `handleSeriesSelect`, both tasks and events) currently
+  sends the full form payload — including `recurrence` — through the
+  plain `updateTask`/`updateEvent` endpoint, relying on exactly the
+  silent-ignore behavior WR-01 flags. Rejecting `recurrence` there
+  outright would break every 仅此一次 save on a recurring item. A correct
+  fix needs a coordinated client change (strip `recurrence` before that
+  specific call, which is always safe there since `seriesScopeModeFor`
+  already guarantees `this_only` is only offered when recurrence did not
+  change) landed together with the server-side rejection. Real fix, not
+  attempted here for lack of time to verify the coordinated change
+  against both edit screens.
+- **WR-04** (split/end paths skip the materializer's advisory lock) —
+  correctness fix requires an interleaved integration test (a tick's
+  materialization racing a user's split/end inside the same window) to
+  prove the race and then prove the fix; that test infrastructure doesn't
+  exist yet and building it responsibly is bigger than a one-session add.
+- **WR-08** (nested validation errors don't reach the client's per-field
+  mapping) — real fix, touches the global `main.ts` exception filter
+  shared by every endpoint in the API, not just recurrence. Wanted a
+  dedicated review pass across all consumers of `validationDetails`
+  rather than a recurrence-scoped session touching it in passing.
+- **WR-09** (a series split's seed occurrence can land on a date the new
+  pattern never produces) — same shape as WR-12/CR-fixed issues but
+  requires mirroring `updateRuleFromAnchor`'s `no_occurrence_in_range`
+  rejection into `updateSeriesFromOccurrence`, which changes that
+  endpoint's error surface; wanted its own regression test for the
+  count-bounded case specifically, not bundled into this session's batch.
+- **WR-11** (weekly `by_weekday` CHECK is a no-op for an empty array) —
+  needs a migration; every plan in this phase was deliberately
+  no-migration. Fold into whichever later phase next touches
+  `recurrence_rules` with one.
+- **WR-12** (remainder — the generated API client has no structural link
+  to the introspected OpenAPI document) — the short-term half (real
+  response DTOs instead of `Object as any`) is fixed; the actual
+  generator rework (deriving `models.ts`/`client.ts` from the document
+  instead of hand-written string literals) is a cross-cutting
+  infrastructure change, not a recurrence-phase fix.
+- **IN-01, IN-02, IN-03, IN-05, IN-06** — pure code-quality/dedup info
+  items with no user-visible effect; left for a dedicated cleanup pass.
+
 ## Out-of-scope Web E2E authentication regression
 
 - **Found during:** 07-08 Task 1 full `pnpm test:e2e:web` gate

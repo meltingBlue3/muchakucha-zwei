@@ -2,6 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
+import { ApiClientError } from '@muchakucha/api-client';
 import type { TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
@@ -202,8 +203,17 @@ export default function TaskListRoute() {
         priority: task.priority,
       });
       void fetchData();
-    } catch {
-      // silently ignore
+    } catch (caught: unknown) {
+      // WR-14: see today.tsx's handleTaskStatusChange for the full
+      // rationale — a silently-swallowed failure and a genuine success
+      // looked identical, most confusingly for a recurring occurrence
+      // another member could have cancelled or split away moments earlier.
+      setError(
+        caught instanceof ApiClientError && caught.status === 403
+          ? '你没有权限修改这个任务。'
+          : '状态没有更新成功，请重试。',
+      );
+      void fetchData();
     } finally {
       setStatusChangingTaskId(null);
     }

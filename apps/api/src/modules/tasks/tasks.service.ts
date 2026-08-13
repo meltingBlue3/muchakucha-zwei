@@ -164,6 +164,20 @@ export class TasksService {
       }
     }
 
+    // WR-13: a recurring task's per-occurrence dueDate is always derived
+    // from the rule's own walk (below), never from this top-level field —
+    // it was previously validated then silently discarded, so a caller
+    // that submitted one got a 201 with no indication it was ignored.
+    // Reject the combination instead; the client already hides the field
+    // once recurrence is selected (see task-form.tsx).
+    if (input.recurrence !== undefined && input.dueDate) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [{ field: 'dueDate', codes: ['not_allowed_with_recurrence'] }],
+      });
+    }
+
     if (input.recurrence?.endsOn !== undefined && input.recurrence.count !== undefined) {
       throw new BadRequestException({
         code: 'VALIDATION_FAILED',

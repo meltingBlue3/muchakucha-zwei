@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { RecurrenceMaterializerService } from './recurrence-materializer.service.js';
@@ -86,6 +86,8 @@ interface ResolvedOccurrence {
 
 @Injectable()
 export class RecurrenceService {
+  private readonly logger = new Logger(RecurrenceService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly materializer: RecurrenceMaterializerService,
@@ -116,15 +118,27 @@ export class RecurrenceService {
       : rule._count.events > 0 ? 'event' : null;
     // D-16: `today` must be computed per-rule in the RULE's own time zone —
     // a list spanning rules in different time zones cannot share one "today".
-    const today = currentCalendarDateIn(rule.timezone);
-    const next = nextOccurrenceFor({
-      freq: rule.freq,
-      interval: rule.interval,
-      byWeekday: rule.byWeekday,
-      startsOn: calendarDate(rule.startsOn),
-      endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn),
-      count: rule.count,
-    }, today);
+    // WR-05: currentCalendarDateIn throws for a timezone Intl cannot
+    // resolve — materializeAllDue already guards this exact case per-rule
+    // ("one rule's timezone becoming unresolvable must not abort the tick
+    // for every other household"); this path had no equivalent guard, so a
+    // single bad row 500d the whole household's rule list, including the
+    // screen you would use to fix or end that rule. Degrade to "no next
+    // occurrence" instead — the client already renders that as ended.
+    let next: CalendarDate | null = null;
+    try {
+      const today = currentCalendarDateIn(rule.timezone);
+      next = nextOccurrenceFor({
+        freq: rule.freq,
+        interval: rule.interval,
+        byWeekday: rule.byWeekday,
+        startsOn: calendarDate(rule.startsOn),
+        endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn),
+        count: rule.count,
+      }, today);
+    } catch (error: unknown) {
+      this.logger.error(`next occurrence unavailable for rule ${rule.id} (timezone: ${rule.timezone})`, error);
+    }
     return {
       id: rule.id,
       kind,
