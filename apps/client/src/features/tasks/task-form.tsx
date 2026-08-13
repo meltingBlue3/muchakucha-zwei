@@ -65,6 +65,21 @@ interface TaskFormProps {
 
 export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: TaskFormProps) {
   const activeTheme = useTheme<Theme>();
+  // A brand-new task's due date starts empty (`EMPTY_TASK.dueDate`), and the
+  // server ignores the top-level `dueDate` entirely once `recurrence` is
+  // present (each occurrence's own due date is derived from the rule's
+  // walk instead — see TasksService.create). Coupling the picker's anchor
+  // to the due-date field was therefore both pointless and actively broken:
+  // an empty due date produced `startsOn: ''`, which fails the server's
+  // `startsOn` format validation on every recurring create. Scoped to
+  // create only — an existing recurring task's due date is a real,
+  // independently-editable field (UpdateSeriesDto.dueDate), so editing
+  // keeps the field and its current start-date coupling unchanged.
+  const isCreate = initial === undefined;
+  const [todayIso] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
   const [form, setForm] = useState<TaskInput>(() => {
     if (initial) {
       // Drop assignees who are no longer household members — the picker
@@ -287,16 +302,20 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
         </View>
       </Stack>
 
-      {/* Due date */}
-      <DateField
-        disabled={isSubmitting}
-        value={form.dueDate}
-        onChange={(v) => updateField('dueDate', v)}
-        mode="date"
-        label="截止日期（可选）"
-        placeholder="YYYY-MM-DD"
-        accessibilityLabel="截止日期"
-      />
+      {/* Due date — hidden for a new recurring task: the server ignores it
+          once `recurrence` is set, and requiring it produced the startsOn
+          validation error this comment block explains above. */}
+      {!(isCreate && form.recurrence !== null) && (
+        <DateField
+          disabled={isSubmitting}
+          value={form.dueDate}
+          onChange={(v) => updateField('dueDate', v)}
+          mode="date"
+          label="截止日期（可选）"
+          placeholder="YYYY-MM-DD"
+          accessibilityLabel="截止日期"
+        />
+      )}
 
       {/* Description */}
       <RecurrencePicker
@@ -304,7 +323,7 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
         errors={recurrenceErrors}
         onChange={(next) => updateField('recurrence', next)}
         onValidityChange={setRecurrenceValid}
-        startDate={form.dueDate}
+        startDate={isCreate ? todayIso : form.dueDate}
         value={form.recurrence}
       />
 
