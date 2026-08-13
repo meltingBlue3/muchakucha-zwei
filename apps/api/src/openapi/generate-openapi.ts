@@ -269,6 +269,15 @@ export interface UpdateSeriesDto {
   recurrence?: RecurrenceDto;
 }
 
+/**
+ * Rule-level edit body. Carries only \`recurrence\` on purpose — a rule-level
+ * edit has no selected occurrence, so it must not be able to express
+ * instance-level intent (title, status, assignees).
+ */
+export interface UpdateRecurrenceRuleDto {
+  recurrence: RecurrenceDto;
+}
+
 export interface SeriesMutationResponseDto {
   recurrenceRuleId: string;
 }
@@ -471,6 +480,7 @@ import type {
   TagEntitiesDto,
   RecurrenceRuleListItemDto,
   RecurrenceRuleListResponseDto,
+  UpdateRecurrenceRuleDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -1234,6 +1244,22 @@ export class ApiClient {
     );
   }
 
+  async updateRecurrenceRule(
+    accessToken: string,
+    householdId: string,
+    ruleId: string,
+    body: UpdateRecurrenceRuleDto,
+    signal?: AbortSignal,
+  ): Promise<SeriesMutationResponseDto> {
+    return this.authenticated<SeriesMutationResponseDto>(
+      'PUT',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/recurrence-rules/\${encodeURIComponent(ruleId)}\`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
   async endRecurrenceRule(
     accessToken: string,
     householdId: string,
@@ -1448,13 +1474,17 @@ async function generate(): Promise<void> {
     }
 
     const listRecurrenceRulesPath = document.paths['/api/v1/households/{householdId}/recurrence-rules']?.get;
-    const getRecurrenceRulePath = document.paths['/api/v1/households/{householdId}/recurrence-rules/{ruleId}']?.get;
+    const recurrenceRuleItemPath = document.paths['/api/v1/households/{householdId}/recurrence-rules/{ruleId}'];
+    const getRecurrenceRulePath = recurrenceRuleItemPath?.get;
+    const updateRecurrenceRulePath = recurrenceRuleItemPath?.put;
     const endRecurrenceRulePath = document.paths['/api/v1/households/{householdId}/recurrence-rules/{ruleId}/end']?.post;
     if (listRecurrenceRulesPath?.operationId !== 'listRecurrenceRules'
       || getRecurrenceRulePath?.operationId !== 'getRecurrenceRule'
+      || updateRecurrenceRulePath?.operationId !== 'updateRecurrenceRule'
       || endRecurrenceRulePath?.operationId !== 'endRecurrenceRule'
       || document.components?.schemas?.RecurrenceRuleListItemDto === undefined
-      || document.components.schemas.RecurrenceRuleListResponseDto === undefined) {
+      || document.components.schemas.RecurrenceRuleListResponseDto === undefined
+      || document.components.schemas.UpdateRecurrenceRuleDto === undefined) {
       throw new Error('OpenAPI recurrence rule operations or schemas are missing or unstable.');
     }
 

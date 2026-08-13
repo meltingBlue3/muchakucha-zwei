@@ -6,6 +6,7 @@ import {
   RecurrenceRuleListItemDto,
   RecurrenceRuleListResponseDto,
   SeriesMutationResponseDto,
+  UpdateRecurrenceRuleDto,
   UpdateSeriesDto,
 } from './dto/recurrence.dto.js';
 import { RecurrenceService } from './recurrence.service.js';
@@ -121,6 +122,23 @@ export class RecurrenceRulesController {
     @Param('ruleId', uuidParam) ruleId: string,
   ): Promise<RecurrenceRuleListItemDto> {
     return this.recurrenceService.getRule(request.auth.sub, householdId, ruleId);
+  }
+
+  // Rule-level edit: no occurrenceId required. Under D-11's narrow lookahead
+  // a healthy weekly rule often has no future occurrence for the client to
+  // select, so the /series path is unreachable from the rule detail screen.
+  @Put(':ruleId')
+  @ApiOperation({ operationId: 'updateRecurrenceRule' })
+  @ApiOkResponse({ type: SeriesMutationResponseDto })
+  updateRule(
+    @Req() request: AuthenticatedRequest,
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('ruleId', uuidParam) ruleId: string,
+    @Body() input: UpdateRecurrenceRuleDto,
+  ): Promise<SeriesMutationResponseDto> {
+    return this.recurrenceService.updateRuleFromAnchor(
+      request.auth.sub, householdId, ruleId, input,
+    );
   }
 
   // POST rather than DELETE: ending a recurrence is not deleting the rule.

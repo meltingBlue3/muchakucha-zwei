@@ -261,6 +261,15 @@ export interface UpdateSeriesDto {
   recurrence?: RecurrenceDto;
 }
 
+/**
+ * Rule-level edit body. Carries only `recurrence` on purpose — a rule-level
+ * edit has no selected occurrence, so it must not be able to express
+ * instance-level intent (title, status, assignees).
+ */
+export interface UpdateRecurrenceRuleDto {
+  recurrence: RecurrenceDto;
+}
+
 export interface SeriesMutationResponseDto {
   recurrenceRuleId: string;
 }
