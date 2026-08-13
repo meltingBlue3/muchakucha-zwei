@@ -15,3 +15,12 @@
   2. `test/auth/password-reset.int.test.ts > rejects a new password from the committed top-3000 fixture without consuming the token` — downstream of the same denylist fixture/CRLF issue (the reset flow's password-strength check reads the same corrupted fixture).
 - **Scope decision:** Neither `apps/api/src/modules/recurrence/**` nor `apps/api/test/recurrence/**` (this plan's files) touch the SecLists denylist fixture or password-reset flow. `git status --short` confirms no files under `test/security/` or `test/auth/` were modified by this plan. Per the executor's scope-boundary rule, pre-existing failures in unrelated files are logged here, not fixed.
 - **Suggested follow-up:** Verify the repo's `.gitattributes` forces LF for the SecLists denylist source file, or re-checkout with `git config core.autocrlf false` on Windows before running the ASVS security suite.
+- **Recurred in:** 07-12 and 07-13, in fresh worktrees, with the same `git ls-files --eol` signature (`i/lf w/crlf`). No duplicate entry filed; it is the same item.
+
+## `recurrence_rules_by_weekday_ck` does not reject an empty `by_weekday` on a weekly rule
+
+- **Found during:** 07-13 Task 2, while looking for a production constraint that a successor rule INSERT could be made to violate
+- **Observed:** the constraint reads `CHECK ("by_weekday" <@ ARRAY[0..6] AND ("freq" <> 'weekly' OR array_length("by_weekday", 1) >= 1))`. For an empty array `array_length('{}', 1)` is **NULL**, not `0`, so the second conjunct evaluates to NULL, the whole CHECK evaluates to NULL, and PostgreSQL admits the row. Verified directly against the test database. A weekly rule with `by_weekday = '{}'` is therefore accepted by the schema even though the constraint was clearly written to forbid it.
+- **Impact today: none.** Every write path (`tasks.service`, `events.service`, and this plan's `updateRuleFromAnchor`) passes `recurrence.byWeekday ?? []`, and `walkOccurrences` treats an empty `byWeekday` on a weekly rule as "the weekday of `startsOn`" — sane, documented behaviour. The constraint is merely more permissive than it reads, not wrong in effect.
+- **Scope decision:** tightening it (`coalesce(array_length(...), 0) >= 1`) requires a new Prisma migration, and this plan is explicitly a no-migration plan. It also affects the two create paths equally, so it is not a defect introduced here.
+- **Suggested follow-up:** fold the `coalesce` fix into whichever later phase next touches `recurrence_rules` with a migration.

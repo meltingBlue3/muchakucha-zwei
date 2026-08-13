@@ -113,14 +113,19 @@ async function eventApi(
 async function recurrenceRulesApi(
   accessToken: string,
   householdId: string,
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PUT',
   path: string = '',
+  payload?: unknown,
 ): Promise<InjectResponse> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
     url: `/api/v1/households/${encodeURIComponent(householdId)}/recurrence-rules${path}`,
-    headers: { authorization: `Bearer ${accessToken}` },
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      ...(payload === undefined ? {} : { 'content-type': 'application/json' }),
+    },
+    ...(payload === undefined ? {} : { payload }),
   });
   return response as InjectResponse;
 }
@@ -148,6 +153,84 @@ async function ruleBounds(ruleId: string): Promise<{ endsOn: string | null; coun
   const row = result.rows[0] as { ends_on: string | null; count: number | null } | undefined;
   expect(row).toBeDefined();
   return { endsOn: row!.ends_on, count: row!.count };
+}
+
+interface RuleRow {
+  startsOn: string;
+  endsOn: string | null;
+  count: number | null;
+  freq: string;
+  byWeekday: number[];
+  templateTitle: string;
+  startTimeLocal: string | null;
+  durationMinutes: number | null;
+}
+
+// Same to_char discipline as ruleBounds: starts_on/ends_on are bare DATE
+// columns and must not go through the driver's local-midnight coercion.
+async function ruleRow(ruleId: string): Promise<RuleRow> {
+  const result = await withDatabase((client) => client.query(
+    `SELECT to_char("starts_on", 'YYYY-MM-DD') AS starts_on,
+            to_char("ends_on", 'YYYY-MM-DD') AS ends_on,
+            "count", "freq", "by_weekday", "template_title",
+            "start_time_local", "duration_minutes"
+       FROM "recurrence_rules" WHERE "id" = $1`,
+    [ruleId],
+  ));
+  const row = result.rows[0] as Record<string, never> | undefined;
+  expect(row).toBeDefined();
+  const value = row as unknown as {
+    starts_on: string; ends_on: string | null; count: number | null; freq: string;
+    by_weekday: number[]; template_title: string;
+    start_time_local: string | null; duration_minutes: number | null;
+  };
+  return {
+    startsOn: value.starts_on,
+    endsOn: value.ends_on,
+    count: value.count,
+    freq: value.freq,
+    byWeekday: value.by_weekday,
+    templateTitle: value.template_title,
+    startTimeLocal: value.start_time_local,
+    durationMinutes: value.duration_minutes,
+  };
+}
+
+async function instancesFor(
+  table: 'tasks' | 'events',
+  ruleId: string,
+): Promise<Array<{ id: string; day: string; title: string }>> {
+  const result = await withDatabase((client) => client.query(
+    `SELECT "id", "title", to_char("occurrence_date", 'YYYY-MM-DD') AS day FROM "${table}"
+      WHERE "recurrence_rule_id" = $1 ORDER BY "occurrence_date"`,
+    [ruleId],
+  ));
+  return result.rows as Array<{ id: string; day: string; title: string }>;
+}
+
+async function taskAssigneeIds(taskId: string): Promise<string[]> {
+  const result = await withDatabase((client) => client.query(
+    `SELECT "user_id" FROM "task_assignees" WHERE "task_id" = $1 ORDER BY "user_id"`,
+    [taskId],
+  ));
+  return (result.rows as Array<{ user_id: string }>).map((row) => row.user_id);
+}
+
+async function labelNamesFor(table: 'task_labels' | 'event_labels', column: 'task_id' | 'event_id', ownerId: string): Promise<string[]> {
+  const result = await withDatabase((client) => client.query(
+    `SELECT l."name" FROM "${table}" tl JOIN "labels" l ON l."id" = tl."label_id"
+      WHERE tl."${column}" = $1 ORDER BY l."name"`,
+    [ownerId],
+  ));
+  return (result.rows as Array<{ name: string }>).map((row) => row.name);
+}
+
+async function ruleCountFor(householdId: string): Promise<number> {
+  const result = await withDatabase((client) => client.query(
+    `SELECT count(*)::int AS total FROM "recurrence_rules" WHERE "household_id" = $1`,
+    [householdId],
+  ));
+  return (result.rows[0] as { total: number }).total;
 }
 
 interface RuleListItem {
@@ -641,5 +724,565 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
     expect(second.statusCode).toBe(204);
     expect(await occurrenceDatesFor('tasks', ruleId)).toEqual(rowsAfterFirst);
     expect(await ruleBounds(ruleId)).toEqual(boundsAfterFirst);
+  });
+});
+
+describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
+  // Same constraint the end-anchor block documents: the daily lookahead is 0
+  // days (D-11), so a DAILY rule never materializes a "tomorrow" row and a
+  // daily fixture would leave nothing on the far side of the anchor to assert
+  // against. A weekly rule covering the weekdays of the given days
+  // materializes exactly those rows.
+  function weeklyAcross(
+    days: CalendarDate[],
+    startsOn: CalendarDate,
+    extra: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      freq: 'weekly',
+      byWeekday: [...new Set(days.map(weekdayOf))],
+      startsOn: formatIsoDate(startsOn),
+      timezone: 'UTC',
+      ...extra,
+    };
+  }
+
+  // The successor requested by most cases below is DAILY starting at the
+  // anchor. That is deliberate: a daily rule's lookahead is 0 days, so the
+  // materializer generates nothing for it at all — every row found under the
+  // successor can only be the seed row the split itself wrote.
+  function dailyFrom(anchor: CalendarDate, extra: Record<string, unknown> = {}): Record<string, unknown> {
+    return { freq: 'daily', startsOn: formatIsoDate(anchor), timezone: 'UTC', ...extra };
+  }
+
+  async function createLabel(accessToken: string, householdId: string, name: string): Promise<string> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await (app.getHttpAdapter().getInstance() as any).inject({
+      method: 'POST',
+      url: `/api/v1/households/${householdId}/labels`,
+      headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+      payload: { name, color: '#FF8A65' },
+    });
+    expect(response.statusCode).toBe(201);
+    return (response.json() as { id: string }).id;
+  }
+
+  async function tagTask(
+    accessToken: string,
+    householdId: string,
+    taskId: string,
+    labelIds: string[],
+  ): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await (app.getHttpAdapter().getInstance() as any).inject({
+      method: 'POST',
+      url: `/api/v1/households/${householdId}/tasks/${taskId}/labels`,
+      headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+      payload: { labelIds },
+    });
+    expect(response.statusCode).toBeLessThan(300);
+  }
+
+  test('splits at tomorrow: history survives, the future moves to the successor', async () => {
+    const owner = await insertActor('rule-edit-anchor-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const yesterday = addDays(today, -1);
+    const tomorrow = addDays(today, 1);
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule edited from the rule itself',
+      recurrence: weeklyAcross([yesterday, today, tomorrow], yesterday),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    // Premise, asserted rather than assumed: rows exist on BOTH sides of the
+    // anchor before the edit, so the split has something to move and
+    // something to leave behind.
+    const before = await occurrenceDatesFor('tasks', oldRuleId);
+    expect(before).toContain(formatIsoDate(yesterday));
+    expect(before).toContain(formatIsoDate(today));
+    expect(before).toContain(formatIsoDate(tomorrow));
+
+    const response = await recurrenceRulesApi(
+      owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    expect(newRuleId).not.toBe(oldRuleId);
+
+    // Yesterday and today are untouched — a rule-level edit anchors on
+    // TOMORROW, so today's (possibly already completed) occurrence survives.
+    expect(await occurrenceDatesFor('tasks', oldRuleId))
+      .toEqual([formatIsoDate(yesterday), formatIsoDate(today)]);
+    const oldBounds = await ruleBounds(oldRuleId);
+    expect(oldBounds.endsOn).toBe(formatIsoDate(today));
+    expect(oldBounds.count).toBeNull();
+
+    const successor = await ruleRow(newRuleId);
+    expect(successor.startsOn).toBe(formatIsoDate(tomorrow));
+    expect(successor.freq).toBe('daily');
+  });
+
+  test('takes the successor template from the RULE, never from a renamed instance', async () => {
+    const owner = await insertActor('rule-edit-template-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Series template title',
+      recurrence: weeklyAcross([today, tomorrow], addDays(today, -7)),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    // Rename EVERY instance to something distinct. D-02/D-07 make each
+    // occurrence independently renameable, so after this no instance row
+    // carries the series title any more — a template read off any instance
+    // whatsoever produces a "Renamed …" value and fails the assertion below.
+    const instances = await instancesFor('tasks', oldRuleId);
+    expect(instances.length).toBeGreaterThan(1);
+    for (const instance of instances) {
+      const renamed = await taskApi(owner.accessToken, householdId, 'PUT', `/${instance.id}`, {
+        title: `Renamed ${instance.day}`,
+      });
+      expect(renamed.statusCode).toBe(200);
+    }
+
+    const response = await recurrenceRulesApi(
+      owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    // CR-01's payoff: the successor's template comes from the old rule's
+    // template_* columns, so one occurrence's rename cannot leak into every
+    // occurrence the successor will ever generate.
+    expect((await ruleRow(newRuleId)).templateTitle).toBe('Series template title');
+    const seeded = await instancesFor('tasks', newRuleId);
+    expect(seeded).toHaveLength(1);
+    expect(seeded[0]!.title).toBe('Series template title');
+  });
+
+  test('writes a seed instance row at the successor\'s first occurrence from the anchor', async () => {
+    const owner = await insertActor('rule-edit-seed-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule needing a seed row',
+      recurrence: weeklyAcross([today, tomorrow], today),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const response = await recurrenceRulesApi(
+      owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    // D-17's guard. The successor is DAILY starting tomorrow and the daily
+    // lookahead is 0 days, so the materializer contributes nothing: this row
+    // exists only because the split wrote it. Without the seed the successor
+    // would be a permanently row-less rule whose kind cannot even be derived.
+    expect(await occurrenceDatesFor('tasks', newRuleId)).toEqual([formatIsoDate(tomorrow)]);
+  });
+
+  test('inherits assignees and labels from the earliest instance at or after the anchor', async () => {
+    const owner = await insertActor('rule-edit-inherit-owner@example.test');
+    const member = await insertActor('rule-edit-inherit-member@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    await addMemberViaDb(householdId, member);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const nearLabelId = await createLabel(owner.accessToken, householdId, '锚点之后');
+    const farLabelId = await createLabel(owner.accessToken, householdId, '锚点之前');
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule with assignees and labels',
+      assigneeIds: [owner.userId, member.userId],
+      recurrence: weeklyAcross([today, tomorrow], today),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const instances = await instancesFor('tasks', oldRuleId);
+    expect(instances.map((row) => row.day)).toEqual([formatIsoDate(today), formatIsoDate(tomorrow)]);
+    // Distinct labels on either side of the anchor, so the assertion below
+    // pins WHICH instance was used as the inheritance source, not merely that
+    // some label was copied.
+    await tagTask(owner.accessToken, householdId, instances[0]!.id, [farLabelId]);
+    await tagTask(owner.accessToken, householdId, instances[1]!.id, [nearLabelId]);
+
+    const response = await recurrenceRulesApi(
+      owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const seeded = await instancesFor('tasks', newRuleId);
+    expect(seeded).toHaveLength(1);
+    expect(await taskAssigneeIds(seeded[0]!.id)).toEqual([owner.userId, member.userId].sort());
+    expect(await labelNamesFor('task_labels', 'task_id', seeded[0]!.id)).toEqual(['锚点之后']);
+  });
+
+  test('falls back to the latest instance before the anchor when none is at or after it', async () => {
+    const owner = await insertActor('rule-edit-fallback-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const recentLabelId = await createLabel(owner.accessToken, householdId, '最近一次');
+    const oldestLabelId = await createLabel(owner.accessToken, householdId, '最早一次');
+
+    // Weekly on TODAY's weekday only, starting a week ago: every row lands on
+    // or before today, so nothing exists at or after tomorrow's anchor and
+    // the fallback branch is the only way to find a source at all.
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule with only past instances',
+      recurrence: weeklyAcross([today], addDays(today, -7)),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const instances = await instancesFor('tasks', oldRuleId);
+    expect(instances.map((row) => row.day))
+      .toEqual([formatIsoDate(addDays(today, -7)), formatIsoDate(today)]);
+    await tagTask(owner.accessToken, householdId, instances[0]!.id, [oldestLabelId]);
+    await tagTask(owner.accessToken, householdId, instances[1]!.id, [recentLabelId]);
+
+    const response = await recurrenceRulesApi(
+      owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const seeded = await instancesFor('tasks', newRuleId);
+    expect(seeded).toHaveLength(1);
+    expect(await labelNamesFor('task_labels', 'task_id', seeded[0]!.id)).toEqual(['最近一次']);
+  });
+
+  test('inherits the remaining count and clears the old rule\'s count atomically', async () => {
+    const owner = await insertActor('rule-edit-count-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Count bounded rule',
+      recurrence: weeklyAcross([today, tomorrow], addDays(today, -7), { count: 10 }),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    // Premise: exactly three occurrences have already elapsed before the
+    // anchor, so 10 - 3 = 7 remain for the successor to inherit.
+    const elapsed = (await occurrenceDatesFor('tasks', oldRuleId))
+      .filter((day) => day < formatIsoDate(tomorrow));
+    expect(elapsed).toHaveLength(3);
+
+    const response = await recurrenceRulesApi(
+      owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    expect((await ruleRow(newRuleId)).count).toBe(7);
+    // endsOn and count are mutually exclusive: date-bounding the old rule must
+    // clear its count in the same statement, never leave both set.
+    const oldBounds = await ruleBounds(oldRuleId);
+    expect(oldBounds.count).toBeNull();
+    expect(oldBounds.endsOn).toBe(formatIsoDate(today));
+  });
+
+  test('rejects endsOn and count together with 400 on recurrence.endsOn', async () => {
+    const owner = await insertActor('rule-edit-xor-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule with conflicting bounds requested',
+      recurrence: weeklyAcross([today, tomorrow], today),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const response = await recurrenceRulesApi(
+      owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow, { endsOn: formatIsoDate(addDays(today, 30)), count: 5 }) },
+    );
+    expect(response.statusCode).toBe(400);
+    const error = response.json().error as { code: string; details: Array<{ field: string; codes: string[] }> };
+    expect(error.code).toBe('VALIDATION_FAILED');
+    expect(error.details[0]!.field).toBe('recurrence.endsOn');
+    expect(error.details[0]!.codes).toContain('ends_on_and_count_mutually_exclusive');
+    // A rejected request writes nothing at all.
+    expect(await ruleBounds(oldRuleId)).toEqual({ endsOn: null, count: null });
+  });
+
+  test('rejects a successor that can never occur and leaves the old rule byte-identical', async () => {
+    const owner = await insertActor('rule-edit-empty-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule edited into nothing',
+      recurrence: weeklyAcross([today, tomorrow], addDays(today, -7), { count: 10 }),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    const boundsBefore = await ruleBounds(oldRuleId);
+    const rowsBefore = await occurrenceDatesFor('tasks', oldRuleId);
+    expect(boundsBefore).toEqual({ endsOn: null, count: 10 });
+
+    // endsOn strictly before the anchor: the successor could never produce a
+    // single occurrence.
+    const response = await recurrenceRulesApi(
+      owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow, { endsOn: formatIsoDate(today) }) },
+    );
+    expect(response.statusCode).toBe(400);
+    const error = response.json().error as { code: string; details: Array<{ field: string; codes: string[] }> };
+    expect(error.code).toBe('VALIDATION_FAILED');
+    expect(error.details[0]!.codes).toContain('no_occurrence_in_range');
+
+    // The old rule was already date-bounded inside the transaction before this
+    // rejection fired — D-08 requires the rollback to restore it exactly.
+    expect(await ruleBounds(oldRuleId)).toEqual(boundsBefore);
+    expect(await occurrenceDatesFor('tasks', oldRuleId)).toEqual(rowsBefore);
+    expect(await ruleCountFor(householdId)).toBe(1);
+  });
+
+  test('rolls the whole split back when its last write fails mid-transaction', async () => {
+    const owner = await insertActor('rule-edit-rollback-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+    const doomedTitle = 'SPLIT_SEED_MUST_FAIL';
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: doomedTitle,
+      recurrence: weeklyAcross([today, tomorrow], addDays(today, -7), { count: 10 }),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    const boundsBefore = await ruleBounds(oldRuleId);
+    const rowsBefore = await occurrenceDatesFor('tasks', oldRuleId);
+    expect(boundsBefore).toEqual({ endsOn: null, count: 10 });
+
+    // Force the failure on the split's LAST write — the seed instance insert.
+    // By then the old rule has been date-bounded, its count cleared, its
+    // future rows deleted, and the successor rule created, so a passing
+    // rollback assertion here proves every one of those is undone rather than
+    // just the first statement. NOT VALID grandfathers the rows the fixture
+    // already wrote, so the seed INSERT is the only statement that trips it.
+    //
+    // No production constraint can serve as this vector: every rule column
+    // the request can influence is already range-checked by RecurrenceDto
+    // before it reaches the database, and every template column the successor
+    // copies is copied from a row that necessarily already satisfies it.
+    await withDatabase((client) => client.query(
+      `ALTER TABLE "tasks" ADD CONSTRAINT "tmp_split_seed_must_fail"
+         CHECK ("title" <> '${doomedTitle}') NOT VALID`,
+    ));
+    try {
+      const response = await recurrenceRulesApi(
+        owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+        { recurrence: dailyFrom(tomorrow) },
+      );
+      expect(response.statusCode).toBeGreaterThanOrEqual(400);
+
+      // D-08: no intermediate state survives — no half-ended old rule, no
+      // orphaned successor, no missing occurrence rows.
+      expect(await ruleBounds(oldRuleId)).toEqual(boundsBefore);
+      expect(await occurrenceDatesFor('tasks', oldRuleId)).toEqual(rowsBefore);
+      expect(await ruleCountFor(householdId)).toBe(1);
+    } finally {
+      // Unconditional: resetDatabase truncates rows and never touches DDL, so
+      // a leaked constraint would poison every later test in the run.
+      await withDatabase((client) => client.query(
+        `ALTER TABLE "tasks" DROP CONSTRAINT IF EXISTS "tmp_split_seed_must_fail"`,
+      ));
+    }
+  });
+
+  test('returns 404 RECURRENCE_RULE_NOT_FOUND for a ruleId belonging to another household', async () => {
+    const owner = await insertActor('rule-edit-cross-owner@example.test');
+    const otherOwner = await insertActor('rule-edit-cross-other@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const otherHouseholdId = await createHousehold(otherOwner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule of another household',
+      recurrence: weeklyAcross([today, tomorrow], today),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const response = await recurrenceRulesApi(
+      otherOwner.accessToken, otherHouseholdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe('RECURRENCE_RULE_NOT_FOUND');
+    expect((await ruleBounds(oldRuleId)).endsOn).toBeNull();
+  });
+
+  test('returns 404 HOUSEHOLD_NOT_FOUND for a non-member before any rule lookup', async () => {
+    const owner = await insertActor('rule-edit-outsider-owner@example.test');
+    const outsider = await insertActor('rule-edit-outsider@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Member gated rule',
+      recurrence: weeklyAcross([today, tomorrow], today),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const response = await recurrenceRulesApi(
+      outsider.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
+    expect((await ruleBounds(oldRuleId)).endsOn).toBeNull();
+  });
+
+  test('rejects a member editing another member\'s rule with 403, but allows their own', async () => {
+    const owner = await insertActor('rule-edit-member-owner@example.test');
+    const member = await insertActor('rule-edit-member-other@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    await addMemberViaDb(householdId, member);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const ownersRule = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: "Owner's rule",
+      recurrence: weeklyAcross([today, tomorrow], today),
+    });
+    expect(ownersRule.statusCode).toBe(201);
+    const ownersRuleId = (ownersRule.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const forbidden = await recurrenceRulesApi(
+      member.accessToken, householdId, 'PUT', `/${ownersRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    // 403, not 404: the member can legitimately SEE this rule through the list
+    // endpoint, so hiding its existence here would contradict that.
+    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.json().error.code).toBe('FORBIDDEN');
+    expect((await ruleBounds(ownersRuleId)).endsOn).toBeNull();
+
+    const ownRule = await taskApi(member.accessToken, householdId, 'POST', '', {
+      title: "Member's own rule",
+      recurrence: weeklyAcross([today, tomorrow], today),
+    });
+    expect(ownRule.statusCode).toBe(201);
+    const ownRuleId = (ownRule.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const allowed = await recurrenceRulesApi(
+      member.accessToken, householdId, 'PUT', `/${ownRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(allowed.statusCode).toBe(200);
+    const newRuleId = (allowed.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    expect(newRuleId).not.toBe(ownRuleId);
+  });
+
+  test('applies identically to an event rule and seeds it with the successor duration', async () => {
+    const owner = await insertActor('rule-edit-event-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const yesterday = addDays(today, -1);
+    const tomorrow = addDays(today, 1);
+    const yesterdayIso = formatIsoDate(yesterday);
+
+    const created = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Event rule edited from the rule',
+      startTime: `${yesterdayIso}T09:00:00.000Z`,
+      endTime: `${yesterdayIso}T10:00:00.000Z`,
+      recurrence: weeklyAcross([yesterday, today, tomorrow], yesterday),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    const before = await occurrenceDatesFor('events', oldRuleId);
+    expect(before).toContain(formatIsoDate(tomorrow));
+
+    const response = await recurrenceRulesApi(
+      owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    expect(await occurrenceDatesFor('events', oldRuleId))
+      .toEqual([yesterdayIso, formatIsoDate(today)]);
+    expect((await ruleBounds(oldRuleId)).endsOn).toBe(formatIsoDate(today));
+    expect(await occurrenceDatesFor('events', newRuleId)).toEqual([formatIsoDate(tomorrow)]);
+
+    // The seed event's span must come from the successor rule's
+    // duration_minutes, not from any surviving instance's own times.
+    const successor = await ruleRow(newRuleId);
+    expect(successor.durationMinutes).toBe(60);
+    const seed = await withDatabase((client) => client.query(
+      `SELECT "start_time", "end_time" FROM "events" WHERE "recurrence_rule_id" = $1`,
+      [newRuleId],
+    ));
+    const seedRow = seed.rows[0] as { start_time: Date; end_time: Date };
+    expect(seedRow.end_time.getTime() - seedRow.start_time.getTime())
+      .toBe(successor.durationMinutes! * 60_000);
+  });
+
+  test('lists the successor before the superseded rule after an edit', async () => {
+    const owner = await insertActor('rule-edit-list-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    // Occurrences strictly after today only, so once the rule is superseded
+    // nothing of it survives on or after today and its nextOccurrenceDate is
+    // genuinely null rather than null-by-accident.
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Superseded rule',
+      recurrence: weeklyAcross([tomorrow], tomorrow),
+    });
+    expect(created.statusCode).toBe(201);
+    const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const response = await recurrenceRulesApi(
+      owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
+      { recurrence: dailyFrom(tomorrow) },
+    );
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const listed = await recurrenceRulesApi(owner.accessToken, householdId, 'GET');
+    expect(listed.statusCode).toBe(200);
+    const body = listed.json() as { rules: RuleListItem[]; total: number };
+    expect(body.total).toBe(2);
+    // The superseded rule stays visible — an edit supersedes, it does not
+    // delete — but it can never occur again.
+    const oldItem = body.rules.find((rule) => rule.id === oldRuleId);
+    const newItem = body.rules.find((rule) => rule.id === newRuleId);
+    expect(oldItem?.nextOccurrenceDate).toBeNull();
+    expect(newItem?.nextOccurrenceDate).toBe(formatIsoDate(tomorrow));
+    expect(body.rules.findIndex((rule) => rule.id === newRuleId))
+      .toBeLessThan(body.rules.findIndex((rule) => rule.id === oldRuleId));
   });
 });
