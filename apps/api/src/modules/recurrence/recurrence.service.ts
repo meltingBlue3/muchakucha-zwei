@@ -29,6 +29,13 @@ function calendarDate(value: Date): CalendarDate {
   return parseIsoDate(value.toISOString().slice(0, 10));
 }
 
+// Matches recurrence-materializer.service.ts's private helper of the same
+// name. That one isn't exported, so this is a deliberate local duplicate
+// rather than a cross-module import of a private implementation.
+function databaseDate(value: CalendarDate): Date {
+  return new Date(`${formatIsoDate(value)}T00:00:00.000Z`);
+}
+
 interface ResolvedOccurrence {
   occurrenceDate: Date;
   createdBy: string;
@@ -357,6 +364,32 @@ export class RecurrenceService {
     return { recurrenceRuleId: newRuleId };
   }
 
+  // Shared by deleteSeriesFromOccurrence's this_and_following branch and
+  // endRule (CR-05's lesson: two independent copies of "end a series" drift).
+  // A rule only ever owns rows in one of the two instance relations, so
+  // running both deleteMany calls unconditionally is a deliberate zero-row
+  // no-op on whichever relation the rule doesn't have — this keeps the
+  // shared body from needing to know the rule's kind at all.
+  private async endSeriesAt(tx: TransactionClient, ruleId: string, anchor: Date): Promise<void> {
+    await tx.recurrenceRule.update({
+      where: { id: ruleId },
+      data: {
+        // The series ends the day BEFORE the anchor: the anchor itself is the
+        // first occurrence that no longer belongs to the series.
+        endsOn: databaseDate(addDays(calendarDate(anchor), -1)),
+        // endsOn and count are mutually exclusive bounds; a date bound must
+        // clear the count bound or the rule carries two conflicting ends.
+        count: null,
+      },
+    });
+    await tx.task.deleteMany({
+      where: { recurrenceRuleId: ruleId, occurrenceDate: { gte: anchor } },
+    });
+    await tx.event.deleteMany({
+      where: { recurrenceRuleId: ruleId, occurrenceDate: { gte: anchor } },
+    });
+  }
+
   async deleteSeriesFromOccurrence(
     actorId: string,
     householdId: string,
@@ -378,23 +411,29 @@ export class RecurrenceService {
       if (!this.canMutate(role, occurrence.createdBy, actorId)) {
         throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can delete this series.' });
       }
-      const splitCalendarDate = parseIsoDate(occurrence.occurrenceDate.toISOString().slice(0, 10));
-      await tx.recurrenceRule.update({
-        where: { id: occurrence.rule.id },
-        data: {
-          endsOn: new Date(`${formatIsoDate(addDays(splitCalendarDate, -1))}T00:00:00.000Z`),
-          count: null,
-        },
-      });
-      if (kind === 'task') {
-        await tx.task.deleteMany({
-          where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: occurrence.occurrenceDate } },
-        });
-      } else {
-        await tx.event.deleteMany({
-          where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: occurrence.occurrenceDate } },
-        });
+      await this.endSeriesAt(tx, occurrence.rule.id, occurrence.occurrenceDate);
+    });
+  }
+
+  // Ends a recurrence directly from the rule, with no occurrence to anchor
+  // on. The anchor is tomorrow in the rule's OWN timezone, not today: today's
+  // occurrence may already be completed, and anchoring on today would
+  // silently delete it — contradicting what "end this recurrence" means.
+  async endRule(actorId: string, householdId: string, ruleId: string): Promise<void> {
+    const role = await this.resolveActorRole(actorId, householdId);
+    if (role === null) {
+      throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const rule = await tx.recurrenceRule.findUnique({ where: { id: ruleId } });
+      if (rule === null || rule.householdId !== householdId) {
+        throw new NotFoundException({ code: 'RECURRENCE_RULE_NOT_FOUND', message: 'Recurrence rule not found.' });
       }
+      if (!this.canMutate(role, rule.createdBy, actorId)) {
+        throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can end this series.' });
+      }
+      const anchor = databaseDate(addDays(currentCalendarDateIn(rule.timezone), 1));
+      await this.endSeriesAt(tx, rule.id, anchor);
     });
   }
 }

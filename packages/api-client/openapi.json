@@ -1268,6 +1268,43 @@
         ]
       }
     },
+    "/api/v1/households/{householdId}/recurrence-rules/{ruleId}/end": {
+      "post": {
+        "operationId": "endRecurrenceRule",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "recurrence"
+        ]
+      }
+    },
     "/api/v1/households/{householdId}/events": {
       "post": {
         "operationId": "createEvent",

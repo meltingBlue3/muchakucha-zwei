@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import {
@@ -121,5 +121,20 @@ export class RecurrenceRulesController {
     @Param('ruleId', uuidParam) ruleId: string,
   ): Promise<RecurrenceRuleListItemDto> {
     return this.recurrenceService.getRule(request.auth.sub, householdId, ruleId);
+  }
+
+  // POST rather than DELETE: ending a recurrence is not deleting the rule.
+  // The rule stays readable and stays in the list — only its future
+  // occurrences stop.
+  @Post(':ruleId/end')
+  @HttpCode(204)
+  @ApiOperation({ operationId: 'endRecurrenceRule' })
+  @ApiNoContentResponse()
+  end(
+    @Req() request: AuthenticatedRequest,
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('ruleId', uuidParam) ruleId: string,
+  ): Promise<void> {
+    return this.recurrenceService.endRule(request.auth.sub, householdId, ruleId);
   }
 }

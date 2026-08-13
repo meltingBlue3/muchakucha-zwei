@@ -1234,6 +1234,21 @@ export class ApiClient {
     );
   }
 
+  async endRecurrenceRule(
+    accessToken: string,
+    householdId: string,
+    ruleId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'POST',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/recurrence-rules/\${encodeURIComponent(ruleId)}/end\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(\`\${this.baseUrl}\${path}\`, {
       method: 'POST',
@@ -1434,8 +1449,10 @@ async function generate(): Promise<void> {
 
     const listRecurrenceRulesPath = document.paths['/api/v1/households/{householdId}/recurrence-rules']?.get;
     const getRecurrenceRulePath = document.paths['/api/v1/households/{householdId}/recurrence-rules/{ruleId}']?.get;
+    const endRecurrenceRulePath = document.paths['/api/v1/households/{householdId}/recurrence-rules/{ruleId}/end']?.post;
     if (listRecurrenceRulesPath?.operationId !== 'listRecurrenceRules'
       || getRecurrenceRulePath?.operationId !== 'getRecurrenceRule'
+      || endRecurrenceRulePath?.operationId !== 'endRecurrenceRule'
       || document.components?.schemas?.RecurrenceRuleListItemDto === undefined
       || document.components.schemas.RecurrenceRuleListResponseDto === undefined) {
       throw new Error('OpenAPI recurrence rule operations or schemas are missing or unstable.');

@@ -5,7 +5,12 @@ import * as argon2 from 'argon2';
 import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { createApplication } from '../../src/main.js';
-import { addDays, currentCalendarDateIn, formatIsoDate } from '../../src/modules/recurrence/recurrence-date.js';
+import {
+  addDays,
+  currentCalendarDateIn,
+  formatIsoDate,
+  type CalendarDate,
+} from '../../src/modules/recurrence/recurrence-date.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
 const accessSecret = 'test-only-access-secret-that-is-longer-than-thirty-two-bytes';
@@ -51,6 +56,15 @@ async function createHousehold(accessToken: string): Promise<string> {
   });
   expect(response.statusCode).toBe(201);
   return (response.json() as { id: string }).id;
+}
+
+async function addMemberViaDb(householdId: string, actor: ActorFixture, role: string = 'MEMBER'): Promise<void> {
+  await withDatabase(async (client) => {
+    await client.query(
+      `INSERT INTO "memberships" ("user_id", "household_id", "role") VALUES ($1, $2, $3)`,
+      [actor.userId, householdId, role],
+    );
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -109,6 +123,31 @@ async function recurrenceRulesApi(
     headers: { authorization: `Bearer ${accessToken}` },
   });
   return response as InjectResponse;
+}
+
+function weekdayOf(date: CalendarDate): number {
+  return new Date(`${formatIsoDate(date)}T00:00:00.000Z`).getUTCDay();
+}
+
+async function occurrenceDatesFor(table: 'tasks' | 'events', ruleId: string): Promise<string[]> {
+  const result = await withDatabase((client) => client.query(
+    `SELECT to_char("occurrence_date", 'YYYY-MM-DD') AS day FROM "${table}"
+      WHERE "recurrence_rule_id" = $1 ORDER BY "occurrence_date"`,
+    [ruleId],
+  ));
+  return (result.rows as Array<{ day: string }>).map((row) => row.day);
+}
+
+// ends_on is a bare DATE column: read it through to_char so the pg driver's
+// local-midnight Date coercion cannot shift the calendar day under assertion.
+async function ruleBounds(ruleId: string): Promise<{ endsOn: string | null; count: number | null }> {
+  const result = await withDatabase((client) => client.query(
+    `SELECT to_char("ends_on", 'YYYY-MM-DD') AS ends_on, "count" FROM "recurrence_rules" WHERE "id" = $1`,
+    [ruleId],
+  ));
+  const row = result.rows[0] as { ends_on: string | null; count: number | null } | undefined;
+  expect(row).toBeDefined();
+  return { endsOn: row!.ends_on, count: row!.count };
 }
 
 interface RuleListItem {
@@ -346,5 +385,261 @@ describe('GET /households/:householdId/recurrence-rules/:ruleId', () => {
 
     const response = await recurrenceRulesApi(owner.accessToken, householdId, 'GET', '/not-a-uuid');
     expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
+  // The daily lookahead is 0 days (D-11), so a daily rule can never have a
+  // materialized "tomorrow" row — there would be nothing on the far side of
+  // the anchor to assert against. A weekly rule covering BOTH today's and
+  // tomorrow's weekday materializes exactly the two rows the anchor sits
+  // between, which is what these tests need.
+  function straddlingWeeklyRecurrence(today: CalendarDate, startsOn: CalendarDate): Record<string, unknown> {
+    return {
+      freq: 'weekly',
+      byWeekday: [weekdayOf(today), weekdayOf(addDays(today, 1))],
+      startsOn: formatIsoDate(startsOn),
+      timezone: 'UTC',
+    };
+  }
+
+  test("keeps today's occurrence, removes tomorrow's, and ends the rule on today", async () => {
+    const owner = await insertActor('end-anchor-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule ended from the rule itself',
+      recurrence: straddlingWeeklyRecurrence(today, today),
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    // Premise: both sides of the anchor exist before the end.
+    expect(await occurrenceDatesFor('tasks', ruleId))
+      .toEqual([formatIsoDate(today), formatIsoDate(tomorrow)]);
+
+    const ended = await recurrenceRulesApi(owner.accessToken, householdId, 'POST', `/${ruleId}/end`);
+    expect(ended.statusCode).toBe(204);
+
+    // D-14: the anchor is TOMORROW. Today's occurrence may already be done —
+    // ending the recurrence must not swallow it.
+    expect(await occurrenceDatesFor('tasks', ruleId)).toEqual([formatIsoDate(today)]);
+    expect((await ruleBounds(ruleId)).endsOn).toBe(formatIsoDate(today));
+  });
+
+  test('preserves every historical occurrence row that existed before the end', async () => {
+    const owner = await insertActor('end-history-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule with history',
+      recurrence: straddlingWeeklyRecurrence(today, addDays(today, -7)),
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    const before = await occurrenceDatesFor('tasks', ruleId);
+    const historical = before.filter((day) => day < formatIsoDate(today));
+    expect(historical.length).toBeGreaterThan(0);
+
+    const ended = await recurrenceRulesApi(owner.accessToken, householdId, 'POST', `/${ruleId}/end`);
+    expect(ended.statusCode).toBe(204);
+
+    const after = await occurrenceDatesFor('tasks', ruleId);
+    for (const day of historical) {
+      expect(after).toContain(day);
+    }
+    expect(after).toEqual([...historical, formatIsoDate(today)]);
+  });
+
+  test('clears a count bound to NULL and replaces it with an endsOn date', async () => {
+    const owner = await insertActor('end-count-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Count bounded rule',
+      recurrence: { ...straddlingWeeklyRecurrence(today, today), count: 10 },
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    expect((await ruleBounds(ruleId)).count).toBe(10);
+
+    const ended = await recurrenceRulesApi(owner.accessToken, householdId, 'POST', `/${ruleId}/end`);
+    expect(ended.statusCode).toBe(204);
+
+    // endsOn and count are mutually exclusive bounds — a date bound must
+    // leave count NULL, never both set.
+    const bounds = await ruleBounds(ruleId);
+    expect(bounds.count).toBeNull();
+    expect(bounds.endsOn).toBe(formatIsoDate(today));
+  });
+
+  test('applies identically to an event rule', async () => {
+    const owner = await insertActor('end-event-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+    const todayIso = formatIsoDate(today);
+
+    const created = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Event rule to end',
+      startTime: `${todayIso}T09:00:00.000Z`,
+      endTime: `${todayIso}T10:00:00.000Z`,
+      recurrence: straddlingWeeklyRecurrence(today, today),
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+    expect(await occurrenceDatesFor('events', ruleId)).toEqual([todayIso, formatIsoDate(tomorrow)]);
+
+    const ended = await recurrenceRulesApi(owner.accessToken, householdId, 'POST', `/${ruleId}/end`);
+    expect(ended.statusCode).toBe(204);
+
+    expect(await occurrenceDatesFor('events', ruleId)).toEqual([todayIso]);
+    expect((await ruleBounds(ruleId)).endsOn).toBe(todayIso);
+  });
+
+  test('returns 404 RECURRENCE_RULE_NOT_FOUND for a ruleId belonging to another household', async () => {
+    const owner = await insertActor('end-cross-owner@example.test');
+    const otherOwner = await insertActor('end-cross-other@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const otherHouseholdId = await createHousehold(otherOwner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule of another household',
+      recurrence: straddlingWeeklyRecurrence(today, today),
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const response = await recurrenceRulesApi(otherOwner.accessToken, otherHouseholdId, 'POST', `/${ruleId}/end`);
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe('RECURRENCE_RULE_NOT_FOUND');
+    // The rule must be untouched by the rejected attempt.
+    expect((await ruleBounds(ruleId)).endsOn).toBeNull();
+  });
+
+  test('returns 404 HOUSEHOLD_NOT_FOUND for a non-member before any rule lookup', async () => {
+    const owner = await insertActor('end-outsider-owner@example.test');
+    const outsider = await insertActor('end-outsider@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Member gated rule',
+      recurrence: straddlingWeeklyRecurrence(today, today),
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const response = await recurrenceRulesApi(outsider.accessToken, householdId, 'POST', `/${ruleId}/end`);
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
+    expect((await ruleBounds(ruleId)).endsOn).toBeNull();
+  });
+
+  test("rejects a member ending another member's rule with 403 FORBIDDEN", async () => {
+    const owner = await insertActor('end-member-owner@example.test');
+    const member = await insertActor('end-member-other@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    await addMemberViaDb(householdId, member);
+    const today = currentCalendarDateIn('UTC');
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: "Owner's rule",
+      recurrence: straddlingWeeklyRecurrence(today, today),
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const response = await recurrenceRulesApi(member.accessToken, householdId, 'POST', `/${ruleId}/end`);
+    // 403, not 404: the member can legitimately SEE this rule, so hiding its
+    // existence here would contradict the list endpoint.
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error.code).toBe('FORBIDDEN');
+    expect((await ruleBounds(ruleId)).endsOn).toBeNull();
+  });
+
+  test('lets a member end a rule they created themselves', async () => {
+    const owner = await insertActor('end-own-owner@example.test');
+    const member = await insertActor('end-own-member@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    await addMemberViaDb(householdId, member);
+    const today = currentCalendarDateIn('UTC');
+
+    const created = await taskApi(member.accessToken, householdId, 'POST', '', {
+      title: "Member's own rule",
+      recurrence: straddlingWeeklyRecurrence(today, today),
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const response = await recurrenceRulesApi(member.accessToken, householdId, 'POST', `/${ruleId}/end`);
+    expect(response.statusCode).toBe(204);
+    expect((await ruleBounds(ruleId)).endsOn).toBe(formatIsoDate(today));
+  });
+
+  test('keeps an ended rule in the list with a null nextOccurrenceDate', async () => {
+    const owner = await insertActor('end-still-listed-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+    const tomorrow = addDays(today, 1);
+
+    // Deliberately a rule whose only occurrences fall strictly after today:
+    // ending it anchors on tomorrow, so nothing survives on or after today
+    // and the next occurrence genuinely becomes null.
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule that will be ended',
+      recurrence: {
+        freq: 'weekly',
+        byWeekday: [weekdayOf(tomorrow)],
+        startsOn: formatIsoDate(tomorrow),
+        timezone: 'UTC',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const beforeList = await recurrenceRulesApi(owner.accessToken, householdId, 'GET');
+    const beforeItem = (beforeList.json() as { rules: RuleListItem[] }).rules
+      .find((rule) => rule.id === ruleId);
+    expect(beforeItem?.nextOccurrenceDate).toBe(formatIsoDate(tomorrow));
+
+    const ended = await recurrenceRulesApi(owner.accessToken, householdId, 'POST', `/${ruleId}/end`);
+    expect(ended.statusCode).toBe(204);
+
+    // D-14: "ended" is not "deleted" — the rule stays visible in the list.
+    const afterList = await recurrenceRulesApi(owner.accessToken, householdId, 'GET');
+    expect(afterList.statusCode).toBe(200);
+    const afterBody = afterList.json() as { rules: RuleListItem[]; total: number };
+    expect(afterBody.total).toBe(1);
+    const afterItem = afterBody.rules.find((rule) => rule.id === ruleId);
+    expect(afterItem).toBeDefined();
+    expect(afterItem!.nextOccurrenceDate).toBeNull();
+  });
+
+  test('is idempotent: ending an already ended rule changes nothing', async () => {
+    const owner = await insertActor('end-idempotent-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const today = currentCalendarDateIn('UTC');
+
+    const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Rule ended twice',
+      recurrence: straddlingWeeklyRecurrence(today, addDays(today, -7)),
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const first = await recurrenceRulesApi(owner.accessToken, householdId, 'POST', `/${ruleId}/end`);
+    expect(first.statusCode).toBe(204);
+    const rowsAfterFirst = await occurrenceDatesFor('tasks', ruleId);
+    const boundsAfterFirst = await ruleBounds(ruleId);
+
+    const second = await recurrenceRulesApi(owner.accessToken, householdId, 'POST', `/${ruleId}/end`);
+    expect(second.statusCode).toBe(204);
+    expect(await occurrenceDatesFor('tasks', ruleId)).toEqual(rowsAfterFirst);
+    expect(await ruleBounds(ruleId)).toEqual(boundsAfterFirst);
   });
 });

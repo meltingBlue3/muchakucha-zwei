@@ -815,6 +815,21 @@ export class ApiClient {
     );
   }
 
+  async endRecurrenceRule(
+    accessToken: string,
+    householdId: string,
+    ruleId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/recurrence-rules/${encodeURIComponent(ruleId)}/end`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
