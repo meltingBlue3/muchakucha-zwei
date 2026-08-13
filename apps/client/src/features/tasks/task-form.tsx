@@ -331,7 +331,13 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
         errors={recurrenceErrors}
         onChange={(next) => updateField('recurrence', next)}
         onValidityChange={setRecurrenceValid}
-        startDate={isCreate ? todayIso : form.dueDate}
+        // WR-07: the same startsOn: '' failure the block above documents for
+        // create is equally reachable on edit — an existing task with no due
+        // date (the field is optional) hits it the moment recurrence is
+        // turned on, or a recurring task re-saved after its due date was
+        // cleared. Empty due date always falls back to todayIso, not just
+        // in create mode.
+        startDate={isCreate || form.dueDate === '' ? todayIso : form.dueDate}
         value={form.recurrence}
       />
 

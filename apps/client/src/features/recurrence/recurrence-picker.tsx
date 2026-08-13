@@ -180,7 +180,11 @@ export function RecurrencePicker({
   }, [value?.count, value?.endsOn]);
 
   useEffect(() => {
-    if (value === null || value.startsOn === startDate) return;
+    // WR-07 defense in depth: every current caller now resolves an empty
+    // due date to today before passing it in, but this effect is the actual
+    // enforcement point — propagating startsOn: '' here is exactly what
+    // fails the server's format validation on save.
+    if (value === null || startDate === '' || value.startsOn === startDate) return;
     const next = { ...value, startsOn: startDate };
     if (next.freq === 'weekly' && (next.byWeekday?.length ?? 0) === 0) {
       next.byWeekday = [weekdayFor(startDate)];
