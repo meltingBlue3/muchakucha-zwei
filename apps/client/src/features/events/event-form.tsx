@@ -48,6 +48,13 @@ interface EventFormProps {
 
 export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: EventFormProps) {
   const activeTheme = useTheme<Theme>();
+  // CR-03: the /series endpoint has no way to detach an occurrence into a
+  // standalone item — selecting 不重复 here omits `recurrence` from the
+  // payload, which the server reads as "unchanged" and just continues the
+  // series. Disable the option entirely for an already-recurring event
+  // rather than accept an edit that silently does nothing; 结束此重复 on
+  // the rule detail screen is the real way to stop it.
+  const isExistingRecurring = initial !== undefined && initial.recurrence !== null;
   const [form, setForm] = useState<EventInput>(() => {
     if (initial) {
       const start = new Date(initial.startTime);
@@ -232,6 +239,7 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
       {/* Location */}
       <RecurrencePicker
         disabled={isSubmitting}
+        disableTurnOff={isExistingRecurring}
         errors={recurrenceErrors}
         onChange={(next) => updateField('recurrence', next)}
         onValidityChange={setRecurrenceValid}

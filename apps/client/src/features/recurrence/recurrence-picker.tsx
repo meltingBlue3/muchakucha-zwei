@@ -143,13 +143,25 @@ interface RecurrencePickerProps {
   disabled?: boolean;
   errors?: Record<string, string>;
   onValidityChange?(valid: boolean): void;
+  /**
+   * Disables the 不重复 chip. Set this when editing an occurrence that
+   * already belongs to a series: turning recurrence off here has no server
+   * effect (CR-03) — the /series endpoint only ever creates or continues a
+   * successor rule, it cannot detach an occurrence into a standalone item —
+   * so offering the chip lets a save silently do nothing. 结束此重复 on the
+   * rule detail screen is the real way to stop a series.
+   */
+  disableTurnOff?: boolean;
 }
+
+const TURN_OFF_DISABLED_HINT = '如需彻底停止这个重复，请到规则详情页使用「结束此重复」。';
 
 export function RecurrencePicker({
   value,
   onChange,
   startDate,
   disabled = false,
+  disableTurnOff = false,
   errors = {},
   onValidityChange,
 }: RecurrencePickerProps) {
@@ -241,6 +253,10 @@ export function RecurrencePicker({
 
   const selectFrequency = (frequency: Frequency | null) => {
     if (disabled) return;
+    // Keyboard arrow navigation moves selection directly (moveRadioSelection),
+    // bypassing the chip's own `disabled` Pressable prop — this guard is the
+    // actual enforcement point for a disabled 不重复 chip, not the prop above.
+    if (frequency === null && disableTurnOff) return;
     setWeekdayAnnouncement(false);
     if (frequency === null) {
       setEndingMode('forever');
@@ -322,14 +338,15 @@ export function RecurrencePicker({
       <View accessibilityLabel="重复频率" accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         {FREQUENCIES.map((frequency, frequencyIndex) => {
           const selected = frequency.value === null ? value === null : value?.freq === frequency.value;
+          const chipDisabled = disabled || (disableTurnOff && frequency.value === null);
           return (
             <Pressable
               key={frequency.label}
               accessibilityLabel={frequency.label}
               accessibilityRole="radio"
-              accessibilityState={{ checked: selected, disabled }}
+              accessibilityState={{ checked: selected, disabled: chipDisabled }}
               aria-checked={selected}
-              disabled={disabled}
+              disabled={chipDisabled}
               {...(Platform.OS === 'web' ? {
                 onKeyDown: (event: WebDirectionalKeyEvent) => moveRadioSelection(
                   event,
@@ -339,13 +356,16 @@ export function RecurrencePicker({
                 ),
               } : {})}
               onPress={() => selectFrequency(frequency.value)}
-              style={({ pressed }) => [chipStyle(selected), { opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [chipStyle(selected), { opacity: chipDisabled ? 0.4 : pressed ? 0.7 : 1 }]}
             >
               <Text variant="bodySm" color={chipTextColor(selected)}>{frequency.label}</Text>
             </Pressable>
           );
         })}
       </View>
+      {disableTurnOff && (
+        <Text variant="caption" color="inkMuted">{TURN_OFF_DISABLED_HINT}</Text>
+      )}
       {frequencyError !== undefined && <FormMessage>{frequencyError}</FormMessage>}
       {timeZoneError !== undefined && <FormMessage>{timeZoneError}</FormMessage>}
 

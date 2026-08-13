@@ -76,6 +76,13 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
   // independently-editable field (UpdateSeriesDto.dueDate), so editing
   // keeps the field and its current start-date coupling unchanged.
   const isCreate = initial === undefined;
+  // CR-03: the /series endpoint has no way to detach an occurrence into a
+  // standalone item — selecting 不重复 here omits `recurrence` from the
+  // payload, which the server reads as "unchanged" and just continues the
+  // series. Disable the option entirely for an already-recurring task
+  // rather than accept an edit that silently does nothing; 结束此重复 on
+  // the rule detail screen is the real way to stop it.
+  const isExistingRecurring = initial !== undefined && initial.recurrence !== null;
   const [todayIso] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -320,6 +327,7 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
       {/* Description */}
       <RecurrencePicker
         disabled={isSubmitting}
+        disableTurnOff={isExistingRecurring}
         errors={recurrenceErrors}
         onChange={(next) => updateField('recurrence', next)}
         onValidityChange={setRecurrenceValid}

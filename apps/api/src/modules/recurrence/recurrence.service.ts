@@ -45,6 +45,39 @@ function localTime(value: string | null): { hour: number; minute: number } {
   return { hour: Number(value.slice(0, 2)), minute: Number(value.slice(3, 5)) };
 }
 
+// WR-02: `parseIsoDate` throws a plain Error (not an HttpException) on a
+// regex-valid but non-existent calendar date ("2026-02-30", "2026-13-45"),
+// which StableHttpExceptionFilter maps to a 500. Every call site that feeds
+// a request-supplied date string into parseIsoDate must go through this
+// wrapper instead, so a malformed request stays a 400.
+function parseRequestDate(value: string, field: string): CalendarDate {
+  try {
+    return parseIsoDate(value);
+  } catch {
+    throw new BadRequestException({
+      code: 'VALIDATION_FAILED',
+      message: 'Request validation failed.',
+      details: [{ field, codes: ['invalid_date'] }],
+    });
+  }
+}
+
+// CR-02: the wall-clock counterpart to Intl-based helpers elsewhere in this
+// module — reads the HH:mm a UTC instant falls on in the given timezone, so
+// a successor rule's startTimeLocal can be derived from a submitted instance
+// time rather than only ever inherited from the rule it is splitting off.
+function localTimeIn(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
 interface ResolvedOccurrence {
   occurrenceDate: Date;
   createdBy: string;
@@ -288,6 +321,52 @@ export class RecurrenceService {
         }
       }
 
+      // CR-04: `recurrence.endsOn` used to reach Prisma via a raw `new Date()`
+      // (regex-valid but calendar-invalid input like "2026-02-30" silently
+      // rolls over instead of rejecting; "2026-13-45" 500s after the old
+      // rule's endsOn/count were already mutated in this same transaction).
+      // Every other call site guards this with parseIsoDate — this one now
+      // does too, wrapped so a bad date stays a 400.
+      const successorEndsOn = recurrence?.endsOn === undefined
+        ? null
+        : parseRequestDate(recurrence.endsOn, 'recurrence.endsOn');
+
+      // CR-02: the successor's clock fields used to be inherited from the OLD
+      // rule unconditionally, even when the request changed the occurrence's
+      // own time — `input.startTime`/`input.endTime` (events) or
+      // `input.dueDate` (tasks) were written onto the edited instance but
+      // never propagated to the rule those fields drive future generation
+      // from. An explicit `recurrence.startTimeLocal`/`durationMinutes` still
+      // wins outright (a rule-change edit); short of that, derive from
+      // whatever instance time the request actually supplied before falling
+      // back to what the old rule already had.
+      const successorTimezone = recurrence?.timezone ?? occurrence.rule.timezone;
+      const nextStartTimeLocal = recurrence?.startTimeLocal ?? (
+        kind === 'event' && input.startTime !== undefined
+          ? localTimeIn(new Date(input.startTime), successorTimezone)
+          : kind === 'task' && input.dueDate !== undefined
+            ? localTimeIn(new Date(input.dueDate), successorTimezone)
+            : occurrence.rule.startTimeLocal
+      );
+      const nextDurationMinutes = recurrence?.durationMinutes ?? (
+        kind === 'event' && input.startTime !== undefined && input.endTime !== undefined
+          ? Math.round((new Date(input.endTime).getTime() - new Date(input.startTime).getTime()) / 60_000)
+          : occurrence.rule.durationMinutes
+      );
+      // Same DB CHECK CR-01 guards on create — a submitted instance span over
+      // 24h reaching this successor rule would violate it identically.
+      if (nextDurationMinutes !== null && nextDurationMinutes > 1440) {
+        throw new BadRequestException({
+          code: 'VALIDATION_FAILED',
+          message: 'Request validation failed.',
+          details: [{
+            field: 'endTime',
+            codes: ['recurring_duration_too_long'],
+            message: '重复事件的单次时长不能超过 24 小时。',
+          }],
+        });
+      }
+
       const createdRule = await tx.recurrenceRule.create({
         data: {
           householdId: occurrence.rule.householdId,
@@ -298,11 +377,11 @@ export class RecurrenceService {
           startsOn: splitDate,
           endsOn: recurrence === undefined
             ? occurrence.rule.endsOn
-            : recurrence.endsOn === undefined ? null : new Date(`${recurrence.endsOn}T00:00:00.000Z`),
+            : successorEndsOn === null ? null : databaseDate(successorEndsOn),
           count: recurrence === undefined ? inheritedCount : recurrence.count ?? null,
-          timezone: recurrence?.timezone ?? occurrence.rule.timezone,
-          startTimeLocal: recurrence?.startTimeLocal ?? occurrence.rule.startTimeLocal,
-          durationMinutes: recurrence?.durationMinutes ?? occurrence.rule.durationMinutes,
+          timezone: successorTimezone,
+          startTimeLocal: nextStartTimeLocal,
+          durationMinutes: nextDurationMinutes,
           templateTitle: nextTitle,
           templateDescription: nextDescription,
           templatePriority: nextPriority,
@@ -471,7 +550,7 @@ export class RecurrenceService {
         data: { endsOn: databaseDate(addDays(anchorCalendar, -1)), count: null },
       });
 
-      const successorEndsOn = recurrence.endsOn === undefined ? null : parseIsoDate(recurrence.endsOn);
+      const successorEndsOn = recurrence.endsOn === undefined ? null : parseRequestDate(recurrence.endsOn, 'recurrence.endsOn');
       // An explicit count wins; with neither bound given the successor
       // inherits the old rule's remaining occurrences.
       const successorCount = recurrence.count

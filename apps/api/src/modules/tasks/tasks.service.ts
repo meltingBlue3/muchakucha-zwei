@@ -28,6 +28,24 @@ function utcMidnightToday(): Date {
   return new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
 }
 
+// WR-02: parseIsoDate throws a plain Error (not an HttpException) on a
+// regex-valid but non-existent calendar date ("2026-02-30", "2026-13-45"),
+// which StableHttpExceptionFilter maps to a 500. Request-supplied recurrence
+// dates must go through this wrapper instead, so a malformed request stays
+// a 400. Matches recurrence.service.ts's copy — deliberately duplicated
+// rather than imported, same rationale as this file's other local helpers.
+function parseRequestDate(value: string, field: string): ReturnType<typeof parseIsoDate> {
+  try {
+    return parseIsoDate(value);
+  } catch {
+    throw new BadRequestException({
+      code: 'VALIDATION_FAILED',
+      message: 'Request validation failed.',
+      details: [{ field, codes: ['invalid_date'] }],
+    });
+  }
+}
+
 interface TaskRow {
   id: string;
   householdId: string;
@@ -156,14 +174,14 @@ export class TasksService {
 
     if (input.recurrence !== undefined) {
       const recurrence = input.recurrence;
-      const startsOn = parseIsoDate(recurrence.startsOn);
+      const startsOn = parseRequestDate(recurrence.startsOn, 'recurrence.startsOn');
       const interval = recurrence.interval ?? 1;
       const firstOccurrence = walkOccurrences({
         freq: recurrence.freq,
         interval,
         byWeekday: recurrence.byWeekday ?? [],
         startsOn,
-        endsOn: recurrence.endsOn === undefined ? null : parseIsoDate(recurrence.endsOn),
+        endsOn: recurrence.endsOn === undefined ? null : parseRequestDate(recurrence.endsOn, 'recurrence.endsOn'),
         count: recurrence.count ?? null,
       }, { horizon: addDays(startsOn, Math.max(7, interval * 7)) })[0];
       if (firstOccurrence === undefined) {

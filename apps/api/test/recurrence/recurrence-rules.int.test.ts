@@ -714,6 +714,94 @@ describe('series scope operations', () => {
     expect(after.future).toEqual(before.future);
   });
 
+  // CR-02 regression: changing an occurrence's own time without touching
+  // `recurrence` used to leave the successor rule's startTimeLocal on the
+  // OLD rule's value, so the edited occurrence showed the new time but every
+  // later generated occurrence reverted to the old one.
+  test('carries a submitted dueDate time onto the successor rule, not just the edited occurrence', async () => {
+    const owner = await insertActor('scope-time-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const series = await createDailySeries(owner, householdId, 'Morning series');
+    const split = series.tasks[2]!;
+    expect(split.title).toBe('Morning series');
+
+    const newDueDate = new Date(`${split.occurrenceDate}T15:30:00.000Z`).toISOString();
+    const response = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${split.id}/series`, {
+      dueDate: newDueDate,
+    });
+    expect(response.statusCode).toBe(200);
+    const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
+
+    const rule = await withDatabase(async (client) => (
+      await client.query<{ start_time_local: string }>(
+        `SELECT "start_time_local" FROM "recurrence_rules" WHERE "id" = $1`,
+        [newRuleId],
+      )
+    ).rows[0]!);
+    expect(rule.start_time_local).toBe('15:30');
+
+    // Not just the rule column — a subsequently materialized future
+    // occurrence must actually carry the new time, proving generation reads
+    // it rather than the split's edited row alone.
+    const materializer = app.get(RecurrenceMaterializerService);
+    await withDatabase((client) => client.query(
+      `UPDATE "recurrence_rules" SET "materialized_through" = NULL WHERE "id" = $1`,
+      [newRuleId],
+    ));
+    await materializer.materializeRule(newRuleId);
+    const generated = await withDatabase(async (client) => (
+      await client.query<{ due_date: string }>(
+        `SELECT "due_date" FROM "tasks" WHERE "recurrence_rule_id" = $1 AND "occurrence_date" > $2::date ORDER BY "occurrence_date" LIMIT 1`,
+        [newRuleId, split.occurrenceDate],
+      )
+    ).rows[0]);
+    expect(generated).toBeDefined();
+    expect(new Date(generated!.due_date).getUTCHours()).toBe(15);
+    expect(new Date(generated!.due_date).getUTCMinutes()).toBe(30);
+  });
+
+  // CR-04 regression: a regex-valid but calendar-invalid recurrence.endsOn
+  // used to reach `new Date(...)` directly, either silently rolling over
+  // ("2026-02-30" -> 2026-03-02) or 500ing ("2026-13-45") after the old
+  // rule's endsOn/count were already mutated in the same transaction.
+  test('rejects a calendar-invalid recurrence.endsOn on the split path with a 400, and rolls back cleanly', async () => {
+    const owner = await insertActor('scope-baddate-owner@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    const series = await createDailySeries(owner, householdId, 'Bad date series');
+    const split = series.tasks[3]!;
+    const before = await withDatabase(async (client) => (
+      await client.query(`SELECT "ends_on" FROM "recurrence_rules" WHERE "id" = $1`, [series.recurrenceRuleId])
+    ).rows[0]);
+
+    const rolledOver = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${split.id}/series`, {
+      recurrence: {
+        freq: 'daily',
+        startsOn: split.occurrenceDate,
+        endsOn: '2026-02-30', // does not exist — must not silently become 2026-03-02
+        timezone: 'UTC',
+      },
+    });
+    expect(rolledOver.statusCode).toBe(400);
+    expect(rolledOver.json().error.code).toBe('VALIDATION_FAILED');
+    expect(rolledOver.json().error.details[0]).toMatchObject({ field: 'recurrence.endsOn', codes: ['invalid_date'] });
+
+    const impossible = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${split.id}/series`, {
+      recurrence: {
+        freq: 'daily',
+        startsOn: split.occurrenceDate,
+        endsOn: '2026-13-45',
+        timezone: 'UTC',
+      },
+    });
+    expect(impossible.statusCode).toBe(400);
+    expect(impossible.json().error.code).toBe('VALIDATION_FAILED');
+
+    const after = await withDatabase(async (client) => (
+      await client.query(`SELECT "ends_on" FROM "recurrence_rules" WHERE "id" = $1`, [series.recurrenceRuleId])
+    ).rows[0]);
+    expect(after.ends_on).toEqual(before.ends_on);
+  });
+
   test('applies labelIds to the successor series instead of copying the old labels', async () => {
     const owner = await insertActor('scope-labels-owner@example.test');
     const householdId = await createHousehold(owner.accessToken);
