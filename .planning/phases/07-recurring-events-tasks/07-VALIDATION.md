@@ -47,6 +47,13 @@ updated: 2026-08-13
 
 Populated by `/gsd-plan-phase 7` (2026-08-12) and verified by 07-08 Task 2. Each row names the plan + task that owns it; ✅ records a focused green run on 2026-08-12.
 
+**Re-verified 2026-08-13** (07-08 SUMMARY run, on the post-wave-4 tree that includes 07-09…07-13). The two e2e rows were re-run and are green again, but only after fixing two regressions that the addendum plans introduced into already-✅ rows — see the 07-08 SUMMARY deviations:
+
+1. `e2e/events/accessibility.spec.ts` went **red**: 07-10's recurring-filter chips emitted `role="radio"` with no `aria-checked` (critical `aria-required-attr`). Fixed in `bd6a887`.
+2. `e2e/events/recurrence.spec.ts` went **red**: 07-09's per-frequency lookahead (D-11/D-12) means a daily `count: 4` rule no longer materializes four rows up front. 07-09 repaired the equivalent assumption in `recurrence-rules.int.test.ts` but did not re-run the e2e tier. Spec realigned in `62440c2`.
+
+Both are recorded here because a ✅ row is only meaningful as of the last run — the addendum waves changed behavior under rows that were signed off earlier, and neither regression was caught until this tier was actually re-executed.
+
 | Requirement | Behavior | Test Type | Automated Command | File (Wave 0) | Owner | Status |
 |-------------|----------|-----------|--------------------|---------------|-------|--------|
 | RECR-01 | Daily walk, `interval`, ISO parse/format round-trip | unit | `pnpm --filter api test:quick` | `apps/api/src/modules/recurrence/recurrence-date.test.ts` | 07-01 T2 | ✅ |
