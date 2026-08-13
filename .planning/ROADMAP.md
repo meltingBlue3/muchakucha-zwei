@@ -260,7 +260,7 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 9/15 plans executed
+**Plans:** 10/15 plans executed
 
 Plans:
 **Wave 1**
@@ -296,7 +296,7 @@ Plans:
 
 **Wave 8** *(blocked on 07-09)*
 
-- [ ] 07-11-PLAN.md — 服务端 recurring 查询参数（任务与事件）与两处列表 where 的类型化
+- [x] 07-11-PLAN.md — 服务端 recurring 查询参数（任务与事件）与两处列表 where 的类型化
 
 **Wave 9** *(blocked on 07-11)*
 
