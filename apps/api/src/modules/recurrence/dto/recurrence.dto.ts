@@ -7,6 +7,7 @@ import {
   IsInt,
   IsBoolean,
   IsDateString,
+  IsDefined,
   IsOptional,
   IsString,
   Matches,
@@ -155,6 +156,24 @@ export class UpdateSeriesDto {
   @ApiPropertyOptional({ type: () => RecurrenceDto })
   @IsOptional() @ValidateNested() @Type(() => RecurrenceDto)
   recurrence?: RecurrenceDto;
+}
+
+/**
+ * Rule-level edit body. Deliberately carries ONE field.
+ *
+ * A rule-level edit has no "the occurrence you selected", so it must not be
+ * able to express instance-level intent: title/status/assigneeIds and friends
+ * belong to a single occurrence and would silently rewrite the whole successor
+ * series if accepted here. The app's `forbidNonWhitelisted` pipe rejects any
+ * extra property outright (T-07-41).
+ */
+export class UpdateRecurrenceRuleDto {
+  // @IsDefined() is not redundant with @ValidateNested(): a body that omits
+  // `recurrence` entirely must fail as a 400 here, never reach the service and
+  // dereference undefined into a 500.
+  @ApiProperty({ type: () => RecurrenceDto })
+  @IsDefined() @ValidateNested() @Type(() => RecurrenceDto)
+  recurrence!: RecurrenceDto;
 }
 
 export class DeleteSeriesQueryDto {

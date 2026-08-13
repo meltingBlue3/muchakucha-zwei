@@ -52,6 +52,7 @@ import type {
   TagEntitiesDto,
   RecurrenceRuleListItemDto,
   RecurrenceRuleListResponseDto,
+  UpdateRecurrenceRuleDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -811,6 +812,22 @@ export class ApiClient {
       `/api/v1/households/${encodeURIComponent(householdId)}/recurrence-rules/${encodeURIComponent(ruleId)}`,
       accessToken,
       undefined,
+      signal,
+    );
+  }
+
+  async updateRecurrenceRule(
+    accessToken: string,
+    householdId: string,
+    ruleId: string,
+    body: UpdateRecurrenceRuleDto,
+    signal?: AbortSignal,
+  ): Promise<SeriesMutationResponseDto> {
+    return this.authenticated<SeriesMutationResponseDto>(
+      'PUT',
+      `/api/v1/households/${encodeURIComponent(householdId)}/recurrence-rules/${encodeURIComponent(ruleId)}`,
+      accessToken,
+      body,
       signal,
     );
   }

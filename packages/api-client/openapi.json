@@ -1266,6 +1266,58 @@
         "tags": [
           "recurrence"
         ]
+      },
+      "put": {
+        "operationId": "updateRecurrenceRule",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRecurrenceRuleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesMutationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "recurrence"
+        ]
       }
     },
     "/api/v1/households/{householdId}/recurrence-rules/{ruleId}/end": {
@@ -3026,6 +3078,17 @@
         "required": [
           "rules",
           "total"
+        ]
+      },
+      "UpdateRecurrenceRuleDto": {
+        "type": "object",
+        "properties": {
+          "recurrence": {
+            "$ref": "#/components/schemas/RecurrenceDto"
+          }
+        },
+        "required": [
+          "recurrence"
         ]
       },
       "CreateEventDto": {

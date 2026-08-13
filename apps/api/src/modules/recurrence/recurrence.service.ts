@@ -6,6 +6,7 @@ import {
   addDays,
   currentCalendarDateIn,
   formatIsoDate,
+  localDateTimeToInstant,
   nextOccurrenceFor,
   parseIsoDate,
   type CalendarDate,
@@ -14,6 +15,7 @@ import type {
   RecurrenceRuleListItemDto,
   RecurrenceRuleListResponseDto,
   SeriesScope,
+  UpdateRecurrenceRuleDto,
   UpdateSeriesDto,
 } from './dto/recurrence.dto.js';
 
@@ -34,6 +36,13 @@ function calendarDate(value: Date): CalendarDate {
 // rather than a cross-module import of a private implementation.
 function databaseDate(value: CalendarDate): Date {
   return new Date(`${formatIsoDate(value)}T00:00:00.000Z`);
+}
+
+// Mirrors the materializer's private helper: a null start time means the
+// occurrence lands at the rule's local midnight.
+function localTime(value: string | null): { hour: number; minute: number } {
+  if (value === null) return { hour: 0, minute: 0 };
+  return { hour: Number(value.slice(0, 2)), minute: Number(value.slice(3, 5)) };
 }
 
 interface ResolvedOccurrence {
@@ -360,6 +369,257 @@ export class RecurrenceService {
       return createdRule.id;
     });
 
+    await this.materializer.materializeRule(newRuleId);
+    return { recurrenceRuleId: newRuleId };
+  }
+
+  /**
+   * Edits a recurrence directly from the RULE, with no occurrence to anchor
+   * on: the split anchor is tomorrow in the rule's own timezone.
+   *
+   * Structurally a sibling of `updateSeriesFromOccurrence`, with three
+   * deliberate substitutions (07-RESEARCH-ADDENDUM §8):
+   *
+   * 1. The anchor is `tomorrow` rather than a selected occurrence's date.
+   *    Under D-11's per-frequency lookahead a healthy weekly rule routinely
+   *    has no future occurrence at all, so the rule detail screen has no
+   *    occurrenceId to hand the occurrence-level path.
+   * 2. The successor's template comes from the rule's own `template_*`
+   *    columns (CR-01), never from an instance row. A rule-level edit has no
+   *    "the one you selected", and instances are independently renameable
+   *    (D-02/D-07) — reading a template off an instance would leak a single
+   *    occurrence's edit into every future occurrence of the successor.
+   * 3. Assignees and labels still come from the rule's nearest instance: the
+   *    rule carries no assignee/label template columns. This is the
+   *    documented Path B fallback, not an oversight.
+   *
+   * D-08: the entire split is one interactive transaction. A half-applied
+   * split — old rule terminated, successor never created — silently ends a
+   * household's recurrence, which is exactly the failure the atomicity
+   * requirement exists to prevent.
+   */
+  async updateRuleFromAnchor(
+    actorId: string,
+    householdId: string,
+    ruleId: string,
+    input: UpdateRecurrenceRuleDto,
+  ): Promise<{ recurrenceRuleId: string }> {
+    const role = await this.resolveActorRole(actorId, householdId);
+    if (role === null) {
+      throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
+    }
+
+    const recurrence = input.recurrence;
+    // Same shape and wording as the /series path: two conflicting bounds are a
+    // request error, not something to silently resolve in favour of one.
+    if (recurrence.endsOn !== undefined && recurrence.count !== undefined) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [{ field: 'recurrence.endsOn', codes: ['ends_on_and_count_mutually_exclusive'] }],
+      });
+    }
+
+    const newRuleId = await this.prisma.$transaction(async (tx) => {
+      const rule = await tx.recurrenceRule.findUnique({ where: { id: ruleId } });
+      // Ownership is checked BEFORE the role (SAFE-01 / T-07-39): a
+      // client-supplied ruleId has no resolved occurrence to cross-check
+      // against, so another household's rule must be indistinguishable from
+      // one that does not exist.
+      if (rule === null || rule.householdId !== householdId) {
+        throw new NotFoundException({ code: 'RECURRENCE_RULE_NOT_FOUND', message: 'Recurrence rule not found.' });
+      }
+      if (!this.canMutate(role, rule.createdBy, actorId)) {
+        throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can update this series.' });
+      }
+
+      // Tomorrow in the RULE's own timezone — same anchor as endRule. Today's
+      // occurrence may already be completed; anchoring on today would delete
+      // it and rewrite something that has already happened.
+      const anchorCalendar = addDays(currentCalendarDateIn(rule.timezone), 1);
+      const anchor = databaseDate(anchorCalendar);
+
+      // Kind is derived from which instance relation the rule owns, exactly
+      // as toListItem derives it. With rows on neither relation the rule
+      // cannot prove which kind of successor to build, and a guess writes to
+      // the wrong table.
+      const taskCount = await tx.task.count({ where: { recurrenceRuleId: ruleId } });
+      const eventCount = taskCount > 0
+        ? 0
+        : await tx.event.count({ where: { recurrenceRuleId: ruleId } });
+      const kind: RecurrenceKind | null = taskCount > 0 ? 'task' : eventCount > 0 ? 'event' : null;
+      if (kind === null) {
+        throw new BadRequestException({
+          code: 'VALIDATION_FAILED',
+          message: 'Request validation failed.',
+          details: [{ field: 'ruleId', codes: ['rule_has_no_occurrences'] }],
+        });
+      }
+
+      const elapsedCount = kind === 'task'
+        ? await tx.task.count({ where: { recurrenceRuleId: ruleId, occurrenceDate: { lt: anchor } } })
+        : await tx.event.count({ where: { recurrenceRuleId: ruleId, occurrenceDate: { lt: anchor } } });
+      const inheritedCount = rule.count === null
+        ? null
+        : Math.max(rule.count - elapsedCount, 0) || null;
+
+      // Date-bound the old rule at the day before the anchor and clear its
+      // count in the same statement: endsOn and count are mutually exclusive,
+      // so a rule that keeps both carries two conflicting ends.
+      await tx.recurrenceRule.update({
+        where: { id: rule.id },
+        data: { endsOn: databaseDate(addDays(anchorCalendar, -1)), count: null },
+      });
+
+      const successorEndsOn = recurrence.endsOn === undefined ? null : parseIsoDate(recurrence.endsOn);
+      // An explicit count wins; with neither bound given the successor
+      // inherits the old rule's remaining occurrences.
+      const successorCount = recurrence.count
+        ?? (recurrence.endsOn === undefined ? inheritedCount : null);
+      const firstOccurrence = nextOccurrenceFor({
+        freq: recurrence.freq,
+        interval: recurrence.interval ?? 1,
+        byWeekday: recurrence.byWeekday ?? [],
+        startsOn: anchorCalendar,
+        endsOn: successorEndsOn,
+        count: successorCount,
+      }, anchorCalendar);
+      if (firstOccurrence === null) {
+        // Reject rather than create a rule that can never produce anything.
+        // The transaction rolls the old rule's endsOn/count back to exactly
+        // what they were, so a rejected edit leaves no trace.
+        throw new BadRequestException({
+          code: 'VALIDATION_FAILED',
+          message: 'Request validation failed.',
+          details: [{
+            field: 'recurrence.endsOn',
+            codes: ['no_occurrence_in_range'],
+            message: '重复规则在结束日期前没有可生成的日期。',
+          }],
+        });
+      }
+
+      const createdRule = await tx.recurrenceRule.create({
+        data: {
+          householdId: rule.householdId,
+          createdBy: rule.createdBy,
+          freq: recurrence.freq,
+          interval: recurrence.interval ?? 1,
+          byWeekday: recurrence.byWeekday ?? [],
+          // The successor starts at the anchor, not at the body's `startsOn`.
+          // "此后所有" is defined by the anchor; letting the request move the
+          // start would let a rule-level edit reach backwards into history.
+          startsOn: anchor,
+          endsOn: successorEndsOn === null ? null : databaseDate(successorEndsOn),
+          count: successorCount,
+          timezone: recurrence.timezone,
+          startTimeLocal: recurrence.startTimeLocal ?? rule.startTimeLocal,
+          durationMinutes: recurrence.durationMinutes ?? rule.durationMinutes,
+          // Template fields come from the OLD RULE's template_* columns, never
+          // from an instance row — see this method's doc comment (2).
+          templateTitle: rule.templateTitle,
+          templateDescription: rule.templateDescription,
+          templatePriority: rule.templatePriority,
+          templateLocation: rule.templateLocation,
+          templateAllDay: rule.templateAllDay,
+          materializedThrough: null,
+        },
+      });
+
+      // Path B fallback for the two things the rule has no template column
+      // for. Prefer the earliest instance at or after the anchor (the very
+      // occurrence the successor replaces); fall back to the latest before it
+      // for a rule whose future rows are all outside the generation window.
+      // Read BEFORE the delete below — the preferred source is exactly what
+      // that delete removes.
+      const taskSource = kind === 'task'
+        ? (await tx.task.findFirst({
+          where: { recurrenceRuleId: ruleId, occurrenceDate: { gte: anchor } },
+          orderBy: { occurrenceDate: 'asc' },
+          include: { assignees: true, labels: true },
+        })) ?? (await tx.task.findFirst({
+          where: { recurrenceRuleId: ruleId, occurrenceDate: { lt: anchor } },
+          orderBy: { occurrenceDate: 'desc' },
+          include: { assignees: true, labels: true },
+        }))
+        : null;
+      const eventSource = kind === 'event'
+        ? (await tx.event.findFirst({
+          where: { recurrenceRuleId: ruleId, occurrenceDate: { gte: anchor } },
+          orderBy: { occurrenceDate: 'asc' },
+          include: { labels: true },
+        })) ?? (await tx.event.findFirst({
+          where: { recurrenceRuleId: ruleId, occurrenceDate: { lt: anchor } },
+          orderBy: { occurrenceDate: 'desc' },
+          include: { labels: true },
+        }))
+        : null;
+
+      // Deliberately NOT this.endSeriesAt: that helper also writes the old
+      // rule's endsOn, which the split already set above. A split and an end
+      // are different operations — a split hands the future to a successor
+      // rule — so they must not be merged into one call site.
+      if (kind === 'task') {
+        await tx.task.deleteMany({
+          where: { recurrenceRuleId: ruleId, occurrenceDate: { gte: anchor } },
+        });
+      } else {
+        await tx.event.deleteMany({
+          where: { recurrenceRuleId: ruleId, occurrenceDate: { gte: anchor } },
+        });
+      }
+
+      // D-17: the successor MUST carry a seed instance row. The materializer
+      // derives a rule's kind and copies its assignees/labels from the rule's
+      // earliest instance — with no seed the successor is an untyped rule
+      // that can never generate anything, and the rule list cannot show its
+      // kind. Its position is the successor's first occurrence from the
+      // anchor, which may be weeks outside the generation window.
+      const time = localTime(createdRule.startTimeLocal);
+      const seedInstant = localDateTimeToInstant(firstOccurrence, time.hour, time.minute, createdRule.timezone);
+      const seedOccurrenceDate = databaseDate(firstOccurrence);
+      if (kind === 'task') {
+        await tx.task.create({
+          data: {
+            householdId: createdRule.householdId,
+            createdBy: createdRule.createdBy,
+            recurrenceRuleId: createdRule.id,
+            occurrenceDate: seedOccurrenceDate,
+            title: createdRule.templateTitle,
+            description: createdRule.templateDescription,
+            // A generated occurrence always begins its own life pending, no
+            // matter how the inheritance source was completed or cancelled.
+            status: 'pending',
+            priority: createdRule.templatePriority,
+            dueDate: seedInstant,
+            assignees: { create: (taskSource?.assignees ?? []).map(({ userId }) => ({ userId })) },
+            labels: { create: (taskSource?.labels ?? []).map(({ labelId }) => ({ labelId })) },
+          },
+        });
+      } else {
+        await tx.event.create({
+          data: {
+            householdId: createdRule.householdId,
+            createdBy: createdRule.createdBy,
+            recurrenceRuleId: createdRule.id,
+            occurrenceDate: seedOccurrenceDate,
+            title: createdRule.templateTitle,
+            description: createdRule.templateDescription,
+            startTime: seedInstant,
+            endTime: new Date(seedInstant.getTime() + (createdRule.durationMinutes ?? 0) * 60_000),
+            allDay: createdRule.templateAllDay,
+            location: createdRule.templateLocation,
+            labels: { create: (eventSource?.labels ?? []).map(({ labelId }) => ({ labelId })) },
+          },
+        });
+      }
+      return createdRule.id;
+    });
+
+    // Locked Phase 7 decision: successor materialization begins only after the
+    // split transaction COMMITS. materializeRule opens its own transaction and
+    // takes the rule's advisory lock; nesting it here would hold that lock for
+    // the whole split and make the split's duration depend on generation.
     await this.materializer.materializeRule(newRuleId);
     return { recurrenceRuleId: newRuleId };
   }
