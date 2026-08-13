@@ -75,6 +75,36 @@ describe('formatRuleRow — next occurrence and ended state', () => {
     expect(formatted.ended).toBe(true);
     expect(formatted.nextLine).not.toMatch(/null|—|-{2,}/);
   });
+
+  // Regression: `endRule` deliberately anchors on tomorrow, preserving
+  // today's occurrence, so `nextOccurrenceFor` (which walks from today
+  // inclusive) still returns today even after the rule has ended. Detecting
+  // "ended" from `nextOccurrenceDate === null` alone under-detects exactly
+  // this case, leaving the 结束此重复 button permanently enabled with no
+  // ended note — the rule looks like it can never be ended.
+  test('treats a rule ended today (occurrence preserved) as ended, not active', () => {
+    const now = new Date('2026-08-13T04:00:00Z'); // 2026-08-13 in Asia/Shanghai
+    const formatted = formatRuleRow(
+      { ...baseRule, endsOn: '2026-08-13', nextOccurrenceDate: '2026-08-13' },
+      TZ,
+      now,
+    );
+
+    expect(formatted.ended).toBe(true);
+    expect(formatted.nextLine).toBe('这个重复已经结束');
+  });
+
+  test('does not treat a rule with a future end date as ended just because it recurs today', () => {
+    const now = new Date('2026-08-13T04:00:00Z'); // 2026-08-13 in Asia/Shanghai
+    const formatted = formatRuleRow(
+      { ...baseRule, endsOn: '2026-12-31', nextOccurrenceDate: '2026-08-13' },
+      TZ,
+      now,
+    );
+
+    expect(formatted.ended).toBe(false);
+    expect(formatted.nextLine).toBe('下一次 2026-08-13');
+  });
 });
 
 describe('formatRuleRow — kind label and accessible name', () => {

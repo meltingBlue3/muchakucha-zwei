@@ -63,6 +63,7 @@ function accessibilityLabelFor(kindLabel: string | null, title: string, summary:
 export function formatRuleRow(
   rule: RecurrenceRuleListItemDto,
   deviceTimeZone: string,
+  now: Date = new Date(),
 ): FormattedRuleRow {
   const kindLabel = recurrenceKindLabel(rule.kind);
   const normalized = recurrenceInputFromResponse(rule);
@@ -90,7 +91,18 @@ export function formatRuleRow(
     normalized.endsOn === undefined && normalized.count === undefined
       ? `${formatted.summary}${NEVER_ENDS_SUFFIX}`
       : formatted.summary;
-  const ended = rule.nextOccurrenceDate === null;
+  // `nextOccurrenceDate` alone under-detects "ended": `nextOccurrenceFor`
+  // walks from TODAY (inclusive), and ending a rule deliberately preserves
+  // today's occurrence (the whole point of the tomorrow anchor — see
+  // `nextDayIsoIn`). A rule whose only remaining occurrence is today
+  // therefore still reports `nextOccurrenceDate = today`, even though no
+  // further occurrence will ever be generated. Cross-check against `endsOn`:
+  // a date bound strictly before tomorrow (i.e. on or before today, in the
+  // rule's own timezone) means every occurrence the rule will ever produce
+  // has already happened.
+  const ended =
+    rule.nextOccurrenceDate === null ||
+    (rule.endsOn !== null && rule.endsOn < nextDayIsoIn(rule.timezone, now));
 
   return {
     title: rule.title,
