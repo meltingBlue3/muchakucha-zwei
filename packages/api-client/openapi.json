@@ -1244,6 +1244,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "recurring",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1423,6 +1431,14 @@
           },
           {
             "name": "assigneeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recurring",
             "required": false,
             "in": "query",
             "schema": {

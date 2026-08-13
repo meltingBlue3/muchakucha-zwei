@@ -55,14 +55,16 @@ export class TasksController {
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'priority', required: false })
   @ApiQuery({ name: 'assigneeId', required: false })
+  @ApiQuery({ name: 'recurring', required: false })
   async list(
     @Req() request: AuthenticatedRequest,
     @Param('householdId') householdId: string,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
     @Query('assigneeId') assigneeId?: string,
+    @Query('recurring') recurring?: string,
   ): Promise<TaskListResponseDto> {
-    return this.tasksService.list(request.auth.sub, householdId, { status, priority, assigneeId });
+    return this.tasksService.list(request.auth.sub, householdId, { status, priority, assigneeId, recurring });
   }
 
   @Get(':taskId')

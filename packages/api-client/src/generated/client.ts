@@ -365,11 +365,13 @@ export class ApiClient {
     householdId: string,
     startDate?: string,
     endDate?: string,
+    recurring?: boolean,
     signal?: AbortSignal,
   ): Promise<EventListResponseDto> {
     const params = new URLSearchParams();
     if (startDate) params.set('startDate', startDate);
     if (endDate) params.set('endDate', endDate);
+    if (recurring !== undefined) params.set('recurring', recurring ? 'true' : 'false');
     const qs = params.toString();
     return this.authenticated<EventListResponseDto>(
       'GET',
@@ -479,12 +481,14 @@ export class ApiClient {
     status?: string,
     priority?: string,
     assigneeId?: string,
+    recurring?: boolean,
     signal?: AbortSignal,
   ): Promise<TaskListResponseDto> {
     const params = new URLSearchParams();
     if (status) params.set('status', status);
     if (priority) params.set('priority', priority);
     if (assigneeId) params.set('assigneeId', assigneeId);
+    if (recurring !== undefined) params.set('recurring', recurring ? 'true' : 'false');
     const qs = params.toString();
     return this.authenticated<TaskListResponseDto>(
       'GET',

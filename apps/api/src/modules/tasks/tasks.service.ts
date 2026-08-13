@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type {
   CreateTaskDto,
@@ -62,6 +63,8 @@ interface ListFilters {
   status?: string | undefined;
   priority?: string | undefined;
   assigneeId?: string | undefined;
+  /** Only 'true' or 'false' are honored; any other value is treated as unset (D-15). */
+  recurring?: string | undefined;
 }
 
 @Injectable()
@@ -255,18 +258,20 @@ export class TasksService {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
 
-    const where: Record<string, unknown> = { householdId };
+    const where: Prisma.TaskWhereInput = { householdId };
     if (filters.status) where.status = filters.status;
     if (filters.priority) where.priority = filters.priority;
     if (filters.assigneeId) where.assignees = { some: { userId: filters.assigneeId } };
+    if (filters.recurring === 'true') where.recurrenceRuleId = { not: null };
+    else if (filters.recurring === 'false') where.recurrenceRuleId = null;
 
     const [tasks, total, watermark] = await Promise.all([
       this.prisma.task.findMany({
-        where: where as any,
+        where,
         orderBy: [{ priority: 'asc' }, { dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
         include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
       }),
-      this.prisma.task.count({ where: where as any }),
+      this.prisma.task.count({ where }),
       // D-13's monotonic watermark means an ended rule's watermark is frozen
       // in the past forever. Counting it into the household _min would
       // permanently under-report generation coverage for every rule that is
