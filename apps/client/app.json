@@ -3,6 +3,7 @@
     "name": "Muchakucha Zwei",
     "slug": "muchakucha-zwei",
     "version": "1.0.0",
+    "icon": "./assets/images/icon.png",
     "orientation": "portrait",
     "scheme": "muchakucha-zwei",
     "userInterfaceStyle": "automatic",
