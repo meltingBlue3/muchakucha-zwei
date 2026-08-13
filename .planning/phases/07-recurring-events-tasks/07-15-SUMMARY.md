@@ -22,7 +22,7 @@ affects: [any later change to the rule screens' accessible names or copy (this s
 # chars/4 over the realized diff (git diff 06baaa3..HEAD, added lines).
 actuals:
   tokens: 8700
-  tasks: 2
+  tasks: 3
   commits: 3
 
 tech-stack:
@@ -48,21 +48,21 @@ key-decisions:
 
 requirements-completed: []
 
-duration: ~75min
+duration: ~75min + device acceptance session 2026-08-13
 completed: 2026-08-13
-status: awaiting-human-verification
+status: complete
 ---
 
 # Phase 07 Plan 15: Addendum E2E Coverage & Validation Closure Summary
 
 **The four addendum user paths are now reproducible end to end in a browser — including a mutation-proved guard that ending a recurrence must not take today's occurrence away — the six addendum test files can no longer be silently disabled, and the validation map's 18 addendum rows are green from real runs rather than from intent.**
 
-> **Task 3 (Android real-device acceptance) is NOT done.** It is a `checkpoint:human-verify gate="blocking"` and cannot be performed by an agent. This plan is complete through Task 2 only; `status` above is deliberately `awaiting-human-verification` rather than `complete`.
+> **Task 3 (Android real-device acceptance): Approved 2026-08-13.** User confirmed the device session — 周期筛选 single-select and touch targets, 200% font scroll, 周期规则 home card and merged rule list, rule detail edit (no write before inline confirm), 结束此重复 (today's occurrence survives, rule stays listed as ended), reduced-motion/forced-colors — with no issues reported. No per-step transcript was relayed; recorded as a checkpoint approval per the plan's resume-signal.
 
 ## Performance
 
-- **Duration:** ~75 min
-- **Tasks:** 2 of 3 (Task 3 is a blocking human checkpoint)
+- **Duration:** ~75 min + device acceptance session
+- **Tasks:** 3 of 3
 - **Files created:** 1; modified: 4
 - **Commits:** 3
 
@@ -179,4 +179,4 @@ None. This plan added no network surface, no auth path, and no schema change. T-
 
 ---
 *Phase: 07-recurring-events-tasks*
-*Tasks 1-2 completed: 2026-08-13 · Task 3 awaiting Android real-device verification*
+*Status: complete — all 3 tasks done, Android real-device acceptance approved 2026-08-13*

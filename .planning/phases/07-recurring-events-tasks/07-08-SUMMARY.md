@@ -87,17 +87,20 @@ coverage:
   - id: D7
     description: "Android real-device acceptance of month-end clamping (D-09), device timezone (D-10), touch targets, font scaling, scope sheet reachability, and reduced motion."
     requirement: RECR-01
-    verification: []
+    verification:
+      - kind: manual
+        ref: "Android real-device acceptance session, 2026-08-13 (user-confirmed, no issues reported)"
+        status: pass
     human_judgment: true
-    rationale: "Task 3 checkpoint — requires a physical Android device and cannot be satisfied by any automated tier."
+    rationale: "Task 3 checkpoint — requires a physical Android device and cannot be satisfied by any automated tier. User confirmed pass; no per-step detail was relayed back, recorded as a checkpoint approval per the plan's resume-signal, not as a step-by-step transcript."
 metrics:
-  duration: 2 sessions (initial 2026-08-12; re-verification 2026-08-13)
+  duration: 3 sessions (initial 2026-08-12; re-verification 2026-08-13; device acceptance 2026-08-13)
   completed: 2026-08-13
 actuals:
   tokens: 61000
-  tasks: 2
+  tasks: 3
   commits: 4
-status: awaiting-human-verification
+status: complete
 ---
 
 # Phase 7 Plan 8: Web Journeys and Event Accessibility Audit Summary
@@ -106,9 +109,13 @@ status: awaiting-human-verification
 
 ## Performance
 
-- **Duration:** initial implementation 2026-08-12; full re-verification 2026-08-13
-- **Tasks:** 2 of 3 complete (Task 3 is a blocking human checkpoint)
+- **Duration:** initial implementation 2026-08-12; full re-verification 2026-08-13; device acceptance 2026-08-13
+- **Tasks:** 3 of 3 complete
 - **Files created:** 2 · **Files modified:** 5
+
+## Task 3 — Android Real-Device Acceptance
+
+**Result: Approved.** User confirmed the 7-step device session (recurring task creation, month-end clamp copy, max-font touch targets, scope-sheet save, delete-and-cancel, non-recurring-items-unaffected, reduced-motion) with no issues reported. Also requested to fold in TalkBack confirmation of the `aria-checked` fix (Deviation 1 above); no issue reported there either. No per-step transcript was relayed — recorded as a checkpoint approval, consistent with the plan's resume-signal ("回复 `approved`, 或逐条描述发现的问题").
 
 ## Accomplishments
 
@@ -198,4 +205,4 @@ None. This plan added no endpoint, dependency, or credential. Per T-07-19 the e2
 
 ---
 *Phase: 07-recurring-events-tasks*
-*Status: Tasks 1-2 complete; Task 3 awaiting Android real-device verification*
+*Status: complete — all 3 tasks done, Android real-device acceptance approved 2026-08-13*
