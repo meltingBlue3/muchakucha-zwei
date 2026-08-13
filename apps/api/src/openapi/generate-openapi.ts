@@ -273,6 +273,27 @@ export interface SeriesMutationResponseDto {
   recurrenceRuleId: string;
 }
 
+export interface RecurrenceRuleListItemDto {
+  id: string;
+  kind: 'task' | 'event' | null;
+  title: string;
+  freq: string;
+  interval: number;
+  byWeekday: number[];
+  startsOn: string;
+  endsOn: string | null;
+  count: number | null;
+  timezone: string;
+  startTimeLocal: string | null;
+  durationMinutes: number | null;
+  nextOccurrenceDate: string | null;
+}
+
+export interface RecurrenceRuleListResponseDto {
+  rules: RecurrenceRuleListItemDto[];
+  total: number;
+}
+
 export interface EventResponseDto {
   id: string;
   householdId: string;
@@ -448,6 +469,8 @@ import type {
   LabelResponseDto,
   LabelListResponseDto,
   TagEntitiesDto,
+  RecurrenceRuleListItemDto,
+  RecurrenceRuleListResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -1180,6 +1203,37 @@ export class ApiClient {
     );
   }
 
+  // ---- Recurrence rules ----
+
+  async listRecurrenceRules(
+    accessToken: string,
+    householdId: string,
+    signal?: AbortSignal,
+  ): Promise<RecurrenceRuleListResponseDto> {
+    return this.authenticated<RecurrenceRuleListResponseDto>(
+      'GET',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/recurrence-rules\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async getRecurrenceRule(
+    accessToken: string,
+    householdId: string,
+    ruleId: string,
+    signal?: AbortSignal,
+  ): Promise<RecurrenceRuleListItemDto> {
+    return this.authenticated<RecurrenceRuleListItemDto>(
+      'GET',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/recurrence-rules/\${encodeURIComponent(ruleId)}\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(\`\${this.baseUrl}\${path}\`, {
       method: 'POST',
@@ -1376,6 +1430,15 @@ async function generate(): Promise<void> {
       || document.components?.schemas?.UpdateSeriesDto === undefined
       || document.components.schemas.SeriesMutationResponseDto === undefined) {
       throw new Error('OpenAPI series mutation operations or schemas are missing or unstable.');
+    }
+
+    const listRecurrenceRulesPath = document.paths['/api/v1/households/{householdId}/recurrence-rules']?.get;
+    const getRecurrenceRulePath = document.paths['/api/v1/households/{householdId}/recurrence-rules/{ruleId}']?.get;
+    if (listRecurrenceRulesPath?.operationId !== 'listRecurrenceRules'
+      || getRecurrenceRulePath?.operationId !== 'getRecurrenceRule'
+      || document.components?.schemas?.RecurrenceRuleListItemDto === undefined
+      || document.components.schemas.RecurrenceRuleListResponseDto === undefined) {
+      throw new Error('OpenAPI recurrence rule operations or schemas are missing or unstable.');
     }
 
     const listTasksParams = document.paths['/api/v1/households/{householdId}/tasks']?.get?.parameters ?? [];

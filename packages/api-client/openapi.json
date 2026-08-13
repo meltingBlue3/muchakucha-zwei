@@ -1188,6 +1188,86 @@
         ]
       }
     },
+    "/api/v1/households/{householdId}/recurrence-rules": {
+      "get": {
+        "operationId": "listRecurrenceRules",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurrenceRuleListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "recurrence"
+        ]
+      }
+    },
+    "/api/v1/households/{householdId}/recurrence-rules/{ruleId}": {
+      "get": {
+        "operationId": "getRecurrenceRule",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurrenceRuleListItemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "recurrence"
+        ]
+      }
+    },
     "/api/v1/households/{householdId}/events": {
       "post": {
         "operationId": "createEvent",
@@ -2813,6 +2893,102 @@
         },
         "required": [
           "recurrenceRuleId"
+        ]
+      },
+      "RecurrenceRuleListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "task",
+              "event"
+            ],
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "freq": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ]
+          },
+          "interval": {
+            "type": "number"
+          },
+          "byWeekday": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "startsOn": {
+            "type": "string"
+          },
+          "endsOn": {
+            "type": "object",
+            "nullable": true
+          },
+          "count": {
+            "type": "object",
+            "nullable": true
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "startTimeLocal": {
+            "type": "object",
+            "nullable": true
+          },
+          "durationMinutes": {
+            "type": "object",
+            "nullable": true
+          },
+          "nextOccurrenceDate": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "freq",
+          "interval",
+          "byWeekday",
+          "startsOn",
+          "endsOn",
+          "count",
+          "timezone",
+          "startTimeLocal",
+          "durationMinutes",
+          "nextOccurrenceDate"
+        ]
+      },
+      "RecurrenceRuleListResponseDto": {
+        "type": "object",
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecurrenceRuleListItemDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "rules",
+          "total"
         ]
       },
       "CreateEventDto": {
