@@ -57,14 +57,16 @@ export class EventsController {
   @ApiOperation({ operationId: 'listEvents' })
   @ApiQuery({ name: 'startDate', required: false, description: 'ISO date string (inclusive)' })
   @ApiQuery({ name: 'endDate', required: false, description: 'ISO date string (inclusive)' })
+  @ApiQuery({ name: 'recurring', required: false })
   @ApiOkResponse({ type: EventListResponseDto })
   list(
     @Req() request: AuthenticatedRequest,
     @Param() params: HouseholdIdParam,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('recurring') recurring?: string,
   ): Promise<EventListResponseDto> {
-    return this.eventsService.list(request.auth.sub, params.householdId, startDate, endDate);
+    return this.eventsService.list(request.auth.sub, params.householdId, { startDate, endDate, recurring });
   }
 
   @Get(':eventId')

@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type { CreateEventDto, EventResponseDto, EventListResponseDto } from './dto/create-event.dto.js';
 import type { UpdateEventDto } from './dto/update-event.dto.js';
@@ -57,6 +58,13 @@ interface EventRow {
       createdAt: Date;
     };
   }>;
+}
+
+interface ListFilters {
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+  /** Only 'true' or 'false' are honored; any other value is treated as unset (D-15). */
+  recurring?: string | undefined;
 }
 
 @Injectable()
@@ -260,15 +268,15 @@ export class EventsService {
   async list(
     actorId: string,
     householdId: string,
-    startDate?: string,
-    endDate?: string,
+    filters: ListFilters = {},
   ): Promise<EventListResponseDto> {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
 
-    const where: Record<string, unknown> = { householdId, cancelledAt: null };
+    const { startDate, endDate, recurring } = filters;
+    const where: Prisma.EventWhereInput = { householdId, cancelledAt: null };
     if (startDate || endDate) {
-      const startTime: Record<string, Date> = {};
+      const startTime: Prisma.DateTimeFilter = {};
       if (startDate) {
         // startDate is the client's local date (e.g. "2026-08-06").
         // new Date("YYYY-MM-DD") creates midnight *UTC*, but an event
@@ -290,14 +298,16 @@ export class EventsService {
       }
       where.startTime = startTime;
     }
+    if (recurring === 'true') where.recurrenceRuleId = { not: null };
+    else if (recurring === 'false') where.recurrenceRuleId = null;
 
     const [events, total, watermark] = await Promise.all([
       this.prisma.event.findMany({
-        where: where as any,
+        where,
         orderBy: { startTime: 'asc' },
         include: { labels: { include: { label: true } }, recurrenceRule: true },
       }),
-      this.prisma.event.count({ where: where as any }),
+      this.prisma.event.count({ where }),
       // D-13's monotonic watermark means an ended rule's watermark is frozen
       // in the past forever. Counting it into the household _min would
       // permanently under-report generation coverage for every rule that is

@@ -97,6 +97,63 @@ async function listTasks(
   return { statusCode: response.statusCode, body: response.json() as unknown };
 }
 
+async function createRecurringEvent(actor: ActorFixture, householdId: string): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10);
+  const response = await app.getHttpAdapter().getInstance().inject({
+    method: 'POST',
+    url: `/api/v1/households/${householdId}/events`,
+    headers: { authorization: `Bearer ${actor.accessToken}`, 'content-type': 'application/json' },
+    payload: {
+      title: 'Recurring filter daily event',
+      startTime: `${today}T09:00:00.000Z`,
+      endTime: `${today}T10:00:00.000Z`,
+      recurrence: { freq: 'daily', startsOn: today, timezone: 'UTC' },
+    },
+  });
+  expect(response.statusCode).toBe(201);
+  const body = response.json() as { id: string; recurrenceRuleId: string | null };
+  expect(body.recurrenceRuleId).not.toBeNull();
+  return body.id;
+}
+
+async function createPlainEvent(actor: ActorFixture, householdId: string): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10);
+  const response = await app.getHttpAdapter().getInstance().inject({
+    method: 'POST',
+    url: `/api/v1/households/${householdId}/events`,
+    headers: { authorization: `Bearer ${actor.accessToken}`, 'content-type': 'application/json' },
+    payload: {
+      title: 'Recurring filter plain event',
+      startTime: `${today}T11:00:00.000Z`,
+      endTime: `${today}T12:00:00.000Z`,
+    },
+  });
+  expect(response.statusCode).toBe(201);
+  const body = response.json() as { id: string; recurrenceRuleId: string | null };
+  expect(body.recurrenceRuleId).toBeNull();
+  return body.id;
+}
+
+interface EventListResult { events: Array<{ id: string; recurrenceRuleId: string | null }>; total: number }
+
+async function listEvents(
+  actor: ActorFixture,
+  householdId: string,
+  options: { recurring?: 'true' | 'false'; startDate?: string; endDate?: string } = {},
+): Promise<{ statusCode: number; body: unknown }> {
+  const params = new URLSearchParams();
+  if (options.recurring !== undefined) params.set('recurring', options.recurring);
+  if (options.startDate !== undefined) params.set('startDate', options.startDate);
+  if (options.endDate !== undefined) params.set('endDate', options.endDate);
+  const qs = params.toString();
+  const response = await app.getHttpAdapter().getInstance().inject({
+    method: 'GET',
+    url: `/api/v1/households/${householdId}/events${qs ? `?${qs}` : ''}`,
+    headers: { authorization: `Bearer ${actor.accessToken}` },
+  });
+  return { statusCode: response.statusCode, body: response.json() as unknown };
+}
+
 beforeAll(async () => {
   passwordHash = await argon2.hash('recurring-filter-fixture-password', {
     type: argon2.argon2id,
@@ -166,5 +223,81 @@ describe('recurring list filter (D-15) — tasks', () => {
     const { statusCode, body } = await listTasks(outsider, householdId, 'true');
     expect(statusCode).toBe(404);
     expect((body as { error: { code: string } }).error.code).toBe('HOUSEHOLD_NOT_FOUND');
+  });
+});
+
+describe('recurring list filter (D-15) — events', () => {
+  test('?recurring=true returns only the recurring event', async () => {
+    const actor = await insertActor('recurring-true-events@example.test');
+    const householdId = await createHousehold(actor.accessToken);
+    const recurringEventId = await createRecurringEvent(actor, householdId);
+    await createPlainEvent(actor, householdId);
+
+    const { statusCode, body } = await listEvents(actor, householdId, { recurring: 'true' });
+    expect(statusCode).toBe(200);
+    const result = body as EventListResult;
+    expect(result.events.map((e) => e.id)).toEqual([recurringEventId]);
+    expect(result.events.every((e) => e.recurrenceRuleId !== null)).toBe(true);
+  });
+
+  test('?recurring=false returns only the plain event', async () => {
+    const actor = await insertActor('recurring-false-events@example.test');
+    const householdId = await createHousehold(actor.accessToken);
+    await createRecurringEvent(actor, householdId);
+    const plainEventId = await createPlainEvent(actor, householdId);
+
+    const { statusCode, body } = await listEvents(actor, householdId, { recurring: 'false' });
+    expect(statusCode).toBe(200);
+    const result = body as EventListResult;
+    expect(result.events.map((e) => e.id)).toEqual([plainEventId]);
+    expect(result.events.every((e) => e.recurrenceRuleId === null)).toBe(true);
+  });
+
+  test('no recurring parameter returns both events and total matches the unfiltered count', async () => {
+    const actor = await insertActor('recurring-unset-events@example.test');
+    const householdId = await createHousehold(actor.accessToken);
+    await createRecurringEvent(actor, householdId);
+    await createPlainEvent(actor, householdId);
+
+    const { statusCode, body } = await listEvents(actor, householdId);
+    expect(statusCode).toBe(200);
+    const result = body as EventListResult;
+    expect(result.events).toHaveLength(2);
+    expect(result.total).toBe(2);
+  });
+
+  test('a non-member requesting ?recurring=true gets 404 HOUSEHOLD_NOT_FOUND', async () => {
+    const owner = await insertActor('recurring-owner-events@example.test');
+    const householdId = await createHousehold(owner.accessToken);
+    await createRecurringEvent(owner, householdId);
+    const outsider = await insertActor('recurring-outsider-events@example.test');
+
+    const { statusCode, body } = await listEvents(outsider, householdId, { recurring: 'true' });
+    expect(statusCode).toBe(404);
+    expect((body as { error: { code: string } }).error.code).toBe('HOUSEHOLD_NOT_FOUND');
+  });
+
+  test('startDate/endDate and recurring=true apply together — date range and recurring filter both take effect', async () => {
+    const actor = await insertActor('recurring-daterange-events@example.test');
+    const householdId = await createHousehold(actor.accessToken);
+    const recurringEventId = await createRecurringEvent(actor, householdId);
+    await createPlainEvent(actor, householdId);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { statusCode, body } = await listEvents(actor, householdId, {
+      recurring: 'true',
+      startDate: today,
+      endDate: today,
+    });
+    expect(statusCode).toBe(200);
+    const result = body as EventListResult;
+    expect(result.events.map((e) => e.id)).toEqual([recurringEventId]);
+
+    // Sanity check: without the recurring filter, the same date range still
+    // returns both events — proving the date-range branch was not lost by
+    // the ListFilters object refactor.
+    const unfiltered = await listEvents(actor, householdId, { startDate: today, endDate: today });
+    expect(unfiltered.statusCode).toBe(200);
+    expect((unfiltered.body as EventListResult).events).toHaveLength(2);
   });
 });

@@ -763,11 +763,13 @@ export class ApiClient {
     householdId: string,
     startDate?: string,
     endDate?: string,
+    recurring?: boolean,
     signal?: AbortSignal,
   ): Promise<EventListResponseDto> {
     const params = new URLSearchParams();
     if (startDate) params.set('startDate', startDate);
     if (endDate) params.set('endDate', endDate);
+    if (recurring !== undefined) params.set('recurring', recurring ? 'true' : 'false');
     const qs = params.toString();
     return this.authenticated<EventListResponseDto>(
       'GET',
@@ -1377,9 +1379,10 @@ async function generate(): Promise<void> {
     }
 
     const listTasksParams = document.paths['/api/v1/households/{householdId}/tasks']?.get?.parameters ?? [];
+    const listEventsParams = document.paths['/api/v1/households/{householdId}/events']?.get?.parameters ?? [];
     const hasRecurringParam = (parameters: unknown): boolean =>
       Array.isArray(parameters) && parameters.some((parameter) => (parameter as { name?: string }).name === 'recurring');
-    if (!hasRecurringParam(listTasksParams)) {
+    if (!hasRecurringParam(listTasksParams) || !hasRecurringParam(listEventsParams)) {
       throw new Error('OpenAPI recurring list filter parameters are missing or unstable.');
     }
 
