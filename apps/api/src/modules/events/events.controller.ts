@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Query,
@@ -24,16 +25,19 @@ import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.g
 import { EventsService } from './events.service.js';
 import { CreateEventDto, EventListResponseDto, EventResponseDto } from './dto/create-event.dto.js';
 import { UpdateEventDto } from './dto/update-event.dto.js';
-import { IsUUID } from 'class-validator';
 
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
 }
 
-class HouseholdIdParam {
-  @IsUUID('4')
-  householdId!: string;
-}
+// WR-06: TypeScript emits `Object` as the design:paramtypes metadata for an
+// intersection param type (the `HouseholdIdParam & { eventId: string }`
+// shape this file used to use), and Nest's ValidationPipe exempts `Object`
+// — so a param class's class-validator decorators never run and a
+// malformed id reaches Prisma, surfacing as a 500 instead of a 404.
+// recurrence.controller.ts documents and avoids this exact trap with a
+// per-parameter pipe; this file now matches it.
+const uuidParam = new ParseUUIDPipe({ version: '4' });
 
 @ApiTags('events')
 @ApiBearerAuth()
@@ -47,10 +51,10 @@ export class EventsController {
   @ApiCreatedResponse({ type: EventResponseDto })
   create(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam,
+    @Param('householdId', uuidParam) householdId: string,
     @Body() input: CreateEventDto,
   ): Promise<EventResponseDto> {
-    return this.eventsService.create(request.auth.sub, params.householdId, input);
+    return this.eventsService.create(request.auth.sub, householdId, input);
   }
 
   @Get()
@@ -61,12 +65,12 @@ export class EventsController {
   @ApiOkResponse({ type: EventListResponseDto })
   list(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam,
+    @Param('householdId', uuidParam) householdId: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('recurring') recurring?: string,
   ): Promise<EventListResponseDto> {
-    return this.eventsService.list(request.auth.sub, params.householdId, { startDate, endDate, recurring });
+    return this.eventsService.list(request.auth.sub, householdId, { startDate, endDate, recurring });
   }
 
   @Get(':eventId')
@@ -74,9 +78,10 @@ export class EventsController {
   @ApiOkResponse({ type: EventResponseDto })
   getById(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { eventId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('eventId', uuidParam) eventId: string,
   ): Promise<EventResponseDto> {
-    return this.eventsService.getById(request.auth.sub, params.householdId, params.eventId);
+    return this.eventsService.getById(request.auth.sub, householdId, eventId);
   }
 
   @Put(':eventId')
@@ -84,10 +89,11 @@ export class EventsController {
   @ApiOkResponse({ type: EventResponseDto })
   update(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { eventId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('eventId', uuidParam) eventId: string,
     @Body() input: UpdateEventDto,
   ): Promise<EventResponseDto> {
-    return this.eventsService.update(request.auth.sub, params.householdId, params.eventId, input);
+    return this.eventsService.update(request.auth.sub, householdId, eventId, input);
   }
 
   @Delete(':eventId')
@@ -96,8 +102,9 @@ export class EventsController {
   @ApiNoContentResponse()
   async delete(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { eventId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('eventId', uuidParam) eventId: string,
   ): Promise<void> {
-    await this.eventsService.delete(request.auth.sub, params.householdId, params.eventId);
+    await this.eventsService.delete(request.auth.sub, householdId, eventId);
   }
 }

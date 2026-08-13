@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Query,
@@ -23,13 +24,18 @@ import {
 } from '@nestjs/swagger';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import { TasksService } from './tasks.service.js';
-import { CreateTaskDto } from './dto/create-task.dto.js';
-import type { TaskListResponseDto, TaskResponseDto } from './dto/create-task.dto.js';
+import { CreateTaskDto, TaskListResponseDto, TaskResponseDto } from './dto/create-task.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
 }
+
+// WR-06: this controller previously took `householdId`/`taskId` with no
+// pipe at all — not even the intersection-type trap recurrence.controller.ts
+// documents, just no validation whatsoever. A malformed id reached Prisma
+// on a `@db.Uuid` column and surfaced as a 500 instead of a 404.
+const uuidParam = new ParseUUIDPipe({ version: '4' });
 
 @ApiTags('tasks')
 @ApiBearerAuth()
@@ -40,10 +46,10 @@ export class TasksController {
 
   @Post()
   @ApiOperation({ operationId: 'createTask' })
-  @ApiCreatedResponse({ type: Object as any })
+  @ApiCreatedResponse({ type: TaskResponseDto })
   async create(
     @Req() request: AuthenticatedRequest,
-    @Param('householdId') householdId: string,
+    @Param('householdId', uuidParam) householdId: string,
     @Body() body: CreateTaskDto,
   ): Promise<TaskResponseDto> {
     return this.tasksService.create(request.auth.sub, householdId, body);
@@ -51,14 +57,14 @@ export class TasksController {
 
   @Get()
   @ApiOperation({ operationId: 'listTasks' })
-  @ApiOkResponse({ type: Object as any })
+  @ApiOkResponse({ type: TaskListResponseDto })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'priority', required: false })
   @ApiQuery({ name: 'assigneeId', required: false })
   @ApiQuery({ name: 'recurring', required: false })
   async list(
     @Req() request: AuthenticatedRequest,
-    @Param('householdId') householdId: string,
+    @Param('householdId', uuidParam) householdId: string,
     @Query('status') status?: string,
     @Query('priority') priority?: string,
     @Query('assigneeId') assigneeId?: string,
@@ -69,22 +75,22 @@ export class TasksController {
 
   @Get(':taskId')
   @ApiOperation({ operationId: 'getTask' })
-  @ApiOkResponse({ type: Object as any })
+  @ApiOkResponse({ type: TaskResponseDto })
   async getById(
     @Req() request: AuthenticatedRequest,
-    @Param('householdId') householdId: string,
-    @Param('taskId') taskId: string,
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('taskId', uuidParam) taskId: string,
   ): Promise<TaskResponseDto> {
     return this.tasksService.getById(request.auth.sub, householdId, taskId);
   }
 
   @Put(':taskId')
   @ApiOperation({ operationId: 'updateTask' })
-  @ApiOkResponse({ type: Object as any })
+  @ApiOkResponse({ type: TaskResponseDto })
   async update(
     @Req() request: AuthenticatedRequest,
-    @Param('householdId') householdId: string,
-    @Param('taskId') taskId: string,
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('taskId', uuidParam) taskId: string,
     @Body() body: UpdateTaskDto,
   ): Promise<TaskResponseDto> {
     return this.tasksService.update(request.auth.sub, householdId, taskId, body);
@@ -96,8 +102,8 @@ export class TasksController {
   @ApiNoContentResponse()
   async delete(
     @Req() request: AuthenticatedRequest,
-    @Param('householdId') householdId: string,
-    @Param('taskId') taskId: string,
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('taskId', uuidParam) taskId: string,
   ): Promise<void> {
     await this.tasksService.delete(request.auth.sub, householdId, taskId);
   }

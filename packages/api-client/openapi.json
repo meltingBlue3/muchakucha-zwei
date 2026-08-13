@@ -1360,7 +1360,16 @@
     "/api/v1/households/{householdId}/events": {
       "post": {
         "operationId": "createEvent",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1396,6 +1405,14 @@
       "get": {
         "operationId": "listEvents",
         "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "startDate",
             "required": false,
@@ -1449,7 +1466,24 @@
     "/api/v1/households/{householdId}/events/{eventId}": {
       "get": {
         "operationId": "getEvent",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -1474,7 +1508,24 @@
       },
       "put": {
         "operationId": "updateEvent",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1509,7 +1560,24 @@
       },
       "delete": {
         "operationId": "deleteEvent",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "204": {
             "description": ""
@@ -1555,7 +1623,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TaskResponseDto"
                 }
               }
             }
@@ -1621,7 +1689,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TaskListResponseDto"
                 }
               }
             }
@@ -1665,7 +1733,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TaskResponseDto"
                 }
               }
             }
@@ -1717,7 +1785,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TaskResponseDto"
                 }
               }
             }
@@ -3434,6 +3502,124 @@
         },
         "required": [
           "title"
+        ]
+      },
+      "TaskResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "householdId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "object",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "urgent"
+            ]
+          },
+          "assigneeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dueDate": {
+            "type": "object",
+            "nullable": true
+          },
+          "recurrenceRuleId": {
+            "type": "object",
+            "nullable": true
+          },
+          "occurrenceDate": {
+            "type": "object",
+            "nullable": true
+          },
+          "recurrence": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RecurrenceResponseDto"
+              }
+            ]
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LabelResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "householdId",
+          "title",
+          "description",
+          "status",
+          "priority",
+          "assigneeIds",
+          "dueDate",
+          "recurrenceRuleId",
+          "occurrenceDate",
+          "recurrence",
+          "createdBy",
+          "createdAt",
+          "updatedAt",
+          "labels"
+        ]
+      },
+      "TaskListResponseDto": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskResponseDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "materializedThrough": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "tasks",
+          "total",
+          "materializedThrough"
         ]
       },
       "UpdateTaskDto": {
