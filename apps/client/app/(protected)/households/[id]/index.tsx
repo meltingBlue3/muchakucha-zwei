@@ -5,6 +5,7 @@ import { useTheme } from '@shopify/restyle';
 import Calendar from 'lucide-react-native/icons/calendar';
 import FileText from 'lucide-react-native/icons/file-text';
 import ListTodo from 'lucide-react-native/icons/list-todo';
+import Repeat from 'lucide-react-native/icons/repeat';
 import Tag from 'lucide-react-native/icons/tag';
 import Sunrise from 'lucide-react-native/icons/sunrise';
 
@@ -75,6 +76,10 @@ export default function HouseholdDetailRoute() {
 
   const handleOpenLabels = useCallback(() => {
     void router.push(`/households/${encodeURIComponent(id)}/labels`);
+  }, [router, id]);
+
+  const handleOpenRecurrenceRules = useCallback(() => {
+    void router.push(`/households/${encodeURIComponent(id)}/recurrence-rules`);
   }, [router, id]);
 
   // ---- AccessChanged or member lost access ----
@@ -218,6 +223,37 @@ export default function HouseholdDetailRoute() {
               <Text variant="label">标签管理</Text>
               <Text variant="bodySm" color="inkMuted">
                 创建和管理标签，给事件和任务分类
+              </Text>
+            </View>
+            <Text variant="caption" color="coral">
+              进入 ›
+            </Text>
+          </Pressable>
+          {/* Recurrence rules quick-access. Teal, not coral: the home screen
+              already spends three coral icons (today / calendar / labels) and a
+              fourth pushes the accent past its budget. `Repeat` is deliberately
+              the same icon `RecurrenceBadge` uses, so the entry point and the
+              per-item badge read as the same concept. */}
+          <Pressable
+            onPress={handleOpenRecurrenceRules}
+            accessibilityLabel="管理周期规则"
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: activeTheme.spacing[3],
+              backgroundColor: activeTheme.colors.surface,
+              borderRadius: activeTheme.borderRadii.md,
+              padding: activeTheme.spacing[4],
+              borderWidth: 1,
+              borderColor: activeTheme.colors.border,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Repeat size={24} color={activeTheme.colors.teal} strokeWidth={1.5} />
+            <View style={{ flex: 1 }}>
+              <Text variant="label">周期规则</Text>
+              <Text variant="bodySm" color="inkMuted">
+                查看和管理所有重复的任务和事件
               </Text>
             </View>
             <Text variant="caption" color="coral">
