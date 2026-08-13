@@ -260,7 +260,7 @@ Plans:
 **UI hint:** yes
 **Depends on:** Phase 3 (共享家庭日历), Phase 4 (任务与今日视图) — 与 Phase 6 并行，不受其阻塞
 **Requirements:** RECR-01, RECR-02
-**Plans:** 13/15 plans executed
+**Plans:** 15/15 plans executed
 
 Plans:
 **Wave 1**
@@ -287,7 +287,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 07-08-PLAN.md — Web 端到端旅程、事件侧无障碍审计（补 Phase 3 缺口）与 Android 真机验收
+- [x] 07-08-PLAN.md — Web 端到端旅程、事件侧无障碍审计（补 Phase 3 缺口）与 Android 真机验收
 
 **Wave 7** *(addendum D-11…D-20; independent of the pending 07-08 checkpoint)*
 
@@ -312,7 +312,7 @@ Plans:
 
 **Wave 12** *(blocked on 07-10 and 07-14)*
 
-- [ ] 07-15-PLAN.md — addendum 的 Web 端到端旅程、必需测试清单与验证映射、Android 真机验收
+- [x] 07-15-PLAN.md — addendum 的 Web 端到端旅程、必需测试清单与验证映射、Android 真机验收
 
 ---
 *Roadmap created: 2026-07-31*
