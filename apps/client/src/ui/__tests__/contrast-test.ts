@@ -40,6 +40,7 @@ describe('measured WCAG 2.2 AA palette contract', () => {
   test('computes at least 4.5:1 for links on canvas and muted status surfaces', () => {
     expect(contrast(theme.colors.link, theme.colors.canvas)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(theme.colors.link, theme.colors.surfaceMuted)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(theme.colors.link, theme.colors.coralSoft)).toBeGreaterThanOrEqual(4.5);
   });
 
   test('keeps pressed primary actions above AA instead of relying on opacity', () => {

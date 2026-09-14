@@ -22,6 +22,8 @@ export interface ProfileFormProps {
   apiClient: ProfileApi;
   sessionStateStore: SessionStateStore;
   sessionTransport: SessionTransport;
+  showHeading?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 function isDisplayNameFailure(error: unknown): boolean {
@@ -41,7 +43,7 @@ function isDisplayNameFailure(error: unknown): boolean {
   );
 }
 
-export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: ProfileFormProps) => {
+export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, showHeading = true, onBusyChange }: ProfileFormProps) => {
   const [reload, setReload] = useState(0);
   const [savedName, setSavedName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,8 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
     reset,
     setError,
   } = useForm<ProfileValues>({ defaultValues: { displayName: '' } });
+
+  useEffect(() => { onBusyChange?.(isSubmitting); }, [isSubmitting, onBusyChange]);
 
   useEffect(() => {
     setLoading(true);
@@ -136,8 +140,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
     <Stack gap={6}>
       <Stack gap={2}>
         <Text variant="display" color="teal">{savedName ? [...savedName][0] : '我'}</Text>
-        <Heading>个人资料</Heading>
-        <Text>让家人一眼认出你。昵称会显示在家庭成员与任务分工中，也可以与其他成员重复。</Text>
+        {showHeading ? <Heading>个人资料</Heading> : null}
       </Stack>
       {loadError || errors.root?.server?.message ? (
         <Banner title={loadError ? '暂时无法加载资料' : '暂时无法保存'}>{loadError ?? errors.root?.server?.message}</Banner>

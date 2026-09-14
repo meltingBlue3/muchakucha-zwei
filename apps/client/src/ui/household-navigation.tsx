@@ -40,7 +40,7 @@ export function HouseholdNavigation({ householdId, active }: { householdId: stri
             style={({ pressed }) => ({ flex: wide ? undefined : 1, flexDirection: wide ? 'row' : 'column', minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center', paddingHorizontal: wide ? theme.spacing[4] : theme.spacing[1], paddingVertical: theme.spacing[2], borderRadius: theme.borderRadii.lg, gap: wide ? theme.spacing[3] : theme.spacing[1], backgroundColor: active === key ? theme.colors.coralSoft : pressed ? theme.colors.surfaceMuted : theme.colors.surface })}
           >
             <Icon size={theme.controlSizes.icon} color={active === key ? theme.colors.coral : theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
-            <Text variant={wide ? 'body' : 'caption'} color={active === key ? 'coral' : 'inkMuted'} style={{ fontWeight: active === key ? '600' : '400' }}>{label}</Text>
+            <Text variant={wide ? 'body' : 'caption'} color={active === key ? 'link' : 'inkMuted'} style={{ fontWeight: active === key ? '600' : '400' }}>{label}</Text>
           </Pressable>
         ))}
       </View>

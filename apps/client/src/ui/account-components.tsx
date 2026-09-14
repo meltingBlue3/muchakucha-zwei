@@ -14,9 +14,7 @@ export function HouseholdSetup({ onCreate, onJoin }: { onCreate(): void; onJoin(
   return (
     <Stack gap={6}>
       <Stack gap={3}>
-        <Text variant="label" color="teal">账户已就绪 · 下一步，连接家人</Text>
         <Heading>开始设置你的家庭</Heading>
-        <Text color="inkMuted">让日程、家务和笔记有一个共同的位置。选择适合你的开始方式。</Text>
       </Stack>
       {[
         { title: '创建家庭', description: '由你开始，之后再邀请家人一起加入。', action: onCreate, icon: HousePlus, primary: true },
@@ -29,7 +27,6 @@ export function HouseholdSetup({ onCreate, onJoin }: { onCreate(): void; onJoin(
           <ChevronRight color={theme.colors.inkMuted} size={theme.controlSizes.icon} />
         </Pressable>
       ))}
-      <Text variant="bodySm">一个家庭，共享日历、任务和笔记。加入后，你可以随时在顶部切换家庭。</Text>
     </Stack>
   );
 }

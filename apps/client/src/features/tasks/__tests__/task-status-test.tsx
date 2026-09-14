@@ -34,6 +34,18 @@ function task(overrides: Partial<TaskResponseDto>): TaskResponseDto {
 }
 
 describe('cancelled task status', () => {
+  test('status and detail controls are independent actions', async () => {
+    const onPress = jest.fn();
+    const onStatusChange = jest.fn();
+    const item = task({ status: 'pending' });
+    const view = await render(<MuchakuchaThemeProvider><TaskCard task={item} onPress={onPress} onStatusChange={onStatusChange} /></MuchakuchaThemeProvider>);
+    await fireEvent.press(view.getByRole('button', { name: '开始任务' }));
+    expect(onStatusChange).toHaveBeenCalledWith(item);
+    expect(onPress).not.toHaveBeenCalled();
+    await fireEvent.press(view.getByRole('button', { name: '任务：重复家务，重复' }));
+    expect(onPress).toHaveBeenCalledWith(item);
+    expect(onStatusChange).toHaveBeenCalledTimes(1);
+  });
   test('completed past-due tasks do not retain the overdue warning', async () => {
     const view = await render(<MuchakuchaThemeProvider><TaskCard task={task({ status: 'completed', dueDate: dateAtOffset(-2) })} onPress={jest.fn()} /></MuchakuchaThemeProvider>);
     expect(view.getByText('已完成')).toBeTruthy();

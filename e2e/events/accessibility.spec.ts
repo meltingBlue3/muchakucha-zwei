@@ -80,7 +80,7 @@ async function openNewEvent(page: Page) {
 async function openEventDetail(page: Page, fixture: Fixture) {
   await openCalendar(page);
   const day = Number(new Date().toISOString().slice(8, 10));
-  await page.getByLabel(new RegExp(`^${day}日，\\d+个事件$`)).click();
+  await page.getByLabel(new RegExp(`^\\d{4}-\\d{2}-${String(day).padStart(2, '0')}(?:，今天)?，\\d+个事件$`)).click();
   await page.getByLabel(`事件：${fixture.title}，重复`).click();
   await expect(page.getByRole('main', { name: '事件详情' })).toBeVisible();
 }
@@ -110,7 +110,7 @@ test.describe('event recurrence accessibility', () => {
     await expectNoSeriousAxeViolations(page);
     await page.getByLabel('取消').click();
     const day = Number(new Date().toISOString().slice(8, 10));
-    await page.getByLabel(new RegExp(`^${day}日，\\d+个事件$`)).click();
+    await page.getByLabel(new RegExp(`^\\d{4}-\\d{2}-${String(day).padStart(2, '0')}(?:，今天)?，\\d+个事件$`)).click();
     await page.getByLabel(`事件：${fixture.title}，重复`).click();
     await expectNoSeriousAxeViolations(page);
     await page.getByLabel('编辑事件').click();

@@ -112,7 +112,6 @@ export const LoginForm = ({
     <Stack gap={5}>
       <Stack gap={2}>
         <Heading>欢迎回来</Heading>
-        <Text>今天的安排，家人的待办，都在这里。</Text>
       </Stack>
       {reauthenticationRequired ? (
         <Banner title="需要重新登录">

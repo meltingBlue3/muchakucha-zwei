@@ -4,7 +4,7 @@ import { Pressable, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { CreateTaskDto, TaskResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
-import { Spinner, Stack, Text } from '../../ui/primitives';
+import { Stack, Text, FormActions } from '../../ui/primitives';
 import { DateField } from '../../ui/date-field';
 import { LabelPicker } from '../labels/label-picker';
 import {
@@ -160,10 +160,12 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
     backgroundColor: activeTheme.colors.surface,
     borderWidth: 1,
     borderColor: activeTheme.colors.border,
-    borderRadius: activeTheme.borderRadii.sm,
+    borderRadius: activeTheme.borderRadii.md,
     paddingHorizontal: activeTheme.spacing[4],
     paddingVertical: activeTheme.spacing[3],
     fontSize: activeTheme.typography.body.fontSize,
+    fontFamily: activeTheme.fontFamilies.regular,
+    lineHeight: activeTheme.typography.body.lineHeight,
     color: activeTheme.colors.ink,
     minHeight: activeTheme.controlSizes.field,
   };
@@ -378,57 +380,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
         </Text>
       )}
 
-      {/* Actions */}
-      <View
-        style={{
-          flexDirection: 'row',
-          gap: activeTheme.spacing[3],
-          marginTop: activeTheme.spacing[2],
-        }}
-      >
-        <Pressable
-          onPress={onCancel}
-          disabled={isSubmitting}
-          style={({ pressed }) => ({
-            flex: 1,
-            alignItems: 'center',
-            paddingVertical: activeTheme.spacing[3],
-            borderRadius: activeTheme.borderRadii.sm,
-            borderWidth: 1,
-            borderColor: activeTheme.colors.border,
-            opacity: pressed ? 0.7 : 1,
-          })}
-          accessibilityLabel="取消"
-        >
-          <Text variant="button" color="ink">
-            取消
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={handleSubmit}
-          disabled={isSubmitting}
-          style={({ pressed }) => ({
-            flex: 1,
-            alignItems: 'center',
-            paddingVertical: activeTheme.spacing[3],
-            borderRadius: activeTheme.borderRadii.sm,
-            backgroundColor: isSubmitting
-              ? activeTheme.colors.disabled
-              : pressed
-                ? activeTheme.colors.coralPressed
-                : activeTheme.colors.coral,
-          })}
-          accessibilityLabel={submitLabel}
-          accessibilityState={{ busy: isSubmitting, disabled: isSubmitting }}
-        >
-          <View style={{ alignItems: 'center', flexDirection: 'row', gap: activeTheme.spacing[2] }}>
-            {isSubmitting && <Spinner label="保存中" />}
-            <Text variant="button" color="surface">
-              {isSubmitting ? '保存中…' : submitLabel}
-            </Text>
-          </View>
-        </Pressable>
-      </View>
+      <FormActions onCancel={onCancel} onSubmit={() => void handleSubmit()} submitting={isSubmitting} submitLabel={submitLabel} />
     </Stack>
   );
 }

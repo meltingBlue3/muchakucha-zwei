@@ -97,14 +97,14 @@ export default function HouseholdMoreRoute() {
   return (
     <>
       {/* Calendar quick-access */}
-      <AppShell accessibilityLabel="家庭空间" title="家庭" showProfile footer={<HouseholdNavigation householdId={id} active="more" />}>
-        <Stack gap={4}>
-          <HouseholdHeader
+      <AppShell accessibilityLabel="家庭空间" title="家庭" showProfile headerContent={<HouseholdHeader
             householdName={householdName}
             onOpenSwitcher={() => setSwitcherOpen(true)}
-          />
+          />} footer={<HouseholdNavigation householdId={id} active="more" />}>
+        <Stack gap={4}>
 
-          <PageIntro title="家庭" subtitle="一起照顾好这个家。管理家人、共享分类与重复安排。" />
+
+          <PageIntro title="家庭" />
           {/* Settings quick-access */}
           <Pressable
             onPress={() => void router.push(`/households/${encodeURIComponent(id)}/settings`)}

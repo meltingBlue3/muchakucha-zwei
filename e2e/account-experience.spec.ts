@@ -60,6 +60,7 @@ test('no-household onboarding offers both routes and profile access', async ({ p
   await expect(page.getByLabel('家庭名称', { exact: true })).toBeVisible();
   await checkLayout(page);
   await page.getByRole('button', { name: '个人中心' }).click();
+  await page.getByRole('menuitem', { name: '个人资料' }).click();
   await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
 });
 
@@ -86,4 +87,84 @@ test('authentication layouts fit small phones and desktop', async ({ page }) => 
     await checkLayout(page);
     await page.screenshot({ path: `test-results/account-login-${width}.png`, fullPage: true });
   }
+});
+
+for (const width of [320, 390, 1440]) {
+  test(`account menu and profile dialog preserve focus and layout at ${width}px`, async ({ page }) => {
+    await mockApi(page, true);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/household-handoff');
+    const trigger = page.getByRole('button', { name: '个人中心', exact: true });
+    await trigger.click();
+    await expect(page.getByRole('menuitem', { name: '个人资料' })).toBeFocused();
+    await page.screenshot({ path: `test-results/account-menu-${width}.png` });
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menuitem', { name: '退出登录' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await page.getByRole('menuitem', { name: '个人资料' }).click();
+    const dialog = page.getByRole('dialog', { name: '个人资料', exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toBeFocused();
+    await expect(dialog.getByLabel('昵称', { exact: true })).toHaveValue('小林');
+    await expect(page.getByTestId('account-dialog-blur')).toHaveCSS('backdrop-filter', /blur/);
+    await page.keyboard.press('Shift+Tab');
+    await expect(dialog.getByLabel('昵称', { exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toBeFocused();
+    await checkLayout(page);
+    await page.screenshot({ path: `test-results/account-dialog-profile-${width}.png` });
+    await dialog.getByLabel('昵称', { exact: true }).fill('新的昵称');
+    await dialog.getByRole('button', { name: '保存昵称' }).click();
+    await expect(dialog.getByText('昵称已更新。')).toBeVisible();
+    await expect(page).toHaveURL(/household-handoff$/);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await page.getByRole('menuitem', { name: '个人资料' }).click();
+    await expect(dialog).toBeVisible();
+    await page.getByTestId('account-overlay-dismiss').click({ position: { x: 4, y: 4 } });
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  });
+}
+
+test('logout dialog cancels, retains failed sessions, and only exits after confirmation', async ({ page }) => {
+  await mockApi(page, true);
+  let logoutCalls = 0;
+  let finishLogout: (() => void) | undefined;
+  await page.route('**/api/v1/auth/logout', async (route) => {
+    logoutCalls++;
+    if (logoutCalls === 1) await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+    else {
+      await new Promise<void>((resolve) => { finishLogout = resolve; });
+      await route.fulfill({ status: 204 });
+    }
+  });
+  await page.goto('/household-handoff');
+  const trigger = page.getByRole('button', { name: '个人中心', exact: true });
+  const open = async () => { await trigger.click(); await page.getByRole('menuitem', { name: '退出登录' }).click(); };
+  await open();
+  const dialog = page.getByRole('dialog', { name: '退出登录', exact: true });
+  await expect(dialog.getByRole('button', { name: '关闭退出登录' })).toBeFocused();
+  await dialog.getByRole('button', { name: '取消退出登录' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(logoutCalls).toBe(0);
+  await expect(trigger).toBeFocused();
+  await open();
+  await checkLayout(page);
+  await page.screenshot({ path: 'test-results/account-dialog-logout.png' });
+  await dialog.getByRole('button', { name: '确认退出登录' }).click();
+  await expect(dialog.getByText('暂时无法退出。请检查网络后重试。')).toBeVisible();
+  await expect(page).toHaveURL(/household-handoff$/);
+  await dialog.getByRole('button', { name: '确认退出登录' }).click();
+  await expect(dialog.getByRole('button', { name: '确认退出登录' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  expect(logoutCalls).toBe(2);
+  finishLogout!();
+  await expect(page).toHaveURL(/login/);
 });

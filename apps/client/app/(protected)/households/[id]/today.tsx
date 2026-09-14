@@ -1,4 +1,4 @@
-import { PageIntro, TodaySummary } from '../../../../src/ui/page-intro';
+import { TodaySummary } from '../../../../src/ui/page-intro';
 import { HouseholdNavigation } from '../../../../src/ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -23,7 +23,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../src/ui/household-components';
-import { Button, LinkText, Stack, Text } from '../../../../src/ui/primitives';
+import { Heading, Stack, Text } from '../../../../src/ui/primitives';
 import type { Theme } from '../../../../src/ui/theme';
 
 function todayIso(): string {
@@ -245,25 +245,13 @@ export default function TodayRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="今日视图" refreshing={refreshing} onRefresh={handleRefresh} title="今日视图" showProfile footer={<HouseholdNavigation householdId={householdId} active="today" />}>
-      <Stack gap={4}>
-        {/* Header */}
-        <HouseholdHeader
+      <AppShell accessibilityLabel="今日视图" refreshing={refreshing} onRefresh={handleRefresh} title="今日视图" showProfile headerContent={<HouseholdHeader
           householdName={currentHousehold?.name ?? ''}
           onOpenSwitcher={() => setSwitcherOpen(true)}
-        />
-
-        {/* Date label */}
-        <PageIntro eyebrow={dateLabel} title="今天" subtitle="一家人的日程和待办，在这里一起照顾。" />
-
-        <View style={{ gap: activeTheme.spacing[4] }}>
-          {!loading && error === null ? <TodaySummary events={events.length} tasks={todayTasks.length} overdue={overdueTasks.length} /> : null}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
-            <Button label="新建任务" onPress={() => router.push(`/households/${encodeURIComponent(householdId)}/tasks/new`)} />
-            <LinkText onPress={() => router.push(`/households/${encodeURIComponent(householdId)}/events/new`)}>添加日程</LinkText>
-            <LinkText onPress={() => router.push(`/households/${encodeURIComponent(householdId)}/notes/new`)}>记笔记</LinkText>
-          </View>
-        </View>
+        />} footer={<HouseholdNavigation householdId={householdId} active="today" />}>
+      <Stack gap={4}>
+        <Heading variant="caption" color="coral" style={{ fontSize: activeTheme.typography.section.fontSize, lineHeight: activeTheme.typography.section.lineHeight }}>{dateLabel}</Heading>
+        {!loading && error === null ? <TodaySummary events={events.length} tasks={todayTasks.length} overdue={overdueTasks.length} /> : null}
 
         {/* Loading */}
         {loading && (
@@ -304,8 +292,8 @@ export default function TodayRoute() {
                   marginBottom: activeTheme.spacing[2],
                 }}>
                   <TriangleAlert size={16} color={activeTheme.colors.destructive} />
-                  <Text variant="label" color="destructive">
-                    逾期任务 ({overdueTasks.length})
+                  <Text accessibilityRole="header" aria-level={2} variant="section" color="destructive">
+                  逾期任务 ({overdueTasks.length})
                   </Text>
                 </View>
                 <Stack gap={2}>
@@ -332,7 +320,7 @@ export default function TodayRoute() {
                 marginBottom: activeTheme.spacing[2],
               }}>
                 <Calendar size={16} color={activeTheme.colors.coral} />
-                <Text variant="label">
+                <Text accessibilityRole="header" aria-level={2} variant="section">
                   今日事件 ({events.length})
                 </Text>
               </View>
@@ -359,8 +347,8 @@ export default function TodayRoute() {
                   marginBottom: activeTheme.spacing[2],
                 }}>
                   <Clock size={16} color={activeTheme.colors.teal} />
-                  <Text variant="label">
-                    今日待办 ({todayTasks.length})
+                  <Text accessibilityRole="header" aria-level={2} variant="section">
+                  今日待办 ({todayTasks.length})
                   </Text>
                 </View>
                 <Stack gap={2}>
@@ -398,7 +386,7 @@ export default function TodayRoute() {
                 marginBottom: activeTheme.spacing[2],
               }}>
                 <Hourglass size={16} color={activeTheme.colors.coral} />
-                <Text variant="label">
+                <Text accessibilityRole="header" aria-level={2} variant="section">
                   临近截止日期 ({approachingTasks.length})
                 </Text>
               </View>
@@ -452,7 +440,7 @@ export default function TodayRoute() {
                 paddingVertical: activeTheme.spacing[8],
               }}>
                 <Text variant="bodySm" color="inkMuted">
-                  今天没有待处理安排，留点时间给家人。
+                  今天没有待处理安排。
                 </Text>
               </View>
             )}

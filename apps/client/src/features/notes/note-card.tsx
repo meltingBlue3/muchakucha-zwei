@@ -22,6 +22,7 @@ export function NoteCard({ note, onPress }: NoteCardProps) {
   return (
     <Pressable
       onPress={() => onPress(note)}
+      accessibilityRole="button"
       accessibilityLabel={`笔记：${note.title}`}
       style={({ pressed }) => ({
         backgroundColor: activeTheme.colors.surface,
@@ -33,21 +34,19 @@ export function NoteCard({ note, onPress }: NoteCardProps) {
       })}
     >
       <View style={{ flexDirection: 'row', gap: activeTheme.spacing[3] }}>
-        <View style={{ paddingTop: activeTheme.spacing[1] }}>
+        <View style={{ padding: activeTheme.spacing[3], backgroundColor: activeTheme.colors.tealSoft, borderRadius: activeTheme.borderRadii.lg, alignSelf: 'flex-start' }}>
           <FileText size={20} color={activeTheme.colors.teal} strokeWidth={1.5} />
         </View>
-        <Stack gap={1} style={{ flex: 1 }}>
+        <Stack gap={3} style={{ flex: 1 }}>
           <Text variant="body" style={{ fontWeight: '600' }} numberOfLines={2}>
             {note.title}
-          </Text>
-          <Text variant="caption" color="inkMuted">
-            {dateLabel}
           </Text>
           {previewText !== '' && (
             <Text variant="bodySm" numberOfLines={2} color="inkMuted">
               {previewText}
             </Text>
           )}
+          <Text variant="caption" color="inkMuted">更新于 {dateLabel}</Text>
         </Stack>
       </View>
     </Pressable>

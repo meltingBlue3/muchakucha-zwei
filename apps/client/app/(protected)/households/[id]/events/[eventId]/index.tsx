@@ -102,7 +102,7 @@ export default function EventDetailRoute() {
 
   return (
     <AppShell accessibilityLabel="事件详情" title="事件详情" showBack showProfile>
-      <Stack gap={5}>
+      <Stack gap={6} style={{ backgroundColor: activeTheme.colors.surface, borderRadius: activeTheme.borderRadii.xl, padding: activeTheme.spacing[5] }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: activeTheme.spacing[3] }}>
           <Stack gap={2} style={{ flex: 1 }}>
             <Heading>{event.title}</Heading>

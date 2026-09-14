@@ -32,6 +32,7 @@ For Web, use `pnpm --filter client exec expo start --web --port 8081`; the curre
 
 ## Implementation
 
+- Before adding or changing frontend layouts, visual styles, shared UI components, or theme tokens, read and follow [docs/design.md](docs/design.md). Keep general design changes synchronized with that document.
 - Reuse `apps/client/src/ui/` components and theme tokens. Keep platform differences in native/Web adapters.
 - Keep `/api/v1` backward compatible. Update DTOs and templates in `apps/api/src/openapi/generate-openapi.ts`, then regenerate; do not hand-edit generated output or expose Prisma models to clients.
 - Enforce household membership and resource ownership on the server. Preserve database constraints and transactions; add migrations for schema changes.

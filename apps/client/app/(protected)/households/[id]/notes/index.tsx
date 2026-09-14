@@ -15,7 +15,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../../src/ui/household-components';
-import { Stack, Text } from '../../../../../src/ui/primitives';
+import { Stack, Text, Button } from '../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../src/ui/theme';
 
 export default function NotesListRoute() {
@@ -124,33 +124,10 @@ export default function NotesListRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="家庭笔记" refreshing={refreshing} onRefresh={handleRefresh} title="家庭笔记" showProfile footer={<HouseholdNavigation householdId={householdId} active="notes" />}>
+      <AppShell accessibilityLabel="家庭笔记" refreshing={refreshing} onRefresh={handleRefresh} title="家庭笔记" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="notes" />}>
         <Stack gap={4}>
-          <PageIntro title="笔记" subtitle="随手记下，把一家人的记忆留在这里。" />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <HouseholdHeader
-              householdName={currentHousehold?.name ?? ''}
-              onOpenSwitcher={() => setSwitcherOpen(true)}
-            />
-            <Pressable
-              onPress={handleCreateNote}
-              accessibilityLabel="创建笔记"
-              hitSlop={activeTheme.spacing[2]}
-              style={({ pressed }) => ({
-                backgroundColor: activeTheme.colors.coral,
-              minHeight: activeTheme.controlSizes.touchTarget,
-              justifyContent: 'center',
-                paddingHorizontal: activeTheme.spacing[4],
-                paddingVertical: activeTheme.spacing[2],
-                borderRadius: activeTheme.borderRadii.full,
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Text variant="button" color="surface">
-                + 新建
-              </Text>
-            </Pressable>
-          </View>
+
+          <PageIntro title="笔记" action={<Button label="新建" accessibilityLabel="创建笔记" onPress={handleCreateNote} />} />
 
           {loading && (
             <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>

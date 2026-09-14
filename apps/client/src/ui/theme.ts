@@ -1,4 +1,5 @@
 import { createTheme } from '@shopify/restyle';
+import { systemFontFamily } from '../platform/typography/font-family';
 
 export const theme = createTheme({
   colors: {
@@ -22,6 +23,7 @@ export const theme = createTheme({
     disabled: '#B7AAA4',
     transparent: 'transparent',
     overlay: 'rgba(45,39,37,0.60)',
+    dialogOverlay: 'rgba(45,39,37,0.18)',
   },
   spacing: {
     0: 0,
@@ -53,9 +55,9 @@ export const theme = createTheme({
     focus: 2,
   },
   fontFamilies: {
-    regular: 'NotoSansSC-Regular',
-    medium: 'NotoSansSC-Medium',
-    semibold: 'NotoSansSC-SemiBold',
+    regular: systemFontFamily,
+    medium: systemFontFamily,
+    semibold: systemFontFamily,
   },
   typography: {
     caption: { fontSize: 12, fontWeight: '500' as const, lineHeight: 16 },
@@ -64,61 +66,69 @@ export const theme = createTheme({
     label: { fontSize: 14, fontWeight: '600' as const, lineHeight: 20 },
     button: { fontSize: 16, fontWeight: '600' as const, lineHeight: 20 },
     heading: { fontSize: 24, fontWeight: '600' as const, lineHeight: 32 },
+    section: { fontSize: 20, fontWeight: '600' as const, lineHeight: 28 },
     display: { fontSize: 32, fontWeight: '600' as const, lineHeight: 40 },
   },
   textVariants: {
     defaults: {
       color: 'ink',
-      fontFamily: 'NotoSansSC-Regular',
+      fontFamily: systemFontFamily,
       fontSize: 16,
       fontWeight: '400',
       lineHeight: 24,
     },
     caption: {
       color: 'inkMuted',
-      fontFamily: 'NotoSansSC-Medium',
+      fontFamily: systemFontFamily,
       fontSize: 12,
       fontWeight: '500',
       lineHeight: 16,
     },
     bodySm: {
       color: 'inkMuted',
-      fontFamily: 'NotoSansSC-Regular',
+      fontFamily: systemFontFamily,
       fontSize: 14,
       fontWeight: '400',
       lineHeight: 20,
     },
     body: {
       color: 'ink',
-      fontFamily: 'NotoSansSC-Regular',
+      fontFamily: systemFontFamily,
       fontSize: 16,
       fontWeight: '400',
       lineHeight: 24,
     },
     label: {
       color: 'ink',
-      fontFamily: 'NotoSansSC-SemiBold',
+      fontFamily: systemFontFamily,
       fontSize: 14,
       fontWeight: '600',
       lineHeight: 20,
     },
     button: {
       color: 'surface',
-      fontFamily: 'NotoSansSC-SemiBold',
+      fontFamily: systemFontFamily,
       fontSize: 16,
       fontWeight: '600',
       lineHeight: 20,
     },
     heading: {
       color: 'ink',
-      fontFamily: 'NotoSansSC-SemiBold',
+      fontFamily: systemFontFamily,
       fontSize: 24,
       fontWeight: '600',
       lineHeight: 32,
     },
+    section: {
+      color: 'ink',
+      fontFamily: systemFontFamily,
+      fontSize: 20,
+      fontWeight: '600',
+      lineHeight: 28,
+    },
     display: {
       color: 'ink',
-      fontFamily: 'NotoSansSC-SemiBold',
+      fontFamily: systemFontFamily,
       fontSize: 32,
       fontWeight: '600',
       lineHeight: 40,
@@ -155,7 +165,11 @@ export const theme = createTheme({
     switcherWidth: 360,
     switcherMaxHeight: 480,
     settingsNavWidth: 280,
+    accountMenuWidth: 160,
+    accountMenuHeight: 120,
+    dialogMaxWidth: 440,
   },
+  blur: { dialog: 36 },
   motion: {
     transitionMs: 180,
     reducedTransitionMs: 80,

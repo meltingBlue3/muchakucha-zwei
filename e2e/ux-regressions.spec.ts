@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 const a = '11111111-1111-4111-8111-111111111111';
 const b = '22222222-2222-4222-8222-222222222222';
@@ -127,3 +128,44 @@ test('a failed invitation preview has a working retry action', async ({ page }) 
   await page.getByRole('button', { name: '重试加载邀请' }).click();
   await expect(page.getByRole('button', { name: '接受邀请', exact: true })).toBeVisible();
 });
+
+for (const width of [320, 390, 1440]) {
+  test(`redesigned destinations fit ${width}px and keep navigation reachable`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await setup(page);
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 30).toISOString();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 30).toISOString();
+    await page.route(/\/api\/v1\/households\/[^/]+\/(tasks|events|notes)(?:\?.*)?$/, async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      const common = { householdId: a, createdBy: 'user', createdAt: start, updatedAt: start, labels: [], recurrenceRuleId: null, recurrence: null };
+      const body = path.endsWith('/events') ? { events: [{ ...common, id: 'event-preview', title: '接孩子放学，一起去公园散步', startTime: start, endTime: end, allDay: false, location: '学校南门 · 记得带水杯', description: null }] }
+        : path.endsWith('/notes') ? { notes: [{ ...common, id: 'note-preview', title: '这周想一起做的事', body: '周末试试新的番茄意面。\n买一束鲜花，给阳台的植物浇水。' }] }
+        : { tasks: [{ ...common, id: taskId, title: '补充家里的水果、牛奶和周末早餐食材', status: 'pending', priority: 'medium', dueDate: null, description: '冰箱里还有鸡蛋，购物前先看一眼清单。', assigneeIds: [] }] };
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+    });
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.setViewportSize({ width, height: 900 });
+    for (const [route, title] of [['today', '今天'], ['events', '日历'], ['tasks', '任务'], ['notes', '笔记'], ['more', '家庭']]) {
+      if (route === 'today') await page.goto(`/households/${a}/today`);
+      else await page.getByRole('tab', { name: title, exact: true }).click();
+      await expect(page.getByRole('heading', { name: route === 'today' ? /^\d{4}年\d{1,2}月\d{1,2}日 星期/ : title, exact: true })).toBeVisible();
+      const navigation = page.getByRole('tablist', { name: '家庭主导航' });
+      await expect(navigation.getByRole('tab')).toHaveCount(5);
+      const navBounds = await navigation.boundingBox();
+      expect(navBounds).not.toBeNull();
+      expect(navBounds!.y + navBounds!.height).toBeLessThanOrEqual(901);
+      const overflow = await page.evaluate(() => [...document.querySelectorAll('input, button, [role="button"], [role="heading"], [role="tab"]')]
+        .filter((el) => el.getBoundingClientRect().width > 0)
+        .some((el) => { const r = el.getBoundingClientRect(); return r.right > innerWidth + 1 || r.left < -1; }));
+      expect(overflow).toBe(false);
+      if (width === 390) {
+        const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+        expect(violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+      }
+      await page.screenshot({ path: `test-results/redesign-${route}-${width}.png`, fullPage: true });
+    }
+    expect(pageErrors).toEqual([]);
+  });
+}

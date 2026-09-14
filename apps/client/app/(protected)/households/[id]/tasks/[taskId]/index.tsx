@@ -104,7 +104,7 @@ export default function TaskDetailRoute() {
 
   return (
     <AppShell accessibilityLabel="任务详情" title="任务详情" showBack showProfile>
-      <Stack gap={5}>
+      <Stack gap={6} style={{ backgroundColor: activeTheme.colors.surface, borderRadius: activeTheme.borderRadii.xl, padding: activeTheme.spacing[5] }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: activeTheme.spacing[3] }}>
           <Heading style={{ flex: 1 }}>{task.title}</Heading>
           <Pressable

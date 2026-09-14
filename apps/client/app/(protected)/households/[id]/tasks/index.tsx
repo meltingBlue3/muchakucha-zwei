@@ -31,7 +31,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../../src/ui/household-components';
-import { Stack, StatusPanel, Text } from '../../../../../src/ui/primitives';
+import { Stack, StatusPanel, Text, Button } from '../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../src/ui/theme';
 
 type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
@@ -281,35 +281,12 @@ export default function TaskListRoute() {
 
   return (
   <>
-    <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile footer={<HouseholdNavigation householdId={householdId} active="tasks" />}>
+    <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="tasks" />}>
       <Stack gap={4}>
-        <PageIntro title="任务" subtitle="一起分担，让日常少一点忙乱。" />
 
         {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <HouseholdHeader
-            householdName={currentHousehold?.name ?? ''}
-            onOpenSwitcher={() => setSwitcherOpen(true)}
-          />
-          <Pressable
-            onPress={handleCreateTask}
-            accessibilityLabel="创建任务"
-            hitSlop={activeTheme.spacing[2]}
-            style={({ pressed }) => ({
-              backgroundColor: activeTheme.colors.coral,
-              minHeight: activeTheme.controlSizes.touchTarget,
-              justifyContent: 'center',
-              paddingHorizontal: activeTheme.spacing[4],
-              paddingVertical: activeTheme.spacing[2],
-              borderRadius: activeTheme.borderRadii.full,
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            <Text variant="button" color="surface">
-              + 新建
-            </Text>
-          </Pressable>
-        </View>
+
+          <PageIntro title="任务" action={<Button label="新建" accessibilityLabel="创建任务" onPress={handleCreateTask} />} />
 
         {/* Filters (collapsible — keeps the four filter groups from dominating the page) */}
         <View>
@@ -340,8 +317,6 @@ export default function TaskListRoute() {
                 paddingHorizontal: activeTheme.spacing[1],
                 borderRadius: activeTheme.borderRadii.full,
                 backgroundColor: activeTheme.colors.coral,
-              minHeight: activeTheme.controlSizes.touchTarget,
-              justifyContent: 'center',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>

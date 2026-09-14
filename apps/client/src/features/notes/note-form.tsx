@@ -1,10 +1,10 @@
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { CreateNoteDto, NoteResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
-import { Stack, Text } from '../../ui/primitives';
+import { Stack, Text, FormActions } from '../../ui/primitives';
 
 export interface NoteInput {
   title: string;
@@ -61,10 +61,12 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
     backgroundColor: activeTheme.colors.surface,
     borderWidth: 1,
     borderColor: activeTheme.colors.border,
-    borderRadius: activeTheme.borderRadii.sm,
+    borderRadius: activeTheme.borderRadii.md,
     paddingHorizontal: activeTheme.spacing[4],
     paddingVertical: activeTheme.spacing[3],
     fontSize: activeTheme.typography.body.fontSize,
+    fontFamily: activeTheme.fontFamilies.regular,
+    lineHeight: activeTheme.typography.body.lineHeight,
     color: activeTheme.colors.ink,
     minHeight: activeTheme.controlSizes.field,
   };
@@ -108,53 +110,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
         </Text>
       )}
 
-      {/* Actions */}
-      <View
-        style={{
-          flexDirection: 'row',
-          gap: activeTheme.spacing[3],
-          marginTop: activeTheme.spacing[2],
-        }}
-      >
-        <Pressable
-          onPress={onCancel}
-          disabled={isSubmitting}
-          style={({ pressed }) => ({
-            flex: 1,
-            alignItems: 'center',
-            paddingVertical: activeTheme.spacing[3],
-            borderRadius: activeTheme.borderRadii.sm,
-            borderWidth: 1,
-            borderColor: activeTheme.colors.border,
-            opacity: pressed ? 0.7 : 1,
-          })}
-          accessibilityLabel="取消"
-        >
-          <Text variant="button" color="ink">
-            取消
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={handleSubmit}
-          disabled={isSubmitting}
-          style={({ pressed }) => ({
-            flex: 1,
-            alignItems: 'center',
-            paddingVertical: activeTheme.spacing[3],
-            borderRadius: activeTheme.borderRadii.sm,
-            backgroundColor: isSubmitting
-              ? activeTheme.colors.disabled
-              : pressed
-                ? activeTheme.colors.coralPressed
-                : activeTheme.colors.coral,
-          })}
-          accessibilityLabel={submitLabel}
-        >
-          <Text variant="button" color="surface">
-            {isSubmitting ? '保存中…' : submitLabel}
-          </Text>
-        </Pressable>
-      </View>
+      <FormActions onCancel={onCancel} onSubmit={() => void handleSubmit()} submitting={isSubmitting} submitLabel={submitLabel} />
     </Stack>
   );
 }

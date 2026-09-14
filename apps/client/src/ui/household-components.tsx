@@ -1,10 +1,11 @@
+import { BlurTargetView } from 'expo-blur';
+import { AccountMenu } from './account-menu';
 import type { GetHouseholdMemberDto, ListMyHouseholdsItemDto } from '@muchakucha/api-client';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import Building2 from 'lucide-react-native/icons/building-2';
 import X from 'lucide-react-native/icons/x';
 import Check from 'lucide-react-native/icons/check';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
-import CircleUserRound from 'lucide-react-native/icons/circle-user-round';
 import Crown from 'lucide-react-native/icons/crown';
 import Shield from 'lucide-react-native/icons/shield';
 import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
@@ -53,6 +54,7 @@ interface AppShellProps {
   onBack?: () => void;
   showProfile?: boolean;
   footer?: React.ReactNode;
+  headerContent?: React.ReactNode;
 }
 
 export const AppShell = ({
@@ -65,8 +67,10 @@ export const AppShell = ({
   onBack,
   showProfile = false,
   footer,
+  headerContent,
 }: AppShellProps) => {
   const router = useRouter();
+  const blurTarget = useRef<View>(null);
   const { width } = useWindowDimensions();
   const wideNavigation = width >= theme.layout.navigationBreakpoint && footer !== undefined;
 
@@ -78,13 +82,10 @@ export const AppShell = ({
     }
   }, [onBack, router]);
 
-  const handleProfile = useCallback(() => {
-    router.push('/profile' as never);
-  }, [router]);
-
   const hasNav = title !== undefined || showBack || showProfile;
 
   return (
+    <BlurTargetView ref={blurTarget} style={{ flex: 1 }}>
     <SafeAreaView
       accessibilityLabel={accessibilityLabel}
       role={Platform.OS === 'web' ? 'main' : undefined}
@@ -107,7 +108,7 @@ export const AppShell = ({
           }}
         >
           {/* Left: back button */}
-          <View style={{ width: 44, alignItems: 'flex-start' }}>
+          {headerContent === undefined || showBack ? <View style={{ width: 44, alignItems: 'flex-start' }}>
             {showBack ? (
               <Pressable
                 accessibilityLabel="返回"
@@ -127,38 +128,20 @@ export const AppShell = ({
                 />
               </Pressable>
             ) : null}
-          </View>
+          </View> : null}
 
           {/* Center: title */}
-          <Text
+          {headerContent === undefined ? <Text
             numberOfLines={1}
             style={{ flex: 1, textAlign: 'center', fontWeight: '600' as const }}
             variant="body"
           >
             {title ?? ''}
-          </Text>
+          </Text> : <View style={{ flex: 1, minWidth: 0, paddingRight: theme.spacing[4] }}>{headerContent}</View>}
 
           {/* Right: profile */}
           <View style={{ width: 44, alignItems: 'flex-end' }}>
-            {showProfile ? (
-              <Pressable
-                accessibilityLabel="个人中心"
-                accessibilityRole="button"
-                onPress={handleProfile}
-                style={{
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: theme.controlSizes.touchTarget,
-                  minWidth: theme.controlSizes.touchTarget,
-                }}
-              >
-                <CircleUserRound
-                  color={theme.colors.ink}
-                  size={theme.controlSizes.icon}
-                  strokeWidth={theme.controlSizes.iconStroke}
-                />
-              </Pressable>
-            ) : null}
+            {showProfile ? <AccountMenu blurTarget={blurTarget} /> : null}
           </View>
         </View>
       ) : null}
@@ -170,7 +153,7 @@ export const AppShell = ({
           contentContainerStyle={{
             flexGrow: 1,
             paddingHorizontal: width < theme.breakpoints.mobile ? theme.layout.compactInset : theme.layout.mobileInset,
-            paddingTop: theme.spacing[6],
+            paddingTop: footer !== undefined ? theme.spacing[3] : theme.spacing[6],
             paddingBottom: theme.spacing[10],
             maxWidth: Platform.OS === 'web' ? theme.layout.householdMaxWidth : undefined,
             alignSelf: Platform.OS === 'web' ? 'center' : undefined,
@@ -194,6 +177,7 @@ export const AppShell = ({
       </View>
       {!wideNavigation ? footer : null}
     </SafeAreaView>
+    </BlurTargetView>
   );
 };
 

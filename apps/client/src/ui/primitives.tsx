@@ -9,7 +9,6 @@ import {
   ScrollView,
   TextInput as NativeTextInput,
   View,
-  useWindowDimensions,
   type PressableProps,
   type TextInputProps,
   type ViewProps,
@@ -121,6 +120,7 @@ export const Spinner = ({ label = '正在处理', inverse = false }: { label?: s
 type ButtonProps = Omit<PressableProps, 'children'> & {
   label: string;
   loading?: boolean;
+  tone?: 'primary' | 'secondary';
 };
 
 export const getButtonFill = (state: { disabled: boolean; pressed: boolean }): string =>
@@ -130,7 +130,7 @@ export const getButtonFill = (state: { disabled: boolean; pressed: boolean }): s
       ? theme.colors.coralPressed
       : theme.colors.coral;
 
-export const Button = ({ disabled, label, loading = false, style, ...props }: ButtonProps) => {
+export const Button = ({ disabled, label, loading = false, tone = 'primary', style, ...props }: ButtonProps) => {
   const activeTheme = useTheme<Theme>();
   const unavailable = disabled || loading;
   const [focused, setFocused] = useState(false);
@@ -138,6 +138,7 @@ export const Button = ({ disabled, label, loading = false, style, ...props }: Bu
   return (
     <Pressable
       {...pressableProps}
+      accessibilityLabel={pressableProps.accessibilityLabel ?? label}
       accessibilityRole="button"
       accessibilityState={{ busy: loading, disabled: unavailable }}
       disabled={unavailable}
@@ -152,7 +153,9 @@ export const Button = ({ disabled, label, loading = false, style, ...props }: Bu
       style={(state) => [
         {
           alignItems: 'center',
-          backgroundColor: getButtonFill({ disabled: unavailable, pressed: state.pressed }),
+          backgroundColor: tone === 'secondary' && !unavailable
+            ? state.pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.surface
+            : getButtonFill({ disabled: unavailable, pressed: state.pressed }),
           borderColor: focused ? activeTheme.colors.focusRing : activeTheme.colors.transparent,
           borderRadius: activeTheme.borderRadii.lg,
           borderWidth: activeTheme.borderWidths.focus,
@@ -167,10 +170,24 @@ export const Button = ({ disabled, label, loading = false, style, ...props }: Bu
       ]}
     >
       {loading ? <Spinner inverse label={`${label}，正在处理`} /> : null}
-      <Text variant="button" color={unavailable ? 'ink' : 'surface'}>{label}</Text>
+      <Text variant="button" color={unavailable ? 'ink' : tone === 'secondary' ? 'link' : 'surface'}>{label}</Text>
     </Pressable>
   );
 };
+
+export function FormActions({ onCancel, onSubmit, submitting, submitLabel }: {
+  onCancel(): void;
+  onSubmit(): void;
+  submitting: boolean;
+  submitLabel: string;
+}) {
+  return (
+    <Inline gap={3} style={{ marginTop: theme.spacing[4] }}>
+      <Button label="取消" tone="secondary" disabled={submitting} onPress={onCancel} style={{ flex: 1 }} />
+      <Button label={submitLabel} loading={submitting} onPress={onSubmit} style={{ flex: 2 }} />
+    </Inline>
+  );
+}
 
 type IconButtonProps = Omit<PressableProps, 'children'> & {
   icon: ReactElement;
@@ -418,8 +435,6 @@ const useAccessibilityPreferences = () => {
 };
 
 export const AuthShell = ({ children }: PropsWithChildren) => {
-  const { width } = useWindowDimensions();
-  const wide = width >= theme.layout.authWideBreakpoint;
   const preferences = useAccessibilityPreferences();
   const duration = getMotionDuration(preferences.reducedMotion);
   return (
@@ -438,19 +453,8 @@ export const AuthShell = ({ children }: PropsWithChildren) => {
           width={theme.spacing[16]}
         />
       ) : null}
-      <View style={{ flex: 1, width: '100%', maxWidth: theme.layout.authLayoutMaxWidth, alignSelf: 'center', justifyContent: 'center', gap: theme.spacing[8], flexDirection: wide ? 'row' : 'column', alignItems: wide ? 'center' : 'stretch' }}>
-        {wide ? (
-          <Stack gap={6} style={{ flex: 1, padding: theme.spacing[6] }}>
-            <BrandMark />
-            <Text variant="display">把生活的小事，{ '\n' }一起安排好。</Text>
-            <Text color="inkMuted">从今天的日程，到明天的家务。给一家人的安排，留一个共同的位置。</Text>
-            <Stack gap={4}>
-              <Text variant="label">01  共享日历，记住每一次约定</Text>
-              <Text variant="label">02  分担任务，让家务有着落</Text>
-              <Text variant="label">03  留下笔记，随时找到常用信息</Text>
-            </Stack>
-          </Stack>
-        ) : <Stack gap={2}><BrandMark /><Text variant="bodySm">一家人的日程、任务和日常记忆。</Text></Stack>}
+      <View style={{ flex: 1, width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center', justifyContent: 'center', gap: theme.spacing[8] }}>
+        <BrandMark />
       <Box
         alignSelf="center"
         maxWidth={theme.layout.authCardMaxWidth}

@@ -57,7 +57,7 @@ describe('typed design-token and composition contract', () => {
       display: { fontSize: 32, fontWeight: '600', lineHeight: 40 },
       heading: { fontSize: 24, fontWeight: '600', lineHeight: 32 },
     });
-    expect(theme.borderRadii).toEqual({ full: 999, lg: 16, md: 12, sm: 8 });
+    expect(theme.borderRadii).toEqual({ full: 999, xl: 24, lg: 16, md: 12, sm: 8 });
     expect(theme.borderWidths).toEqual({ default: 1, focus: 2 });
     expect(theme.focus).toEqual({ offset: 2, width: 2 });
     expect(theme.elevation).toEqual({ native: 0, softWeb: '0 8px 28px rgba(45,39,37,0.08)' });

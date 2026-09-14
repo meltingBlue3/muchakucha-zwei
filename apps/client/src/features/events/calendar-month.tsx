@@ -3,6 +3,8 @@ import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { Theme } from '../../ui/theme';
 import { Text } from '../../ui/primitives';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { getCalendarMonth, getDayNames, formatMonthLabel, type CalendarDay } from './calendar-utils';
 
 const DAY_CELL_SIZE = 36;
@@ -39,7 +41,7 @@ export function CalendarMonth({
   );
 
   return (
-    <View>
+    <View style={{ backgroundColor: activeTheme.colors.surface, borderRadius: activeTheme.borderRadii.xl, padding: activeTheme.spacing[3], borderWidth: activeTheme.borderWidths.default, borderColor: activeTheme.colors.separator }}>
       {/* Month header */}
       <View
         style={{
@@ -52,29 +54,35 @@ export function CalendarMonth({
         <Pressable
           onPress={onPrevMonth}
           accessibilityLabel="上一个月"
+          accessibilityRole="button"
           hitSlop={activeTheme.spacing[3]}
           style={({ pressed }) => ({
             opacity: pressed ? 0.6 : 1,
             padding: activeTheme.spacing[2],
+            minHeight: activeTheme.controlSizes.touchTarget,
+            minWidth: activeTheme.controlSizes.touchTarget,
+            alignItems: 'center',
+            justifyContent: 'center',
           })}
         >
-          <Text variant="label" color="coral">
-            ‹
-          </Text>
+          <ChevronLeft color={activeTheme.colors.coral} size={activeTheme.controlSizes.icon} />
         </Pressable>
-        <Text variant="heading">{formatMonthLabel(year, month)}</Text>
+        <Text variant="body" style={{ fontWeight: '600', flexShrink: 1 }}>{formatMonthLabel(year, month)}</Text>
         <Pressable
           onPress={onNextMonth}
           accessibilityLabel="下一个月"
+          accessibilityRole="button"
           hitSlop={activeTheme.spacing[3]}
           style={({ pressed }) => ({
             opacity: pressed ? 0.6 : 1,
             padding: activeTheme.spacing[2],
+            minHeight: activeTheme.controlSizes.touchTarget,
+            minWidth: activeTheme.controlSizes.touchTarget,
+            alignItems: 'center',
+            justifyContent: 'center',
           })}
         >
-          <Text variant="label" color="coral">
-            ›
-          </Text>
+          <ChevronRight color={activeTheme.colors.coral} size={activeTheme.controlSizes.icon} />
         </Pressable>
       </View>
 
@@ -110,12 +118,15 @@ export function CalendarMonth({
               <Pressable
                 key={day.iso}
                 onPress={() => handleSelectDay(day)}
-                accessibilityLabel={`${day.dayOfMonth}日${eventCount > 0 ? `，${eventCount}个事件` : ''}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={`${day.iso}${day.isToday ? '，今天' : ''}${eventCount > 0 ? `，${eventCount}个事件` : ''}`}
                 style={({ pressed }) => ({
                   flex: 1,
+                  minHeight: activeTheme.controlSizes.touchTarget + activeTheme.spacing[2],
                   alignItems: 'center',
                   paddingVertical: activeTheme.spacing[1],
-                  opacity: day.isCurrentMonth ? (pressed ? 0.7 : 1) : 0.35,
+                  opacity: pressed ? 0.7 : 1,
                   backgroundColor: isSelected
                     ? activeTheme.colors.coralSoft
                     : 'transparent',
@@ -124,19 +135,19 @@ export function CalendarMonth({
               >
                 <View
                   style={{
-                    width: DAY_CELL_SIZE,
-                    height: DAY_CELL_SIZE,
+                    minWidth: DAY_CELL_SIZE,
+                    minHeight: DAY_CELL_SIZE,
                     borderRadius: DAY_CELL_SIZE / 2,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: day.isToday
+                    backgroundColor: isSelected
                       ? activeTheme.colors.coral
                       : 'transparent',
                   }}
                 >
                   <Text
                     variant="bodySm"
-                    color={day.isToday ? 'surface' : day.isCurrentMonth ? 'ink' : 'inkMuted'}
+                    color={isSelected ? 'surface' : day.isToday ? 'coral' : day.isCurrentMonth ? 'ink' : 'inkMuted'}
                   >
                     {day.dayOfMonth}
                   </Text>
