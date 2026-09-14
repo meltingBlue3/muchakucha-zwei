@@ -56,14 +56,16 @@ describe('InvitationRow and ConfirmationPage', () => {
     // Resend button
     const resendButton = view.getByLabelText('重新发送邀请给 pending@example.test');
     expect(resendButton).toBeTruthy();
-    fireEvent.press(resendButton);
+    await fireEvent.press(resendButton);
     expect(onResend).toHaveBeenCalledWith('inv-1');
 
     // Revoke button
     const revokeButton = view.getByLabelText('撤销邀请 pending@example.test');
     expect(revokeButton).toBeTruthy();
-    fireEvent.press(revokeButton);
-    expect(onRevoke).toHaveBeenCalledWith('inv-1');
+    await fireEvent.press(revokeButton);
+    expect(onRevoke).toHaveBeenCalledWith('inv-1', expect.objectContaining({
+      props: expect.objectContaining({ accessibilityLabel: '撤销邀请 pending@example.test' }),
+    }));
   });
 
   // TODO: Add ConfirmationPage tests when RNTL 14 render isolation is

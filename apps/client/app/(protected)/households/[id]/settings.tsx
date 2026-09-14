@@ -57,12 +57,6 @@ export default function HouseholdSettingsRoute() {
     enterAccessChanged(lostHouseholdName);
   }, [enterAccessChanged]);
 
-  const handleRevokeNavigate = useCallback((householdId: string, invitationId: string) => {
-    void router.push(
-      `/households/${encodeURIComponent(householdId)}/invitations/${encodeURIComponent(invitationId)}/revoke`,
-    );
-  }, [router]);
-
   // ---- AccessChanged or member lost access ----
   if (viewState === 'accessChanged') {
     const hasOtherHouseholds = households.length > 0;
@@ -103,7 +97,7 @@ export default function HouseholdSettingsRoute() {
         onRenameAccessChanged={handleRenameAccessChanged}
         showRename
         onInviteAccessChanged={handleInviteAccessChanged}
-        onRevokeNavigate={handleRevokeNavigate}
+
         showInvite
         navTitle="家庭设置"
         navShowBack

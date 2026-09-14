@@ -2,6 +2,13 @@ import type { GetHouseholdResponseDto, InvitationListItemDto } from '@muchakucha
 import { ApiClientError } from '@muchakucha/api-client';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, View, useWindowDimensions } from 'react-native';
+import { AppDialog } from '../../ui/app-dialog';
+import House from 'lucide-react-native/icons/house';
+import Users from 'lucide-react-native/icons/users';
+import UserPlus from 'lucide-react-native/icons/user-plus';
+import Mail from 'lucide-react-native/icons/mail';
+import { SettingsSection } from '../../ui/settings-section';
 
 import type { HouseholdApi } from './household-api';
 import {
@@ -13,7 +20,6 @@ import {
 } from './member-governance';
 import {
   AppShell,
-  HouseholdContextNote,
   HouseholdHeader,
   InvitationRow,
   MemberRow,
@@ -21,7 +27,6 @@ import {
 import {
   Banner,
   Button,
-  Heading,
   Spinner,
   Stack,
   Text,
@@ -54,8 +59,6 @@ export interface HouseholdSettingsProps {
   showInvite?: boolean;
   /** Called when membership loss is detected after an invitation attempt. */
   onInviteAccessChanged?: (lostHouseholdName: string) => void;
-  /** Called to navigate to the revoke confirmation page. */
-  onRevokeNavigate?: (householdId: string, invitationId: string) => void;
   /** Optional nav header props passed through to the internal AppShell. */
   navTitle?: string;
   navShowBack?: boolean;
@@ -77,11 +80,19 @@ export function HouseholdSettings({
   onRenameAccessChanged,
   showInvite = false,
   onInviteAccessChanged,
-  onRevokeNavigate,
   navTitle,
   navShowBack = false,
   navShowProfile = false,
 }: HouseholdSettingsProps) {
+  const { width } = useWindowDimensions();
+  const [activeForm, setActiveForm] = useState<'rename' | 'invite' | null>(null);
+  const editTrigger = useRef<View>(null);
+  const inviteTrigger = useRef<View>(null);
+  const revokeTrigger = useRef<View>(null);
+  const [revokeId, setRevokeId] = useState<string | null>(null);
+  const [revokeBusy, setRevokeBusy] = useState(false);
+  const revokePending = useRef(false);
+  const [revokeError, setRevokeError] = useState<string>();
   const [viewState, setViewState] = useState<ViewState>({ kind: 'loading' });
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
@@ -345,6 +356,7 @@ export function HouseholdSettings({
       const resent = await deps.householdApi.resendInvitation(accessToken, householdId, invitationId);
 
       if (!mountedRef.current) return;
+      setActiveForm('invite');
       setInviteLink(resent.invitationUrl);
       setInviteSuccess(resent.message);
 
@@ -364,10 +376,31 @@ export function HouseholdSettings({
     setResendingId(undefined);
   };
 
-  // ---- Revoke handler (navigate to confirmation page) ----
-  const handleRevoke = (invitationId: string) => {
-    if (onRevokeNavigate !== undefined) {
-      onRevokeNavigate(householdId, invitationId);
+  const handleRevoke = (invitationId: string, trigger: View | null) => {
+    revokeTrigger.current = trigger;
+    setRevokeError(undefined);
+    setRevokeId(invitationId);
+  };
+
+  const confirmRevoke = async () => {
+    if (revokeId === null || revokePending.current) return;
+    const accessToken = deps.getAccessToken();
+    if (!accessToken) { setRevokeError(GENERIC_ERROR); return; }
+    revokePending.current = true;
+    setRevokeBusy(true);
+    setRevokeError(undefined);
+    try {
+      await deps.householdApi.revokeInvitation(accessToken, householdId, revokeId);
+      if (!mountedRef.current) return;
+      setInvitationList((list) => list.map((item) => item.id === revokeId ? { ...item, status: 'revoked' } : item));
+      // The revoked row loses its action; restore focus to the invitation entry.
+      revokeTrigger.current = inviteTrigger.current;
+      setRevokeId(null);
+    } catch {
+      if (mountedRef.current) setRevokeError('撤销失败，家庭邀请状态未改变。请重试。');
+    } finally {
+      revokePending.current = false;
+      if (mountedRef.current) setRevokeBusy(false);
     }
   };
 
@@ -430,10 +463,119 @@ export function HouseholdSettings({
           onOpenSwitcher={onOpenSwitcher}
         />
 
+        <View style={{ flexDirection: width >= theme.breakpoints.web ? 'row' : 'column', gap: theme.spacing[4], alignItems: 'flex-start' }}>
+        <Stack gap={4} style={{ flex: width >= theme.breakpoints.web ? 1 : undefined, width: '100%', minWidth: 0 }}>
         {/* Rename form — only shown on the settings route */}
         {showRename ? (
+          <SettingsSection title="基本信息" icon={<House size={theme.controlSizes.icon} color={theme.colors.coral} />}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
+              <Text variant="label">家庭名称</Text>
+              <Text style={{ flex: 1 }} numberOfLines={1}>{authoritativeName}</Text>
+              <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel="编辑家庭名称" onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
+                <Text variant="label" color="coral">编辑</Text>
+              </Pressable>
+            </View>
+          </SettingsSection>
+        ) : null}
+
+
+        </Stack>
+        <Stack gap={4} style={{ flex: width >= theme.breakpoints.web ? 1 : undefined, width: '100%', minWidth: 0 }}>
+        <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.teal} />} action={showInvite && (actorRole === 'OWNER' || actorRole === 'ADMIN') ? (
+          <Pressable ref={inviteTrigger} accessibilityRole="button" accessibilityLabel="邀请家人" onPress={() => setActiveForm('invite')} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', gap: theme.spacing[2], paddingHorizontal: theme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.tealSoft : theme.colors.surfaceSubtle })}>
+            <UserPlus size={theme.controlSizes.icon} color={theme.colors.teal} /><Text variant="label" color="teal">邀请</Text>
+          </Pressable>
+        ) : null}>
+        <Stack gap={0}>
+          {data.members.map((member) => {
+            const targetIsOwner = member.membershipId === data.ownerMembershipId;
+            const action = governanceAction(actorRole, actorIsOwner, member.role, targetIsOwner, member.isCurrentUser);
+            const removable = canRemoveMember(actorRole, member.role, targetIsOwner, member.isCurrentUser) && governance.remove !== undefined;
+            const transferable = canTransferOwnership(actorRole, actorIsOwner, member.isCurrentUser) && governance.transfer !== undefined;
+            const leaveable = actorIsOwner && !member.isCurrentUser
+              && canLeave(actorRole, actorIsOwner, data.members.length - 1) && governance.leave !== undefined;
+
+            const onRoleAction = action === 'promote'
+              ? () => governance.promote?.(member.membershipId, member.displayName)
+              : action === 'demote'
+                ? () => governance.demote?.(member.membershipId, member.displayName)
+                : () => undefined;
+
+            return (
+              <MemberRow
+                key={member.membershipId}
+                member={member}
+                {...(action === 'none' ? {} : { roleAction: action })}
+                onRoleAction={onRoleAction}
+                canRemoveMember={removable}
+                onRemove={() => governance.remove?.(member.membershipId, member.displayName, member.role)}
+                canTransferTo={transferable}
+                onTransfer={() => governance.transfer?.(member.membershipId, member.displayName)}
+                canLeaveTo={leaveable}
+                onLeaveTo={() => governance.leave?.(member.membershipId, member.displayName)}
+              />
+            );
+          })}
+        </Stack>
+        </SettingsSection>
+
+        {/* Invitation list — visible to owner/admin when showInvite is enabled */}
+        {(() => {
+          const currentMember = data.members.find((m) => m.isCurrentUser);
+          const canManage = currentMember !== undefined && (currentMember.role === 'OWNER' || currentMember.role === 'ADMIN');
+          if (!showInvite || !canManage) return null;
+
+          return (
+            <SettingsSection title="邀请" icon={<Mail size={theme.controlSizes.icon} color={theme.colors.coral} />}>
+
+              {invitationListError !== undefined ? (
+                <Banner title="邀请列表加载失败">{invitationListError}</Banner>
+              ) : null}
+
+              {invitationListLoading ? (
+                <Stack gap={4} style={{ paddingVertical: theme.spacing[4] }}>
+                  {[1, 2].map((i) => (
+                    <Spinner key={i} label={`加载邀请 ${i}`} />
+                  ))}
+                </Stack>
+              ) : invitationList.length === 0 ? (
+                <Text variant="bodySm">还没有待处理的邀请。</Text>
+              ) : (
+                <Stack>
+                  {invitationList.map((inv) => (
+                    <InvitationRow
+                      key={inv.id}
+                      invitation={inv}
+                      canManage={canManage}
+                      onResend={handleResend}
+                      onRevoke={handleRevoke}
+                      resendBusy={resendingId === inv.id}
+                    />
+                  ))}
+                </Stack>
+              )}
+            </SettingsSection>
+          );
+        })()}
+        </Stack>
+        </View>
+    </Stack>
+
+      {revokeId !== null ? (
+        <AppDialog title="撤销邀请？" busy={revokeBusy} onClose={() => setRevokeId(null)} trigger={revokeTrigger}>
           <Stack gap={4}>
-            <HouseholdContextNote householdName={authoritativeName} />
+            {revokeError ? <Banner title="撤销失败">{revokeError}</Banner> : null}
+            <Text>撤销后，原链接将不能使用。</Text>
+            <View style={{ flexDirection: 'row', gap: theme.spacing[3] }}>
+              <Button label="保留邀请" tone="secondary" disabled={revokeBusy} onPress={() => setRevokeId(null)} style={{ flex: 1 }} />
+              <Button label="撤销邀请" loading={revokeBusy} onPress={() => { void confirmRevoke(); }} style={{ flex: 1 }} />
+            </View>
+          </Stack>
+        </AppDialog>
+      ) : null}
+      {activeForm === 'rename' && showRename ? (
+        <AppDialog title="编辑家庭名称" busy={renameSubmitting} onClose={() => setActiveForm(null)} trigger={editTrigger}>
+          <Stack gap={4}>
 
             {renameError !== undefined ? (
               <Banner title="重命名失败">{renameError}</Banner>
@@ -470,17 +612,13 @@ export function HouseholdSettings({
                 onPress={() => { void handleRename(); }}
               />
             </Stack>
-          </Stack>
-        ) : null}
 
-        {/* Invitation form — only shown on the settings route for owner/admin */}
-        {(() => {
-          const currentMember = data.members.find((m) => m.isCurrentUser);
-          const canInvite = currentMember !== undefined && (currentMember.role === 'OWNER' || currentMember.role === 'ADMIN');
-          return showInvite && canInvite;
-        })() ? (
+          </Stack>
+        </AppDialog>
+      ) : null}
+      {activeForm === 'invite' && showInvite && (actorRole === 'OWNER' || actorRole === 'ADMIN') ? (
+        <AppDialog title="邀请家人" busy={inviteSubmitting || resendingId !== undefined} onClose={() => setActiveForm(null)} trigger={inviteTrigger}>
           <Stack gap={4}>
-            <HouseholdContextNote householdName={authoritativeName} />
 
             {inviteError !== undefined ? (
               <Banner title="邀请失败">{inviteError}</Banner>
@@ -526,88 +664,10 @@ export function HouseholdSettings({
                 onPress={() => { void handleInvite(); }}
               />
             </Stack>
+
           </Stack>
-        ) : null}
-
-        <Stack gap={2}>
-          <Heading>成员</Heading>
-          <Text variant="bodySm">
-            {data.members.length} 位成员
-          </Text>
-        </Stack>
-
-        <Stack>
-          {data.members.map((member) => {
-            const targetIsOwner = member.membershipId === data.ownerMembershipId;
-            const action = governanceAction(actorRole, actorIsOwner, member.role, targetIsOwner, member.isCurrentUser);
-            const removable = canRemoveMember(actorRole, member.role, targetIsOwner, member.isCurrentUser) && governance.remove !== undefined;
-            const transferable = canTransferOwnership(actorRole, actorIsOwner, member.isCurrentUser) && governance.transfer !== undefined;
-            const leaveable = actorIsOwner && !member.isCurrentUser
-              && canLeave(actorRole, actorIsOwner, data.members.length - 1) && governance.leave !== undefined;
-
-            const onRoleAction = action === 'promote'
-              ? () => governance.promote?.(member.membershipId, member.displayName)
-              : action === 'demote'
-                ? () => governance.demote?.(member.membershipId, member.displayName)
-                : () => undefined;
-
-            return (
-              <MemberRow
-                key={member.membershipId}
-                member={member}
-                {...(action === 'none' ? {} : { roleAction: action })}
-                onRoleAction={onRoleAction}
-                canRemoveMember={removable}
-                onRemove={() => governance.remove?.(member.membershipId, member.displayName, member.role)}
-                canTransferTo={transferable}
-                onTransfer={() => governance.transfer?.(member.membershipId, member.displayName)}
-                canLeaveTo={leaveable}
-                onLeaveTo={() => governance.leave?.(member.membershipId, member.displayName)}
-              />
-            );
-          })}
-        </Stack>
-
-        {/* Invitation list — visible to owner/admin when showInvite is enabled */}
-        {(() => {
-          const currentMember = data.members.find((m) => m.isCurrentUser);
-          const canManage = currentMember !== undefined && (currentMember.role === 'OWNER' || currentMember.role === 'ADMIN');
-          if (!showInvite || !canManage) return null;
-
-          return (
-            <Stack gap={2}>
-              <Heading>邀请</Heading>
-
-              {invitationListError !== undefined ? (
-                <Banner title="邀请列表加载失败">{invitationListError}</Banner>
-              ) : null}
-
-              {invitationListLoading ? (
-                <Stack gap={4} style={{ paddingVertical: theme.spacing[4] }}>
-                  {[1, 2].map((i) => (
-                    <Spinner key={i} label={`加载邀请 ${i}`} />
-                  ))}
-                </Stack>
-              ) : invitationList.length === 0 ? (
-                <Text variant="bodySm">还没有待处理的邀请。</Text>
-              ) : (
-                <Stack>
-                  {invitationList.map((inv) => (
-                    <InvitationRow
-                      key={inv.id}
-                      invitation={inv}
-                      canManage={canManage}
-                      onResend={handleResend}
-                      onRevoke={handleRevoke}
-                      resendBusy={resendingId === inv.id}
-                    />
-                  ))}
-                </Stack>
-              )}
-            </Stack>
-          );
-        })()}
-    </Stack>
+        </AppDialog>
+      ) : null}
     </AppShell>
   );
 }

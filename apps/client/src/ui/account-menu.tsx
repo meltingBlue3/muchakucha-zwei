@@ -1,21 +1,21 @@
-import { BlurView } from 'expo-blur';
+import { AppDialog } from './app-dialog';
 import { useRouter } from 'expo-router';
 import CircleUserRound from 'lucide-react-native/icons/circle-user-round';
 import LogOut from 'lucide-react-native/icons/log-out';
-import X from 'lucide-react-native/icons/x';
-import { useCallback, useRef, useState, type RefObject } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+
+import { useCallback, useRef, useState } from 'react';
+import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LogoutAction } from '../features/auth/logout-action';
 import { sessionApiClient, sessionStateStore, sessionTransport } from '../features/auth/session-runtime';
 import { ProfileForm } from '../features/profile/profile-form';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
-import { Heading, Inline, Text } from './primitives';
+import { Text } from './primitives';
 import { theme } from './theme';
 
 type AccountPanel = 'closed' | 'menu' | 'profile' | 'logout';
 
-export function AccountMenu({ blurTarget }: { blurTarget: RefObject<View | null> }) {
+export function AccountMenu() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -26,8 +26,8 @@ export function AccountMenu({ blurTarget }: { blurTarget: RefObject<View | null>
   const [busy, setBusy] = useState(false);
   const [anchorBottom, setAnchorBottom] = useState(insets.top + theme.controlSizes.touchTarget);
   const close = useCallback(() => { if (!busy) setMode('closed'); }, [busy]);
-  const focusInitial = useOverlayFocus({ mode, panel, initial, trigger, onClose: close });
-  const isMenu = mode === 'menu';
+  const focusInitial = useOverlayFocus({ mode: mode === 'menu' ? 'menu' : 'closed', panel, initial, trigger, onClose: close });
+
   const title = mode === 'profile' ? '个人资料' : '退出登录';
 
   const openMenu = () => {
@@ -49,18 +49,17 @@ export function AccountMenu({ blurTarget }: { blurTarget: RefObject<View | null>
       >
         <CircleUserRound color={mode !== 'closed' ? theme.colors.link : theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
       </Pressable>
-      {mode !== 'closed' ? (
+      {mode === 'menu' ? (
         <Modal transparent visible animationType="none" onShow={focusInitial} onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
           <View style={{ flex: 1 }}>
-            {!isMenu ? <BlurView testID="account-dialog-blur" pointerEvents="none" blurTarget={blurTarget} blurMethod="dimezisBlurView" intensity={theme.blur.dialog} tint="light" style={StyleSheet.absoluteFill} /> : null}
             <Pressable
               accessible={false}
               tabIndex={-1}
               testID="account-overlay-dismiss"
               onPress={close}
-              style={[StyleSheet.absoluteFill, { backgroundColor: isMenu ? theme.colors.transparent : theme.colors.dialogOverlay }]}
+              style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.transparent }]}
             />
-            {isMenu ? (
+
               <View
                 ref={panel}
                 accessibilityRole="menu"
@@ -85,34 +84,18 @@ export function AccountMenu({ blurTarget }: { blurTarget: RefObject<View | null>
                   </Pressable>
                 ))}
               </View>
-            ) : (
-              <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing[5], paddingTop: insets.top + theme.spacing[5], paddingBottom: insets.bottom + theme.spacing[5] }}>
-                <View
-                  ref={panel}
-                  role={Platform.OS === 'web' ? 'dialog' : undefined}
-                  aria-modal
-                  accessibilityViewIsModal
-                  accessibilityLabel={title}
-                  style={{ width: '100%', maxWidth: theme.layout.dialogMaxWidth, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, borderColor: theme.colors.separator, borderWidth: theme.borderWidths.default, padding: theme.spacing[6], gap: theme.spacing[4] }}
-                >
-                  <Inline style={{ justifyContent: 'space-between' }}>
-                    <Heading style={{ flex: 1 }}>{title}</Heading>
-                    <Pressable ref={initial} accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed }) => ({ alignItems: 'center', justifyContent: 'center', minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.full, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surfaceSubtle })}>
-                      <X color={theme.colors.inkMuted} size={theme.controlSizes.icon} />
-                    </Pressable>
-                  </Inline>
-                  <ScrollView keyboardShouldPersistTaps="handled" style={{ flexShrink: 1 }}>
-                    {mode === 'profile' ? (
-                      <ProfileForm showHeading={false} onBusyChange={setBusy} apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} />
-                    ) : (
-                      <LogoutAction confirmationOnly onCancel={close} onBusyChange={setBusy} apiClient={sessionApiClient} onLoggedOut={() => router.replace('/login')} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} />
-                    )}
-                  </ScrollView>
-                </View>
-              </KeyboardAvoidingView>
-            )}
+
           </View>
         </Modal>
+      ) : null}
+      {mode === 'profile' || mode === 'logout' ? (
+        <AppDialog title={title} busy={busy} onClose={close} trigger={trigger}>
+          {mode === 'profile' ? (
+            <ProfileForm showHeading={false} onBusyChange={setBusy} apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} />
+          ) : (
+            <LogoutAction confirmationOnly onCancel={close} onBusyChange={setBusy} apiClient={sessionApiClient} onLoggedOut={() => router.replace('/login')} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} />
+          )}
+        </AppDialog>
       ) : null}
     </>
   );

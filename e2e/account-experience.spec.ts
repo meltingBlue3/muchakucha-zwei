@@ -109,7 +109,7 @@ for (const width of [320, 390, 1440]) {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toBeFocused();
     await expect(dialog.getByLabel('昵称', { exact: true })).toHaveValue('小林');
-    await expect(page.getByTestId('account-dialog-blur')).toHaveCSS('backdrop-filter', /blur/);
+    await expect(page.getByTestId('app-dialog-blur')).toHaveCSS('backdrop-filter', /blur/);
     await page.keyboard.press('Shift+Tab');
     await expect(dialog.getByLabel('昵称', { exact: true })).toBeFocused();
     await page.keyboard.press('Tab');
@@ -126,7 +126,7 @@ for (const width of [320, 390, 1440]) {
     await trigger.click();
     await page.getByRole('menuitem', { name: '个人资料' }).click();
     await expect(dialog).toBeVisible();
-    await page.getByTestId('account-overlay-dismiss').click({ position: { x: 4, y: 4 } });
+    await page.getByTestId('app-dialog-dismiss').click({ position: { x: 4, y: 4 } });
     await expect(dialog).toHaveCount(0);
     await expect(trigger).toBeFocused();
   });

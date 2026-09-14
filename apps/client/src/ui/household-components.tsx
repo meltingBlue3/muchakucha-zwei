@@ -1,5 +1,6 @@
 import { BlurTargetView } from 'expo-blur';
 import { AccountMenu } from './account-menu';
+import { DialogBackground } from './dialog-background';
 import type { GetHouseholdMemberDto, ListMyHouseholdsItemDto } from '@muchakucha/api-client';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import Building2 from 'lucide-react-native/icons/building-2';
@@ -85,6 +86,7 @@ export const AppShell = ({
   const hasNav = title !== undefined || showBack || showProfile;
 
   return (
+    <DialogBackground.Provider value={blurTarget}>
     <BlurTargetView ref={blurTarget} style={{ flex: 1 }}>
     <SafeAreaView
       accessibilityLabel={accessibilityLabel}
@@ -141,7 +143,7 @@ export const AppShell = ({
 
           {/* Right: profile */}
           <View style={{ width: 44, alignItems: 'flex-end' }}>
-            {showProfile ? <AccountMenu blurTarget={blurTarget} /> : null}
+            {showProfile ? <AccountMenu /> : null}
           </View>
         </View>
       ) : null}
@@ -178,6 +180,7 @@ export const AppShell = ({
       {!wideNavigation ? footer : null}
     </SafeAreaView>
     </BlurTargetView>
+    </DialogBackground.Provider>
   );
 };
 
@@ -593,7 +596,7 @@ export const MemberRow = ({
           alignItems: 'center',
           flexDirection: 'row',
           gap: theme.spacing[3],
-          minHeight: 72,
+          minHeight: theme.controlSizes.touchTarget + theme.spacing[4],
         }}
       >
         {/* Avatar placeholder */}
@@ -617,10 +620,11 @@ export const MemberRow = ({
         </View>
 
         {/* Name, email, role */}
-        <Stack gap={1} style={{ flex: 1 }}>
+        <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>
           <Inline gap={2} style={{ alignItems: 'center' }}>
             <Text
               numberOfLines={1}
+              style={{ flexShrink: 1 }}
               variant="body"
             >
               {member.displayName}
@@ -646,7 +650,7 @@ export const MemberRow = ({
       </View>
 
       {hasActions ? (
-        <Inline gap={1} style={{ paddingLeft: theme.controlSizes.touchTarget + theme.spacing[3] }}>
+        <Inline gap={1} style={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {roleAction !== undefined ? (
             <Pressable
               accessibilityLabel={`${roleAction === 'promote' ? '提升' : '降级'} ${member.displayName}`}
@@ -747,7 +751,7 @@ export interface InvitationRowProps {
   /** Whether the current user can manage invitations (owner/admin). */
   canManage: boolean;
   onResend?: (invitationId: string) => void;
-  onRevoke?: (invitationId: string) => void;
+  onRevoke?: (invitationId: string, trigger: View | null) => void;
   resendBusy?: boolean;
   revokeBusy?: boolean;
 }
@@ -760,6 +764,7 @@ export const InvitationRow = ({
   resendBusy = false,
   revokeBusy = false,
 }: InvitationRowProps) => {
+  const revokeTrigger = useRef<View>(null);
   const recipient = invitation.username ?? invitation.emailCanonical;
   const statusLabel = INVITATION_STATUS_LABELS[invitation.status] ?? invitation.status;
   const isPending = invitation.status === 'pending';
@@ -784,6 +789,7 @@ export const InvitationRow = ({
         borderBottomColor: theme.colors.separator,
         borderBottomWidth: theme.borderWidths.default,
         flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: theme.spacing[3],
         minHeight: 72,
         paddingVertical: theme.spacing[2],
@@ -792,6 +798,7 @@ export const InvitationRow = ({
       {/* Email icon placeholder */}
       <View
         accessibilityLabel={`${recipient}的邀请`}
+        accessibilityRole="image"
         style={{
           alignItems: 'center',
           backgroundColor: theme.colors.surfaceMuted,
@@ -805,14 +812,14 @@ export const InvitationRow = ({
       </View>
 
       {/* Email, status, expiry */}
-      <Stack gap={1} style={{ flex: 1 }}>
+      <Stack gap={1} style={{ flex: 1, minWidth: 0, flexBasis: theme.controlSizes.primary * 2 }}>
         <Text
           numberOfLines={1}
           variant="body"
         >
           {recipient}
         </Text>
-        <Inline gap={2}>
+        <Inline gap={2} style={{ flexWrap: 'wrap' }}>
           <View
             accessibilityLabel={`状态：${statusLabel}`}
             style={{
@@ -836,7 +843,7 @@ export const InvitationRow = ({
 
       {/* Actions */}
       {canResend || canRevoke ? (
-        <Inline gap={1}>
+        <Inline gap={1} style={{ marginLeft: 'auto' }}>
           {canResend ? (
             <Pressable
               accessibilityLabel={`重新发送邀请给 ${recipient}`}
@@ -863,9 +870,10 @@ export const InvitationRow = ({
           {canRevoke ? (
             <Pressable
               accessibilityLabel={`撤销邀请 ${recipient}`}
+              ref={revokeTrigger}
               accessibilityRole="button"
               disabled={resendBusy || revokeBusy}
-              onPress={() => onRevoke?.(invitation.id)}
+              onPress={() => onRevoke?.(invitation.id, revokeTrigger.current)}
               style={({ pressed }) => ({
                 alignItems: 'center',
                 backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',

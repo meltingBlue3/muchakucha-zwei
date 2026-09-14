@@ -51,6 +51,7 @@ describe('username invitation settings', () => {
   test('accepts expanded username lookup and shows selectable links after send and resend', async () => {
     const api = createApi();
     const view = await renderSettings(api);
+    await fireEvent.press(await view.findByRole('button', { name: '邀请家人' }));
     const canonicalUsername = 'İ'.repeat(32).toLowerCase();
     await fireEvent.changeText(await view.findByLabelText('用户名'), ` ${canonicalUsername} `);
     await fireEvent.press(view.getByRole('button', { name: '发送邀请' }));
@@ -58,6 +59,7 @@ describe('username invitation settings', () => {
     expect(await view.findByText('https://family.test/invite/first')).toBeTruthy();
     expect(view.getByLabelText('邀请链接').props.selectable).toBe(true);
 
+    await fireEvent.press(view.getByLabelText('关闭邀请家人'));
     await fireEvent.press(view.getByLabelText('重新发送邀请给 family-member'));
     expect(await view.findByText('https://family.test/invite/replacement')).toBeTruthy();
     expect(view.queryByText('https://family.test/invite/first')).toBeNull();
@@ -67,6 +69,7 @@ describe('username invitation settings', () => {
     const api = createApi();
     jest.mocked(api.sendHouseholdInvitation).mockRejectedValue(new ApiClientError(400, { error: { code: 'INVITATION_USER_NOT_FOUND' } }));
     const view = await renderSettings(api);
+    await fireEvent.press(await view.findByRole('button', { name: '邀请家人' }));
     await fireEvent.changeText(await view.findByLabelText('用户名'), 'missing-family-member');
     await fireEvent.press(view.getByRole('button', { name: '发送邀请' }));
     expect(await view.findByText('未找到这个用户名，请让家人先注册账户。')).toBeTruthy();
