@@ -1,3 +1,6 @@
+import { PageIntro } from '../../../../../src/ui/page-intro';
+import { useWorkspaceState } from '../../../../../src/ui/workspace-state';
+import { HouseholdNavigation } from '../../../../../src/ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -43,21 +46,21 @@ export default function CalendarRoute() {
   } = useHouseholdContext();
 
   const today = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth());
-  const [selectedDateIso, setSelectedDateIso] = useState<string | null>(toDateIso(today));
+  const [year, setYear] = useWorkspaceState(`view:${id}:events:year`, today.getFullYear());
+  const [month, setMonth] = useWorkspaceState(`view:${id}:events:month`, today.getMonth());
+  const [selectedDateIso, setSelectedDateIso] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, toDateIso(today));
   const [events, setEvents] = useState<EventResponseDto[]>([]);
   const [eventsByDate, setEventsByDate] = useState<Map<string, number>>(new Map());
   const [materializedThrough, setMaterializedThrough] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [labelFilter, setLabelFilter] = useState<string>('all');
-  const [recurringFilter, setRecurringFilter] = useState<RecurringFilterKey>('all');
+  const [labelFilter, setLabelFilter] = useWorkspaceState<string>(`view:${id}:events:labelFilter`, 'all');
+  const [recurringFilter, setRecurringFilter] = useWorkspaceState<RecurringFilterKey>(`view:${id}:events:recurringFilter`, 'all');
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   const handleSwitch = useCallback(async (householdId: string) => {
-    if (householdId === currentHouseholdId) {
+    if (householdId === (id ?? currentHouseholdId)) {
       setSwitcherOpen(false);
       return;
     }
@@ -66,10 +69,10 @@ export default function CalendarRoute() {
       void router.replace(`/households/${encodeURIComponent(householdId)}/events`);
     }
     setSwitcherOpen(false);
-  }, [currentHouseholdId, switchHousehold, router]);
+  }, [id, currentHouseholdId, switchHousehold, router]);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
+  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
 
   // Fetch events for visible month
   const fetchEvents = useCallback(async () => {
@@ -233,7 +236,7 @@ export default function CalendarRoute() {
 
   return (
   <>
-    <AppShell accessibilityLabel="家庭日历" refreshing={refreshing} onRefresh={handleRefresh} title="家庭日历" showProfile>
+    <AppShell accessibilityLabel="家庭日历" refreshing={refreshing} onRefresh={handleRefresh} title="家庭日历" showProfile footer={<HouseholdNavigation householdId={householdId} active="events" />}>
       <Stack gap={4}>
         {/* Header with household name and create button */}
         <View
@@ -253,6 +256,8 @@ export default function CalendarRoute() {
             hitSlop={activeTheme.spacing[2]}
             style={({ pressed }) => ({
               backgroundColor: activeTheme.colors.coral,
+              minHeight: activeTheme.controlSizes.touchTarget,
+              justifyContent: 'center',
               paddingHorizontal: activeTheme.spacing[4],
               paddingVertical: activeTheme.spacing[2],
               borderRadius: activeTheme.borderRadii.full,
@@ -264,6 +269,8 @@ export default function CalendarRoute() {
             </Text>
           </Pressable>
         </View>
+
+        <PageIntro title="日历" subtitle="每一次约定，都为家人留好时间。" />
 
         {/* Calendar */}
         <CalendarMonth
@@ -439,7 +446,7 @@ export default function CalendarRoute() {
     </AppShell>
 
     <HouseholdSwitcher
-      currentHouseholdId={currentHouseholdId}
+      currentHouseholdId={id ?? currentHouseholdId}
       households={households}
       onCreateNew={() => {
         void router.push('/households/new');

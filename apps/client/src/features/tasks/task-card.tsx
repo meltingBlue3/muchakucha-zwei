@@ -24,7 +24,7 @@ interface TaskCardProps {
 export function TaskCard({ task, assigneeNames, onPress, onStatusChange, statusChanging = false }: TaskCardProps) {
   const activeTheme = useTheme<Theme>();
   const cancelled = task.status === 'cancelled';
-  const overdue = !cancelled && isOverdue(task.dueDate ?? null);
+  const overdue = !cancelled && task.status !== 'completed' && isOverdue(task.dueDate ?? null);
   const canToggle = onStatusChange !== undefined;
 
   const statusColors: Record<string, string> = {
@@ -46,10 +46,10 @@ export function TaskCard({ task, assigneeNames, onPress, onStatusChange, statusC
       accessibilityLabel={`任务：${task.title}${task.recurrenceRuleId == null ? '' : '，重复'}`}
       style={({ pressed }) => ({
         backgroundColor: activeTheme.colors.surface,
-        borderRadius: activeTheme.borderRadii.md,
-        padding: activeTheme.spacing[4],
+        borderRadius: activeTheme.borderRadii.xl,
+        padding: activeTheme.spacing[5],
         borderWidth: 1,
-        borderColor: activeTheme.colors.border,
+        borderColor: activeTheme.colors.separator,
         opacity: task.status === 'completed' || cancelled ? 0.6 : pressed ? 0.8 : 1,
       })}
     >

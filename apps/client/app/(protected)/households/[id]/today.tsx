@@ -1,3 +1,5 @@
+import { PageIntro, TodaySummary } from '../../../../src/ui/page-intro';
+import { HouseholdNavigation } from '../../../../src/ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -21,7 +23,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../src/ui/household-components';
-import { Stack, Text } from '../../../../src/ui/primitives';
+import { Button, LinkText, Stack, Text } from '../../../../src/ui/primitives';
 import type { Theme } from '../../../../src/ui/theme';
 
 function todayIso(): string {
@@ -80,12 +82,14 @@ export default function TodayRoute() {
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [showUpcoming, setShowUpcoming] = useState(false);
   const [statusChangingTaskId, setStatusChangingTaskId] = useState<string | null>(null);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
+  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
 
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -166,10 +170,11 @@ export default function TodayRoute() {
     if (householdId === undefined || householdId === '') return;
     const nextStatus = nextTaskStatus(task.status);
     if (nextStatus === null) return;
+    setActionError(null);
     setStatusChangingTaskId(task.id);
     try {
       const token = await sessionTransport.getAccessToken();
-      if (token === null) return;
+      if (token === null) { setActionError('登录已过期，请重新登录。'); return; }
       await sessionApiClient.updateTask(token, householdId, task.id, {
         title: task.title,
         status: nextStatus,
@@ -185,7 +190,7 @@ export default function TodayRoute() {
       // legitimately be cancelled or split away by another household
       // member seconds earlier. Surface it and refetch so the card
       // reflects authoritative state either way.
-      setError(
+      setActionError(
         caught instanceof ApiClientError && caught.status === 403
           ? '你没有权限修改这个任务。'
           : '状态没有更新成功，请重试。',
@@ -203,7 +208,7 @@ export default function TodayRoute() {
   }, []);
 
   const handleSwitch = useCallback(async (householdId: string) => {
-    if (householdId === currentHouseholdId) {
+    if (householdId === (id ?? currentHouseholdId)) {
       setSwitcherOpen(false);
       return;
     }
@@ -212,7 +217,7 @@ export default function TodayRoute() {
       void router.replace(`/households/${encodeURIComponent(householdId)}/today`);
     }
     setSwitcherOpen(false);
-  }, [currentHouseholdId, switchHousehold, router]);
+  }, [id, currentHouseholdId, switchHousehold, router]);
 
   // AccessChanged state
   if (viewState === 'accessChanged') {
@@ -240,7 +245,7 @@ export default function TodayRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="今日视图" refreshing={refreshing} onRefresh={handleRefresh} title="今日视图" showProfile>
+      <AppShell accessibilityLabel="今日视图" refreshing={refreshing} onRefresh={handleRefresh} title="今日视图" showProfile footer={<HouseholdNavigation householdId={householdId} active="today" />}>
       <Stack gap={4}>
         {/* Header */}
         <HouseholdHeader
@@ -249,7 +254,16 @@ export default function TodayRoute() {
         />
 
         {/* Date label */}
-        <Text variant="label">{dateLabel}</Text>
+        <PageIntro eyebrow={dateLabel} title="今天" subtitle="一家人的日程和待办，在这里一起照顾。" />
+
+        <View style={{ gap: activeTheme.spacing[4] }}>
+          {!loading && error === null ? <TodaySummary events={events.length} tasks={todayTasks.length} overdue={overdueTasks.length} /> : null}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+            <Button label="新建任务" onPress={() => router.push(`/households/${encodeURIComponent(householdId)}/tasks/new`)} />
+            <LinkText onPress={() => router.push(`/households/${encodeURIComponent(householdId)}/events/new`)}>添加日程</LinkText>
+            <LinkText onPress={() => router.push(`/households/${encodeURIComponent(householdId)}/notes/new`)}>记笔记</LinkText>
+          </View>
+        </View>
 
         {/* Loading */}
         {loading && (
@@ -259,6 +273,7 @@ export default function TodayRoute() {
         )}
 
         {/* Error */}
+        {actionError !== null ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" color="destructive">{actionError}</Text> : null}
         {error !== null && (
           <View style={{
             backgroundColor: activeTheme.colors.destructiveSoft,
@@ -363,7 +378,18 @@ export default function TodayRoute() {
               </View>
             )}
 
-            {/* Approaching deadlines — always shown so the user knows this section exists */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showUpcoming }}
+              onPress={() => setShowUpcoming((value) => !value)}
+              style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}
+            >
+              <Text variant="label" color="link">
+                {showUpcoming ? '收起后续安排' : `查看后续安排（${approachingTasks.length + otherUpcomingTasks.length}）`}
+              </Text>
+            </Pressable>
+            {showUpcoming ? <>
+            {/* Upcoming work is secondary to today's actions. */}
             <View>
               <View style={{
                 flexDirection: 'row',
@@ -417,14 +443,16 @@ export default function TodayRoute() {
               </View>
             )}
 
+            </> : null}
+
             {/* Empty state */}
-            {events.length === 0 && overdueTasks.length === 0 && todayTasks.length === 0 && otherUpcomingTasks.length === 0 && (
+            {events.length === 0 && overdueTasks.length === 0 && todayTasks.length === 0 && (
               <View style={{
                 alignItems: 'center',
                 paddingVertical: activeTheme.spacing[8],
               }}>
                 <Text variant="bodySm" color="inkMuted">
-                  今天没有待办事项 🎉
+                  今天没有待处理安排，留点时间给家人。
                 </Text>
               </View>
             )}
@@ -434,7 +462,7 @@ export default function TodayRoute() {
     </AppShell>
 
     <HouseholdSwitcher
-      currentHouseholdId={currentHouseholdId}
+      currentHouseholdId={id ?? currentHouseholdId}
       households={households}
       onCreateNew={() => {
         void router.push('/households/new');

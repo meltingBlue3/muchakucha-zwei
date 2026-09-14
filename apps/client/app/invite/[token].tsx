@@ -7,7 +7,7 @@ import { InvitationFlow } from '../../src/features/households/invitation-flow';
 import { sessionStateStore, sessionTransport } from '../../src/features/auth/session-runtime';
 import { createNativePendingInvitationStore } from '../../src/platform/invitation/pending-invitation.native';
 import { createWebPendingInvitationStore } from '../../src/platform/invitation/pending-invitation.web';
-import { AuthShell, Banner, Button, Heading, Stack, Text, TextField } from '../../src/ui/primitives';
+import { AuthShell, Banner, Button, Heading, LinkText, Stack, Text, TextField } from '../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 const apiClient = new ApiClient(API_ORIGIN);
@@ -194,6 +194,10 @@ export default function InviteRoute() {
               onChangeText={setManualToken}
               placeholder="粘贴邀请链接或邀请码"
               autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="go"
+              onSubmitEditing={handleSubmitManualToken}
             />
             <Button
               disabled={manualToken.trim() === ''}
@@ -201,6 +205,7 @@ export default function InviteRoute() {
               onPress={handleSubmitManualToken}
             />
           </Stack>
+          <LinkText onPress={() => router.replace(isAuthenticated ? '/household-handoff' : '/login')}>{isAuthenticated ? '返回设置家庭' : '返回登录'}</LinkText>
           <Text variant="caption" color="inkMuted">
             还没有邀请？请联系家庭管理员，让对方在家庭设置中发送邀请链接。
           </Text>
@@ -211,6 +216,7 @@ export default function InviteRoute() {
 
   return (
     <AuthShell>
+      <LinkText onPress={() => router.replace(isAuthenticated ? '/household-handoff' : '/login')}>{isAuthenticated ? '返回我的家庭' : '返回登录'}</LinkText>
       {switchError ? <Banner>暂时无法切换账户。请检查网络后重试。</Banner> : null}
       <InvitationFlow
         {...(accessToken === undefined ? {} : { accessToken })}
@@ -220,6 +226,12 @@ export default function InviteRoute() {
         onLogin={handleLogin}
         onRegister={handleRegister}
         onSwitchAccount={handleSwitchAccount}
+        onReset={() => {
+          void pendingInvitationStore.clear().then(() => {
+            setManualToken('');
+            setPersistedToken(undefined);
+          });
+        }}
         token={persistedToken}
       />
     </AuthShell>

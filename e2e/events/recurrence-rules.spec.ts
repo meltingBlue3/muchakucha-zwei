@@ -213,7 +213,7 @@ async function loginFixture(page: Page, email: string): Promise<void> {
 
 async function openTaskList(page: Page, householdId: string): Promise<void> {
   await page.goto(`/households/${householdId}`);
-  await page.getByLabel('打开家庭任务').click();
+  await page.getByRole('tab', { name: '任务', exact: true }).click();
   await expect(page.getByRole('main', { name: '家庭任务' })).toBeVisible();
 }
 
@@ -231,6 +231,7 @@ function ruleDetailScreen(page: Page) {
 
 async function openRuleList(page: Page, householdId: string): Promise<void> {
   await page.goto(`/households/${householdId}`);
+  await page.getByRole('tab', { name: '家庭', exact: true }).click();
   await page.getByLabel('管理周期规则').click();
   await expect(ruleListScreen(page)).toBeVisible();
 }

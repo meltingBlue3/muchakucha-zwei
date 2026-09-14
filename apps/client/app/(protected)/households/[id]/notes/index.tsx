@@ -1,3 +1,5 @@
+import { PageIntro } from '../../../../../src/ui/page-intro';
+import { HouseholdNavigation } from '../../../../../src/ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -36,7 +38,7 @@ export default function NotesListRoute() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
+  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === '') return;
@@ -73,7 +75,7 @@ export default function NotesListRoute() {
   }, [fetchData]);
 
   const handleSwitch = useCallback(async (householdId: string) => {
-    if (householdId === currentHouseholdId) {
+    if (householdId === (id ?? currentHouseholdId)) {
       setSwitcherOpen(false);
       return;
     }
@@ -82,7 +84,7 @@ export default function NotesListRoute() {
       void router.replace(`/households/${encodeURIComponent(householdId)}/notes`);
     }
     setSwitcherOpen(false);
-  }, [currentHouseholdId, switchHousehold, router]);
+  }, [id, currentHouseholdId, switchHousehold, router]);
 
   const handleNotePress = useCallback(
     (note: NoteResponseDto) => {
@@ -122,8 +124,9 @@ export default function NotesListRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="家庭笔记" refreshing={refreshing} onRefresh={handleRefresh} title="家庭笔记" showProfile>
+      <AppShell accessibilityLabel="家庭笔记" refreshing={refreshing} onRefresh={handleRefresh} title="家庭笔记" showProfile footer={<HouseholdNavigation householdId={householdId} active="notes" />}>
         <Stack gap={4}>
+          <PageIntro title="笔记" subtitle="随手记下，把一家人的记忆留在这里。" />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <HouseholdHeader
               householdName={currentHousehold?.name ?? ''}
@@ -135,6 +138,8 @@ export default function NotesListRoute() {
               hitSlop={activeTheme.spacing[2]}
               style={({ pressed }) => ({
                 backgroundColor: activeTheme.colors.coral,
+              minHeight: activeTheme.controlSizes.touchTarget,
+              justifyContent: 'center',
                 paddingHorizontal: activeTheme.spacing[4],
                 paddingVertical: activeTheme.spacing[2],
                 borderRadius: activeTheme.borderRadii.full,
@@ -186,7 +191,7 @@ export default function NotesListRoute() {
       </AppShell>
 
       <HouseholdSwitcher
-        currentHouseholdId={currentHouseholdId}
+        currentHouseholdId={id ?? currentHouseholdId}
         households={households}
         onCreateNew={() => {
           void router.push('/households/new');

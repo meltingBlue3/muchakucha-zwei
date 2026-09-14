@@ -1,3 +1,4 @@
+import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
@@ -16,6 +17,7 @@ const EMPTY_NOTE: NoteInput = {
 };
 
 interface NoteFormProps {
+  draftKey?: string;
   initial?: NoteResponseDto;
   onSubmit: (data: CreateNoteDto) => Promise<void>;
   onCancel: () => void;
@@ -23,9 +25,9 @@ interface NoteFormProps {
   isSubmitting: boolean;
 }
 
-export function NoteForm({ initial, onSubmit, onCancel, submitLabel, isSubmitting }: NoteFormProps) {
+export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, isSubmitting }: NoteFormProps) {
   const activeTheme = useTheme<Theme>();
-  const [form, setForm] = useState<NoteInput>(() => {
+  const [form, setForm] = useWorkspaceState<NoteInput>(draftKey, () => {
     if (initial) {
       return {
         title: initial.title,
@@ -39,7 +41,7 @@ export function NoteForm({ initial, onSubmit, onCancel, submitLabel, isSubmittin
   const updateField = useCallback(<K extends keyof NoteInput>(key: K, value: NoteInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
-  }, []);
+  }, [setForm]);
 
   const handleSubmit = useCallback(async () => {
     if (form.title.trim().length === 0) {
@@ -69,6 +71,7 @@ export function NoteForm({ initial, onSubmit, onCancel, submitLabel, isSubmittin
 
   return (
     <Stack gap={4}>
+      {draftKey ? <Text variant="caption">未保存内容会在本次登录期间暂存。保存成功后清除。</Text> : null}
       {/* Title */}
       <Stack gap={1}>
         <Text variant="label">标题</Text>

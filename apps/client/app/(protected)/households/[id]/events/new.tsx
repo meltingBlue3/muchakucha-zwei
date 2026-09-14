@@ -1,53 +1,39 @@
+import { useCreateWithLabels } from '../../../../../src/features/households/use-create-with-labels';
+import { useWorkspaceStore, useWorkspaceState } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { EventForm } from '../../../../../src/features/events/event-form';
 import { AppShell } from '../../../../../src/ui/household-components';
-import { Screen, Stack, Text } from '../../../../../src/ui/primitives';
+import { Button, Stack, Text } from '../../../../../src/ui/primitives';
 import type { CreateEventDto } from '@muchakucha/api-client';
 
 export default function CreateEventRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const workspace = useWorkspaceStore();
+  const draftPrefix = `draft:${id}:events:new:`;
   const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [selectedLabelIds, setSelectedLabelIds] = useWorkspaceState<string[]>(draftPrefix + 'labels', []);
 
-  const handleSubmit = useCallback(
-    async (data: CreateEventDto) => {
-      setIsSubmitting(true);
-      setError(null);
-      try {
-        const token = await sessionTransport.getAccessToken();
-        if (token === null) {
-          setError('登录已过期，请重新登录。');
-          return;
-        }
-        const event = await sessionApiClient.createEvent(token, id!, data);
-        // Tag the new event with selected labels
-        if (selectedLabelIds.length > 0) {
-          await sessionApiClient.tagEvent(token, id!, event.id, { labelIds: selectedLabelIds });
-        }
-        router.back();
-      } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : '创建事件失败，请重试。';
-        setError(message);
-      } finally {
-        setIsSubmitting(false);
-      }
+  const { submit, retry, created, pending: isSubmitting, error: error } = useCreateWithLabels<CreateEventDto>({
+    key: draftPrefix + 'created',
+    create: async (data) => {
+      const token = sessionTransport.getAccessToken();
+      if (token === null) throw new Error('Session expired');
+      return sessionApiClient.createEvent(token, id!, data);
     },
-    [id, router, selectedLabelIds],
-  );
-
-  const handleCancel = useCallback(() => {
-    router.back();
-  }, [router]);
+    tag: async (resourceId, labelIds) => {
+      const token = sessionTransport.getAccessToken();
+      if (token === null) throw new Error('Session expired');
+      return sessionApiClient.tagEvent(token, id!, resourceId, { labelIds });
+    },
+    onComplete: () => { workspace.clear(draftPrefix); router.back(); },
+  });
+  const handleSubmit = (data: CreateEventDto) => submit(data, selectedLabelIds);
 
   return (
     <AppShell accessibilityLabel="创建事件" title="创建事件" showBack showProfile>
-      <Screen>
+
         <Stack gap={4}>
           <Text variant="heading">创建事件</Text>
           {error !== null && (
@@ -55,17 +41,18 @@ export default function CreateEventRoute() {
               {error}
             </Text>
           )}
-          <EventForm
+          {created !== null ? <Stack gap={4}><Text>日程已创建</Text><Button label="重试保存标签" loading={isSubmitting} onPress={() => void retry()} /></Stack> : <EventForm
+            draftKey={draftPrefix + 'form'}
             onSubmit={handleSubmit}
-            onCancel={handleCancel}
+            onCancel={() => router.back()}
             submitLabel="创建"
             isSubmitting={isSubmitting}
             householdId={id}
             selectedLabelIds={selectedLabelIds}
             onLabelChange={setSelectedLabelIds}
-          />
+          />}
         </Stack>
-      </Screen>
+
     </AppShell>
   );
 }

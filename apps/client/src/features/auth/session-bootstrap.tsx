@@ -10,7 +10,7 @@ export type SafeIntendedRoute = (typeof SAFE_INTENDED_ROUTES)[number] | `/invite
 export type SessionDestination = SafeIntendedRoute | '/login' | '/offline';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const HOUSEHOLD_PAGES = new Set(['settings', 'today', 'tasks', 'events', 'notes', 'labels', 'recurrence-rules']);
+const HOUSEHOLD_PAGES = new Set(['more', 'settings', 'today', 'tasks', 'events', 'notes', 'labels', 'recurrence-rules']);
 const EDITABLE_RESOURCES = new Set(['tasks', 'events', 'notes']);
 
 const isUuid = (value: string | undefined): boolean => value !== undefined && UUID_PATTERN.test(value);

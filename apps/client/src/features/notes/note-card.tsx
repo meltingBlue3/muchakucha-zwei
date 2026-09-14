@@ -25,10 +25,10 @@ export function NoteCard({ note, onPress }: NoteCardProps) {
       accessibilityLabel={`笔记：${note.title}`}
       style={({ pressed }) => ({
         backgroundColor: activeTheme.colors.surface,
-        borderRadius: activeTheme.borderRadii.md,
-        padding: activeTheme.spacing[4],
+        borderRadius: activeTheme.borderRadii.xl,
+        padding: activeTheme.spacing[5],
         borderWidth: 1,
-        borderColor: activeTheme.colors.border,
+        borderColor: activeTheme.colors.separator,
         opacity: pressed ? 0.8 : 1,
       })}
     >
@@ -37,7 +37,7 @@ export function NoteCard({ note, onPress }: NoteCardProps) {
           <FileText size={20} color={activeTheme.colors.teal} strokeWidth={1.5} />
         </View>
         <Stack gap={1} style={{ flex: 1 }}>
-          <Text variant="label" numberOfLines={1}>
+          <Text variant="body" style={{ fontWeight: '600' }} numberOfLines={2}>
             {note.title}
           </Text>
           <Text variant="caption" color="inkMuted">

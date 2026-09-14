@@ -1,3 +1,4 @@
+import { HouseholdSetup } from '../../../src/ui/account-components';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -10,7 +11,7 @@ import {
   HouseholdSwitcher,
   SwitchErrorBanner,
 } from '../../../src/ui/household-components';
-import { Banner, Button, Heading, Spinner, Stack, Text } from '../../../src/ui/primitives';
+import { Banner, Button, Spinner, Stack, Text } from '../../../src/ui/primitives';
 import { theme } from '../../../src/ui/theme';
 
 export default function HouseholdsIndexRoute() {
@@ -96,18 +97,11 @@ export default function HouseholdsIndexRoute() {
   }
 
   // ---- Offline retained or ready with no households ----
-  if (viewState === 'noHousehold' || (viewState === 'offlineRetained' && households.length === 0)) {
+  if (viewState === 'noHousehold') {
     return (
-      <AppShell accessibilityLabel="还没有家庭">
-        <Stack gap={6}>
-          <Stack gap={2}>
-            <Heading>还没有家庭</Heading>
-            <Text>创建一个家庭，或打开邀请链接加入家人的家庭。</Text>
-          </Stack>
-          <Button
-            label="创建家庭"
-            onPress={() => void router.push('/households/new')}
-          />
+      <AppShell accessibilityLabel="还没有家庭" title="设置家庭" showProfile>
+        <Stack style={{ width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center' }}>
+          <HouseholdSetup onCreate={() => router.push('/households/new')} onJoin={() => router.push('/invite')} />
         </Stack>
       </AppShell>
     );
@@ -115,7 +109,7 @@ export default function HouseholdsIndexRoute() {
 
   // ---- Ready (with households) ----
   return (
-    <AppShell accessibilityLabel="家庭选择">
+    <AppShell accessibilityLabel="家庭选择" title="我的家庭" showProfile>
       <Stack gap={6}>
         {currentHousehold !== null ? (
           <HouseholdHeader
@@ -125,7 +119,7 @@ export default function HouseholdsIndexRoute() {
         ) : null}
 
         {viewState === 'offlineRetained' ? (
-          <Banner title="离线">当前为离线内容，管理操作需要联网</Banner>
+          <Stack gap={3}><Banner title="暂时无法连接">当前为离线内容，管理操作需要联网。家庭列表为空时，也不代表你尚未加入家庭。</Banner><Button label="重新加载家庭" loading={isSwitching} onPress={() => void handleRetrySwitch()} /></Stack>
         ) : null}
 
         {switchError && currentHousehold !== null ? (

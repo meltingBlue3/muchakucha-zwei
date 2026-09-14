@@ -53,6 +53,22 @@ async function renderProfile(overrides: Partial<React.ComponentProps<typeof Prof
 }
 
 describe('profile nickname form contract', () => {
+  test('retries a failed load and only enables save after editing', async () => {
+    const apiClient = createProfileApi();
+    (apiClient.getMe as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    const view = await render(
+      <MuchakuchaThemeProvider>
+        <ProfileForm apiClient={apiClient} sessionStateStore={createSessionStateStore()} sessionTransport={createTransport()} />
+      </MuchakuchaThemeProvider>,
+    );
+    await fireEvent.press(await view.findByRole('button', { name: '重新加载资料' }));
+    await waitFor(() => expect(view.getByLabelText('昵称').props.value).toBe(currentUser.displayName));
+    expect(view.queryByText('暂时无法加载资料')).toBeNull();
+    expect(view.getByRole('button', { name: '保存昵称' }).props.accessibilityState.disabled).toBe(true);
+    await fireEvent.changeText(view.getByLabelText('昵称'), '新的家庭昵称');
+    expect(view.getByRole('button', { name: '保存昵称' }).props.accessibilityState.disabled).toBe(false);
+  });
+
   test('loads only the authenticated subject profile and displays the current nickname', async () => {
     const { apiClient, view } = await renderProfile();
     expect(apiClient.getMe).toHaveBeenCalledWith('current-access-token', expect.any(AbortSignal));

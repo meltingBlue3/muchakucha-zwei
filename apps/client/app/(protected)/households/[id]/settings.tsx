@@ -26,7 +26,7 @@ export default function HouseholdSettingsRoute() {
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
-  const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
+  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
   const householdName = currentHousehold?.name ?? '';
 
   const deps = useMemo(
@@ -38,7 +38,7 @@ export default function HouseholdSettingsRoute() {
   );
 
   const handleSwitch = useCallback(async (householdId: string) => {
-    if (householdId === currentHouseholdId) {
+    if (householdId === (id ?? currentHouseholdId)) {
       setSwitcherOpen(false);
       return;
     }
@@ -47,7 +47,7 @@ export default function HouseholdSettingsRoute() {
       void router.replace(`/households/${encodeURIComponent(householdId)}/settings`);
     }
     setSwitcherOpen(false);
-  }, [currentHouseholdId, switchHousehold, router]);
+  }, [id, currentHouseholdId, switchHousehold, router]);
 
   const handleRenameAccessChanged = useCallback((lostHouseholdName: string) => {
     enterAccessChanged(lostHouseholdName);
@@ -110,7 +110,7 @@ export default function HouseholdSettingsRoute() {
         navShowProfile
       />
       <HouseholdSwitcher
-        currentHouseholdId={currentHouseholdId}
+        currentHouseholdId={id ?? currentHouseholdId}
         households={households}
         onCreateNew={() => {
           void router.push('/households/new');

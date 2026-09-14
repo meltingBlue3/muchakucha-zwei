@@ -1,3 +1,4 @@
+import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -21,7 +22,7 @@ import {
 import {
   AccessChangedPanel,
   AppShell,
-  HouseholdHeader,
+  HouseholdContextNote,
 } from '../../../../../../src/ui/household-components';
 import { Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
@@ -57,6 +58,8 @@ function taskSeriesUpdate(data: CreateTaskDto, labelIds: string[]): UpdateSeries
 
 export default function EditTaskRoute() {
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId: string }>();
+  const workspace = useWorkspaceStore();
+  const draftPrefix = `draft:${id}:tasks:${taskId}:`;
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
   const {
@@ -74,13 +77,13 @@ export default function EditTaskRoute() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [selectedLabelIds, setSelectedLabelIds] = useWorkspaceState<string[]>(draftPrefix + 'labels', []);
   const [pendingSeriesAction, setPendingSeriesAction] = useState<PendingSeriesAction | null>(null);
   const [seriesSubmitting, setSeriesSubmitting] = useState<SeriesScope | null>(null);
   const [seriesError, setSeriesError] = useState<string | null>(null);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
+  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
 
   const memberOptions = useMemo(
     () => members.map((m) => ({ userId: m.userId, displayName: m.displayName })),
@@ -99,13 +102,13 @@ export default function EditTaskRoute() {
       ]);
       setTask(taskResult);
       setMembers(householdResult.members);
-      setSelectedLabelIds((taskResult.labels ?? []).map((l) => l.id));
+      workspace.seed(draftPrefix + 'labels', (taskResult.labels ?? []).map((l) => l.id));
     } catch {
       // Keep the current authoritative snapshot when a silent refresh fails.
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [householdId, taskId]);
+  }, [householdId, taskId, workspace, draftPrefix]);
 
   useEffect(() => {
     void fetchTask();
@@ -134,6 +137,7 @@ export default function EditTaskRoute() {
       await sessionApiClient.updateTask(token, householdId, taskId, data);
       // Sync labels: tag with all selected labels (replaces current)
       await sessionApiClient.tagTask(token, householdId, taskId, { labelIds: selectedLabelIds });
+      workspace.clear(draftPrefix);
       router.back();
     } catch (error: unknown) {
       if (error instanceof ApiClientError) {
@@ -152,7 +156,7 @@ export default function EditTaskRoute() {
       }
       setSubmitting(false);
     }
-  }, [householdId, task, taskId, router, selectedLabelIds]);
+  }, [householdId, task, taskId, router, selectedLabelIds, workspace, draftPrefix]);
 
   const handleDelete = useCallback(async () => {
     if (householdId === undefined || householdId === '' || taskId === undefined || taskId === '') return;
@@ -214,6 +218,7 @@ export default function EditTaskRoute() {
         );
       }
       setPendingSeriesAction(null);
+      workspace.clear(draftPrefix);
       router.back();
     } catch (caught: unknown) {
       setSeriesError(
@@ -225,7 +230,7 @@ export default function EditTaskRoute() {
     } finally {
       setSeriesSubmitting(null);
     }
-  }, [fetchTask, householdId, pendingSeriesAction, router, selectedLabelIds, taskId]);
+  }, [fetchTask, householdId, pendingSeriesAction, router, selectedLabelIds, taskId, workspace, draftPrefix]);
 
   if (viewState === 'accessChanged') {
     return (
@@ -243,7 +248,7 @@ export default function EditTaskRoute() {
   return (
     <AppShell accessibilityLabel="编辑任务" title="编辑任务" showBack showProfile>
       <Stack gap={4}>
-        <HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => {}} />
+        <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
 
         {loading ? (
           <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
@@ -261,6 +266,7 @@ export default function EditTaskRoute() {
               </View>
             )}
             <TaskForm
+            draftKey={draftPrefix + 'form'}
               initial={task}
               members={memberOptions}
               onSubmit={handleSubmit}

@@ -443,6 +443,7 @@ test('completes the full household collaboration journey', async ({ page, reques
   await expect(page.getByText('アリス家').first()).toBeVisible({ timeout: 5000 });
 
   // Open the settings page that contains the current household's roster.
+  await page.getByRole('tab', { name: '家庭', exact: true }).click();
   await page.getByLabel('打开家庭设置').click();
   await page.waitForURL(/\/households\/[^/]+\/settings$/);
   await page.waitForTimeout(2000);

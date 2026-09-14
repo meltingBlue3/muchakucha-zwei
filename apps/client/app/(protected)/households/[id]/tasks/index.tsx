@@ -1,3 +1,6 @@
+import { PageIntro } from '../../../../../src/ui/page-intro';
+import { useWorkspaceState } from '../../../../../src/ui/workspace-state';
+import { HouseholdNavigation } from '../../../../../src/ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
@@ -67,18 +70,19 @@ export default function TaskListRoute() {
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<FilterKey>('all');
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilterKey>('all');
-  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
-  const [labelFilter, setLabelFilter] = useState<string>('all');
-  const [recurringFilter, setRecurringFilter] = useState<RecurringFilterKey>('all');
+  const [filter, setFilter] = useWorkspaceState<FilterKey>(`view:${id}:tasks:filter`, 'all');
+  const [priorityFilter, setPriorityFilter] = useWorkspaceState<PriorityFilterKey>(`view:${id}:tasks:priorityFilter`, 'all');
+  const [assigneeFilter, setAssigneeFilter] = useWorkspaceState<string>(`view:${id}:tasks:assigneeFilter`, 'all');
+  const [labelFilter, setLabelFilter] = useWorkspaceState<string>(`view:${id}:tasks:labelFilter`, 'all');
+  const [recurringFilter, setRecurringFilter] = useWorkspaceState<RecurringFilterKey>(`view:${id}:tasks:recurringFilter`, 'all');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [statusChangingTaskId, setStatusChangingTaskId] = useState<string | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useWorkspaceState(`view:${id}:tasks:filtersOpen`, false);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
+  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
 
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -193,10 +197,11 @@ export default function TaskListRoute() {
       task.status === 'pending' ? 'in_progress'
         : task.status === 'in_progress' ? 'completed'
         : 'pending';
+    setActionError(null);
     setStatusChangingTaskId(task.id);
     try {
       const token = await sessionTransport.getAccessToken();
-      if (token === null) return;
+      if (token === null) { setActionError('登录已过期，请重新登录。'); return; }
       await sessionApiClient.updateTask(token, householdId, task.id, {
         title: task.title,
         status: nextStatus,
@@ -208,7 +213,7 @@ export default function TaskListRoute() {
       // rationale — a silently-swallowed failure and a genuine success
       // looked identical, most confusingly for a recurring occurrence
       // another member could have cancelled or split away moments earlier.
-      setError(
+      setActionError(
         caught instanceof ApiClientError && caught.status === 403
           ? '你没有权限修改这个任务。'
           : '状态没有更新成功，请重试。',
@@ -235,7 +240,7 @@ export default function TaskListRoute() {
   });
 
   const handleSwitch = useCallback(async (householdId: string) => {
-    if (householdId === currentHouseholdId) {
+    if (householdId === (id ?? currentHouseholdId)) {
       setSwitcherOpen(false);
       return;
     }
@@ -244,7 +249,7 @@ export default function TaskListRoute() {
       void router.replace(`/households/${encodeURIComponent(householdId)}/tasks`);
     }
     setSwitcherOpen(false);
-  }, [currentHouseholdId, switchHousehold, router]);
+  }, [id, currentHouseholdId, switchHousehold, router]);
 
   // AccessChanged state
   if (viewState === 'accessChanged') {
@@ -276,8 +281,10 @@ export default function TaskListRoute() {
 
   return (
   <>
-    <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile>
+    <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile footer={<HouseholdNavigation householdId={householdId} active="tasks" />}>
       <Stack gap={4}>
+        <PageIntro title="任务" subtitle="一起分担，让日常少一点忙乱。" />
+
         {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <HouseholdHeader
@@ -290,6 +297,8 @@ export default function TaskListRoute() {
             hitSlop={activeTheme.spacing[2]}
             style={({ pressed }) => ({
               backgroundColor: activeTheme.colors.coral,
+              minHeight: activeTheme.controlSizes.touchTarget,
+              justifyContent: 'center',
               paddingHorizontal: activeTheme.spacing[4],
               paddingVertical: activeTheme.spacing[2],
               borderRadius: activeTheme.borderRadii.full,
@@ -331,6 +340,8 @@ export default function TaskListRoute() {
                 paddingHorizontal: activeTheme.spacing[1],
                 borderRadius: activeTheme.borderRadii.full,
                 backgroundColor: activeTheme.colors.coral,
+              minHeight: activeTheme.controlSizes.touchTarget,
+              justifyContent: 'center',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
@@ -569,6 +580,7 @@ export default function TaskListRoute() {
         )}
 
         {/* Error */}
+        {actionError !== null ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" color="destructive">{actionError}</Text> : null}
         {error !== null && (
           <View style={{
             backgroundColor: activeTheme.colors.destructiveSoft,
@@ -625,7 +637,7 @@ export default function TaskListRoute() {
     </AppShell>
 
     <HouseholdSwitcher
-      currentHouseholdId={currentHouseholdId}
+      currentHouseholdId={id ?? currentHouseholdId}
       households={households}
       onCreateNew={() => {
         void router.push('/households/new');

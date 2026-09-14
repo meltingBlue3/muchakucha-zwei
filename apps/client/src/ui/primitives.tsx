@@ -9,6 +9,7 @@ import {
   ScrollView,
   TextInput as NativeTextInput,
   View,
+  useWindowDimensions,
   type PressableProps,
   type TextInputProps,
   type ViewProps,
@@ -19,6 +20,7 @@ import CircleCheck from 'lucide-react-native/icons/circle-check';
 import Eye from 'lucide-react-native/icons/eye';
 import EyeOff from 'lucide-react-native/icons/eye-off';
 import Info from 'lucide-react-native/icons/info';
+import House from 'lucide-react-native/icons/house';
 
 import { theme, type Space, type TextVariant, type Theme } from './theme';
 
@@ -104,13 +106,13 @@ export const Heading = forwardRef<React.ElementRef<typeof RestyleText>, OwnedTex
 
 Heading.displayName = 'Heading';
 
-export const Spinner = ({ label = '正在处理' }: { label?: string }) => {
+export const Spinner = ({ label = '正在处理', inverse = false }: { label?: string; inverse?: boolean }) => {
   const activeTheme = useTheme<Theme>();
   return (
     <ActivityIndicator
       accessibilityLabel={label}
       accessibilityRole="progressbar"
-      color={activeTheme.colors.surface}
+      color={inverse ? activeTheme.colors.surface : activeTheme.colors.coral}
       size="small"
     />
   );
@@ -153,7 +155,7 @@ export const Button = ({ disabled, label, loading = false, style, ...props }: Bu
           backgroundColor: getButtonFill({ disabled: unavailable, pressed: state.pressed }),
           borderColor: focused ? activeTheme.colors.focusRing : activeTheme.colors.transparent,
           borderRadius: activeTheme.borderRadii.lg,
-          borderWidth: focused ? activeTheme.borderWidths.focus : activeTheme.spacing[0],
+          borderWidth: activeTheme.borderWidths.focus,
           flexDirection: 'row',
           gap: activeTheme.spacing[2],
           justifyContent: 'center',
@@ -164,8 +166,8 @@ export const Button = ({ disabled, label, loading = false, style, ...props }: Bu
         typeof style === 'function' ? style(state) : style,
       ]}
     >
-      {loading ? <Spinner label={`${label}，正在处理`} /> : null}
-      <Text variant="button">{label}</Text>
+      {loading ? <Spinner inverse label={`${label}，正在处理`} /> : null}
+      <Text variant="button" color={unavailable ? 'ink' : 'surface'}>{label}</Text>
     </Pressable>
   );
 };
@@ -186,8 +188,9 @@ export const IconButton = ({ icon, label, style, visibleLabel = false, ...props 
       style={(state) => [
         {
           alignItems: 'center',
-          borderColor: state.pressed ? activeTheme.colors.coral : activeTheme.colors.border,
-          borderRadius: activeTheme.borderRadii.md,
+          backgroundColor: state.pressed ? activeTheme.colors.coralSoft : activeTheme.colors.surface,
+          borderColor: state.pressed ? activeTheme.colors.coral : activeTheme.colors.separator,
+          borderRadius: activeTheme.borderRadii.full,
           borderWidth: activeTheme.borderWidths.default,
           flexDirection: 'row',
           gap: activeTheme.spacing[2],
@@ -208,10 +211,12 @@ type FieldProps = TextInputProps & {
   disabled?: boolean;
   error?: string;
   label: string;
+  hint?: string;
+  trailing?: ReactNode;
 };
 
 export const TextField = forwardRef<NativeTextInput, FieldProps>(
-  ({ disabled, error, label, nativeID, onBlur, onFocus, style, ...props }, ref) => {
+  ({ disabled, error, hint, trailing, label, nativeID, onBlur, onFocus, style, ...props }, ref) => {
     const activeTheme = useTheme<Theme>();
     const preferences = useAccessibilityPreferences();
     const generatedId = useId();
@@ -230,11 +235,12 @@ export const TextField = forwardRef<NativeTextInput, FieldProps>(
         <Text nativeID={`${inputId}-label`} variant="label">
           {label}
         </Text>
+        <View>
         <NativeTextInput
           {...props}
           accessibilityLabel={label}
           accessibilityState={{ disabled }}
-          aria-describedby={error ? errorId : undefined}
+          aria-describedby={error ? errorId : hint ? `${inputId}-hint` : undefined}
           aria-invalid={Boolean(error)}
           aria-labelledby={`${inputId}-label`}
           editable={!disabled}
@@ -266,6 +272,7 @@ export const TextField = forwardRef<NativeTextInput, FieldProps>(
               lineHeight: activeTheme.typography.body.lineHeight,
               minHeight: activeTheme.controlSizes.field,
               paddingHorizontal: activeTheme.spacing[4],
+              ...(trailing ? { paddingRight: activeTheme.spacing[16] } : {}),
               ...(Platform.OS === 'web' && preferences.forcedColors
                 ? {
                     outlineColor: 'CanvasText',
@@ -277,6 +284,9 @@ export const TextField = forwardRef<NativeTextInput, FieldProps>(
             style,
           ]}
         />
+        {trailing ? <View style={{ position: 'absolute', right: activeTheme.spacing[1], top: activeTheme.spacing[0], height: activeTheme.controlSizes.field, justifyContent: 'center' }}>{trailing}</View> : null}
+        </View>
+        {hint && !error ? <Text nativeID={`${inputId}-hint`} variant="caption">{hint}</Text> : null}
         {error ? <FormMessage id={errorId}>{error}</FormMessage> : null}
       </Stack>
     );
@@ -296,33 +306,26 @@ export const PasswordField = forwardRef<NativeTextInput, FieldProps>((props, for
   };
   const actionLabel = `${revealed ? '隐藏' : '显示'}${props.label}`;
   return (
-    <Stack gap={2}>
-      <TextField {...props} ref={setRefs} secureTextEntry={!revealed} />
-      <Box alignSelf="flex-end">
-        <IconButton
-          icon={
-            revealed ? (
-              <EyeOff
-                color={activeTheme.colors.ink}
-                size={activeTheme.controlSizes.icon}
-                strokeWidth={activeTheme.controlSizes.iconStroke}
-              />
-            ) : (
-              <Eye
-                color={activeTheme.colors.ink}
-                size={activeTheme.controlSizes.icon}
-                strokeWidth={activeTheme.controlSizes.iconStroke}
-              />
-            )
-          }
-          label={actionLabel}
+    <TextField
+      {...props}
+      ref={setRefs}
+      secureTextEntry={!revealed}
+      trailing={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+          accessibilityState={{ disabled: Boolean(props.disabled) }}
+          disabled={props.disabled}
           onPress={() => {
             setRevealed((current) => !current);
             internalRef.current?.focus();
           }}
-        />
-      </Box>
-    </Stack>
+          style={{ minWidth: activeTheme.controlSizes.touchTarget, minHeight: activeTheme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center' }}
+        >
+          {revealed ? <EyeOff color={activeTheme.colors.inkMuted} size={activeTheme.controlSizes.icon} /> : <Eye color={activeTheme.colors.inkMuted} size={activeTheme.controlSizes.icon} />}
+        </Pressable>
+      }
+    />
   );
 });
 
@@ -351,7 +354,7 @@ export const Banner = ({ children, title }: BannerProps) => (
   >
     <Inline gap={2}>
       <CircleAlert color={theme.colors.destructive} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-      <Stack gap={1}>
+      <Stack gap={1} style={{ flex: 1 }}>
         {title ? <Text variant="label">{title}</Text> : null}
         <Text variant="bodySm">{children}</Text>
       </Stack>
@@ -368,8 +371,10 @@ export const BrandMark = () => (
       height={theme.spacing[8]}
       importantForAccessibility="no-hide-descendants"
       width={theme.spacing[8]}
-    />
-    <Text variant="heading">Muchakucha Zwei</Text>
+      alignItems="center"
+      justifyContent="center"
+    ><House color={theme.colors.surface} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} /></Box>
+    <Text variant="body" style={{ fontWeight: '600', flexShrink: 1 }}>Muchakucha Zwei</Text>
   </Inline>
 );
 
@@ -413,6 +418,8 @@ const useAccessibilityPreferences = () => {
 };
 
 export const AuthShell = ({ children }: PropsWithChildren) => {
+  const { width } = useWindowDimensions();
+  const wide = width >= theme.layout.authWideBreakpoint;
   const preferences = useAccessibilityPreferences();
   const duration = getMotionDuration(preferences.reducedMotion);
   return (
@@ -431,10 +438,28 @@ export const AuthShell = ({ children }: PropsWithChildren) => {
           width={theme.spacing[16]}
         />
       ) : null}
+      <View style={{ flex: 1, width: '100%', maxWidth: theme.layout.authLayoutMaxWidth, alignSelf: 'center', justifyContent: 'center', gap: theme.spacing[8], flexDirection: wide ? 'row' : 'column', alignItems: wide ? 'center' : 'stretch' }}>
+        {wide ? (
+          <Stack gap={6} style={{ flex: 1, padding: theme.spacing[6] }}>
+            <BrandMark />
+            <Text variant="display">把生活的小事，{ '\n' }一起安排好。</Text>
+            <Text color="inkMuted">从今天的日程，到明天的家务。给一家人的安排，留一个共同的位置。</Text>
+            <Stack gap={4}>
+              <Text variant="label">01  共享日历，记住每一次约定</Text>
+              <Text variant="label">02  分担任务，让家务有着落</Text>
+              <Text variant="label">03  留下笔记，随时找到常用信息</Text>
+            </Stack>
+          </Stack>
+        ) : <Stack gap={2}><BrandMark /><Text variant="bodySm">一家人的日程、任务和日常记忆。</Text></Stack>}
       <Box
         alignSelf="center"
         maxWidth={theme.layout.authCardMaxWidth}
         testID="auth-shell"
+        backgroundColor="surface"
+        borderRadius="xl"
+        borderColor="separator"
+        borderWidth={theme.borderWidths.default}
+        padding={6}
         width="100%"
         {...(Platform.OS === 'web'
           ? {
@@ -447,10 +472,10 @@ export const AuthShell = ({ children }: PropsWithChildren) => {
           : {})}
       >
         <Stack gap={8}>
-          <BrandMark />
           {children}
         </Stack>
       </Box>
+      </View>
     </Screen>
   );
 };

@@ -1,3 +1,4 @@
+import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useState } from 'react';
 import { Pressable, Switch, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
@@ -36,6 +37,7 @@ const EMPTY_INPUT: EventInput = {
 };
 
 interface EventFormProps {
+  draftKey?: string;
   initial?: EventResponseDto;
   onSubmit: (data: CreateEventDto) => Promise<void>;
   onCancel: () => void;
@@ -46,7 +48,7 @@ interface EventFormProps {
   onLabelChange?: (labelIds: string[]) => void;
 }
 
-export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: EventFormProps) {
+export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: EventFormProps) {
   const activeTheme = useTheme<Theme>();
   // CR-03: the /series endpoint has no way to detach an occurrence into a
   // standalone item — selecting 不重复 here omits `recurrence` from the
@@ -55,7 +57,7 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
   // rather than accept an edit that silently does nothing; 结束此重复 on
   // the rule detail screen is the real way to stop it.
   const isExistingRecurring = initial !== undefined && initial.recurrence !== null;
-  const [form, setForm] = useState<EventInput>(() => {
+  const [form, setForm] = useWorkspaceState<EventInput>(draftKey, () => {
     if (initial) {
       const start = new Date(initial.startTime);
       const end = new Date(initial.endTime);
@@ -81,7 +83,7 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
     if (key === 'recurrence') setRecurrenceErrors({});
-  }, []);
+  }, [setForm]);
 
   const handleSubmit = useCallback(async () => {
     if (form.title.trim().length === 0) {
@@ -160,6 +162,7 @@ export function EventForm({ initial, onSubmit, onCancel, submitLabel, isSubmitti
 
   return (
     <Stack gap={4}>
+      {draftKey ? <Text variant="caption">未保存内容会在本次登录期间暂存。保存成功后清除。</Text> : null}
       {/* Title */}
       <Stack gap={1}>
         <Text variant="label">标题</Text>

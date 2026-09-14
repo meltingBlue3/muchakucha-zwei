@@ -42,6 +42,8 @@ function isDisplayNameFailure(error: unknown): boolean {
 }
 
 export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: ProfileFormProps) => {
+  const [reload, setReload] = useState(0);
+  const [savedName, setSavedName] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string>();
   const [success, setSuccess] = useState<string>();
@@ -49,7 +51,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
   const {
     clearErrors,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
     getValues,
     handleSubmit,
     reset,
@@ -57,6 +59,8 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
   } = useForm<ProfileValues>({ defaultValues: { displayName: '' } });
 
   useEffect(() => {
+    setLoading(true);
+    setLoadError(undefined);
     const accessToken = sessionTransport.getAccessToken();
     if (accessToken === null) {
       setLoadError(GENERIC_ERROR);
@@ -68,14 +72,15 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
       .getMe(accessToken, controller.signal)
       .then((user) => {
         reset({ displayName: user.displayName });
+        setSavedName(user.displayName);
         setUsername(user.username);
       })
       .catch((error: unknown) => {
         if (!(error instanceof Error && error.name === 'AbortError')) setLoadError(GENERIC_ERROR);
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [apiClient, reset, sessionTransport]);
+  }, [apiClient, reset, sessionTransport, reload]);
 
   const validateNickname = (): boolean => {
     const parsed = nicknameSchema.safeParse(getValues('displayName'));
@@ -107,6 +112,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
         new AbortController().signal,
       );
       reset({ displayName: user.displayName });
+        setSavedName(user.displayName);
       sessionStateStore.enterAuthenticated({ accessToken, currentUser: user });
       setSuccess('昵称已更新。');
     } catch (error) {
@@ -129,12 +135,14 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
   return (
     <Stack gap={6}>
       <Stack gap={2}>
+        <Text variant="display" color="teal">{savedName ? [...savedName][0] : '我'}</Text>
         <Heading>个人资料</Heading>
-        <Text>昵称可以与其他家庭成员重复。</Text>
+        <Text>让家人一眼认出你。昵称会显示在家庭成员与任务分工中，也可以与其他成员重复。</Text>
       </Stack>
       {loadError || errors.root?.server?.message ? (
-        <Banner title="暂时无法保存">{loadError ?? errors.root?.server?.message}</Banner>
+        <Banner title={loadError ? '暂时无法加载资料' : '暂时无法保存'}>{loadError ?? errors.root?.server?.message}</Banner>
       ) : null}
+      {loadError ? <Button label="重新加载资料" onPress={() => setReload((value) => value + 1)} /> : null}
       {success ? (
         <Stack accessibilityLiveRegion="polite" accessibilityRole={'status' as never} gap={1}>
           <Text>{success}</Text>
@@ -144,6 +152,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
         <Stack gap={1}>
           <Text variant="label">用户名</Text>
           <Text>{username}</Text>
+          <Text variant="caption">用于登录，暂不支持修改。</Text>
         </Stack>
       ) : null}
       <Controller
@@ -162,7 +171,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
               onBlur();
               validateNickname();
             }}
-            onChangeText={onChange}
+            onChangeText={(value) => { setSuccess(undefined); onChange(value); }}
             ref={ref}
             textContentType="name"
             value={value}
@@ -170,7 +179,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
         )}
       />
       <Button
-        disabled={loadError !== undefined || isSubmitting}
+        disabled={loadError !== undefined || isSubmitting || !isDirty}
         label="保存昵称"
         loading={isSubmitting}
         onPress={() => void submit()}

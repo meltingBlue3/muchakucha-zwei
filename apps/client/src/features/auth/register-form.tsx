@@ -147,10 +147,10 @@ export const RegisterForm = ({
   });
 
   return (
-    <Stack gap={6}>
+    <Stack gap={5}>
       <Stack gap={2}>
         <Heading>创建你的账户</Heading>
-        <Text>填写用户名和密码，即可开始使用。</Text>
+        <Text>先创建账户，再创建或加入家人的家庭。</Text>
       </Stack>
       {formError ? <Banner title="暂时无法创建账户">{formError}</Banner> : null}
       <Controller
@@ -158,11 +158,13 @@ export const RegisterForm = ({
         name="username"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <TextField
+            disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="username"
             autoCorrect={false}
             {...(errors.username?.message === undefined ? {} : { error: errors.username.message })}
             label="用户名"
+            hint="3–32 个字符，可使用字母、数字、点、下划线和短横线，不区分大小写。"
             onBlur={() => { onBlur(); validateField('username'); }}
             onChangeText={onChange}
             ref={ref}
@@ -171,16 +173,17 @@ export const RegisterForm = ({
           />
         )}
       />
-      <Text variant="bodySm">用户名为 3–32 个字符，可使用字母、数字、点、下划线和短横线，不区分大小写。密码至少 8 个字符。</Text>
       <Controller
         control={control}
         name="password"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <PasswordField
+            disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="new-password"
             {...(errors.password?.message === undefined ? {} : { error: errors.password.message })}
             label="密码"
+            hint="8–128 个字符，建议使用不容易猜到的组合。"
             onBlur={() => {
               onBlur();
               validateField('password');
@@ -198,6 +201,7 @@ export const RegisterForm = ({
         name="confirmPassword"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <PasswordField
+            disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="new-password"
             {...(errors.confirmPassword?.message === undefined ? {} : { error: errors.confirmPassword.message })}
@@ -220,7 +224,7 @@ export const RegisterForm = ({
           focusFirstInvalidWebField();
         }}
       />
-      <LinkText onPress={onLogin}>已有账户？登录</LinkText>
+      <LinkText style={{ alignSelf: 'center' }} onPress={onLogin}>已有账户？登录</LinkText>
     </Stack>
   );
 };

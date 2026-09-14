@@ -1,3 +1,4 @@
+import { useWorkspaceStore } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -13,6 +14,8 @@ import type { CreateNoteDto } from '@muchakucha/api-client';
 
 export default function EditNoteRoute() {
   const { id, noteId } = useLocalSearchParams<{ id: string; noteId: string }>();
+  const workspace = useWorkspaceStore();
+  const draftPrefix = `draft:${id}:notes:${noteId}:`;
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
   const [note, setNote] = useState<NoteResponseDto | null>(null);
@@ -55,6 +58,7 @@ export default function EditNoteRoute() {
           return;
         }
         await sessionApiClient.updateNote(token, id!, noteId!, data as any);
+        workspace.clear(draftPrefix);
         router.back();
       } catch {
         setError('保存失败，请重试。');
@@ -62,7 +66,7 @@ export default function EditNoteRoute() {
         setIsSubmitting(false);
       }
     },
-    [id, noteId, router],
+    [id, noteId, router, workspace, draftPrefix],
   );
 
   const handleDelete = useCallback(async () => {
@@ -121,6 +125,7 @@ export default function EditNoteRoute() {
           </Text>
         )}
         <NoteForm
+          draftKey={draftPrefix + 'form'}
           initial={note}
           onSubmit={handleSubmit}
           onCancel={() => router.back()}

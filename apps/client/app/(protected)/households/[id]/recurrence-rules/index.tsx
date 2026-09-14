@@ -52,7 +52,7 @@ export default function RecurrenceRulesIndexRoute() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
+  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
   const deviceTimeZone = resolveDeviceTimeZone();
 
   const fetchRules = useCallback(async () => {
@@ -106,7 +106,7 @@ export default function RecurrenceRulesIndexRoute() {
       void router.replace(`/households/${encodeURIComponent(nextHouseholdId)}/recurrence-rules`);
     }
     setSwitcherOpen(false);
-  }, [currentHouseholdId, switchHousehold, router]);
+  }, [id, currentHouseholdId, switchHousehold, router]);
 
   const handleOpenRule = useCallback((ruleId: string) => {
     if (householdId === undefined || householdId === '') return;
@@ -195,7 +195,7 @@ export default function RecurrenceRulesIndexRoute() {
       </AppShell>
 
       <HouseholdSwitcher
-        currentHouseholdId={currentHouseholdId}
+        currentHouseholdId={id ?? currentHouseholdId}
         households={households}
         onCreateNew={() => {
           void router.push('/households/new');

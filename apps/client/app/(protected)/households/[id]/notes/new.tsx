@@ -1,3 +1,4 @@
+import { useWorkspaceStore } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 
@@ -9,6 +10,8 @@ import type { CreateNoteDto } from '@muchakucha/api-client';
 
 export default function CreateNoteRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const workspace = useWorkspaceStore();
+  const draftPrefix = `draft:${id}:notes:new:`;
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +27,7 @@ export default function CreateNoteRoute() {
           return;
         }
         await sessionApiClient.createNote(token, id!, data);
+        workspace.clear(draftPrefix);
         router.back();
       } catch {
         setError('创建笔记失败，请重试。');
@@ -31,7 +35,7 @@ export default function CreateNoteRoute() {
         setIsSubmitting(false);
       }
     },
-    [id, router],
+    [id, router, workspace, draftPrefix],
   );
 
   return (
@@ -44,6 +48,7 @@ export default function CreateNoteRoute() {
           </Text>
         )}
         <NoteForm
+          draftKey={draftPrefix + 'form'}
           onSubmit={handleSubmit}
           onCancel={() => router.back()}
           submitLabel="创建"

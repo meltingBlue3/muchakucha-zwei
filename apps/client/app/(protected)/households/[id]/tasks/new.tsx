@@ -1,5 +1,7 @@
+import { useCreateWithLabels } from '../../../../../src/features/households/use-create-with-labels';
+import { useWorkspaceStore, useWorkspaceState } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { GetHouseholdMemberDto } from '@muchakucha/api-client';
@@ -10,14 +12,16 @@ import { TaskForm } from '../../../../../src/features/tasks/task-form';
 import {
   AccessChangedPanel,
   AppShell,
-  HouseholdHeader,
+  HouseholdContextNote,
 } from '../../../../../src/ui/household-components';
-import { Stack, Text } from '../../../../../src/ui/primitives';
+import { Button, Stack, Text } from '../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../src/ui/theme';
 import type { CreateTaskDto } from '@muchakucha/api-client';
 
 export default function CreateTaskRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const workspace = useWorkspaceStore();
+  const draftPrefix = `draft:${id}:tasks:new:`;
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
   const {
@@ -30,12 +34,10 @@ export default function CreateTaskRoute() {
 
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [selectedLabelIds, setSelectedLabelIds] = useWorkspaceState<string[]>(draftPrefix + 'labels', []);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
+  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
 
   const memberOptions = useMemo(
     () => members.map((m) => ({ userId: m.userId, displayName: m.displayName })),
@@ -59,28 +61,21 @@ export default function CreateTaskRoute() {
     void fetchMembers();
   }, [householdId]);
 
-  const handleSubmit = useCallback(async (data: CreateTaskDto) => {
-    if (householdId === undefined || householdId === '') return;
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      const token = await sessionTransport.getAccessToken();
-      if (token === null) {
-        setSubmitError('登录已过期，请重新登录。');
-        setSubmitting(false);
-        return;
-      }
-      const task = await sessionApiClient.createTask(token, householdId, data);
-      // Tag the new task with selected labels
-      if (selectedLabelIds.length > 0) {
-        await sessionApiClient.tagTask(token, householdId, task.id, { labelIds: selectedLabelIds });
-      }
-      router.back();
-    } catch {
-      setSubmitError('创建任务失败，请重试。');
-      setSubmitting(false);
-    }
-  }, [householdId, router, selectedLabelIds]);
+  const { submit, retry, created, pending: submitting, error: submitError } = useCreateWithLabels<CreateTaskDto>({
+    key: draftPrefix + 'created',
+    create: async (data) => {
+      const token = sessionTransport.getAccessToken();
+      if (token === null) throw new Error('Session expired');
+      return sessionApiClient.createTask(token, id!, data);
+    },
+    tag: async (resourceId, labelIds) => {
+      const token = sessionTransport.getAccessToken();
+      if (token === null) throw new Error('Session expired');
+      return sessionApiClient.tagTask(token, id!, resourceId, { labelIds });
+    },
+    onComplete: () => { workspace.clear(draftPrefix); router.back(); },
+  });
+  const handleSubmit = (data: CreateTaskDto) => submit(data, selectedLabelIds);
 
   if (viewState === 'accessChanged') {
     return (
@@ -98,9 +93,11 @@ export default function CreateTaskRoute() {
   return (
     <AppShell accessibilityLabel="创建任务" title="创建任务" showBack showProfile>
       <Stack gap={4}>
-        <HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => {}} />
+        <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
 
-        {loading ? (
+        {created !== null ? (
+          <Stack gap={4}><Text>任务已创建</Text><Text accessibilityRole="alert">{submitError ?? '正在保存标签…'}</Text><Button label="重试保存标签" loading={submitting} onPress={() => void retry()} /></Stack>
+        ) : loading ? (
           <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
             <ActivityIndicator color={activeTheme.colors.coral} />
           </View>
@@ -116,6 +113,7 @@ export default function CreateTaskRoute() {
               </View>
             )}
             <TaskForm
+            draftKey={draftPrefix + 'form'}
               members={memberOptions}
               onSubmit={handleSubmit}
               onCancel={() => router.back()}

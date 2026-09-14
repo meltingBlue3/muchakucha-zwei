@@ -67,7 +67,7 @@ async function loginFixture(page: Page, email: string) {
 }
 
 async function openCalendar(page: Page) {
-  await page.getByLabel('打开家庭日历').click();
+  await page.getByRole('tab', { name: '日历', exact: true }).click();
   await expect(page.getByRole('main', { name: '家庭日历' })).toBeVisible();
 }
 

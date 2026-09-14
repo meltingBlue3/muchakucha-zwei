@@ -59,6 +59,30 @@ function createStore(): CurrentHouseholdStore & {
 }
 
 describe('HouseholdProvider recovery state machine', () => {
+  test('a failed initial request without cached membership is not an empty household result', async () => {
+    const store = createStore();
+    await store.clearAll();
+    const api = { listMyHouseholds: jest.fn().mockRejectedValue(new Error('offline')) } as unknown as HouseholdApi;
+    const Provider = createHouseholdProvider(api, () => 'access-token', store);
+    function Probe() { return <Text>{useHouseholdContext().viewState}</Text>; }
+    const view = await render(<Provider><Probe /></Provider>);
+    expect(await view.findByText('offlineRetained')).toBeTruthy();
+    expect(view.queryByText('noHousehold')).toBeNull();
+  });
+
+  test('refresh selects a newly created household from the fresh membership response', async () => {
+    const store = createStore();
+    const api = { listMyHouseholds: jest.fn().mockResolvedValueOnce([alpha]).mockResolvedValueOnce([alpha, beta]) } as unknown as HouseholdApi;
+    const Provider = createHouseholdProvider(api, () => 'access-token', store);
+    let context: HouseholdContextValue | undefined;
+    function Probe() { context = useHouseholdContext(); return <Text>{context.currentHouseholdId}</Text>; }
+    const view = await render(<Provider><Probe /></Provider>);
+    await view.findByText(alpha.id);
+    await act(async () => { expect(await context!.refreshHouseholds(beta.id)).toBe(true); });
+    expect(view.getByText(beta.id)).toBeTruthy();
+    expect(store.getCurrentId()).toBe(beta.id);
+  });
+
   test('hydrates before resolution and reaches accessChanged when a switch target disappeared', async () => {
     const store = createStore();
     const listMyHouseholds = jest

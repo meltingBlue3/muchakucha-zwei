@@ -1,3 +1,4 @@
+import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -49,6 +50,8 @@ function eventSeriesUpdate(data: CreateEventDto, labelIds: string[]): UpdateSeri
 
 export default function EditEventRoute() {
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
+  const workspace = useWorkspaceStore();
+  const draftPrefix = `draft:${id}:events:${eventId}:`;
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
   const [event, setEvent] = useState<EventResponseDto | null>(null);
@@ -57,7 +60,7 @@ export default function EditEventRoute() {
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [selectedLabelIds, setSelectedLabelIds] = useWorkspaceState<string[]>(draftPrefix + 'labels', []);
   const [pendingSeriesAction, setPendingSeriesAction] = useState<PendingSeriesAction | null>(null);
   const [seriesSubmitting, setSeriesSubmitting] = useState<SeriesScope | null>(null);
   const [seriesError, setSeriesError] = useState<string | null>(null);
@@ -73,13 +76,13 @@ export default function EditEventRoute() {
       }
       const result = await sessionApiClient.getEvent(token, id, eventId);
       setEvent(result);
-      setSelectedLabelIds((result.labels ?? []).map((l) => l.id));
+      workspace.seed(draftPrefix + 'labels', (result.labels ?? []).map((l) => l.id));
     } catch {
       if (showLoading) setError('无法加载事件。');
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [id, eventId]);
+  }, [id, eventId, workspace, draftPrefix]);
 
   useEffect(() => {
     void fetchEvent();
@@ -107,6 +110,7 @@ export default function EditEventRoute() {
         await sessionApiClient.updateEvent(token, id!, eventId!, data);
         // Sync labels: tag with all selected labels (replaces current)
         await sessionApiClient.tagEvent(token, id!, eventId!, { labelIds: selectedLabelIds });
+        workspace.clear(draftPrefix);
         router.back();
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : '保存失败，请重试。';
@@ -115,7 +119,7 @@ export default function EditEventRoute() {
         setIsSubmitting(false);
       }
     },
-    [event, id, eventId, router, selectedLabelIds],
+    [event, id, eventId, router, selectedLabelIds, workspace, draftPrefix],
   );
 
   const handleDelete = useCallback(async () => {
@@ -178,6 +182,7 @@ export default function EditEventRoute() {
         );
       }
       setPendingSeriesAction(null);
+      workspace.clear(draftPrefix);
       router.back();
     } catch (caught: unknown) {
       setSeriesError(
@@ -189,7 +194,7 @@ export default function EditEventRoute() {
     } finally {
       setSeriesSubmitting(null);
     }
-  }, [eventId, fetchEvent, id, pendingSeriesAction, router, selectedLabelIds]);
+  }, [eventId, fetchEvent, id, pendingSeriesAction, router, selectedLabelIds, workspace, draftPrefix]);
 
   const handleCancel = useCallback(() => {
     router.back();
@@ -231,6 +236,7 @@ export default function EditEventRoute() {
             </Text>
           )}
           <EventForm
+            draftKey={draftPrefix + 'form'}
             initial={event}
             onSubmit={handleSubmit}
             onCancel={handleCancel}

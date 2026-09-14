@@ -1,3 +1,4 @@
+import { WorkspaceStateProvider } from '../../src/ui/workspace-state';
 import { Stack } from 'expo-router';
 import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -76,7 +77,7 @@ export default function ProtectedLayout() {
     React.createElement(
       ResolvingGate,
       null,
-      React.createElement(Stack, { screenOptions: { headerShown: false } }),
+      React.createElement(WorkspaceStateProvider, null, React.createElement(Stack, { screenOptions: { headerShown: false } })),
     ),
   );
 }

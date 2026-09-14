@@ -27,6 +27,7 @@ import {
   RefreshControl,
   ScrollView,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -51,6 +52,7 @@ interface AppShellProps {
   showBack?: boolean;
   onBack?: () => void;
   showProfile?: boolean;
+  footer?: React.ReactNode;
 }
 
 export const AppShell = ({
@@ -62,8 +64,11 @@ export const AppShell = ({
   showBack = false,
   onBack,
   showProfile = false,
+  footer,
 }: AppShellProps) => {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const wideNavigation = width >= theme.layout.navigationBreakpoint && footer !== undefined;
 
   const handleBack = useCallback(() => {
     if (onBack !== undefined) {
@@ -83,20 +88,22 @@ export const AppShell = ({
     <SafeAreaView
       accessibilityLabel={accessibilityLabel}
       role={Platform.OS === 'web' ? 'main' : undefined}
-      style={{ backgroundColor: theme.colors.canvas, flex: 1 }}
+      style={{ backgroundColor: theme.colors.canvas, flex: 1, flexDirection: wideNavigation ? 'row' : 'column' }}
     >
+      {wideNavigation ? footer : null}
+      <View style={{ flex: 1, minWidth: 0 }}>
       {hasNav ? (
         <View
           style={{
             alignItems: 'center',
-            borderBottomColor: theme.colors.border,
+            borderBottomColor: theme.colors.separator,
             borderBottomWidth: theme.borderWidths.default,
-            backgroundColor: theme.colors.canvas,
+            backgroundColor: theme.colors.surface,
             flexDirection: 'row',
             justifyContent: 'space-between',
             minHeight: 48,
             paddingHorizontal: theme.layout.mobileInset,
-            paddingVertical: theme.spacing[1],
+            paddingVertical: theme.spacing[2],
           }}
         >
           {/* Left: back button */}
@@ -162,8 +169,9 @@ export const AppShell = ({
         <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
-            paddingHorizontal: theme.layout.mobileInset,
-            paddingVertical: theme.spacing[6],
+            paddingHorizontal: width < theme.breakpoints.mobile ? theme.layout.compactInset : theme.layout.mobileInset,
+            paddingTop: theme.spacing[6],
+            paddingBottom: theme.spacing[10],
             maxWidth: Platform.OS === 'web' ? theme.layout.householdMaxWidth : undefined,
             alignSelf: Platform.OS === 'web' ? 'center' : undefined,
             width: '100%',
@@ -183,6 +191,8 @@ export const AppShell = ({
           {children}
         </ScrollView>
       </KeyboardAvoidingView>
+      </View>
+      {!wideNavigation ? footer : null}
     </SafeAreaView>
   );
 };
@@ -195,15 +205,17 @@ interface HouseholdHeaderProps {
 }
 
 export const HouseholdHeader = ({ householdName, onOpenSwitcher }: HouseholdHeaderProps) => (
-  <View
+  <Pressable
     accessibilityLabel={`当前家庭：${householdName}，切换家庭`}
     accessibilityRole="button"
+    onPress={onOpenSwitcher}
     style={{
       alignItems: 'center',
       flexDirection: 'row',
       justifyContent: 'space-between',
       minHeight: theme.controlSizes.touchTarget + 8,
       paddingVertical: theme.spacing[2],
+      flexShrink: 1,
     }}
   >
     <View style={{ flex: 1 }}>
@@ -216,10 +228,7 @@ export const HouseholdHeader = ({ householdName, onOpenSwitcher }: HouseholdHead
         {householdName}
       </Text>
     </View>
-    <Pressable
-      accessible={false}
-      hitSlop={theme.spacing[2]}
-      onPress={onOpenSwitcher}
+    <View
       style={{
         alignItems: 'center',
         justifyContent: 'center',
@@ -228,8 +237,8 @@ export const HouseholdHeader = ({ householdName, onOpenSwitcher }: HouseholdHead
       }}
     >
       <ChevronDown color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-    </Pressable>
-  </View>
+    </View>
+  </Pressable>
 );
 
 // ---- HouseholdContextNote ----
@@ -262,7 +271,7 @@ export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryA
     <View style={{
       backgroundColor: theme.colors.surface,
       borderColor: isCurrent ? theme.colors.coral : theme.colors.border,
-      borderRadius: theme.borderRadii.lg,
+      borderRadius: theme.borderRadii.xl,
       borderWidth: theme.borderWidths.default,
       overflow: 'hidden',
       padding: theme.spacing[4],
@@ -356,7 +365,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
         <View
           style={{
             alignItems: 'center',
-            borderBottomColor: theme.colors.border,
+            borderBottomColor: theme.colors.separator,
             borderBottomWidth: theme.borderWidths.default,
             flexDirection: 'row',
             justifyContent: 'space-between',
@@ -491,7 +500,7 @@ export const AccessChangedPanel = ({
     style={{
       backgroundColor: theme.colors.destructiveSoft,
       borderColor: theme.colors.destructive,
-      borderRadius: theme.borderRadii.lg,
+      borderRadius: theme.borderRadii.xl,
       borderWidth: theme.borderWidths.default,
       padding: theme.spacing[6],
     }}
@@ -589,7 +598,7 @@ export const MemberRow = ({
   return (
     <View
       style={{
-        borderBottomColor: theme.colors.border,
+        borderBottomColor: theme.colors.separator,
         borderBottomWidth: theme.borderWidths.default,
         paddingVertical: theme.spacing[2],
       }}
@@ -788,7 +797,7 @@ export const InvitationRow = ({
       accessibilityLabel={`邀请：${recipient}，${statusLabel}`}
       style={{
         alignItems: 'center',
-        borderBottomColor: theme.colors.border,
+        borderBottomColor: theme.colors.separator,
         borderBottomWidth: theme.borderWidths.default,
         flexDirection: 'row',
         gap: theme.spacing[3],
@@ -949,7 +958,7 @@ export const ConfirmationPage = ({
             backgroundColor: busy
               ? theme.colors.disabled
               : theme.colors.destructive,
-            borderRadius: theme.borderRadii.lg,
+            borderRadius: theme.borderRadii.xl,
             flexDirection: 'row',
             gap: theme.spacing[2],
             justifyContent: 'center',
@@ -1029,7 +1038,7 @@ export const FinalConfirmation = ({
             backgroundColor: busy
               ? theme.colors.disabled
               : theme.colors.destructive,
-            borderRadius: theme.borderRadii.lg,
+            borderRadius: theme.borderRadii.xl,
             flexDirection: 'row',
             gap: theme.spacing[2],
             justifyContent: 'center',
@@ -1058,7 +1067,7 @@ export const SwitchErrorBanner = ({ householdName, onRetry }: SwitchErrorBannerP
     accessibilityLiveRegion="polite"
     style={{
       backgroundColor: theme.colors.surfaceMuted,
-      borderColor: theme.colors.border,
+      borderColor: theme.colors.separator,
       borderRadius: theme.borderRadii.md,
       borderWidth: theme.borderWidths.default,
       padding: theme.spacing[4],

@@ -109,10 +109,10 @@ export const LoginForm = ({
   const formError = errors.root?.server?.message;
 
   return (
-    <Stack gap={6}>
+    <Stack gap={5}>
       <Stack gap={2}>
         <Heading>欢迎回来</Heading>
-        <Text>登录后继续查看家里的安排。</Text>
+        <Text>今天的安排，家人的待办，都在这里。</Text>
       </Stack>
       {reauthenticationRequired ? (
         <Banner title="需要重新登录">
@@ -125,6 +125,7 @@ export const LoginForm = ({
         name="username"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <TextField
+            disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="username"
             autoCorrect={false}
@@ -146,6 +147,7 @@ export const LoginForm = ({
         name="password"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <PasswordField
+            disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="current-password"
             {...(errors.password?.message === undefined ? {} : { error: errors.password.message })}
@@ -163,7 +165,7 @@ export const LoginForm = ({
         )}
       />
       <Button disabled={isSubmitting} label="登录" loading={isSubmitting} onPress={() => void submit()} />
-      <LinkText onPress={onRegister}>创建账户</LinkText>
+      <Stack gap={1} style={{ alignItems: 'center' }}><Text variant="bodySm">第一次来到这里？</Text><LinkText style={{ alignSelf: 'center' }} onPress={onRegister}>创建账户</LinkText></Stack>
     </Stack>
   );
 };

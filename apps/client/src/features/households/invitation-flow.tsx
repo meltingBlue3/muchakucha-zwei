@@ -39,6 +39,7 @@ interface InvitationFlowProps {
   onLogin(): void;
   onRegister(): void;
   onSwitchAccount(): void;
+  onReset?(): void;
   onEnterHousehold(household: GetHouseholdResponseDto): void;
   token: string;
 }
@@ -48,7 +49,8 @@ function useInvitationPreview(
   token: string,
   isAuthenticated: boolean,
   accessToken: string | undefined,
-): { state: FlowState; accept(): void; accepting: boolean; acceptError: boolean } {
+): { state: FlowState; accept(): void; accepting: boolean; acceptError: boolean; retry(): void } {
+  const [revision, setRevision] = useState(0);
   const [state, setState] = useState<FlowState>({ kind: 'loading' });
   const [accepting, setAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState(false);
@@ -82,7 +84,7 @@ function useInvitationPreview(
     })();
 
     return () => controller.abort();
-  }, [apiClient, token]);
+  }, [apiClient, token, revision]);
 
   // Re-evaluate authentication transitions: when the user logs in,
   // the unauthenticated preview should transition to matching.
@@ -131,7 +133,7 @@ function useInvitationPreview(
     })();
   }, [accepting, accessToken, apiClient, token]);
 
-  return { state, accept, accepting, acceptError };
+  return { state, accept, accepting, acceptError, retry: () => setRevision((value) => value + 1) };
 }
 
 const terminalCopy: Record<
@@ -159,10 +161,11 @@ export function InvitationFlow({
   onLogin,
   onRegister,
   onSwitchAccount,
+  onReset,
   onEnterHousehold,
   token,
 }: InvitationFlowProps) {
-  const { state, accept, accepting, acceptError } = useInvitationPreview(
+  const { state, accept, accepting, acceptError, retry } = useInvitationPreview(
     apiClient,
     token,
     isAuthenticated,
@@ -185,6 +188,8 @@ export function InvitationFlow({
       <Stack gap={4}>
         <Heading>暂时无法加载邀请</Heading>
         <Banner>这次没有完成。请检查网络后重试。</Banner>
+        <Button label="重试加载邀请" onPress={retry} />
+        {onReset ? <LinkText onPress={onReset}>重新输入邀请链接</LinkText> : null}
       </Stack>
     );
   }
@@ -194,7 +199,7 @@ export function InvitationFlow({
     const copy = terminalCopy[state.reason];
     return (
       <StatusPanel
-        action={null}
+        action={onReset ? <Button label="重新输入邀请链接" onPress={onReset} /> : null}
         heading={copy.heading}
         body={copy.body}
         kind="offline"

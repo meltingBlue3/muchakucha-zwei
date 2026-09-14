@@ -21,15 +21,15 @@ export function EventCard({ event, onPress }: EventCardProps) {
       accessibilityLabel={`事件：${event.title}${event.recurrenceRuleId == null ? '' : '，重复'}`}
       style={({ pressed }) => ({
         backgroundColor: activeTheme.colors.surface,
-        borderRadius: activeTheme.borderRadii.md,
-        padding: activeTheme.spacing[4],
+        borderRadius: activeTheme.borderRadii.xl,
+        padding: activeTheme.spacing[5],
         borderWidth: 1,
-        borderColor: activeTheme.colors.border,
+        borderColor: activeTheme.colors.separator,
         opacity: pressed ? 0.8 : 1,
       })}
     >
       <Stack gap={1}>
-        <Text variant="label" numberOfLines={1}>
+        <Text variant="body" style={{ fontWeight: '600' }} numberOfLines={2}>
           {event.title}
         </Text>
         <Inline gap={1}>

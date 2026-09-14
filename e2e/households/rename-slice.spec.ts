@@ -137,6 +137,7 @@ test('renames the explicit current household [RED:HOUSEHOLD_RENAME]', async ({ p
   await expect(page).toHaveURL(/\/households/);
 
   // --- Precondition: settings navigation reaches the household roster ---
+  await page.getByRole('tab', { name: '家庭', exact: true }).click();
   await page.getByLabel('打开家庭设置').click();
   await expect(page).toHaveURL(/\/households\/[^/]+\/settings$/);
   await expect(page.getByRole('main').getByText('温暖小家').first()).toBeVisible();

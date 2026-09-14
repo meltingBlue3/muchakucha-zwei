@@ -21,7 +21,7 @@ export interface HouseholdContextValue {
   currentHouseholdId: string | null;
   accessChangedHouseholdName: string | undefined;
   switchHousehold: (householdId: string) => Promise<boolean>;
-  refreshHouseholds: () => Promise<boolean>;
+  refreshHouseholds: (preferredHouseholdId?: string) => Promise<boolean>;
   enterAccessChanged: (lostHouseholdName?: string) => void;
   resolve: () => Promise<void>;
 }
@@ -141,13 +141,8 @@ export function createHouseholdProvider(
       } catch {
         if (!mountedRef.current) return;
 
-        // If we have cached data, retain it as offline.
-        const cachedId = store.getCurrentId();
-        if (cachedId !== null) {
-          setViewState('offlineRetained');
-        } else {
-          setViewState('noHousehold');
-        }
+        // A failed request cannot establish that the account has no household.
+        setViewState('offlineRetained');
       }
     }, [getAccessToken, householdApi, store]);
 
@@ -160,10 +155,10 @@ export function createHouseholdProvider(
       return promise;
     }, [doResolve]);
 
-    const refreshHouseholds = useCallback(async (): Promise<boolean> => {
+    const refreshHouseholds = useCallback(async (preferredHouseholdId?: string): Promise<boolean> => {
       setViewState('resolving');
       // Persist current selection during refresh.
-      const priorId = currentHouseholdId;
+      const priorId = preferredHouseholdId ?? currentHouseholdId;
       const accessToken = getAccessToken();
       if (accessToken === null) {
         setViewState('noHousehold');
@@ -178,13 +173,18 @@ export function createHouseholdProvider(
           setHouseholds([]);
           setCurrentHouseholdId(null);
           setViewState('noHousehold');
-          return true;
+          return preferredHouseholdId === undefined;
         }
 
+        if (preferredHouseholdId !== undefined && !result.items.some((h) => h.id === preferredHouseholdId)) {
+          setViewState('ready');
+          return false;
+        }
         const timestamps = store.getAccessTimestamps();
         const validId = priorId !== null && result.items.some((h) => h.id === priorId)
           ? priorId
           : result.items[0]!.id;
+        await store.setCurrentId(validId);
         const sorted = sortHouseholds(result.items, validId, timestamps);
         setHouseholds(sorted);
         setCurrentHouseholdId(validId);
@@ -201,7 +201,7 @@ export function createHouseholdProvider(
         return true;
       } catch {
         if (mountedRef.current) {
-          setViewState(priorId !== null ? 'offlineRetained' : 'noHousehold');
+          setViewState('offlineRetained');
         }
         return false;
       }

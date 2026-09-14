@@ -5,7 +5,7 @@ import { useTheme } from '@shopify/restyle';
 
 import type { SessionStateStore } from './session-state';
 import type { SessionTransport } from '../../platform/session/session-transport';
-import { Banner, Button, Heading, Stack, Text } from '../../ui/primitives';
+import { Banner, Heading, Stack, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
 
 const LOGOUT_ERROR = '暂时无法退出。请检查网络后重试。';
@@ -58,7 +58,7 @@ export const LogoutAction = ({
           labelled "退出登录" buttons on screen at once, which is confusing
           both visually and for screen readers (duplicate accessible names). */}
       {!confirming ? (
-        <Button label="退出登录" onPress={() => setConfirming(true)} />
+        <Pressable accessibilityRole="button" accessibilityLabel="退出登录" onPress={() => setConfirming(true)} style={({ pressed }) => ({ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', alignItems: 'center', borderWidth: activeTheme.borderWidths.default, borderColor: activeTheme.colors.border, borderRadius: activeTheme.borderRadii.md, backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.surface })}><Text variant="label" color="destructive">退出登录</Text></Pressable>
       ) : (
         <Stack
           accessibilityLabel="退出这台设备？"

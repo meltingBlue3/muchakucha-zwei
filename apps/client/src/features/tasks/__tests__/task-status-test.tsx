@@ -34,6 +34,12 @@ function task(overrides: Partial<TaskResponseDto>): TaskResponseDto {
 }
 
 describe('cancelled task status', () => {
+  test('completed past-due tasks do not retain the overdue warning', async () => {
+    const view = await render(<MuchakuchaThemeProvider><TaskCard task={task({ status: 'completed', dueDate: dateAtOffset(-2) })} onPress={jest.fn()} /></MuchakuchaThemeProvider>);
+    expect(view.getByText('已完成')).toBeTruthy();
+    expect(view.queryByText('逾期')).toBeNull();
+  });
+
   test.each([
     ['due today', dateAtOffset(0)],
     ['overdue', dateAtOffset(-2)],

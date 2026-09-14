@@ -1,3 +1,4 @@
+import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
@@ -52,6 +53,7 @@ const EMPTY_TASK: TaskInput = {
 };
 
 interface TaskFormProps {
+  draftKey?: string;
   initial?: TaskResponseDto;
   members: MemberOption[];
   onSubmit: (data: CreateTaskDto) => Promise<void>;
@@ -63,7 +65,7 @@ interface TaskFormProps {
   onLabelChange?: (labelIds: string[]) => void;
 }
 
-export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: TaskFormProps) {
+export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: TaskFormProps) {
   const activeTheme = useTheme<Theme>();
   // A brand-new task's due date starts empty (`EMPTY_TASK.dueDate`), and the
   // server ignores the top-level `dueDate` entirely once `recurrence` is
@@ -87,7 +89,7 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   });
-  const [form, setForm] = useState<TaskInput>(() => {
+  const [form, setForm] = useWorkspaceState<TaskInput>(draftKey, () => {
     if (initial) {
       // Drop assignees who are no longer household members — the picker
       // below only offers current members as choices, so a stale ID here
@@ -114,7 +116,7 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
     if (key === 'recurrence') setRecurrenceErrors({});
-  }, []);
+  }, [setForm]);
 
   const handleSubmit = useCallback(async () => {
     if (form.title.trim().length === 0) {
@@ -179,6 +181,7 @@ export function TaskForm({ initial, members, onSubmit, onCancel, submitLabel, is
 
   return (
     <Stack gap={4}>
+      {draftKey ? <Text variant="caption">未保存内容会在本次登录期间暂存。保存成功后清除。</Text> : null}
       {/* Title */}
       <Stack gap={1}>
         <Text variant="label">标题</Text>

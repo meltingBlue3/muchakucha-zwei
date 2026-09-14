@@ -128,7 +128,7 @@ test.describe('recurring event and task journeys', () => {
     const monthStart = toIsoDate(dateAt(now.getFullYear(), now.getMonth(), 1));
     const monthEnd = toIsoDate(dateAt(now.getFullYear(), now.getMonth() + 1, 0));
     await loginFixture(page, account.email);
-    await page.getByLabel('打开家庭日历').click();
+    await page.getByRole('tab', { name: '日历', exact: true }).click();
     await expect(page.getByLabel('创建事件')).toBeVisible();
     await page.getByLabel('创建事件').click();
     await expect(page.getByRole('main', { name: '创建事件' })).toBeVisible();
@@ -214,7 +214,7 @@ test.describe('recurring event and task journeys', () => {
     const removedWeekday = byWeekday.find((weekday) => weekday !== new Date(`${selected.occurrenceDate}T00:00:00Z`).getUTCDay())!;
 
     await loginFixture(page, account.email);
-    await page.getByLabel('打开家庭日历').click();
+    await page.getByRole('tab', { name: '日历', exact: true }).click();
     await page.getByLabel(new RegExp(`^${Number(String(selected.occurrenceDate).slice(-2))}日，\\d+个事件$`)).click();
     await page.getByLabel(`事件：${eventTitle}，重复`).click();
     await page.getByLabel('编辑事件').click();
@@ -292,7 +292,7 @@ test.describe('recurring event and task journeys', () => {
     expect(taskToCancel).toBeDefined();
 
     await page.goto(`/households/${householdId}`);
-    await page.getByLabel('打开今日视图').click();
+    await page.getByRole('tab', { name: '今日', exact: true }).click();
     await expect(page.getByRole('main', { name: '今日视图' })).toBeVisible();
     // Exactly one occurrence is due today, and it is in 今日待办 before the cancel —
     // this is the "before" half of the exclusion assertion, so the "after" half
@@ -317,17 +317,18 @@ test.describe('recurring event and task journeys', () => {
     expect(afterCancel.filter((task) => task.id !== taskToCancel.id).every((task) => task.status === 'pending')).toBe(true);
 
     await page.goto(`/households/${householdId}`);
-    await page.getByLabel('打开家庭任务').click();
+    await page.getByRole('tab', { name: '任务', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/households/${householdId}/tasks$`));
     await expect(page.getByText('已取消', { exact: true })).toBeVisible();
 
     await page.goto(`/households/${householdId}`);
-    await page.getByLabel('打开今日视图').click();
+    await page.getByRole('tab', { name: '今日', exact: true }).click();
     await expect(page.getByRole('main', { name: '今日视图' })).toBeVisible();
     // The cancelled occurrence is gone from 今日待办 — the section held only that
     // one task, so it disappears entirely. Its future siblings are untouched and
     // remain listed under the upcoming section.
     await expect(page.getByText(/^今日待办 \(/)).toHaveCount(0);
+    await page.getByRole('button', { name: /^查看后续安排/ }).click();
     await expect(page.getByLabel(`任务：${taskTitle}，重复`).first()).toBeVisible();
   });
 });

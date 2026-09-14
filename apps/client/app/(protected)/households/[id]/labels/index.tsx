@@ -54,7 +54,7 @@ export default function LabelsIndexRoute() {
   const [deleting, setDeleting] = useState(false);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === currentHouseholdId) ?? null;
+  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
 
   const fetchLabels = useCallback(async () => {
     if (householdId === undefined || householdId === '') return;
@@ -91,7 +91,7 @@ export default function LabelsIndexRoute() {
   }, [fetchLabels]);
 
   const handleSwitch = useCallback(async (householdId: string) => {
-    if (householdId === currentHouseholdId) {
+    if (householdId === (id ?? currentHouseholdId)) {
       setSwitcherOpen(false);
       return;
     }
@@ -100,7 +100,7 @@ export default function LabelsIndexRoute() {
       void router.replace(`/households/${encodeURIComponent(householdId)}/labels`);
     }
     setSwitcherOpen(false);
-  }, [currentHouseholdId, switchHousehold, router]);
+  }, [id, currentHouseholdId, switchHousehold, router]);
 
   const handleCreate = useCallback(async () => {
     if (householdId === undefined || householdId === '' || newName.trim() === '') return;
@@ -416,7 +416,7 @@ export default function LabelsIndexRoute() {
       </AppShell>
 
       <HouseholdSwitcher
-        currentHouseholdId={currentHouseholdId}
+        currentHouseholdId={id ?? currentHouseholdId}
         households={households}
         onCreateNew={() => {
           void router.push('/households/new');
