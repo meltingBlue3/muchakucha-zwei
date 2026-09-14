@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { isEmail } from 'class-validator';
 import * as argon2 from 'argon2';
@@ -17,9 +17,7 @@ const RESEND_COOLDOWN_MS = 60 * 1_000;
 const REFRESH_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000;
 const SESSION_ABSOLUTE_LIFETIME_MS = 90 * 24 * 60 * 60 * 1_000;
 
-interface RegistrationResult {
-  readonly pendingProof: string;
-}
+type RegistrationResult = { readonly pendingProof: string } | SessionCredentials;
 
 interface CompleteVerificationInput {
   readonly token: string;
@@ -108,8 +106,13 @@ export class AuthService {
   ) {}
 
   async login(input: LoginDto): Promise<SessionCredentials> {
-    const emailCanonical = input.email.trim().normalize('NFC').toLowerCase();
-    const user = await this.prisma.user.findUnique({ where: { emailCanonical } });
+    if ((input.username !== undefined) === (input.email !== undefined)) {
+      throw validationError('username', 'EXACTLY_ONE_IDENTITY');
+    }
+    const identity = input.username !== undefined
+      ? { usernameCanonical: input.username.trim().normalize('NFC').toLowerCase() }
+      : { emailCanonical: input.email!.trim().normalize('NFC').toLowerCase() };
+    const user = await this.prisma.user.findUnique({ where: identity });
     const passwordMatches = user === null
       ? await argon2.hash(input.password, {
         type: argon2.argon2id,
@@ -122,10 +125,12 @@ export class AuthService {
     if (user === null || !passwordMatches) {
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
-        message: 'The email or password is incorrect.',
+        message: input.username === undefined
+          ? 'The email or password is incorrect.'
+          : 'The username or password is incorrect.',
       });
     }
-    if (user.emailVerifiedAt === null) {
+    if (user.username === null && user.emailVerifiedAt === null) {
       throw new ForbiddenException({
         code: 'EMAIL_NOT_VERIFIED',
         message: 'Verify your email before signing in.',
@@ -251,8 +256,18 @@ export class AuthService {
   }
 
   async register(input: RegisterDto): Promise<RegistrationResult> {
-    const emailCanonical = input.email.trim().normalize('NFC').toLowerCase();
-    const deliveryEmail = input.email.trim().normalize('NFC');
+    if (input.username !== undefined) {
+      if (input.email !== undefined || input.displayName !== undefined) {
+        throw validationError('username', 'EXACTLY_ONE_IDENTITY');
+      }
+      return this.registerUsername(input.username, input.password, input.confirmPassword);
+    }
+    if (input.email === undefined || input.displayName === undefined || input.confirmPassword !== undefined) {
+      throw validationError('username', 'EXACTLY_ONE_IDENTITY');
+    }
+    const email = input.email;
+    const emailCanonical = email.trim().normalize('NFC').toLowerCase();
+    const deliveryEmail = email.trim().normalize('NFC');
     const displayName = input.displayName.trim();
     if (!isEmail(emailCanonical)) {
       throw validationError('email', 'isEmail');
@@ -282,7 +297,7 @@ export class AuthService {
       await this.prisma.$transaction(async (transaction) => {
         const user = await transaction.user.create({
           data: {
-            email: input.email,
+            email,
             emailCanonical,
             displayName,
             passwordHash,
@@ -317,6 +332,58 @@ export class AuthService {
     return { pendingProof };
   }
 
+  private async registerUsername(usernameInput: string, password: string, confirmPassword: string | undefined): Promise<SessionCredentials> {
+    const username = usernameInput.trim().normalize('NFC');
+    if (Array.from(username).length < 3 || Array.from(username).length > 32 || !/^[\p{L}\p{N}._-]+$/u.test(username)) {
+      throw validationError('username', 'INVALID_USERNAME');
+    }
+    if (Array.from(password).length < 8 || Array.from(password).length > 128) {
+      throw validationError('password', 'length');
+    }
+    if (confirmPassword !== password) {
+      throw validationError('confirmPassword', 'PASSWORD_MISMATCH');
+    }
+    const passwordHash = await argon2.hash(password, {
+      type: argon2.argon2id,
+      memoryCost: 19_456,
+      timeCost: 2,
+      parallelism: 1,
+    });
+    const refreshToken = opaqueToken();
+    const now = new Date();
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          username,
+          usernameCanonical: username.toLowerCase(),
+          displayName: username,
+          passwordHash,
+          sessions: {
+            create: {
+              absoluteEndsAt: new Date(now.getTime() + SESSION_ABSOLUTE_LIFETIME_MS),
+              refreshTokens: {
+                create: {
+                  tokenHash: hashOpaqueToken(refreshToken),
+                  expiresAt: new Date(now.getTime() + REFRESH_LIFETIME_MS),
+                },
+              },
+            },
+          },
+        },
+        select: { id: true, sessions: { select: { id: true } } },
+      });
+      return {
+        accessToken: await this.signAccessToken(user.id, user.sessions[0]!.id),
+        refreshToken,
+      };
+    } catch (error) {
+      if (isUniqueConflict(error)) {
+        throw new ConflictException({ code: 'USERNAME_TAKEN', message: 'This username is already taken.' });
+      }
+      throw error;
+    }
+  }
+
   async requestPasswordReset(email: string): Promise<RequestPasswordResetResult> {
     const emailCanonical = email.trim().normalize('NFC').toLowerCase();
     if (!isEmail(emailCanonical)) {
@@ -349,7 +416,7 @@ export class AuthService {
       return { kind: 'created', user } as const;
     }, { isolationLevel: 'Serializable' });
 
-    if (outcome.kind === 'created') {
+    if (outcome.kind === 'created' && outcome.user.email !== null) {
       void this.mailPort.sendPasswordReset({
         to: outcome.user.email.trim().normalize('NFC'),
         recipientName: outcome.user.displayName,
@@ -417,11 +484,13 @@ export class AuthService {
             message: 'The password reset credential is invalid or expired.',
           });
         }
-        void this.mailPort.sendPasswordChangedNotice({
-          to: outcome.user.email.trim().normalize('NFC'),
-          recipientName: outcome.user.displayName,
-          changedAt: outcome.changedAt,
-        }).catch(() => undefined);
+        if (outcome.user.email !== null) {
+          void this.mailPort.sendPasswordChangedNotice({
+            to: outcome.user.email.trim().normalize('NFC'),
+            recipientName: outcome.user.displayName,
+            changedAt: outcome.changedAt,
+          }).catch(() => undefined);
+        }
         return;
       } catch (error) {
         if (this.isSerializationConflict(error) && attempt < 2) continue;
@@ -578,7 +647,7 @@ export class AuthService {
         retryAfterSeconds: outcome.retryAfterSeconds,
       }, HttpStatus.TOO_MANY_REQUESTS);
     }
-    if (outcome.kind === 'created') {
+    if (outcome.kind === 'created' && outcome.user.email !== null) {
       void this.mailPort.sendEmailVerification({
         to: outcome.user.email.trim().normalize('NFC'),
         recipientName: outcome.user.displayName,

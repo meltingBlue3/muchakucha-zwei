@@ -121,6 +121,9 @@
           },
           "400": {
             "description": "Registration input or transport is invalid."
+          },
+          "409": {
+            "description": "The username is already taken."
           }
         },
         "summary": "",
@@ -2217,10 +2220,18 @@
       "LoginDto": {
         "type": "object",
         "properties": {
+          "username": {
+            "type": "string",
+            "example": "family_member",
+            "minLength": 3,
+            "maxLength": 64,
+            "description": "Allows Unicode lowercase expansion of a registered username."
+          },
           "email": {
             "type": "string",
             "example": "member@example.com",
-            "maxLength": 320
+            "maxLength": 320,
+            "description": "Legacy email login; supply exactly one of username or email."
           },
           "password": {
             "type": "string",
@@ -2237,7 +2248,6 @@
           }
         },
         "required": [
-          "email",
           "password",
           "platform"
         ]
@@ -2285,21 +2295,37 @@
       "RegisterDto": {
         "type": "object",
         "properties": {
+          "username": {
+            "type": "string",
+            "example": "family_member",
+            "minLength": 3,
+            "maxLength": 32,
+            "description": "Use username and confirmPassword for immediate registration."
+          },
           "email": {
             "type": "string",
             "example": "member@example.com",
-            "maxLength": 320
+            "maxLength": 320,
+            "description": "Legacy email registration; cannot be combined with username."
           },
           "displayName": {
             "type": "string",
             "example": "Member",
-            "maxLength": 80
+            "maxLength": 80,
+            "description": "Required only for legacy email registration."
           },
           "password": {
             "type": "string",
-            "minLength": 12,
+            "minLength": 8,
             "maxLength": 128,
             "writeOnly": true
+          },
+          "confirmPassword": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128,
+            "writeOnly": true,
+            "description": "Required and must match password for username registration."
           },
           "platform": {
             "type": "string",
@@ -2310,8 +2336,6 @@
           }
         },
         "required": [
-          "email",
-          "displayName",
           "password",
           "platform"
         ]
@@ -2328,6 +2352,14 @@
           "pendingProof": {
             "type": "string",
             "description": "Native-only pending proof for encrypted device storage."
+          },
+          "accessToken": {
+            "type": "string",
+            "description": "Access credential issued immediately for username registration."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Native-only refresh credential for username registration."
           }
         },
         "required": [
@@ -2476,6 +2508,10 @@
             "type": "string",
             "example": "member@example.com"
           },
+          "username": {
+            "type": "string",
+            "example": "family_member"
+          },
           "displayName": {
             "type": "string",
             "example": "Family member"
@@ -2573,6 +2609,10 @@
             "type": "string",
             "format": "email",
             "example": "owner@example.test"
+          },
+          "username": {
+            "type": "string",
+            "example": "family-member"
           },
           "role": {
             "type": "string",
@@ -2762,11 +2802,13 @@
             "format": "email",
             "example": "friend@example.test",
             "description": "Canonical invited email address. Role is server-fixed to MEMBER per D-05."
+          },
+          "username": {
+            "type": "string",
+            "example": "family-member",
+            "description": "An existing username. Supply exactly one of username or email."
           }
-        },
-        "required": [
-          "email"
-        ]
+        }
       },
       "SendHouseholdInvitationResponseDto": {
         "type": "object",
@@ -2778,6 +2820,10 @@
           "message": {
             "type": "string",
             "example": "邀请已发送。"
+          },
+          "invitationUrl": {
+            "type": "string",
+            "description": "Share this link with the invited username account."
           }
         },
         "required": [
@@ -2796,6 +2842,10 @@
             "type": "string",
             "format": "email",
             "example": "pending@example.test"
+          },
+          "username": {
+            "type": "string",
+            "example": "family-member"
           },
           "status": {
             "type": "string",
@@ -2852,6 +2902,10 @@
           "message": {
             "type": "string",
             "example": "邀请已重新发送。"
+          },
+          "invitationUrl": {
+            "type": "string",
+            "description": "New link replacing the previous username invitation."
           }
         },
         "required": [

@@ -6,6 +6,7 @@ import {
 
 import {
   type IssuedSession,
+  type LoginCredentials,
   type RestoreFailureOutcome,
 } from '../platform/session/session-transport';
 
@@ -24,7 +25,7 @@ export type GeneratedSessionClient = Pick<
 export interface SessionApiClient {
   getCurrentUser(): Promise<CurrentUserDto>;
   login(
-    credentials: Omit<LoginDto, 'platform'>,
+    credentials: LoginCredentials,
     platform: LoginDto['platform'],
   ): Promise<IssuedSession>;
   refreshNative(refreshToken: string): Promise<IssuedSession>;

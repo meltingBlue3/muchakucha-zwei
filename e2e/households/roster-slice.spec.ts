@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
+import { loginEmailFixture } from '../support/auth';
+
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
@@ -175,20 +177,15 @@ test('shows the isolated totally ordered roster', async ({ page, request }) => {
 
   expect(adminRoster.members[2].role).toBe('MEMBER');
 
-  await page.goto('/login');
-  await page.getByLabel('邮箱').fill(owner.email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
+  await loginEmailFixture(page, owner.email, password);
 
   // --- Verify: the /households selector route renders ---
   await page.goto('/households');
   await expect(page).toHaveURL(/\/households/);
 
   // --- Verify: navigation to the owned household destination works ---
-  // Click "查看成员" on the HouseholdCard to navigate.
-  await page.getByRole('button', { name: '查看成员' }).first().click();
-  await expect(page).toHaveURL(/\/households\//);
+  await page.getByLabel('打开家庭设置').click();
+  await expect(page).toHaveURL(/\/households\/[^/]+\/settings$/);
 
   const rosterMain = page.getByRole('main');
 

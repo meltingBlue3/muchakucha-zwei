@@ -45,6 +45,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string>();
   const [success, setSuccess] = useState<string>();
+  const [username, setUsername] = useState<string>();
   const {
     clearErrors,
     control,
@@ -65,7 +66,10 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
     const controller = new AbortController();
     void apiClient
       .getMe(accessToken, controller.signal)
-      .then((user) => reset({ displayName: user.displayName }))
+      .then((user) => {
+        reset({ displayName: user.displayName });
+        setUsername(user.username);
+      })
       .catch((error: unknown) => {
         if (!(error instanceof Error && error.name === 'AbortError')) setLoadError(GENERIC_ERROR);
       })
@@ -134,6 +138,12 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport }: 
       {success ? (
         <Stack accessibilityLiveRegion="polite" accessibilityRole={'status' as never} gap={1}>
           <Text>{success}</Text>
+        </Stack>
+      ) : null}
+      {username ? (
+        <Stack gap={1}>
+          <Text variant="label">用户名</Text>
+          <Text>{username}</Text>
         </Stack>
       ) : null}
       <Controller

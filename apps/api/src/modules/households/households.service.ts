@@ -17,6 +17,7 @@ interface HouseholdMemberRow {
   displayName: string;
   email: string;
   emailCanonical: string;
+  username: string | null;
   dbRole: string;
   isOwner: boolean;
 }
@@ -66,6 +67,11 @@ function invitationUrl(token: string, environment: NodeJS.ProcessEnv = process.e
   // The route at apps/client/app/invite/[token].tsx extracts the token from the path.
   const link = new URL(`/invite/${encodeURIComponent(token)}`, parsed);
   return link.href;
+}
+
+function shareInvitationUrl(token: string, environment: NodeJS.ProcessEnv = process.env): string {
+  const origin = environment.WEB_ORIGIN?.split(',').map((value) => value.trim()).find(Boolean);
+  return invitationUrl(token, { ...environment, EMAIL_LINK_ORIGIN: origin });
 }
 
 @Injectable()
@@ -177,8 +183,9 @@ export class HouseholdsService {
       membershipId: m.id,
       userId: m.userId,
       displayName: m.user.displayName,
-      email: m.user.email,
-      emailCanonical: m.user.emailCanonical,
+      email: m.user.email ?? '',
+      emailCanonical: m.user.usernameCanonical ?? m.user.emailCanonical ?? '',
+      username: m.user.username,
       dbRole: m.role,
       isOwner: m.id === household.ownerMembershipId,
     }));
@@ -225,6 +232,7 @@ export class HouseholdsService {
       userId: r.userId,
       displayName: r.displayName,
       email: r.email,
+      ...(r.username !== null ? { username: r.username } : {}),
       role: (r.isOwner ? 'OWNER' : r.dbRole) as 'OWNER' | 'ADMIN' | 'MEMBER',
       isCurrentUser: r.userId === actorId,
     }));
@@ -288,10 +296,13 @@ export class HouseholdsService {
   async sendHouseholdInvitation(
     actorId: string,
     householdId: string,
-    email: string,
-  ): Promise<{ code: 'INVITATION_SENT'; message: string }> {
-    const emailCanonical = email.trim().normalize('NFC').toLowerCase();
-    if (!isEmail(emailCanonical)) {
+    input: { email?: string; username?: string },
+  ): Promise<{ code: 'INVITATION_SENT'; message: string; invitationUrl?: string }> {
+    if ((input.email === undefined) === (input.username === undefined)) {
+      throw validationError('username', 'exactlyOneRecipient');
+    }
+    const emailCanonical = input.email?.trim().normalize('NFC').toLowerCase() ?? '';
+    if (input.email !== undefined && !isEmail(emailCanonical)) {
       throw validationError('email', 'isEmail');
     }
 
@@ -337,14 +348,25 @@ export class HouseholdsService {
       });
     }
 
-    // Check if email is already a current member.
+    const recipient = input.username === undefined ? null : await this.prisma.user.findUnique({
+      where: { usernameCanonical: input.username.trim().normalize('NFC').toLowerCase() },
+      select: { id: true, username: true },
+    });
+    if (input.username !== undefined && recipient === null) {
+      throw new BadRequestException({
+        code: 'INVITATION_USER_NOT_FOUND',
+        message: '未找到这个用户名，请让家人先注册账户。',
+      });
+    }
+
+    // A username invitation is bound to the registered account, never an empty email.
     const existingMember = household.memberships.find(
-      (m) => m.user.emailCanonical === emailCanonical,
+      (m) => recipient !== null ? m.userId === recipient.id : m.user.emailCanonical === emailCanonical,
     );
     if (existingMember !== undefined) {
       throw new ConflictException({
         code: 'ALREADY_MEMBER',
-        message: '这个邮箱已经是该家庭的成员。',
+        message: '这个账户已经是该家庭的成员。',
       });
     }
 
@@ -357,14 +379,14 @@ export class HouseholdsService {
     // Transactionally rotate predecessor and create new invitation.
     const inviterDisplayName = actorMembership.user.displayName;
     const householdName = household.name;
-    const deliveryEmail = email.trim().normalize('NFC');
+    const link = recipient !== null ? shareInvitationUrl(rawToken) : invitationUrl(rawToken);
 
     await this.prisma.$transaction(async (transaction) => {
       // Invalidate any pending active invitation for this household+email.
       await transaction.invitation.updateMany({
         where: {
           householdId,
-          emailCanonical,
+          ...(recipient !== null ? { recipientUserId: recipient.id } : { emailCanonical, recipientUserId: null }),
           invalidatedAt: null,
           consumedAt: null,
         },
@@ -378,6 +400,8 @@ export class HouseholdsService {
           inviterMembershipId: actorMembership.id,
           householdId,
           emailCanonical,
+          recipientUserId: recipient?.id ?? null,
+          username: recipient?.username ?? null,
           hash: tokenHash,
           role: 'MEMBER',
           expiresAt,
@@ -385,10 +409,12 @@ export class HouseholdsService {
       });
     }, { isolationLevel: 'Serializable' });
 
-    // Send email after successful commit.
+    if (recipient !== null) {
+      return { code: 'INVITATION_SENT', message: '邀请链接已生成，请发给家人。', invitationUrl: link };
+    }
     await this.mailPort.sendHouseholdInvitation({
-      to: deliveryEmail,
-      invitationUrl: invitationUrl(rawToken),
+      to: input.email!.trim().normalize('NFC'),
+      invitationUrl: link,
       inviterDisplayName,
       householdDisplayName: householdName,
       expiresAt,
@@ -483,11 +509,13 @@ export class HouseholdsService {
       throw new BadRequestException(GENERIC_INVALID);
     }
 
-    // D-08: Email must match. Mismatch hides household and inviter details.
-    if (actor.emailCanonical !== invitation.emailCanonical) {
+    const recipientMatches = invitation.recipientUserId !== null
+      ? actorId === invitation.recipientUserId
+      : actor.emailCanonical !== null && actor.emailCanonical === invitation.emailCanonical;
+    if (!recipientMatches) {
       throw new ForbiddenException({
         code: 'INVITATION_EMAIL_MISMATCH',
-        message: '此邀请发给了另一个邮箱。请切换到受邀账户。',
+        message: '此邀请发给了另一个账户。请切换到受邀账户。',
       });
     }
 
@@ -552,6 +580,7 @@ export class HouseholdsService {
     invitations: Array<{
       id: string;
       emailCanonical: string;
+      username?: string;
       status: 'pending' | 'expired' | 'accepted' | 'revoked';
       expiresAt: string;
       role: string;
@@ -597,6 +626,7 @@ export class HouseholdsService {
       invitations: invitations.map((inv) => ({
         id: inv.id,
         emailCanonical: inv.emailCanonical,
+        ...(inv.username !== null ? { username: inv.username } : {}),
         status: inv.consumedAt !== null
           ? 'accepted' as const
           : inv.invalidatedAt !== null
@@ -615,7 +645,7 @@ export class HouseholdsService {
     actorId: string,
     householdId: string,
     invitationId: string,
-  ): Promise<{ code: 'INVITATION_RESENT'; message: string }> {
+  ): Promise<{ code: 'INVITATION_RESENT'; message: string; invitationUrl?: string }> {
     const household = await this.prisma.household.findUnique({
       where: { id: householdId },
       include: {
@@ -686,6 +716,7 @@ export class HouseholdsService {
     const householdName = invitation.household.name;
     const inviterDisplayName = invitation.inviterUser.displayName;
     const deliveryEmail = invitation.emailCanonical;
+    const link = invitation.recipientUserId !== null ? shareInvitationUrl(rawToken) : invitationUrl(rawToken);
 
     await this.prisma.$transaction(async (transaction) => {
       // Invalidate the current invitation.
@@ -705,6 +736,8 @@ export class HouseholdsService {
           inviterMembershipId: actorMembership.id,
           householdId,
           emailCanonical: invitation.emailCanonical,
+          recipientUserId: invitation.recipientUserId,
+          username: invitation.username,
           hash: tokenHash,
           role: 'MEMBER',
           expiresAt,
@@ -712,10 +745,12 @@ export class HouseholdsService {
       });
     }, { isolationLevel: 'Serializable' });
 
-    // Send email after successful commit.
+    if (invitation.recipientUserId !== null) {
+      return { code: 'INVITATION_RESENT', message: '邀请链接已更新，请发给家人。', invitationUrl: link };
+    }
     await this.mailPort.sendHouseholdInvitation({
       to: deliveryEmail,
-      invitationUrl: invitationUrl(rawToken),
+      invitationUrl: link,
       inviterDisplayName,
       householdDisplayName: householdName,
       expiresAt,

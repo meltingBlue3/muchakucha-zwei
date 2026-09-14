@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/react-native';
 
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
-import { ConfirmationPage, InvitationRow } from '../../../ui/household-components';
+import { ConfirmationPage, InvitationRow, MemberRow } from '../../../ui/household-components';
 
 const pendingInvitation = {
   id: 'inv-1',
@@ -13,6 +13,27 @@ const pendingInvitation = {
 };
 
 describe('InvitationRow and ConfirmationPage', () => {
+  test('shows usernames for members and invitations without email', async () => {
+    const onResend = jest.fn();
+    const view = await render(
+      <MuchakuchaThemeProvider>
+        <MemberRow member={{
+          membershipId: 'member-1', userId: 'user-1', displayName: '家人',
+          username: 'family-member', email: '', role: 'MEMBER', isCurrentUser: false,
+        }} />
+        <InvitationRow
+          invitation={{ ...pendingInvitation, emailCanonical: '', username: 'another-member' }}
+          canManage={true}
+          onResend={onResend}
+        />
+      </MuchakuchaThemeProvider>,
+    );
+    expect(view.getByText('family-member')).toBeTruthy();
+    expect(view.getByText('another-member')).toBeTruthy();
+    fireEvent.press(view.getByLabelText('重新发送邀请给 another-member'));
+    expect(onResend).toHaveBeenCalledWith('inv-1');
+  });
+
   test('shows pending invitation status and resend/revoke actions', async () => {
     const onResend = jest.fn();
     const onRevoke = jest.fn();

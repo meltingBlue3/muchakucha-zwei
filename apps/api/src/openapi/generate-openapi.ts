@@ -7,24 +7,31 @@ const packageRoot = resolve(repositoryRoot, 'packages/api-client');
 const generatedRoot = resolve(packageRoot, 'src/generated');
 
 const modelsSource = `// Generated from openapi.json. Do not edit.
-export interface RegisterDto {
-  email: string;
-  displayName: string;
+export type RegisterDto = {
   password: string;
   platform: 'native' | 'web';
-}
+} & (
+  | { username: string; confirmPassword: string; email?: never; displayName?: never }
+  | { email: string; displayName: string; username?: never; confirmPassword?: never }
+);
 
 export interface RegistrationAcceptedDto {
   code: 'REGISTRATION_ACCEPTED';
+  /** Username registration signs in immediately. */
+  accessToken?: string;
+  /** Native-only refresh credential for username registration. */
+  refreshToken?: string;
   /** Native-only pending proof. Web responses omit this property. */
   pendingProof?: string;
 }
 
-export interface LoginDto {
-  email: string;
+export type LoginDto = {
   password: string;
   platform: 'native' | 'web';
-}
+} & (
+  | { username: string; email?: never }
+  | { email: string; username?: never }
+);
 
 export interface LoginResponseDto {
   accessToken: string;
@@ -49,6 +56,7 @@ export interface UpdateMeDto {
 
 export interface CurrentUserDto {
   id: string;
+  username?: string;
   email: string;
   displayName: string;
   emailVerified: boolean;
@@ -136,6 +144,7 @@ export interface GetHouseholdMemberDto {
   userId: string;
   displayName: string;
   email: string;
+  username?: string;
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
   isCurrentUser: boolean;
 }
@@ -148,14 +157,15 @@ export interface GetHouseholdResponseDto {
   members: GetHouseholdMemberDto[];
 }
 
-export interface SendHouseholdInvitationDto {
-  /** Canonical invited email address. Role is server-fixed to MEMBER per D-05. */
-  email: string;
-}
+/** Invite a registered username, or use the legacy email delivery flow. */
+export type SendHouseholdInvitationDto =
+  | { username: string; email?: never }
+  | { email: string; username?: never };
 
 export interface SendHouseholdInvitationResponseDto {
   code: 'INVITATION_SENT';
   message: string;
+  invitationUrl?: string;
 }
 
 export interface InvitationPreviewResponseDto {
@@ -172,6 +182,7 @@ export interface AcceptInvitationDto {
 export interface InvitationListItemDto {
   id: string;
   emailCanonical: string;
+  username?: string;
   status: 'pending' | 'expired' | 'accepted' | 'revoked';
   expiresAt: string;
   role: string;
@@ -185,6 +196,7 @@ export interface ListInvitationsResponseDto {
 export interface ResendInvitationResponseDto {
   code: 'INVITATION_RESENT';
   message: string;
+  invitationUrl?: string;
 }
 
 export interface RevokeInvitationResponseDto {

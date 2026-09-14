@@ -17,15 +17,13 @@ test.describe('Web authentication accessibility matrix', () => {
     });
   }
 
-  test('has no axe violations across delivered auth, result, and profile states', async ({ context, page }) => {
+  test('has no axe violations across registration and profile states', async ({ context, page }) => {
     test.setTimeout(60_000);
     const publicStates = [
       { path: '/register', width: 320 },
-      { path: '/verify-pending?email=member%40example.test', width: 390 },
-      { path: '/forgot-password', width: 390 },
-      { path: '/auth/reset-password?token=e2e-invalid', width: 768 },
-      { path: '/reset-success', width: 768 },
-      { path: '/auth/verify-email?token=e2e-invalid', width: 390 },
+      { path: '/register', width: 390 },
+      { path: '/register', width: 768 },
+      { path: '/register', width: 1440 },
     ] as const;
 
     for (const state of publicStates) {
@@ -50,9 +48,10 @@ test.describe('Web authentication accessibility matrix', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           id: 'accessibility-user',
-          email: 'member@example.test',
+          username: 'family-member',
+          email: '',
           displayName: '家庭成员',
-          emailVerified: true,
+          emailVerified: false,
           hasHousehold: false,
         }),
       }),
@@ -68,30 +67,40 @@ test.describe('Web authentication accessibility matrix', () => {
 
   test('follows visual keyboard order and moves focus to the first invalid field', async ({ page }) => {
     await page.goto('/register');
-    await page.keyboard.press('Tab');
+    await page.getByLabel('用户名', { exact: true }).fill('family-member');
+    await page.getByLabel('密码', { exact: true }).fill('12345678');
+    await page.getByLabel('确认密码', { exact: true }).fill('12345678');
+    await page.getByLabel('用户名', { exact: true }).focus();
     const focusedLabels: string[] = [];
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       focusedLabels.push(
         await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? ''),
       );
       await page.keyboard.press('Tab');
     }
-    expect(focusedLabels.join(' ')).toMatch(/邮箱.*昵称.*密码/s);
+    expect(focusedLabels.join(' ')).toMatch(/用户名.*密码.*确认密码/s);
+    await page.getByLabel('用户名', { exact: true }).fill('');
     await page.getByRole('button', { name: '创建账户' }).click();
-    await expect(page.getByLabel('邮箱')).toBeFocused();
+    await expect(page.getByLabel('用户名', { exact: true })).toBeFocused();
   });
 
-  test('focuses resolved status headings and exposes live-region feedback', async ({ page }) => {
-    await page.goto('/auth/verify-email?token=e2e-invalid');
-    await expect(page).not.toHaveURL(/token=/i);
-    await expect(page.getByRole('heading')).toBeFocused();
-    await page.goto('/forgot-password');
-    await page.getByLabel('邮箱').fill('unknown@example.test');
-    await page.getByRole('button', { name: '发送重置链接' }).click();
-    await expect(page.getByRole('status')).toHaveAttribute('aria-live', /polite|assertive/);
+  test('exposes failed login feedback through an accessible live region', async ({ context, page }) => {
+    await context.route('**/api/v1/auth/login', (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'INVALID_CREDENTIALS' } }),
+      }),
+    );
+    await page.goto('/login');
+    await page.getByLabel('用户名', { exact: true }).fill('family-member');
+    await page.getByLabel('密码', { exact: true }).fill('incorrect password');
+    await page.getByRole('button', { name: '登录' }).click();
+    await expect(page.getByRole('alert')).toContainText(/用户名|密码/);
+    await expect(page.getByRole('alert')).toHaveAttribute('aria-live', /polite|assertive/);
   });
 
-  test('retains primary actions, errors, and email addresses at 200% zoom', async ({ page }) => {
+  test('retains primary actions, errors, and usernames at 200% zoom', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto('/register');
     await page.evaluate(() => {
@@ -99,7 +108,7 @@ test.describe('Web authentication accessibility matrix', () => {
     });
     await page.getByRole('button', { name: '创建账户' }).click();
     await expect(page.getByRole('button', { name: '创建账户' })).toBeVisible();
-    await expect(page.getByText(/请输入|必填/).first()).toBeVisible();
+    await expect(page.getByText(/用户名至少|请输入|必填/).first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 
@@ -116,8 +125,8 @@ test.describe('Web authentication accessibility matrix', () => {
     await page.emulateMedia({ forcedColors: 'active' });
     await page.goto('/login');
     await expect(page.locator('[data-testid="auth-decoration"]')).toBeHidden();
-    await page.getByLabel('邮箱').focus();
-    const outline = await page.getByLabel('邮箱').evaluate((element) => getComputedStyle(element).outlineStyle);
+    await page.getByLabel('用户名', { exact: true }).focus();
+    const outline = await page.getByLabel('用户名', { exact: true }).evaluate((element) => getComputedStyle(element).outlineStyle);
     expect(outline).not.toBe('none');
   });
 });

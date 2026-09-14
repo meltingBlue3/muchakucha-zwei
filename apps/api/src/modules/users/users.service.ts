@@ -5,13 +5,15 @@ import type { CurrentUserDto } from './dto/update-me.dto.js';
 const publicUserSelection = {
   id: true,
   email: true,
+  username: true,
   displayName: true,
   emailVerifiedAt: true,
 } as const;
 
 type PublicUserRecord = {
   id: string;
-  email: string;
+  email: string | null;
+  username: string | null;
   displayName: string;
   emailVerifiedAt: Date | null;
 };
@@ -46,7 +48,8 @@ export class UsersService {
   private toCurrentUser(user: PublicUserRecord): CurrentUserDto {
     return {
       id: user.id,
-      email: user.email,
+      email: user.email ?? '',
+      ...(user.username === null ? {} : { username: user.username }),
       displayName: user.displayName,
       emailVerified: user.emailVerifiedAt !== null,
       hasHousehold: false,

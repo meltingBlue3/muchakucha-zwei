@@ -2,8 +2,9 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 const currentUser = {
   displayName: '家庭成员',
-  email: 'verified-user@example.test',
-  emailVerified: true,
+  username: 'family-member',
+  email: '',
+  emailVerified: false,
   hasHousehold: false,
   id: 'playwright-user',
 };
@@ -20,13 +21,18 @@ async function waitForBootstrap(page: Page): Promise<void> {
 
 test.describe('Web login and session restoration', () => {
   test.describe.configure({ mode: 'serial' });
-  test('logs in a verified account and restores it after a fresh page without Web-visible refresh material', async ({
+  test('logs in a username account and restores it after a fresh page without Web-visible refresh material', async ({
     context,
     page,
   }) => {
     let authenticated = false;
     await mockCurrentUser(context);
     await context.route('**/api/v1/auth/login', async (route) => {
+      expect(route.request().postDataJSON()).toEqual({
+        username: 'family-member',
+        password: 'correct horse battery staple 2026',
+        platform: 'web',
+      });
       authenticated = true;
       await route.fulfill({
         status: 200,
@@ -45,12 +51,12 @@ test.describe('Web login and session restoration', () => {
       }),
     );
 
-    await page.goto('/login');
+    await page.goto('/login?intended=%2Fprofile');
     await waitForBootstrap(page);
-    await page.getByLabel('邮箱').fill('verified-user@example.test');
+    await page.getByLabel('用户名', { exact: true }).fill('family-member');
     await page.getByLabel('密码', { exact: true }).fill('correct horse battery staple 2026');
     await page.getByRole('button', { name: '登录' }).click();
-    await expect(page).toHaveURL(/\/household-handoff/);
+    await expect(page).toHaveURL(/\/profile/);
 
     const restored = await context.newPage();
     await restored.goto('/');

@@ -52,36 +52,26 @@ function useInvitationPreview(
   const [state, setState] = useState<FlowState>({ kind: 'loading' });
   const [accepting, setAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState(false);
-  const started = useRef(false);
 
   // Phase 1: preview the invitation
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
     const controller = new AbortController();
+    setState({ kind: 'loading' });
 
     void (async () => {
       try {
         const preview = await apiClient.previewInvitation(token, controller.signal);
+        if (controller.signal.aborted) return;
 
         if (preview.kind !== 'valid') {
           setState({ kind: 'terminal', reason: preview.kind as 'invalid' | 'expired' | 'used' });
           return;
         }
 
-        if (!isAuthenticated) {
-          // Show public preview with household name and inviter
-          setState({
-            kind: 'unauthenticated',
-            householdName: preview.householdName!,
-            inviterDisplayName: preview.inviterDisplayName!,
-          });
-          return;
-        }
-
-        // Authenticated — user can accept. Show matching state.
+        // Authentication can resolve while this request is pending. The effect
+        // below applies the latest account state without cancelling the preview.
         setState({
-          kind: 'matching',
+          kind: 'unauthenticated',
           householdName: preview.householdName!,
           inviterDisplayName: preview.inviterDisplayName!,
         });
@@ -92,7 +82,7 @@ function useInvitationPreview(
     })();
 
     return () => controller.abort();
-  }, [apiClient, token, isAuthenticated]);
+  }, [apiClient, token]);
 
   // Re-evaluate authentication transitions: when the user logs in,
   // the unauthenticated preview should transition to matching.
@@ -107,6 +97,10 @@ function useInvitationPreview(
             }
           : current,
       );
+    } else if (!isAuthenticated && state.kind === 'matching') {
+      setState((current) => current.kind === 'matching'
+        ? { ...current, kind: 'unauthenticated' }
+        : current);
     }
   }, [isAuthenticated, state.kind]);
 
@@ -120,7 +114,7 @@ function useInvitationPreview(
         const household = await apiClient.acceptInvitation(accessToken, { token });
         setState({ kind: 'accepted', household });
       } catch (error) {
-        // D-08: 403 means email mismatch
+        // The account must match the invitation recipient.
         if (
           typeof error === 'object' &&
           error !== null &&
@@ -269,13 +263,13 @@ export function InvitationFlow({
     );
   }
 
-  // ---- Authenticated & mismatch: email doesn't match (D-08) ----
+  // ---- Authenticated & mismatch: account doesn't match ----
   if (state.kind === 'mismatch') {
     return (
       <StatusPanel
         action={<Button label="切换账户" onPress={onSwitchAccount} />}
         body="请切换到受邀账户以接受此邀请。"
-        heading="此邀请发给了另一个邮箱"
+        heading="此邀请发给了另一个账户"
         kind="offline"
       />
     );

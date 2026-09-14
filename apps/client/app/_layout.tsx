@@ -1,30 +1,36 @@
-import { router, Stack, usePathname } from 'expo-router';
+import { router, Stack, useGlobalSearchParams, usePathname } from 'expo-router';
 import { useCallback } from 'react';
 
 import {
+  sanitizeIntendedRoute,
   SessionBootstrap,
+  type SafeIntendedRoute,
+  type SessionDestination,
 } from '../src/features/auth/session-bootstrap';
 import { sessionStateStore, sessionTransport } from '../src/features/auth/session-runtime';
 import { MuchakuchaThemeProvider } from '../src/ui/primitives';
 
 export default function RootLayout() {
   const pathname = usePathname();
-  const isPublicContinuation =
-    pathname === '/register' ||
-    pathname === '/verify-pending' ||
-    pathname === '/auth/verify-email' ||
-    pathname === '/forgot-password' ||
-    pathname === '/auth/reset-password' ||
-    pathname === '/reset-success';
+  const params = useGlobalSearchParams<{ intended?: string }>();
+  const intendedRoute = sanitizeIntendedRoute(
+    pathname === '/login' || pathname === '/register'
+      ? typeof params.intended === 'string' ? params.intended : undefined
+      : pathname,
+  );
+  const isPublicContinuation = pathname === '/register';
   const invitationPreview = pathname === '/invite' || pathname.startsWith('/invite/');
   const routeSession = useCallback(
-    (destination: '/household-handoff' | '/profile' | '/login' | '/offline', intendedRoute?: string) => {
+    (destination: SessionDestination, intended?: SafeIntendedRoute) => {
+      const reauthenticationRequired = sessionStateStore.get().kind === 'reauthRequired';
       router.replace({
         pathname: destination,
-        params:
-          destination === '/login' && intendedRoute !== undefined
-            ? { intended: intendedRoute, reason: 'reauth-required' }
-            : undefined,
+        params: destination === '/login'
+          ? {
+              ...(intended === undefined ? {} : { intended }),
+              ...(reauthenticationRequired ? { reason: 'reauth-required' } : {}),
+            }
+          : undefined,
       } as never);
     },
     [],
@@ -34,7 +40,7 @@ export default function RootLayout() {
     <MuchakuchaThemeProvider>
       <SessionBootstrap
         fontsReady
-        intendedRoute={pathname}
+        intendedRoute={intendedRoute}
         onRoute={routeSession}
         restorationRequired={!isPublicContinuation && !invitationPreview}
         sessionStateStore={sessionStateStore}

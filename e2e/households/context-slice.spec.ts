@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
+import { loginEmailFixture } from '../support/auth';
+
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
@@ -115,11 +117,7 @@ test('lists restores switches and explains access loss', async ({ page, request 
   }
 
   // --- UI: navigate to the no-household handoff for a fresh actor ---
-  await page.goto('/login');
-  await page.getByLabel('邮箱').fill(secondary.email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
+  await loginEmailFixture(page, secondary.email, password);
   await page.goto('/household-handoff');
   await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
@@ -127,11 +125,7 @@ test('lists restores switches and explains access loss', async ({ page, request 
   // This path exercises the household-context provider, session-bootstrap extension,
   // and /households route rendering.
   await page.context().clearCookies();
-  await page.goto('/login');
-  await page.getByLabel('邮箱').fill(primary.email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
+  await loginEmailFixture(page, primary.email, password);
   await page.goto('/households');
   await expect(page).toHaveURL(/\/households/);
 

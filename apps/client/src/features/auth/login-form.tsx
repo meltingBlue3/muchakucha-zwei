@@ -15,16 +15,14 @@ import {
 } from '../../ui/primitives';
 
 const loginSchema = z.object({
-  email: z.string().trim().email('请输入有效的邮箱地址。'),
+  username: z.string().trim().min(1, '请输入用户名。').transform((value) => value.normalize('NFC')),
   password: z.string().min(1, '请输入密码。'),
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
 
 export interface LoginFormProps {
-  intendedRoute?: string | undefined;
   onAuthenticated(): void;
-  onForgotPassword(): void;
   onOffline(): void;
   onRegister(): void;
   reauthenticationRequired?: boolean | undefined;
@@ -41,17 +39,8 @@ function isUnauthorized(error: unknown): boolean {
   );
 }
 
-function isEmailNotVerified(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null || !('status' in error)) return false;
-  if ((error as { status?: unknown }).status !== 403) return false;
-  const body = (error as { body?: unknown }).body;
-  if (typeof body !== 'object' || body === null || !('error' in body)) return false;
-  return (body as { error?: { code?: string } }).error?.code === 'EMAIL_NOT_VERIFIED';
-}
-
 export const LoginForm = ({
   onAuthenticated,
-  onForgotPassword,
   onOffline,
   onRegister,
   reauthenticationRequired = false,
@@ -65,7 +54,7 @@ export const LoginForm = ({
     getValues,
     handleSubmit,
     setError,
-  } = useForm<LoginValues>({ defaultValues: { email: '', password: '' } });
+  } = useForm<LoginValues>({ defaultValues: { username: '', password: '' } });
 
   const applyOutcome = async (outcome: RestoreOutcome): Promise<void> => {
     if (outcome.kind === 'authenticated') {
@@ -93,7 +82,7 @@ export const LoginForm = ({
     if (!parsed.success) {
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
-        if (field === 'email' || field === 'password') {
+        if (field === 'username' || field === 'password') {
           setError(field, { message: issue.message });
         }
       }
@@ -105,10 +94,8 @@ export const LoginForm = ({
     } catch (error) {
       setError('root.server', {
         message: isUnauthorized(error)
-          ? '邮箱或密码不正确，请重新输入。'
-          : isEmailNotVerified(error)
-            ? '此邮箱尚未验证，请先完成邮箱验证后再登录。'
-            : '这次没有完成。请检查网络后重试。',
+          ? '用户名或密码不正确，请重新输入。'
+          : '这次没有完成。请检查网络后重试。',
       });
     }
   });
@@ -135,21 +122,21 @@ export const LoginForm = ({
       {formError ? <Banner title="暂时无法登录">{formError}</Banner> : null}
       <Controller
         control={control}
-        name="email"
+        name="username"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <TextField
             autoCapitalize="none"
-            autoComplete="email"
-            {...(errors.email?.message === undefined ? {} : { error: errors.email.message })}
-            keyboardType="email-address"
-            label="邮箱"
+            autoComplete="username"
+            autoCorrect={false}
+            {...(errors.username?.message === undefined ? {} : { error: errors.username.message })}
+            label="用户名"
             onBlur={() => {
               onBlur();
-              validateField('email');
+              validateField('username');
             }}
             onChangeText={onChange}
             ref={ref}
-            textContentType="emailAddress"
+            textContentType="username"
             value={value}
           />
         )}
@@ -176,10 +163,7 @@ export const LoginForm = ({
         )}
       />
       <Button disabled={isSubmitting} label="登录" loading={isSubmitting} onPress={() => void submit()} />
-      <Stack gap={2}>
-        <LinkText onPress={onRegister}>创建账户</LinkText>
-        <LinkText onPress={onForgotPassword}>忘记密码</LinkText>
-      </Stack>
+      <LinkText onPress={onRegister}>创建账户</LinkText>
     </Stack>
   );
 };

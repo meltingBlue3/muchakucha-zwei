@@ -2,7 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import type { PendingInvitationStore } from './pending-invitation';
 
-const KEY = 'muchakucha:pendingInvitationToken';
+const KEY = 'muchakucha.pendingInvitationToken';
 
 export function createNativePendingInvitationStore(): PendingInvitationStore {
   return {

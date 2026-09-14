@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
+import { loginEmailFixture } from '../support/auth';
+
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
@@ -128,19 +130,15 @@ test('renames the explicit current household [RED:HOUSEHOLD_RENAME]', async ({ p
   expect(roster.members[0].role).toBe('OWNER');
   expect(roster.members[0].isCurrentUser).toBe(true);
 
-  await page.goto('/login');
-  await page.getByLabel('邮箱').fill(owner.email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
+  await loginEmailFixture(page, owner.email, password);
 
   // --- Precondition: /households selector is healthy ---
   await page.goto('/households');
   await expect(page).toHaveURL(/\/households/);
 
-  // --- Precondition: roster navigation works ---
-  await page.getByRole('button', { name: '查看成员' }).first().click();
-  await expect(page).toHaveURL(/\/households\//);
+  // --- Precondition: settings navigation reaches the household roster ---
+  await page.getByLabel('打开家庭设置').click();
+  await expect(page).toHaveURL(/\/households\/[^/]+\/settings$/);
   await expect(page.getByRole('main').getByText('温暖小家').first()).toBeVisible();
 
   // --- Navigate to the settings route ---

@@ -27,7 +27,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsIn, IsString, IsUUID } from 'class-validator';
+import { IsEmail, IsIn, IsString, IsUUID, MaxLength, MinLength, ValidateIf } from 'class-validator';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import {
   CreateHouseholdDto,
@@ -42,6 +42,7 @@ import { HouseholdsService } from './households.service.js';
 
 export class SendHouseholdInvitationDto {
   @ApiProperty({
+    required: false,
     format: 'email',
     example: 'friend@example.test',
     description: 'Canonical invited email address. Role is server-fixed to MEMBER per D-05.',
@@ -49,8 +50,19 @@ export class SendHouseholdInvitationDto {
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().normalize('NFC').toLowerCase() : value,
   )
+  @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
   @IsEmail()
-  email!: string;
+  email?: string;
+
+  @ApiProperty({ required: false, example: 'family-member', description: 'An existing username. Supply exactly one of username or email.' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().normalize('NFC') : value,
+  )
+  @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  username?: string;
 }
 
 export class SendHouseholdInvitationResponseDto {
@@ -59,6 +71,9 @@ export class SendHouseholdInvitationResponseDto {
 
   @ApiProperty({ example: '邀请已发送。' })
   message!: string;
+
+  @ApiProperty({ required: false, description: 'Share this link with the invited username account.' })
+  invitationUrl?: string;
 }
 
 // ---- Invitation Accept DTOs ----
@@ -106,6 +121,9 @@ export class InvitationListItemDto {
   @ApiProperty({ format: 'email', example: 'pending@example.test' })
   emailCanonical!: string;
 
+  @ApiProperty({ required: false, example: 'family-member' })
+  username?: string;
+
   @ApiProperty({ enum: ['pending', 'expired', 'accepted', 'revoked'] })
   status!: 'pending' | 'expired' | 'accepted' | 'revoked';
 
@@ -130,6 +148,9 @@ export class ResendInvitationResponseDto {
 
   @ApiProperty({ example: '邀请已重新发送。' })
   message!: string;
+
+  @ApiProperty({ required: false, description: 'New link replacing the previous username invitation.' })
+  invitationUrl?: string;
 }
 
 export class RevokeInvitationResponseDto {
@@ -343,7 +364,7 @@ export class HouseholdsController {
     return this.householdsService.sendHouseholdInvitation(
       request.auth.sub,
       id,
-      input.email,
+      input,
     );
   }
 

@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
+import { loginEmailFixture } from '../support/auth';
+
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
@@ -67,16 +69,11 @@ async function prepareVerifiedAccount(
   });
 }
 
-async function loginViaPage(
+async function loginFixture(
   page: import('@playwright/test').Page,
   email: string,
 ): Promise<void> {
-  await page.goto(`${WEB_ORIGIN}/login`);
-  await page.waitForTimeout(500);
-  await page.getByLabel('邮箱').fill(email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await page.waitForTimeout(1000);
+  await loginEmailFixture(page, email, password);
 }
 
 async function createHousehold(
@@ -434,8 +431,8 @@ test('completes the full household collaboration journey', async ({ page, reques
   // 12. UI: Household routes render without errors.
   // ============================================================================
 
-  // Login as Alice via the Web UI and verify the household handoff page.
-  await loginViaPage(page, alice.email);
+  // Restore Alice's browser session and verify the household handoff page.
+  await loginFixture(page, alice.email);
 
   // Navigate to /households — the selector should list Alice's memberships.
   await page.goto(`${WEB_ORIGIN}/households`);
@@ -445,9 +442,9 @@ test('completes the full household collaboration journey', async ({ page, reques
   // Alice should see the household selector with the household name.
   await expect(page.getByText('アリス家').first()).toBeVisible({ timeout: 5000 });
 
-  // Navigate to the household roster page.
-  await page.getByRole('button', { name: '查看成员' }).first().click();
-  await page.waitForURL(/\/households\//);
+  // Open the settings page that contains the current household's roster.
+  await page.getByLabel('打开家庭设置').click();
+  await page.waitForURL(/\/households\/[^/]+\/settings$/);
   await page.waitForTimeout(2000);
 
   const rosterMain = page.getByRole('main');

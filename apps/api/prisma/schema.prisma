@@ -11,8 +11,10 @@ datasource db {
 
 model User {
   id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email               String                   @db.VarChar(320)
-  emailCanonical      String                   @unique(map: "User_email_canonical_key") @map("email_canonical") @db.VarChar(320)
+  email               String?                  @db.VarChar(320)
+  emailCanonical      String?                  @unique(map: "User_email_canonical_key") @map("email_canonical") @db.VarChar(320)
+  username            String?                  @db.VarChar(32)
+  usernameCanonical   String?                  @unique(map: "User_username_canonical_key") @map("username_canonical") @db.VarChar(64)
   displayName         String                   @map("display_name") @db.VarChar(80)
   passwordHash        String                   @map("password_hash") @db.Text
   emailVerifiedAt     DateTime?                @map("email_verified_at") @db.Timestamptz(3)
@@ -22,7 +24,8 @@ model User {
   verificationTokens  EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
   memberships         Membership[]
-  sentInvitations     Invitation[]
+  sentInvitations     Invitation[] @relation("InvitationSender")
+  receivedInvitations Invitation[] @relation("InvitationRecipient")
   createdEvents       Event[]
   createdTasks        Task[]          @relation("CreatedTasks")
   createdRecurrenceRules RecurrenceRule[] @relation("CreatedRecurrenceRules")
@@ -72,6 +75,8 @@ model Invitation {
   inviterMembershipId String     @map("inviter_membership_id") @db.Uuid
   householdId         String     @map("household_id") @db.Uuid
   emailCanonical      String     @map("email_canonical") @db.VarChar(320)
+  recipientUserId     String?    @map("recipient_user_id") @db.Uuid
+  username            String?    @db.VarChar(32)
   hash                String     @unique @db.Char(64)
   role                String     @default("MEMBER") @db.VarChar(10)
   expiresAt           DateTime   @map("expires_at") @db.Timestamptz(3)
@@ -79,11 +84,13 @@ model Invitation {
   consumedAt          DateTime?  @map("consumed_at") @db.Timestamptz(3)
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  inviterUser         User       @relation(fields: [inviterUserId], references: [id], onDelete: Cascade)
+  inviterUser         User       @relation("InvitationSender", fields: [inviterUserId], references: [id], onDelete: Cascade)
+  recipientUser       User?      @relation("InvitationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
   inviterMembership   Membership @relation(fields: [inviterMembershipId], references: [id], onDelete: Cascade)
   household           Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
   @@index([householdId, emailCanonical, invalidatedAt, consumedAt], map: "Invitation_household_email_state_idx")
+  @@index([householdId, recipientUserId, invalidatedAt, consumedAt], map: "Invitation_household_recipient_state_idx")
   @@map("invitations")
 }
 

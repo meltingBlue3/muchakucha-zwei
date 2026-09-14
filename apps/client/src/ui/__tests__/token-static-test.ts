@@ -72,9 +72,8 @@ describe('typed design-token and composition contract', () => {
   test('keeps every feature file outside the raw-style allowlist', () => {
     const tests = [
       'src/features/auth/__tests__/register-form-test.tsx',
-      'src/features/auth/__tests__/verification-flow-test.tsx',
+      'src/features/auth/__tests__/login-form-test.tsx',
       'src/features/auth/__tests__/session-bootstrap-test.tsx',
-      'src/features/auth/__tests__/password-reset-flow-test.tsx',
       'src/features/profile/__tests__/profile-form-test.tsx',
     ];
     for (const path of tests) {

@@ -2,6 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
+import { loginEmailFixture } from '../support/auth';
+
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL = process.env.DATABASE_URL ??
@@ -60,12 +62,8 @@ async function prepareFixture(): Promise<Fixture> {
   return { accessToken, email, eventId, householdId, title };
 }
 
-async function loginViaPage(page: Page, email: string) {
-  await page.goto('/login');
-  await page.getByLabel('邮箱').fill(email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
+async function loginFixture(page: Page, email: string) {
+  await loginEmailFixture(page, email, password);
 }
 
 async function openCalendar(page: Page) {
@@ -105,7 +103,7 @@ test.describe('event recurrence accessibility', () => {
   test.beforeAll(async () => { fixture = await prepareFixture(); });
 
   test('has no serious axe violations on list, create, detail, and edit routes', async ({ page }) => {
-    await loginViaPage(page, fixture.email);
+    await loginFixture(page, fixture.email);
     await openCalendar(page);
     await expectNoSeriousAxeViolations(page);
     await page.getByLabel('创建事件').click();
@@ -120,7 +118,7 @@ test.describe('event recurrence accessibility', () => {
   });
 
   test('supports keyboard traversal and directional radio selection', async ({ page }) => {
-    await loginViaPage(page, fixture.email);
+    await loginFixture(page, fixture.email);
     await openNewEvent(page);
     await page.getByLabel('事件标题').focus();
     await page.keyboard.press('Tab');
@@ -135,7 +133,7 @@ test.describe('event recurrence accessibility', () => {
   });
 
   test('keeps the last weekday selected and announces the constraint', async ({ page }) => {
-    await loginViaPage(page, fixture.email);
+    await loginFixture(page, fixture.email);
     await openNewEvent(page);
     await page.getByLabel('每周', { exact: true }).click();
     const selectedLabel = await page.getByRole('checkbox').evaluateAll((nodes) =>
@@ -148,7 +146,7 @@ test.describe('event recurrence accessibility', () => {
   });
 
   test('traps focus in SeriesScopeSheet, closes on Escape, and returns focus', async ({ page }) => {
-    await loginViaPage(page, fixture.email);
+    await loginFixture(page, fixture.email);
     await openEventEdit(page, fixture);
     const deleteTrigger = page.getByLabel('删除事件');
     await deleteTrigger.click();
@@ -164,7 +162,7 @@ test.describe('event recurrence accessibility', () => {
 
   test('remains usable at 200% zoom without horizontal overflow or inert weekday chips', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
-    await loginViaPage(page, fixture.email);
+    await loginFixture(page, fixture.email);
     await openNewEvent(page);
     await page.getByLabel('每周', { exact: true }).click();
     await page.evaluate(() => { document.documentElement.style.zoom = '2'; });

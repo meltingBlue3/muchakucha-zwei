@@ -294,7 +294,7 @@ export const PasswordField = forwardRef<NativeTextInput, FieldProps>((props, for
     if (typeof forwardedRef === 'function') forwardedRef(node);
     else if (forwardedRef) forwardedRef.current = node;
   };
-  const actionLabel = revealed ? '隐藏密码' : '显示密码';
+  const actionLabel = `${revealed ? '隐藏' : '显示'}${props.label}`;
   return (
     <Stack gap={2}>
       <TextField {...props} ref={setRefs} secureTextEntry={!revealed} />

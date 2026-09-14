@@ -8,6 +8,7 @@ import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { ProfileForm, type ProfileApi } from '../profile-form';
 
 const currentUser: CurrentUserDto = {
+  username: 'family_member',
   displayName: '家庭成员',
   email: 'member@example.test',
   emailVerified: true,
@@ -56,6 +57,7 @@ describe('profile nickname form contract', () => {
     const { apiClient, view } = await renderProfile();
     expect(apiClient.getMe).toHaveBeenCalledWith('current-access-token', expect.any(AbortSignal));
     expect(view.getByLabelText('昵称').props.value).toBe('家庭成员');
+    expect(view.getByText('family_member')).toBeTruthy();
     expect(JSON.stringify(view.toJSON())).not.toContain(currentUser.email);
   });
 

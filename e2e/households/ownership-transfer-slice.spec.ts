@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
+import { loginEmailFixture } from '../support/auth';
+
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
@@ -169,12 +171,7 @@ test('transfers ownership safely', async ({ page, request }) => {
   // PRECONDITION: settings page is reachable
   // ============================================================================
 
-  await page.goto(`${WEB_ORIGIN}/login`);
-  await page.waitForTimeout(500);
-  await page.getByLabel('邮箱').fill(owner.email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await page.waitForTimeout(1000);
+  await loginEmailFixture(page, owner.email, password);
 
   await page.goto(`${WEB_ORIGIN}/households/${encodeURIComponent(household.id)}/settings`);
   await page.waitForURL(`/households/${encodeURIComponent(household.id)}/settings`);

@@ -1,8 +1,13 @@
-import type { CurrentUserDto, LoginDto } from '@muchakucha/api-client';
+import type { CurrentUserDto } from '@muchakucha/api-client';
 
 export { SessionRestoreError } from '../../api/api-client';
 
 export type ReauthenticationReason = 'expired' | 'revoked' | 'replayed';
+
+export interface LoginCredentials {
+  username: string;
+  password: string;
+}
 
 export interface AccessSession {
   accessToken: string;
@@ -28,7 +33,7 @@ export interface SessionTransport {
   acceptIssuedSession(session: IssuedSession): Promise<AccessSession>;
   clear(): Promise<void>;
   getAccessToken(): string | null;
-  login(credentials: Omit<LoginDto, 'platform'>): Promise<RestoreOutcome>;
+  login(credentials: LoginCredentials): Promise<RestoreOutcome>;
   loadCurrentUser(): Promise<RestoreOutcome>;
   refresh(): Promise<RestoreOutcome>;
   restore(): Promise<RestoreOutcome>;

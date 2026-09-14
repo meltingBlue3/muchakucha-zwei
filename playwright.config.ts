@@ -53,13 +53,6 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'node e2e/support/mailbox-server.mjs',
-      url: `http://127.0.0.1:${process.env.TEST_MAILPIT_HTTP_PORT ?? '18025'}/readyz`,
-      reuseExistingServer: false,
-      timeout: 30_000,
-      env: { ...process.env },
-    },
-    {
       command: 'pnpm --filter api dev',
       url: `${apiOrigin}/api/v1/openapi.json`,
       reuseExistingServer: !process.env.CI,
@@ -82,6 +75,7 @@ export default defineConfig({
       env: {
         ...process.env,
         CI: '1',
+        NODE_ENV: 'development',
         WEB_ORIGIN: webOrigin,
         API_ORIGIN: apiOrigin,
         EMAIL_LINK_ORIGIN: emailLinkOrigin,

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { MAIL_PORT } from '../src/infrastructure/mail/mail.port.js';
 import { ConsoleMailAdapter } from '../src/infrastructure/mail/console-mail.adapter.js';
+import { DisabledMailAdapter } from '../src/infrastructure/mail/disabled-mail.adapter.js';
 import { createApplication, parseRuntimeConfig } from '../src/main.js';
 
 const allowedOrigin = 'http://127.0.0.1:8081';
@@ -24,6 +25,26 @@ afterAll(async () => {
 });
 
 describe('versioned Fastify application boundary', () => {
+  test('starts in production without SMTP for username-only households', async () => {
+    const productionApp = await createApplication({
+      NODE_ENV: 'production',
+      WEB_ORIGIN: 'https://family.example.test',
+      JWT_ACCESS_SECRET: 'test-only-production-secret-with-at-least-32-bytes',
+      LOG_LEVEL: 'silent',
+    });
+    try {
+      await productionApp.init();
+      await productionApp.getHttpAdapter().getInstance().ready();
+      expect(productionApp.get(MAIL_PORT)).toBeInstanceOf(DisabledMailAdapter);
+      const response = await productionApp.getHttpAdapter().getInstance().inject({
+        method: 'GET', url: '/api/v1/openapi.json',
+      });
+      expect(response.statusCode).toBe(200);
+    } finally {
+      await productionApp.close();
+    }
+  });
+
   test('boots Prisma, AuthModule, cookie parsing, throttling, and OpenAPI under /api/v1', async () => {
     const fastify = app.getHttpAdapter().getInstance();
     expect(fastify.hasRequestDecorator('cookies')).toBe(true);

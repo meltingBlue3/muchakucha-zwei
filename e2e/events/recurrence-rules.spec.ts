@@ -2,6 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
+import { loginEmailFixture } from '../support/auth';
+
 // Same three constants, same defaults, and the same test-only database as
 // `e2e/events/recurrence.spec.ts`. Introducing a second source for the
 // connection string is exactly how an E2E suite ends up pointed at something
@@ -164,7 +166,6 @@ async function createDailyTaskRule(
     `/api/v1/households/${householdId}/tasks`,
     {
       title,
-      dueDate: `${today}T00:00:00.000Z`,
       recurrence: {
         freq: 'daily',
         interval: 1,
@@ -206,12 +207,8 @@ async function createWeeklyEventRule(
   return result.body.recurrenceRuleId;
 }
 
-async function loginViaPage(page: Page, email: string): Promise<void> {
-  await page.goto('/login');
-  await page.getByLabel('邮箱').fill(email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
+async function loginFixture(page: Page, email: string): Promise<void> {
+  await loginEmailFixture(page, email, password);
 }
 
 async function openTaskList(page: Page, householdId: string): Promise<void> {
@@ -271,7 +268,7 @@ test.describe('recurrence rule addendum journeys', () => {
     expect(materialized).toHaveLength(1);
     expect(materialized[0].occurrenceDate).toBe(today);
 
-    await loginViaPage(page, account.email);
+    await loginFixture(page, account.email);
     await openTaskList(page, householdId);
 
     // The user-visible half of the same fact: one row, not a batch.
@@ -295,7 +292,7 @@ test.describe('recurrence rule addendum journeys', () => {
     });
     expect(plain.status).toBe(201);
 
-    await loginViaPage(page, account.email);
+    await loginFixture(page, account.email);
     await openTaskList(page, householdId);
     await expect(page.getByLabel(`任务：${recurringTitle}，重复`)).toBeVisible();
     await expect(page.getByLabel(`任务：${plainTitle}`)).toBeVisible();
@@ -336,7 +333,7 @@ test.describe('recurrence rule addendum journeys', () => {
     const taskSummary = '每天重复，永不结束';
     const eventSummary = `${weeklySummary(localWeekday(1))}，永不结束`;
 
-    await loginViaPage(page, account.email);
+    await loginFixture(page, account.email);
     await openRuleList(page, householdId);
 
     const list = ruleListScreen(page);
@@ -390,9 +387,9 @@ test.describe('recurrence rule addendum journeys', () => {
     await detail.getByLabel(END_CONFIRM_ACTION).click();
     await expect(page).toHaveURL(new RegExp(`/households/${householdId}/recurrence-rules$`));
 
-    // The anchor is tomorrow, so today is still this rule's next occurrence —
-    // the visible consequence of "今天和之前的安排都保留".
-    await expect(list.getByText(`下一次 ${today}`, { exact: true })).toBeVisible();
+    // Both rules are now visibly ended. The API still includes today's date
+    // in the daily rule's walk, and its existing task must remain available.
+    await expect(list.getByText(ENDED_ROW_LINE, { exact: true })).toHaveCount(2);
     expect((await listRules(account.accessToken, householdId))
       .find((rule) => rule.id === taskRuleId)?.nextOccurrenceDate).toBe(today);
 
@@ -420,7 +417,7 @@ test.describe('recurrence rule addendum journeys', () => {
     );
     expect(ended.status).toBe(204);
 
-    await loginViaPage(page, account.email);
+    await loginFixture(page, account.email);
     await openRuleList(page, householdId);
     const list = ruleListScreen(page);
     const detail = ruleDetailScreen(page);

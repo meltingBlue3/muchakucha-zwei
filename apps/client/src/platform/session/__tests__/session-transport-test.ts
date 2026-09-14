@@ -2,8 +2,6 @@ import * as SecureStore from 'expo-secure-store';
 import { ApiClient } from '@muchakucha/api-client';
 
 import { createSessionStateStore } from '../../../features/auth/session-state';
-import { pendingProofStore } from '../pending-proof.native';
-import { pendingProofTransport } from '../pending-proof.web';
 import { createNativeSessionTransport } from '../session-transport.native';
 import { createWebSessionTransport } from '../session-transport.web';
 
@@ -15,20 +13,6 @@ const apiResponse = (status: number, body: unknown) => ({
 });
 
 describe('platform session transport contract', () => {
-  test('native stores pending proof only in its namespaced SecureStore slot', async () => {
-    await pendingProofStore.write('pending-proof');
-
-    await expect(pendingProofStore.read()).resolves.toBe('pending-proof');
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-      'muchakucha.session.pending-proof.v1',
-      'pending-proof',
-    );
-
-    await pendingProofStore.clear();
-    await pendingProofStore.clear();
-    await expect(pendingProofStore.read()).resolves.toBeNull();
-  });
-
   test('native persists refresh before publishing memory-only access', async () => {
     const transport = createNativeSessionTransport(jest.fn());
     jest.mocked(SecureStore.setItemAsync).mockImplementationOnce(async () => {
@@ -101,11 +85,6 @@ describe('platform session transport contract', () => {
       'muchakucha.session.refresh.v1',
       'generation-two',
     );
-  });
-
-  test('Web exposes credentialed transport but no proof secret accessor', () => {
-    expect(pendingProofTransport).toEqual({ credentials: 'include' });
-    expect(Object.keys(pendingProofTransport).sort()).toEqual(['credentials']);
   });
 
   test('Web sends cookie credentials and retains only access in memory', async () => {
@@ -220,8 +199,6 @@ describe('platform session transport contract', () => {
 
   test('platform adapters never reference forbidden browser-readable storage', () => {
     const adapterSources = [
-      pendingProofStore.read,
-      pendingProofStore.write,
       createNativeSessionTransport,
       createWebSessionTransport,
     ]
@@ -337,7 +314,7 @@ describe('platform session transport contract', () => {
     );
 
     await expect(
-      transport.login({ email: 'member@example.test', password: 'correct horse' }),
+      transport.login({ username: 'family_member', password: 'correct horse' }),
     ).resolves.toMatchObject({
       kind: 'authenticated',
       session: { accessToken: 'login-access', currentUser: { id: 'user-1' } },
@@ -347,7 +324,7 @@ describe('platform session transport contract', () => {
     );
     expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(
       JSON.stringify({
-        email: 'member@example.test',
+        username: 'family_member',
         password: 'correct horse',
         platform: 'native',
       }),

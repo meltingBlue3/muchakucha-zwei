@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Headers, HttpCode, Post, Req, Res, SetMetadata, UseGuards } from '@nestjs/common';
-import { ApiAcceptedResponse, ApiBadRequestResponse, ApiBearerAuth, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiAcceptedResponse, ApiBadRequestResponse, ApiBearerAuth, ApiConflictResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
@@ -169,6 +169,7 @@ export class AuthController {
   @ApiOperation({ operationId: 'register' })
   @ApiAcceptedResponse({ type: RegistrationAcceptedDto })
   @ApiBadRequestResponse({ description: 'Registration input or transport is invalid.' })
+  @ApiConflictResponse({ description: 'The username is already taken.' })
   async register(
     @Body() input: RegisterDto,
     @Headers('origin') origin: string | undefined,
@@ -183,6 +184,13 @@ export class AuthController {
     }
 
     const result = await this.authService.register(input);
+    if ('accessToken' in result) {
+      if (isWeb) {
+        this.setRefreshCookie(reply, result.refreshToken);
+        return { code: 'REGISTRATION_ACCEPTED', accessToken: result.accessToken };
+      }
+      return { code: 'REGISTRATION_ACCEPTED', ...result };
+    }
     if (isWeb) {
       const production = process.env.NODE_ENV === 'production';
       reply.setCookie(production ? '__Secure-mk_pending_proof' : 'mk_pending_proof_dev', result.pendingProof, {

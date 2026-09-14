@@ -32,8 +32,7 @@ import { theme } from '../../ui/theme';
 const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
 const PERMISSION_DENIED = '你没有重命名此家庭的权限。';
 const RENAME_SUCCESS = '家庭名称已更新。';
-const INVITE_SUCCESS = '邀请已发送。';
-const INVITE_ALREADY_MEMBER = '这个邮箱已经是该家庭的成员。';
+const INVITE_ALREADY_MEMBER = '这个账户已经是该家庭的成员。';
 
 export type HouseholdSettingsApi = Pick<HouseholdApi, 'getHousehold' | 'updateHousehold' | 'sendHouseholdInvitation' | 'listInvitations' | 'resendInvitation' | 'revokeInvitation'>;
 
@@ -94,7 +93,8 @@ export function HouseholdSettings({
   const [renameError, setRenameError] = useState<string | undefined>(undefined);
 
   // ---- Invitation form state ----
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteUsername, setInviteUsername] = useState('');
+  const [inviteLink, setInviteLink] = useState<string | undefined>(undefined);
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState<string | undefined>(undefined);
   const [inviteError, setInviteError] = useState<string | undefined>(undefined);
@@ -186,12 +186,13 @@ export function HouseholdSettings({
   };
 
   const handleInvite = async () => {
-    const trimmed = inviteEmail.trim().normalize('NFC');
-    if (trimmed === '' || !trimmed.includes('@')) return;
+    const trimmed = inviteUsername.trim().normalize('NFC');
+    if (trimmed === '' || [...trimmed].length > 64) return;
 
     setInviteSubmitting(true);
     setInviteSuccess(undefined);
     setInviteError(undefined);
+    setInviteLink(undefined);
 
     const accessToken = deps.getAccessToken();
     if (accessToken === null) {
@@ -201,21 +202,32 @@ export function HouseholdSettings({
     }
 
     try {
-      await deps.householdApi.sendHouseholdInvitation(
+      const result = await deps.householdApi.sendHouseholdInvitation(
         accessToken,
         householdId,
-        { email: trimmed },
+        { username: trimmed },
       );
 
       if (!mountedRef.current) return;
 
-      setInviteEmail('');
-      setInviteSuccess(INVITE_SUCCESS);
+      setInviteUsername('');
+      setInviteSuccess(result.message);
+      setInviteLink(result.invitationUrl);
+      try {
+        const list = await deps.householdApi.listInvitations(accessToken, householdId);
+        if (mountedRef.current) setInvitationList(list.invitations);
+      } catch {
+        if (mountedRef.current) setInvitationListError(GENERIC_ERROR);
+      }
     } catch (error: unknown) {
       if (!mountedRef.current) return;
 
       if (error instanceof ApiClientError) {
-        if (error.status === 409) {
+        const payload = error.body;
+        const serverError = typeof payload === 'object' && payload !== null && 'error' in payload ? payload.error : undefined;
+        if (typeof serverError === 'object' && serverError !== null && 'code' in serverError && serverError.code === 'INVITATION_USER_NOT_FOUND') {
+          setInviteError('未找到这个用户名，请让家人先注册账户。');
+        } else if (error.status === 409) {
           setInviteError(INVITE_ALREADY_MEMBER);
         } else if (error.status === 403) {
           setInviteError(PERMISSION_DENIED);
@@ -330,9 +342,11 @@ export function HouseholdSettings({
     setInvitationListError(undefined);
 
     try {
-      await deps.householdApi.resendInvitation(accessToken, householdId, invitationId);
+      const resent = await deps.householdApi.resendInvitation(accessToken, householdId, invitationId);
 
       if (!mountedRef.current) return;
+      setInviteLink(resent.invitationUrl);
+      setInviteSuccess(resent.message);
 
       // Refetch the invitation list to get updated states.
       try {
@@ -479,29 +493,33 @@ export function HouseholdSettings({
                 gap={1}
               >
                 <Text>{inviteSuccess}</Text>
+                {inviteLink !== undefined ? (
+                  <Text selectable accessibilityLabel="邀请链接" variant="bodySm">{inviteLink}</Text>
+                ) : null}
               </Stack>
             ) : null}
 
             <Stack gap={2}>
               <TextField
-                label="邮箱地址"
-                keyboardType="email-address"
-                autoComplete="email"
-                value={inviteEmail}
+                label="用户名"
+                autoComplete="username"
+                autoCapitalize="none"
+                value={inviteUsername}
                 onChangeText={(text) => {
-                  setInviteEmail(text);
+                  setInviteUsername(text);
                   setInviteError(undefined);
                   setInviteSuccess(undefined);
+                  setInviteLink(undefined);
                 }}
               />
               <Text variant="bodySm">
-                对方可通过邮件登录或创建账户后接受邀请。
+                输入家人已注册的用户名，再将生成的邀请链接复制发给对方。
               </Text>
               <Button
                 disabled={
                   inviteSubmitting ||
-                  inviteEmail.trim().normalize('NFC') === '' ||
-                  !inviteEmail.trim().normalize('NFC').includes('@')
+                  inviteUsername.trim().normalize('NFC') === '' ||
+                  [...inviteUsername.trim().normalize('NFC')].length > 64
                 }
                 label="发送邀请"
                 loading={inviteSubmitting}

@@ -17,6 +17,20 @@ const currentUser = {
   id: 'user-1',
 };
 
+const householdId = '123e4567-e89b-12d3-a456-426614174000';
+const resourceId = '123e4567-e89b-12d3-a456-426614174001';
+const householdRoute = `/households/${householdId}`;
+const householdPageSuffixes = [
+  '', '/settings', '/today', '/labels',
+  '/tasks', '/tasks/new', `/tasks/${resourceId}`, `/tasks/${resourceId}/edit`,
+  '/events', '/events/new', `/events/${resourceId}`, `/events/${resourceId}/edit`,
+  '/notes', '/notes/new', `/notes/${resourceId}`, `/notes/${resourceId}/edit`,
+  '/recurrence-rules', `/recurrence-rules/${resourceId}`,
+  '/ownership/transfer', '/ownership/leave',
+  `/members/${resourceId}/role`, `/members/${resourceId}/remove`,
+  `/invitations/${resourceId}/revoke`,
+];
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((resolver) => {
@@ -128,6 +142,51 @@ describe('session bootstrap contract', () => {
     expect(result.onRoute).not.toHaveBeenCalledWith('/household-handoff');
   });
 
+  test.each(householdPageSuffixes)('restores the current household page %s instead of the household handoff', async (suffix) => {
+    const intendedRoute = `${householdRoute}${suffix}`;
+    const result = await renderBootstrap({
+      intendedRoute,
+      outcome: { kind: 'authenticated', session: { accessToken: 'access-secret', currentUser } },
+    });
+
+    await waitFor(() => expect(result.onRoute).toHaveBeenCalledWith(intendedRoute));
+  });
+
+  test.each(householdPageSuffixes)('preserves the household page %s when login is required', async (suffix) => {
+    const intendedRoute = `${householdRoute}${suffix}`;
+    const result = await renderBootstrap({ intendedRoute });
+
+    await waitFor(() => expect(result.onRoute).toHaveBeenCalledWith('/login', intendedRoute));
+  });
+
+  test.each([
+    `${householdRoute}/calendar`,
+    `${householdRoute}/tasks/archive`,
+    `${householdRoute}/tasks/${resourceId}/delete`,
+    `${householdRoute}/events/new/edit`,
+    `${householdRoute}/labels/${resourceId}`,
+    `${householdRoute}/recurrence-rules/new`,
+    `${householdRoute}/recurrence-rules/${resourceId}/edit`,
+    `${householdRoute}/members`,
+    `${householdRoute}/members/${resourceId}`,
+    `${householdRoute}/invitations/${resourceId}/edit`,
+    `${householdRoute}/ownership/remove`,
+    `${householdRoute}/tasks/not-a-uuid`,
+    `/households/${'a'.repeat(36)}/tasks`,
+    `/households/${'-'.repeat(36)}`,
+    `${householdRoute}/tasks/${'a'.repeat(36)}`,
+    `${householdRoute}/tasks/../settings`,
+    `${householdRoute}/tasks/%2e%2e/settings`,
+    `${householdRoute}/tasks?next=/profile`,
+    `${householdRoute}/tasks#next`,
+    `${householdRoute}/tasks/`,
+    `${householdRoute}/Tasks`,
+    `prefix${householdRoute}/tasks`,
+    `https://example.test${householdRoute}/tasks`,
+  ])('rejects unsupported or unsafe household return route %s', (intendedRoute) => {
+    expect(sanitizeIntendedRoute(intendedRoute)).toBeUndefined();
+  });
+
   test('clears an explicitly rejected credential and enters reauthentication', async () => {
     const result = await renderBootstrap({
       intendedRoute: '/profile',
@@ -138,6 +197,22 @@ describe('session bootstrap contract', () => {
     expect(result.sessionStateStore.get()).toEqual({ kind: 'reauthRequired', reason: 'revoked' });
     expect(result.onRoute).toHaveBeenCalledWith('/login', '/profile');
   });
+
+  test('keeps an intended route through a cold start without marking it as reauthentication', async () => {
+    const result = await renderBootstrap({ intendedRoute: '/profile' });
+
+    await waitFor(() => expect(result.onRoute).toHaveBeenCalledWith('/login', '/profile'));
+    expect(result.sessionStateStore.get()).toEqual({ kind: 'unauthenticated' });
+    expect(result.sessionTransport.clear).not.toHaveBeenCalled();
+  });
+
+  test.each(['https://attacker.test', '//attacker.test', '/households/../../profile', '/profile?next=unsafe'])(
+    'does not preserve an unsafe cold-start return route %s', async (intendedRoute) => {
+      const result = await renderBootstrap({ intendedRoute });
+
+      await waitFor(() => expect(result.onRoute).toHaveBeenCalledWith('/login', undefined));
+    },
+  );
 
   test.each(['timeout', 'dns', 'offline', 'server-5xx'])(
     'retains credentials and offers retry for %s restoration failure',

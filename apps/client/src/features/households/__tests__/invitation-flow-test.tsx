@@ -1,5 +1,5 @@
 import type { GetHouseholdResponseDto, InvitationPreviewResponseDto } from '@muchakucha/api-client';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { InvitationFlow, type InvitationFlowApi } from '../invitation-flow';
@@ -35,6 +35,31 @@ const validPreview: InvitationPreviewResponseDto = {
 };
 
 describe('InvitationFlow', () => {
+  test('finishes the preview when authentication restores during the request', async () => {
+    let resolvePreview!: (preview: InvitationPreviewResponseDto) => void;
+    let requestedSignal: AbortSignal | undefined;
+    const apiClient = createInvitationApi();
+    jest.mocked(apiClient.previewInvitation).mockImplementation((_token, signal) => {
+      requestedSignal = signal;
+      return new Promise((resolve) => { resolvePreview = resolve; });
+    });
+    const props = {
+      apiClient, token: 'pending-preview', onLogin: jest.fn(), onRegister: jest.fn(),
+      onSwitchAccount: jest.fn(), onEnterHousehold: jest.fn(),
+    };
+    const view = await render(
+      <MuchakuchaThemeProvider><InvitationFlow {...props} isAuthenticated={false} /></MuchakuchaThemeProvider>,
+    );
+    await view.rerender(
+      <MuchakuchaThemeProvider><InvitationFlow {...props} isAuthenticated accessToken="restored" /></MuchakuchaThemeProvider>,
+    );
+    expect(requestedSignal?.aborted).toBe(false);
+    await act(async () => { resolvePreview(validPreview); });
+    await waitFor(() => expect(view.getByRole('button', { name: '接受邀请' })).toBeTruthy());
+    expect(view.queryByText('正在加载邀请')).toBeNull();
+    expect(apiClient.previewInvitation).toHaveBeenCalledTimes(1);
+  });
+
   test('shows loading state initially', async () => {
     const apiClient = createInvitationApi();
     // Delay the preview resolution to keep loading visible.
@@ -221,7 +246,7 @@ describe('InvitationFlow', () => {
 
     // Should show mismatch state (D-08)
     await waitFor(() =>
-      expect(view.getByText('此邀请发给了另一个邮箱')).toBeTruthy(),
+      expect(view.getByText('此邀请发给了另一个账户')).toBeTruthy(),
     );
 
     // Switch account button is present

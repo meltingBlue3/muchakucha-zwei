@@ -1,6 +1,9 @@
+import { createHash, randomBytes } from 'node:crypto';
+
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
-import { createHash, randomBytes } from 'node:crypto';
+
+import { loginEmailFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -208,10 +211,9 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
   // Should be on the login page
   await expect(page).toHaveURL(/\/login/);
 
-  // Complete login with the invited email
-  await page.getByLabel('邮箱').fill(invitee.email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
+  // Restore the legacy email fixture session before returning to the invitation.
+  // Username form return routing is covered by the authentication journeys.
+  await loginEmailFixture(page, invitee.email, password, '/invite');
 
   // After login, the user should be returned to the invitation page (not auto-accepted)
   await page.waitForTimeout(2000);
@@ -315,14 +317,11 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
   await page.goto(`${WEB_ORIGIN}/profile`);
   await page.getByRole('button', { name: '退出登录' }).first().click();
   const logoutDialog = page.getByRole('dialog', { name: '退出这台设备？' });
-  await logoutDialog.getByRole('button', { name: '退出登录' }).click();
+  await logoutDialog.getByRole('button', { name: '确认退出登录', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
 
   // Log in as the stranger (different email).
-  await page.getByLabel('邮箱').fill(stranger.email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
+  await loginEmailFixture(page, stranger.email, password);
 
   // Navigate to the second invitation URL
   const secondInviteUrl = `${EMAIL_LINK_ORIGIN}/invite/${encodeURIComponent(secondToken)}`;
@@ -335,7 +334,7 @@ test('accepts an invitation explicitly [RED:INVITATION_ACCEPT]', async ({ page, 
 
   // --- Mismatch: household name and inviter are hidden ---
   // D-08: "不匹配时提示切换账户，且不泄露更多邀请细节"
-  await expect(page.getByText('此邀请发给了另一个邮箱')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('此邀请发给了另一个账户')).toBeVisible({ timeout: 5000 });
   await expect(page.getByText('温暖小家')).not.toBeVisible();
   await expect(page.getByText('家主')).not.toBeVisible();
 

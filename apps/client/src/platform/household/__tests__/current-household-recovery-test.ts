@@ -37,6 +37,23 @@ describe('native household and invitation recovery stores', () => {
     await expect(first.get()).resolves.toBeNull();
   });
 
+  test('preserves invitations across login with native SecureStore key validation', async () => {
+    const originalSet = jest.mocked(SecureStore.setItemAsync).getMockImplementation()!;
+    jest.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value, options) => {
+      if (!/^[\w.-]+$/.test(key)) throw new Error('Invalid SecureStore key');
+      return originalSet(key, value, options);
+    });
+    try {
+      await createNativePendingInvitationStore().set('invitation-before-login');
+      const afterLogin = createNativePendingInvitationStore();
+      await expect(afterLogin.get()).resolves.toBe('invitation-before-login');
+      await afterLogin.clear();
+      await expect(afterLogin.get()).resolves.toBeNull();
+    } finally {
+      jest.mocked(SecureStore.setItemAsync).mockImplementation(originalSet);
+    }
+  });
+
   test('degrades gracefully when SecureStore cannot persist pending invitation state', async () => {
     jest.mocked(SecureStore.setItemAsync).mockRejectedValueOnce(
       new Error('SecureStore unavailable'),

@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
+import { loginEmailFixture } from '../support/auth';
+
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
@@ -52,11 +54,7 @@ test('creates and displays the authoritative household', async ({ page, request 
 
   const { email, accessToken } = await prepareVerifiedAccount();
 
-  await page.goto('/login');
-  await page.getByLabel('邮箱').fill(email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
+  await loginEmailFixture(page, email, password);
 
   // Navigate to the no-household handoff and verify the heading is visible.
   await page.goto('/household-handoff');
@@ -73,10 +71,19 @@ test('creates and displays the authoritative household', async ({ page, request 
   await page.getByRole('button', { name: '创建家庭' }).click();
 
   // Assert the authoritative result is displayed on the same route.
-  await expect(page.getByRole('heading', { name: '我的家' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '家庭已创建' })).toBeVisible();
   await expect(page.getByText('家庭已创建。你现在是这个家庭的所有者。')).toBeVisible();
-  await expect(page.getByText('角色：所有者')).toBeVisible();
 
   // The app stays on /households/new — it does not navigate to an unowned route.
   await expect(page).toHaveURL(/\/households\/new/);
+
+  const listed = await request.get(`${API_ORIGIN}/api/v1/households`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  expect(listed.status()).toBe(200);
+  expect(await listed.json()).toEqual([
+    expect.objectContaining({ name: '我的家', role: 'OWNER' }),
+  ]);
+  await page.getByRole('button', { name: '进入家庭' }).click();
+  await expect(page.getByRole('button', { name: '当前家庭：我的家，切换家庭' })).toBeVisible();
 });

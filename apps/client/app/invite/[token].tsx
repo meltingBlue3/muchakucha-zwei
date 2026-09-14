@@ -7,7 +7,7 @@ import { InvitationFlow } from '../../src/features/households/invitation-flow';
 import { sessionStateStore, sessionTransport } from '../../src/features/auth/session-runtime';
 import { createNativePendingInvitationStore } from '../../src/platform/invitation/pending-invitation.native';
 import { createWebPendingInvitationStore } from '../../src/platform/invitation/pending-invitation.web';
-import { AuthShell, Button, Heading, Stack, Text, TextField } from '../../src/ui/primitives';
+import { AuthShell, Banner, Button, Heading, Stack, Text, TextField } from '../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 const apiClient = new ApiClient(API_ORIGIN);
@@ -72,6 +72,8 @@ export default function InviteRoute() {
 
   const [accessToken, setAccessToken] = useState<string>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [switchError, setSwitchError] = useState(false);
+  const switching = useRef(false);
   const stateResolved = useRef(false);
 
   // Resolve authentication state from the session store.
@@ -123,13 +125,26 @@ export default function InviteRoute() {
   };
 
   const handleRegister = () => {
-    router.replace('/register' as never);
+    router.replace({ pathname: '/register', params: { intended: '/invite' } } as never);
   };
 
   const handleSwitchAccount = () => {
-    void sessionTransport.clear();
-    sessionStateStore.enterUnauthenticated();
-    router.replace('/login' as never);
+    if (switching.current) return;
+    switching.current = true;
+    setSwitchError(false);
+    void (async () => {
+      try {
+        const currentToken = sessionTransport.getAccessToken();
+        if (currentToken !== null) await apiClient.logout(currentToken);
+        await sessionTransport.clear();
+        sessionStateStore.enterUnauthenticated();
+        router.replace({ pathname: '/login', params: { intended: '/invite' } } as never);
+      } catch {
+        setSwitchError(true);
+      } finally {
+        switching.current = false;
+      }
+    })();
   };
 
   const handleEnterHousehold = (household: GetHouseholdResponseDto) => {
@@ -158,7 +173,7 @@ export default function InviteRoute() {
       }
     }
 
-    setPersistedToken(trimmed);
+    void pendingInvitationStore.set(trimmed).then(() => setPersistedToken(trimmed));
   }, [manualToken]);
 
   if (!persistedToken) {
@@ -168,7 +183,7 @@ export default function InviteRoute() {
           <Stack gap={2}>
             <Heading>加入家庭</Heading>
             <Text>
-              家庭管理员发送的邀请邮件中包含一个邀请链接，点击链接即可自动加入。
+              打开家庭管理员发来的邀请链接，登录受邀账户后即可接受邀请。
               你也可以将收到的邀请链接或邀请码粘贴到下方。
             </Text>
           </Stack>
@@ -196,6 +211,7 @@ export default function InviteRoute() {
 
   return (
     <AuthShell>
+      {switchError ? <Banner>暂时无法切换账户。请检查网络后重试。</Banner> : null}
       <InvitationFlow
         {...(accessToken === undefined ? {} : { accessToken })}
         apiClient={apiClient}

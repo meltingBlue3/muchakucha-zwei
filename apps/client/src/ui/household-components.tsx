@@ -645,7 +645,7 @@ export const MemberRow = ({
             numberOfLines={1}
             variant="caption"
           >
-            {member.email}
+            {member.username ?? member.email}
           </Text>
         </Stack>
 
@@ -745,6 +745,7 @@ export interface InvitationRowProps {
   invitation: {
     id: string;
     emailCanonical: string;
+    username?: string;
     status: 'pending' | 'expired' | 'accepted' | 'revoked';
     expiresAt: string;
     role: string;
@@ -766,6 +767,7 @@ export const InvitationRow = ({
   resendBusy = false,
   revokeBusy = false,
 }: InvitationRowProps) => {
+  const recipient = invitation.username ?? invitation.emailCanonical;
   const statusLabel = INVITATION_STATUS_LABELS[invitation.status] ?? invitation.status;
   const isPending = invitation.status === 'pending';
   const isExpired = invitation.status === 'expired';
@@ -783,7 +785,7 @@ export const InvitationRow = ({
 
   return (
     <View
-      accessibilityLabel={`邀请：${invitation.emailCanonical}，${statusLabel}`}
+      accessibilityLabel={`邀请：${recipient}，${statusLabel}`}
       style={{
         alignItems: 'center',
         borderBottomColor: theme.colors.border,
@@ -796,7 +798,7 @@ export const InvitationRow = ({
     >
       {/* Email icon placeholder */}
       <View
-        accessibilityLabel={`${invitation.emailCanonical}的邀请`}
+        accessibilityLabel={`${recipient}的邀请`}
         style={{
           alignItems: 'center',
           backgroundColor: theme.colors.surfaceMuted,
@@ -815,7 +817,7 @@ export const InvitationRow = ({
           numberOfLines={1}
           variant="body"
         >
-          {invitation.emailCanonical}
+          {recipient}
         </Text>
         <Inline gap={2}>
           <View
@@ -844,7 +846,7 @@ export const InvitationRow = ({
         <Inline gap={1}>
           {canResend ? (
             <Pressable
-              accessibilityLabel={`重新发送邀请给 ${invitation.emailCanonical}`}
+              accessibilityLabel={`重新发送邀请给 ${recipient}`}
               accessibilityRole="button"
               disabled={resendBusy || revokeBusy}
               onPress={() => onResend?.(invitation.id)}
@@ -867,7 +869,7 @@ export const InvitationRow = ({
           ) : null}
           {canRevoke ? (
             <Pressable
-              accessibilityLabel={`撤销邀请 ${invitation.emailCanonical}`}
+              accessibilityLabel={`撤销邀请 ${recipient}`}
               accessibilityRole="button"
               disabled={resendBusy || revokeBusy}
               onPress={() => onRevoke?.(invitation.id)}

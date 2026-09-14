@@ -13,6 +13,9 @@ export class GetHouseholdMemberDto {
   @ApiProperty({ format: 'email', example: 'owner@example.test' })
   email!: string;
 
+  @ApiProperty({ required: false, example: 'family-member' })
+  username?: string;
+
   @ApiProperty({ enum: ['OWNER', 'ADMIN', 'MEMBER'] })
   role!: 'OWNER' | 'ADMIN' | 'MEMBER';
 

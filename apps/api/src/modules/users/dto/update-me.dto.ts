@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateMeDto {
@@ -17,6 +17,9 @@ export class CurrentUserDto {
 
   @ApiProperty({ example: 'member@example.com' })
   email!: string;
+
+  @ApiPropertyOptional({ example: 'family_member' })
+  username?: string;
 
   @ApiProperty({ example: 'Family member' })
   displayName!: string;

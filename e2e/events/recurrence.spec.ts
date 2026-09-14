@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
+import { loginEmailFixture } from '../support/auth';
+
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
@@ -91,12 +93,8 @@ async function apiCall<T = any>(
   };
 }
 
-async function loginViaPage(page: Page, email: string): Promise<void> {
-  await page.goto('/login');
-  await page.getByLabel('邮箱').fill(email);
-  await page.getByLabel('密码', { exact: true }).fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await expect(page).not.toHaveURL(/\/login$/);
+async function loginFixture(page: Page, email: string): Promise<void> {
+  await loginEmailFixture(page, email, password);
 }
 
 async function listEvents(accessToken: string, householdId: string, start: string, end: string) {
@@ -129,7 +127,7 @@ test.describe('recurring event and task journeys', () => {
     const startDate = toIsoDate(start);
     const monthStart = toIsoDate(dateAt(now.getFullYear(), now.getMonth(), 1));
     const monthEnd = toIsoDate(dateAt(now.getFullYear(), now.getMonth() + 1, 0));
-    await loginViaPage(page, account.email);
+    await loginFixture(page, account.email);
     await page.getByLabel('打开家庭日历').click();
     await expect(page.getByLabel('创建事件')).toBeVisible();
     await page.getByLabel('创建事件').click();
@@ -215,7 +213,7 @@ test.describe('recurring event and task journeys', () => {
     const selected = before[2]!;
     const removedWeekday = byWeekday.find((weekday) => weekday !== new Date(`${selected.occurrenceDate}T00:00:00Z`).getUTCDay())!;
 
-    await loginViaPage(page, account.email);
+    await loginFixture(page, account.email);
     await page.getByLabel('打开家庭日历').click();
     await page.getByLabel(new RegExp(`^${Number(String(selected.occurrenceDate).slice(-2))}日，\\d+个事件$`)).click();
     await page.getByLabel(`事件：${eventTitle}，重复`).click();
@@ -274,7 +272,6 @@ test.describe('recurring event and task journeys', () => {
     const taskTitle = `取消单次-${Date.now()}`;
     const taskCreate = await apiCall<any>(account.accessToken, 'POST', `/api/v1/households/${householdId}/tasks`, {
       title: taskTitle,
-      dueDate: `${today}T00:00:00.000Z`,
       recurrence: {
         freq: 'weekly',
         interval: 1,

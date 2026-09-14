@@ -176,6 +176,122 @@ function inject(opts: {
   });
 }
 
+describe('username invitations', () => {
+  async function useUsernameAccount(user: MemberFixture, username: string): Promise<void> {
+    await withDatabase(async (client) => {
+      await client.query(
+        `UPDATE "User" SET "email" = NULL, "email_canonical" = NULL,
+          "email_verified_at" = NULL, "username" = $1, "username_canonical" = $2
+         WHERE "id" = $3`,
+        [username, username.normalize('NFC').toLowerCase(), user.id],
+      );
+    });
+  }
+
+  async function send(username: string) {
+    return inject({
+      method: 'POST', url: `/api/v1/households/${household.id}/invitations`,
+      accessToken: owner.accessToken, body: { username },
+    });
+  }
+
+  function tokenFrom(response: { json<T>(): T }): string {
+    const body = response.json<{ invitationUrl: string }>();
+    return new URL(body.invitationUrl).pathname.split('/').at(-1)!;
+  }
+
+  test('canonicalizes username and binds acceptance to that account without sending mail', async () => {
+    await useUsernameAccount(invitee, 'FamilyMember');
+    const sent = await send('  FAMILYMEMBER  ');
+    expect(sent.statusCode).toBe(201);
+    expect(mailPort.sendHouseholdInvitation).not.toHaveBeenCalled();
+    const token = tokenFrom(sent);
+
+    const wrongAccount = await inject({
+      method: 'POST', url: '/api/v1/households/invitations/accept',
+      accessToken: stranger.accessToken, body: { token },
+    });
+    expect(wrongAccount.statusCode).toBe(403);
+
+    const accepted = await inject({
+      method: 'POST', url: '/api/v1/households/invitations/accept',
+      accessToken: invitee.accessToken, body: { token },
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json<{ members: unknown[] }>().members).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: invitee.id, username: 'FamilyMember', email: '', role: 'MEMBER' }),
+    ]));
+    const duplicate = await send('familymember');
+    expect(duplicate.statusCode).toBe(409);
+  });
+
+  test.each(['İpek', 'İ'.repeat(32)])('finds Unicode username %s after lowercase expands it', async (username) => {
+    await useUsernameAccount(invitee, username);
+    const sent = await send(username.toLowerCase());
+    expect(sent.statusCode).toBe(201);
+    expect(tokenFrom(sent)).toBeTruthy();
+    expect(mailPort.sendHouseholdInvitation).not.toHaveBeenCalled();
+  });
+
+  test('supports multiple username recipients and rotates and revokes their links independently', async () => {
+    await useUsernameAccount(invitee, 'FamilyMember');
+    await useUsernameAccount(stranger, 'AnotherMember');
+    const original = await send('FamilyMember');
+    expect(original.statusCode).toBe(201);
+    expect((await send('AnotherMember')).statusCode).toBe(201);
+
+    const listed = await inject({
+      method: 'GET', url: `/api/v1/households/${household.id}/invitations`, accessToken: owner.accessToken,
+    });
+    const invitation = listed.json<{ invitations: Array<{ id: string; username: string }> }>()
+      .invitations.find((item) => item.username === 'FamilyMember')!;
+    expect(invitation).toBeDefined();
+
+    const resent = await inject({
+      method: 'POST', url: `/api/v1/households/${household.id}/invitations/${invitation.id}/resend`,
+      accessToken: owner.accessToken,
+    });
+    expect(resent.statusCode).toBe(200);
+    expect(tokenFrom(resent)).not.toBe(tokenFrom(original));
+    const oldLink = await inject({
+      method: 'POST', url: '/api/v1/households/invitations/accept',
+      accessToken: invitee.accessToken, body: { token: tokenFrom(original) },
+    });
+    expect(oldLink.statusCode).toBe(400);
+
+    const afterResend = await inject({
+      method: 'GET', url: `/api/v1/households/${household.id}/invitations`, accessToken: owner.accessToken,
+    });
+    const active = afterResend.json<{ invitations: Array<{ id: string; username: string; status: string }> }>()
+      .invitations.find((item) => item.username === 'FamilyMember' && item.status === 'pending')!;
+    const revoked = await inject({
+      method: 'POST', url: `/api/v1/households/${household.id}/invitations/${active.id}/revoke`,
+      accessToken: owner.accessToken,
+    });
+    expect(revoked.statusCode).toBe(200);
+    const revokedLink = await inject({
+      method: 'POST', url: '/api/v1/households/invitations/accept',
+      accessToken: invitee.accessToken, body: { token: tokenFrom(resent) },
+    });
+    expect(revokedLink.statusCode).toBe(400);
+    expect(mailPort.sendHouseholdInvitation).not.toHaveBeenCalled();
+  });
+
+  test('requires one recipient and rejects unknown usernames', async () => {
+    for (const body of [{}, { email: 'someone@example.test', username: 'someone' }]) {
+      const response = await inject({
+        method: 'POST', url: `/api/v1/households/${household.id}/invitations`,
+        accessToken: owner.accessToken, body,
+      });
+      expect(response.statusCode).toBe(400);
+    }
+    const missing = await send('unregistered');
+    expect(missing.statusCode).toBe(400);
+    expect(missing.json<{ error: { code: string } }>().error.code).toBe('INVITATION_USER_NOT_FOUND');
+    expect(mailPort.sendHouseholdInvitation).not.toHaveBeenCalled();
+  });
+});
+
 describe('sendHouseholdInvitation delivery', () => {
   test('does not report success when invitation mail delivery fails', async () => {
     vi.mocked(mailPort.sendHouseholdInvitation).mockRejectedValueOnce(

@@ -9,12 +9,35 @@ export const SAFE_INTENDED_ROUTES = ['/household-handoff', '/profile', '/invite'
 export type SafeIntendedRoute = (typeof SAFE_INTENDED_ROUTES)[number] | `/invite/${string}` | `/households/${string}`;
 export type SessionDestination = SafeIntendedRoute | '/login' | '/offline';
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HOUSEHOLD_PAGES = new Set(['settings', 'today', 'tasks', 'events', 'notes', 'labels', 'recurrence-rules']);
+const EDITABLE_RESOURCES = new Set(['tasks', 'events', 'notes']);
+
+const isUuid = (value: string | undefined): boolean => value !== undefined && UUID_PATTERN.test(value);
+
+function isHouseholdPage(value: string): boolean {
+  const [prefix, root, householdId, ...segments] = value.split('/');
+  if (prefix !== '' || root !== 'households' || !isUuid(householdId)) return false;
+  const [section, resourceId, action] = segments;
+  if (section === undefined) return true;
+  if (segments.length === 1) return HOUSEHOLD_PAGES.has(section);
+  if (segments.length === 2) {
+    if (section === 'ownership') return resourceId === 'transfer' || resourceId === 'leave';
+    if (EDITABLE_RESOURCES.has(section)) return resourceId === 'new' || isUuid(resourceId);
+    return section === 'recurrence-rules' && isUuid(resourceId);
+  }
+  if (segments.length !== 3 || !isUuid(resourceId)) return false;
+  if (EDITABLE_RESOURCES.has(section)) return action === 'edit';
+  if (section === 'members') return action === 'role' || action === 'remove';
+  return section === 'invitations' && action === 'revoke';
+}
+
 export function sanitizeIntendedRoute(value: string | undefined): SafeIntendedRoute | undefined {
   const exact = SAFE_INTENDED_ROUTES.find((route) => route === value);
   if (exact !== undefined) return exact;
   if (value === undefined || /[?#\\]/.test(value) || value.includes('..')) return undefined;
   if (/^\/invite\/[A-Za-z0-9_-]+$/.test(value)) return value as `/invite/${string}`;
-  if (/^\/households\/[0-9a-f-]{36}(?:\/settings|\/ownership\/(?:transfer|leave)|\/invitations\/[0-9a-f-]{36}\/revoke)?$/i.test(value)) {
+  if (isHouseholdPage(value)) {
     return value as `/households/${string}`;
   }
   return undefined;
@@ -79,7 +102,7 @@ export const SessionBootstrap = ({
         return;
       }
       sessionStateStore.enterUnauthenticated();
-      onRoute('/login');
+      onRoute('/login', safeIntendedRoute);
       setViewState('resolved');
     }, [onRoute, safeIntendedRoute, sessionStateStore, sessionTransport],
   );

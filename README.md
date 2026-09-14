@@ -13,7 +13,7 @@
 | **ORM** | Prisma 7 |
 | **认证** | Argon2 密码哈希 + HS256 JWT 双 Token（Access + Refresh） |
 | **API 文档** | OpenAPI / Swagger（从装饰器自动生成） |
-| **邮件** | Nodemailer（生产用 SMTP，开发/测试用控制台输出） |
+| **邮件（可选）** | 仅旧邮箱 API 兼容流程使用；用户名注册、登录和家庭邀请不依赖 SMTP |
 | **测试** | Vitest（API 集成）、Playwright（E2E + 无障碍）、Jest（客户端） |
 | **包管理** | pnpm workspace monorepo |
 
@@ -52,7 +52,7 @@ muchakucha-zwei/
 ### 数据模型
 
 ```
-User → AuthSession, RefreshToken, EmailVerificationToken, PasswordResetToken
+User → AuthSession, RefreshToken（旧邮箱 API 另保留验证与重置凭据）
 Household → Membership, Invitation, Label
 Membership → Role (OWNER / ADMIN / MEMBER)
 RecurrenceRule → 归属 Household，按频率（每天/每周/每月/每年）驱动 Event/Task 的滚动生成
@@ -124,7 +124,7 @@ API 服务需要的环境变量（开发环境有安全默认值）：
 | `JWT_ACCESS_SECRET` | JWT 签名密钥（≥32 字节） | `development-only-access-secret-change-before-production` |
 | `NODE_ENV` | 运行环境 | `development` |
 | `WEB_ORIGIN` | 允许的 CORS 来源（逗号分隔） | `http://127.0.0.1:8081` |
-| `SMTP_*` | 生产环境 SMTP 配置 | 开发环境自动使用控制台输出 |
+| `SMTP_*` | 可选，仅使用旧邮箱 API 时配置 | 开发环境自动使用控制台输出 |
 
 ### 5. 启动开发服务器
 
@@ -133,16 +133,18 @@ API 服务需要的环境变量（开发环境有安全默认值）：
 cd apps/api && pnpm dev
 
 # 启动客户端 Web 开发服务 (http://127.0.0.1:8081)
-cd apps/client && pnpm web
+pnpm --filter client exec expo start --web --port 8081
 ```
 
-开发环境下邮件验证链接会输出到终端控制台，无需 SMTP 服务器。
+注册只需用户名、密码和确认密码，成功后自动登录。用户名支持 3–32 个字母、数字、点、下划线或连字符（包含中文），忽略首尾空白及大小写；密码为 8–128 个字符，两次输入必须一致。登录使用用户名和密码。家庭邀请按已注册用户名生成分享链接，无需邮箱。
+
+为保持 `/api/v1` 兼容，旧邮箱注册、验证、找回密码接口仍保留；客户端使用新的用户名流程。新账号的邮箱字段在数据库中为空，旧响应中的 `email` 返回空字符串并新增 `username`。应用启动前需执行新增数据库迁移。
 
 ### 6. 运行测试
 
 ```bash
 # API 集成测试
-pnpm test:integration            # 277 用例，19 个测试文件
+pnpm test:integration
 
 # API 类型检查
 cd apps/api && pnpm typecheck
@@ -171,7 +173,7 @@ pnpm openapi:check
 
 ### 已实现功能
 
-- **账户安全**：邮箱注册、验证、登录、会话恢复、密码重置、昵称修改、设备级退出
+- **账户**：用户名注册与登录、注册后自动登录、会话恢复、昵称修改、设备级退出；密码使用 Argon2id 哈希，刷新凭据存于原生 SecureStore 或 Web HttpOnly Cookie
 - **家庭协作**：创建/命名家庭、邀请成员、接受/拒绝/撤回邀请、角色治理（OWNER/ADMIN/MEMBER）、移除成员、所有权转移
 - **共享日历**：月视图、日期列表、全天/定时事件、创建/编辑/删除、时区安全 timestamptz 建模
 - **任务管理**：状态流转（pending → in_progress → completed）、优先级、负责人分配、过滤排序
@@ -181,7 +183,7 @@ pnpm openapi:check
 
 ### 测试覆盖
 
-- **API 集成测试**：19 文件 · 277 用例（认证、用户、家庭、事件、任务、周期性重复、安全边界）—— 笔记与标签模块目前**没有**集成测试覆盖
+- **API 集成测试**：用户名注册和登录、旧邮箱 API 兼容、会话、用户、家庭邀请、事件、任务、周期性重复及安全边界；笔记与标签模块目前**没有**集成测试覆盖
 - **Playwright E2E**：认证流程、家庭协作矩阵、日历 API、任务 API、周期性重复的 Web 端到端旅程与重复规则管理页、无障碍审计
 - **客户端单元测试**：Jest + Testing Library
 
@@ -193,14 +195,21 @@ pnpm openapi:check
 export NODE_ENV=production
 export JWT_ACCESS_SECRET='<强随机密钥 32+ 字节>'
 export WEB_ORIGIN='https://your-app.example.com'
+```
+
+用户名注册和家庭邀请无需配置邮件服务。只有需要旧邮箱 API 时才配置：
+
+```bash
+export EMAIL_LINK_ORIGIN='https://your-app.example.com'
 export SMTP_HOST='smtp.example.com'
 export SMTP_PORT=587
 export SMTP_SECURE=false
 export SMTP_USER='noreply@example.com'
 export SMTP_PASSWORD='<smtp-password>'
+export SMTP_FROM='noreply@example.com'
 ```
 
-生产 CORS 仅允许 `WEB_ORIGIN` 配置的精确来源。邮件通过 SMTP 实际发送。
+生产 CORS 仅允许 `WEB_ORIGIN` 配置的精确来源。未配置 SMTP 时邮件功能不可用，用户名流程照常使用。
 
 ## CLI 参考
 
