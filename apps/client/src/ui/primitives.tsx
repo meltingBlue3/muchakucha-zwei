@@ -90,6 +90,8 @@ export const Inline = ({ children, gap = 2, style, ...props }: LayoutProps) => {
 };
 
 type OwnedTextProps = React.ComponentProps<typeof RestyleText> & {
+  // React Native Web makes text programmatically focusable; native text ignores it.
+  tabIndex?: 0 | -1;
   variant?: TextVariant;
 };
 
