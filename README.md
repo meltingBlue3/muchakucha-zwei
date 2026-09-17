@@ -1,203 +1,221 @@
 # Muchakucha Zwei（ムチャクチャ 2号）
 
-共享家庭协作应用 — 让家庭成员在移动优先的体验中管理日历、任务和笔记。
+共享家庭协作应用 — 让家庭成员在移动优先的体验中管理日程、任务、笔记和标签。Android 与 iOS 为主要平台，Web 为次要平台。
 
 ## 技术栈
 
 | 层 | 技术 |
 |---|------|
-| **移动端 / Web** | React Native 0.86 + Expo 57 + Expo Router |
-| **UI 系统** | Shopify Restyle（主题化设计系统） |
-| **API 服务** | NestJS 11 + Fastify |
-| **数据库** | PostgreSQL 17（本地安装，无需 Docker） |
-| **ORM** | Prisma 7 |
-| **认证** | Argon2 密码哈希 + HS256 JWT 双 Token（Access + Refresh） |
-| **API 文档** | OpenAPI / Swagger（从装饰器自动生成） |
+| **移动端 / Web** | React Native 0.86 + Expo 57 + Expo Router（Metro 打包 Web） |
+| **UI 系统** | Shopify Restyle 主题 + `apps/client/src/ui/` 共享组件，设计规范见 [docs/design.md](docs/design.md) |
+| **API 服务** | NestJS 11 + Fastify，统一前缀 `/api/v1` |
+| **数据库** | PostgreSQL（`compose.yaml` 提供 18.4；本机 PostgreSQL 16 亦可完成迁移） |
+| **ORM** | Prisma 7 + `@prisma/adapter-pg` |
+| **认证** | Argon2 密码哈希；HS256 Access Token（15 分钟，仅存内存）+ 轮换 Refresh Token（原生 SecureStore / Web HttpOnly Cookie） |
+| **API 契约** | 由 `generate-openapi.ts` 生成 `packages/api-client`（OpenAPI JSON + TypeScript 客户端） |
 | **邮件（可选）** | 仅旧邮箱 API 兼容流程使用；用户名注册、登录和家庭邀请不依赖 SMTP |
-| **测试** | Vitest（API 集成）、Playwright（E2E + 无障碍）、Jest（客户端） |
-| **包管理** | pnpm workspace monorepo |
+| **测试** | Vitest（API 单元 / 集成）、Jest + Testing Library（客户端）、Playwright（Web E2E + 无障碍） |
+| **包管理** | pnpm 10 workspace monorepo（不要使用 npm 安装） |
 
 ## 项目结构
 
 ```
 muchakucha-zwei/
 ├── apps/
-│   ├── api/                     # NestJS + Fastify 后端
-│   │   ├── prisma/              # 数据库 Schema & 迁移
-│   │   │   └── schema.prisma    # 数据模型（用户/家庭/事件/任务/重复规则/笔记/标签）
+│   ├── api/                       # NestJS + Fastify 后端
+│   │   ├── prisma/                # schema.prisma 与迁移
 │   │   ├── src/
-│   │   │   ├── infrastructure/  # Prisma、邮件适配器
-│   │   │   ├── modules/         # auth、users、households、events、tasks、recurrence、notes、labels
-│   │   │   └── openapi/         # OpenAPI 自动生成器
-│   │   └── test/                # 集成测试
-│   └── client/                  # Expo 跨平台客户端
-│       ├── app/                 # Expo Router 文件路由
-│       │   └── (protected)/     # 受保护页面（需登录，含 recurrence-rules 规则管理页）
+│   │   │   ├── infrastructure/    # Prisma、邮件适配器（SMTP / 控制台 / 禁用）
+│   │   │   ├── modules/           # auth、users、households、events、tasks、recurrence、notes、labels
+│   │   │   └── openapi/           # OpenAPI 契约与客户端生成器
+│   │   └── test/                  # 集成测试（会清空测试库）
+│   └── client/                    # Expo 跨平台客户端
+│       ├── app/                   # Expo Router 文件路由
+│       │   ├── (auth)/            # 登录、注册、离线页
+│       │   ├── invite/            # 邀请链接落地页
+│       │   └── (protected)/       # 需登录：家庭列表、个人中心、家庭内各页面
 │       └── src/
-│           ├── features/        # 功能模块 (auth, households, events, tasks, recurrence, notes, labels, profile)
-│           └── ui/              # 共享 UI 组件 & 主题
-├── e2e/                         # Playwright E2E 测试
-│   ├── auth/                    # 认证流程
-│   ├── households/              # 家庭协作
-│   ├── events/                  # 日历事件、重复规则、无障碍
-│   └── tasks/                   # 任务 & 无障碍
+│           ├── features/          # auth、households、events、tasks、recurrence、notes、labels、profile
+│           ├── platform/          # 原生 / Web 差异适配（会话、当前家庭、邀请、浮层焦点、字体）
+│           └── ui/                # 共享组件与主题 token
 ├── packages/
-│   └── api-client/              # 自动生成（OpenAPI → TypeScript 客户端）
-├── docs/
-│   └── security/                # ASVS 安全审计证据
-├── scripts/                     # 工具脚本（OpenAPI 漂移检查等）
-└── .planning/                   # 路线图 & 计划文档
+│   └── api-client/                # 生成产物，请勿手改
+├── e2e/                           # Playwright 用例（auth、households、events、tasks、support）
+├── docs/                          # 设计规范、设计调研与历史方案、security/ ASVS 审计
+├── scripts/                       # OpenAPI 漂移检查；PowerShell 测试门禁脚本
+├── compose.yaml                   # 测试用 PostgreSQL + Mailpit
+├── playwright.config.ts           # 完整 Web E2E（启动 API + Web）
+└── playwright.ui.config.ts        # 仅 UI 回归（拦截全部 API 请求，无需数据库）
 ```
 
 ### 数据模型
 
 ```
-User → AuthSession, RefreshToken（旧邮箱 API 另保留验证与重置凭据）
-Household → Membership, Invitation, Label
+User → AuthSession, RefreshToken（旧邮箱 API 另有 EmailVerificationToken、PasswordResetToken）
+Household → Membership, Invitation, Event, Task, RecurrenceRule, Note, Label
 Membership → Role (OWNER / ADMIN / MEMBER)
-RecurrenceRule → 归属 Household，按频率（每天/每周/每月/每年）驱动 Event/Task 的滚动生成
-Event → 归属 Household，支持全天/定时事件，可关联 RecurrenceRule 与多个 Label
-Task → 归属 Household，过滤/状态流转/分配，可关联 RecurrenceRule 与多个 Label
-Note → 归属 Household 的共享笔记，可关联多个 Label
+Invitation → 按已注册用户名发出（旧邮箱邀请仍兼容）
+RecurrenceRule → 每天 / 每周 / 每月 / 每年，滚动生成 Event 与 Task
+Event → 全天 / 定时，可关联 RecurrenceRule 与多个 Label（EventLabel）
+Task → 状态、优先级、多个负责人（TaskAssignee），可关联 RecurrenceRule 与多个 Label（TaskLabel）
+Note → 家庭共享笔记（标题 + 正文，不支持标签）
+Label → 家庭内唯一名称 + 颜色
 ```
 
-## 快速开始
+## 本地开发
 
 ### 前置条件
 
-- **Node.js** ≥ 24.0.0
-- **pnpm** ≥ 10.x
-- **PostgreSQL 17** 本地运行（推荐）
+- **Node.js** 24.x（`>=24.0.0 <25`）
+- **pnpm** 10.x：`corepack enable` 会按 `packageManager` 字段启用 pnpm 10.34.5
+- **PostgreSQL**：本机安装，或使用 Docker Compose
 
-### 1. 克隆并安装
+### 1. 安装依赖
 
 ```bash
 git clone <repo-url>
 cd muchakucha-zwei
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 ```
 
-### 2. 配置数据库
+### 2. 准备数据库
 
-**方式一：Docker Compose（推荐测试环境）**
-
-```bash
-docker compose up -d
-# 启动 PostgreSQL 17 + Mailpit（SMTP 测试服务器）
-# PostgreSQL: localhost:55432
-# Mailpit Web UI: http://localhost:18025
-```
-
-**方式二：本地安装**
-
-创建两个 PostgreSQL 数据库：
+**方式一：本机 PostgreSQL**
 
 ```sql
 CREATE USER muchakucha_dev WITH PASSWORD 'muchakucha_dev_only';
-CREATE USER muchakucha_test WITH PASSWORD 'muchakucha_test_only';
 CREATE DATABASE muchakucha_dev OWNER muchakucha_dev;
-CREATE DATABASE muchakucha_test OWNER muchakucha_test;
 ```
 
-或通过环境变量自定义：
+**方式二：Docker Compose**
 
 ```bash
-export DATABASE_URL='postgresql://user:password@localhost:5432/muchakucha_dev'
-export TEST_DATABASE_URL='postgresql://user:password@localhost:5432/muchakucha_test'
+docker compose up -d
+# PostgreSQL 18.4：127.0.0.1:55432，库/用户 muchakucha_test，密码 muchakucha_test_only
+# Mailpit：SMTP 127.0.0.1:11025，Web UI http://127.0.0.1:18025
 ```
 
-### 3. 迁移数据库 & 生成 Prisma 客户端
+Compose 中的库是测试库，运行集成测试或 E2E 时会被清空。
+
+### 3. 配置 API 环境变量
+
+API 和 Prisma CLI 都会读取 `apps/api/.env`（已被 git 忽略），也可以直接 export：
 
 ```bash
-cd apps/api
-pnpm prisma:generate
-npx prisma migrate deploy
+# apps/api/.env
+DATABASE_URL='postgresql://muchakucha_dev:muchakucha_dev_only@127.0.0.1:5432/muchakucha_dev'
 ```
 
-### 4. 环境变量
+未设置 `DATABASE_URL` 时，API 默认连接 `127.0.0.1:5432/muchakucha_test`。
 
-API 服务需要的环境变量（开发环境有安全默认值）：
+| 变量 | 说明 | 非生产默认值 |
+|------|------|--------------|
+| `DATABASE_URL` | PostgreSQL 连接串 | `postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test` |
+| `NODE_ENV` | `development` / `test` / `production` | `development` |
+| `HOST` / `PORT` | 监听地址与端口 | `127.0.0.1` / `3000`（生产默认 `0.0.0.0`） |
+| `LOG_LEVEL` | Fastify 日志级别 | `info`（`test` 下为 `silent`） |
+| `JWT_ACCESS_SECRET` | JWT 签名密钥，≥32 字节 | `development-only-access-secret-change-before-production` |
+| `WEB_ORIGIN` | 生产 CORS 允许的精确来源（逗号分隔）；第一个值也用于生成邀请分享链接 | 非生产环境 CORS 放行所有来源 |
+| `EMAIL_LINK_ORIGIN` | 旧邮箱流程链接的来源 | `http://127.0.0.1:8081` |
+| `SMTP_*` | 旧邮箱 API 的发信配置 | 未设置 `SMTP_HOST` 时邮件输出到控制台 |
 
-| 变量 | 说明 | 默认值（开发） |
-|------|------|----------------|
-| `DATABASE_URL` | PostgreSQL 连接串 | — |
-| `JWT_ACCESS_SECRET` | JWT 签名密钥（≥32 字节） | `development-only-access-secret-change-before-production` |
-| `NODE_ENV` | 运行环境 | `development` |
-| `WEB_ORIGIN` | 允许的 CORS 来源（逗号分隔） | `http://127.0.0.1:8081` |
-| `SMTP_*` | 可选，仅使用旧邮箱 API 时配置 | 开发环境自动使用控制台输出 |
+客户端通过 `EXPO_PUBLIC_API_ORIGIN` 指定 API 地址，默认 `http://localhost:3000`。在真机上调试时要改成电脑的局域网地址，并给 API 设置 `HOST=0.0.0.0`。
 
-### 5. 启动开发服务器
+### 4. 生成 Prisma 客户端并迁移
 
 ```bash
-# 启动 API 服务 (http://127.0.0.1:3000)
-cd apps/api && pnpm dev
+pnpm --filter api prisma:generate
+pnpm --filter api exec prisma migrate deploy
+```
 
-# 启动客户端 Web 开发服务 (http://127.0.0.1:8081)
+拉取到新的迁移后需要再次执行 `migrate deploy`。
+
+### 5. 启动
+
+```bash
+# API：http://127.0.0.1:3000（先编译再运行，不监听文件变更，改代码后需重启）
+pnpm --filter api dev
+
+# Web 客户端：http://127.0.0.1:8081
 pnpm --filter client exec expo start --web --port 8081
+
+# 原生客户端：Expo 开发服务器，扫码或连接模拟器
+pnpm --filter client start
 ```
 
-注册只需用户名、密码和确认密码，成功后自动登录。用户名支持 3–32 个字母、数字、点、下划线或连字符（包含中文），忽略首尾空白及大小写；密码为 8–128 个字符，两次输入必须一致。登录使用用户名和密码。家庭邀请按已注册用户名生成分享链接，无需邮箱。
+`pnpm dev` 会并行运行 API 和 `expo start`。Web 请使用上面的 8081 命令：`client` 包的 `web` 脚本使用 18025 端口，与 Mailpit 冲突。
 
-为保持 `/api/v1` 兼容，旧邮箱注册、验证、找回密码接口仍保留；客户端使用新的用户名流程。新账号的邮箱字段在数据库中为空，旧响应中的 `email` 返回空字符串并新增 `username`。应用启动前需执行新增数据库迁移。
+API 的 OpenAPI 文档位于 `http://127.0.0.1:3000/api/v1/openapi.json`（未启用 Swagger UI）。
 
-### 6. 运行测试
+### 使用流程
+
+1. 注册只需用户名、密码和确认密码，成功后自动登录。用户名为 3–32 个字母、数字、点、下划线或连字符（支持中文），忽略首尾空白和大小写；密码 8–128 个字符。
+2. 创建家庭，或通过邀请链接加入。邀请按已注册用户名生成分享链接，无需邮箱。
+3. 进入家庭后默认打开「今日」。底部导航（宽屏为侧栏）有五个入口：**今日、日历、任务、笔记、家庭**。标签管理、周期规则和家庭设置（成员、邀请、角色、所有权）都在「家庭」页。
+4. 通过账户菜单进入个人中心，可修改昵称、查看我的家庭、退出当前设备。
+
+为保持 `/api/v1` 兼容，旧邮箱注册、验证、找回密码接口仍保留，但客户端只使用用户名流程。新账号的邮箱字段为空，旧响应中的 `email` 返回空字符串，并新增 `username`。
+
+## 测试与检查
 
 ```bash
-# API 集成测试
-pnpm test:integration
+pnpm --recursive typecheck   # 所有包类型检查
+pnpm test:quick              # API 单元测试 + 客户端 Jest
+pnpm test:integration        # API 集成测试（需要测试库，见下文）
+pnpm test:e2e:web            # Web E2E（自动启动 API 与 Web，或复用已运行的服务）
+pnpm openapi:check           # 重新生成 api-client 并检查与 HEAD 是否一致
 
-# API 类型检查
-cd apps/api && pnpm typecheck
-
-# 客户端类型检查
-cd apps/client && pnpm typecheck
-
-# E2E 测试（需要先启动 API 和客户端）
-pnpm test:e2e:web
-
-# OpenAPI 一致性检查
-pnpm openapi:check
+# 仅 UI 回归（拦截 API，无需数据库）
+pnpm exec playwright test -c playwright.ui.config.ts
 ```
 
-## 功能完成度
+**测试数据库会被清空。** 集成测试和 E2E 只接受回环地址、且库名含独立 `test` 片段的数据库：
 
-| 阶段 | 进度 | 状态 |
-|------|------|--------|
-| Phase 1: 安全账户入口 | 27/27 | ✅ 完成 |
-| Phase 2: 家庭组与成员协作 | 12/13 | 🔄 待 Android 真机验收 |
-| Phase 3: 共享家庭日历 | 3/4 | 🔄 待 Android 真机验收 + 无障碍审计 |
-| Phase 4: 任务与今日视图 | 3/4 | 🔄 待 Android 真机验收（其余门禁均绿） |
-| Phase 5: 笔记与标签整理 | ~2/3（代码完成，未走 GSD 流程） | ⚠️ 零自动化测试、缺"按标签筛选"能力、未跑门禁 |
-| Phase 6: 跨平台完成度与发布准备 | 0/3 | 待开始 |
-| Phase 7: 周期性重复事件与任务 | 15/15 | ✅ 完成（含 Android 真机验收） |
+- 集成测试读取 `TEST_DATABASE_URL`，或由 `TEST_POSTGRES_DB/USER/PASSWORD/PORT` 拼接（默认端口 5432）。
+- E2E 读取 `DATABASE_URL`，默认 `127.0.0.1:5432/muchakucha_test`。
+- 使用 Docker Compose 时参考 [`.env.test.example`](.env.test.example)，端口为 55432。根目录 `.env.test` **不会**被自动加载，需要自行导出变量。
 
-### 已实现功能
+测试库需要先执行 `prisma migrate deploy`。
 
-- **账户**：用户名注册与登录、注册后自动登录、会话恢复、昵称修改、设备级退出；密码使用 Argon2id 哈希，刷新凭据存于原生 SecureStore 或 Web HttpOnly Cookie
-- **家庭协作**：创建/命名家庭、邀请成员、接受/拒绝/撤回邀请、角色治理（OWNER/ADMIN/MEMBER）、移除成员、所有权转移
-- **共享日历**：月视图、日期列表、全天/定时事件、创建/编辑/删除、时区安全 timestamptz 建模
-- **任务管理**：状态流转（pending → in_progress → completed）、优先级、负责人分配、过滤排序
-- **今日视图**：逾期任务高亮、今日事件、今日待办、即将到来 — 一站式聚合
-- **周期性重复**：事件与任务均支持每天/每周（多选星期几）/每月/每年重复，月末自动钳位、DST 正确处理；「仅此一次」与「此后所有」两种编辑/删除范围由服务端强制执行；重复规则管理页（列表 + 详情）支持规则级编辑与「结束此重复」
-- **笔记与标签**：家庭共享笔记的创建/查看/编辑/删除；标签的创建/重命名/着色/删除；事件与任务可打标签（⚠️ 尚不支持按标签筛选列表，且此功能未走完整测试门禁 — 见下方测试覆盖）
+修改 API 契约时，更新 `apps/api/src/openapi/generate-openapi.ts` 中的 DTO 与模板，然后运行 `pnpm openapi:generate`，不要手改 `packages/api-client`。
 
-### 测试覆盖
+## 功能
 
-- **API 集成测试**：用户名注册和登录、旧邮箱 API 兼容、会话、用户、家庭邀请、事件、任务、周期性重复及安全边界；笔记与标签模块目前**没有**集成测试覆盖
-- **Playwright E2E**：认证流程、家庭协作矩阵、日历 API、任务 API、周期性重复的 Web 端到端旅程与重复规则管理页、无障碍审计
-- **客户端单元测试**：Jest + Testing Library
+- **账户**：用户名注册与登录、会话恢复、昵称修改、设备级退出；API 全局限流（每个客户端每分钟 60 次）
+- **家庭协作**：创建 / 重命名 / 切换家庭；按用户名邀请，接受 / 重发 / 撤回邀请；OWNER / ADMIN / MEMBER 角色治理、移除成员、所有权转移、所有者离开
+- **今日**：当天日程、待办与逾期任务的概览，后续安排默认收起
+- **日历**：月视图、全天 / 定时事件，按标签和是否重复筛选；时间点使用 `timestamptz`
+- **任务**：待处理 → 进行中 → 已完成、优先级、多负责人，按状态、标签和是否重复筛选；筛选状态在切换页面后保留
+- **周期性重复**：事件与任务支持每天 / 每周（多选星期）/ 每月 / 每年，月末钳位并正确处理夏令时；可选择「仅此一次」或「此后所有」范围编辑 / 删除；周期规则列表与详情页支持编辑规则和结束重复
+- **笔记**：家庭共享笔记的增删改查；草稿在取消后保留，保存成功后清除
+- **标签**：创建、重命名、着色、删除；可用于事件和任务
+
+### 已知缺口
+
+- 笔记与标签没有 API 集成测试，也没有真实后端的 E2E（仅在 `ux-regressions.spec.ts` 中有拦截 API 的 UI 用例）
+- 发布准备未完成：`apps/client/eas.json` 的 production `EXPO_PUBLIC_API_ORIGIN` 仍为占位地址 `https://api.yourdomain.com`
+- 家庭、日历、任务三块尚未完成 Android 真机验收
 
 ## 生产部署
 
-生产环境需要额外配置：
+### API
 
 ```bash
 export NODE_ENV=production
-export JWT_ACCESS_SECRET='<强随机密钥 32+ 字节>'
-export WEB_ORIGIN='https://your-app.example.com'
+export DATABASE_URL='postgresql://...'
+export JWT_ACCESS_SECRET='<强随机密钥，≥32 字节，如 openssl rand -base64 48>'
+export WEB_ORIGIN='https://your-app.example.com'   # 必填，必须是 HTTPS 精确来源
+
+pnpm install --frozen-lockfile
+pnpm --filter api prisma:generate
+pnpm --filter api exec prisma migrate deploy
+pnpm --filter api dev    # 编译到 dist/ 并运行 node dist/main.js，生产默认监听 0.0.0.0:3000
 ```
 
-用户名注册和家庭邀请无需配置邮件服务。只有需要旧邮箱 API 时才配置：
+生产环境只允许 `WEB_ORIGIN` 中的精确来源跨域访问。建议在 API 前放置 HTTPS 反向代理。
+
+用户名注册和家庭邀请不需要邮件服务。只有需要旧邮箱 API 时才配置以下变量（生产环境设置了 `SMTP_HOST` 后，其余项均为必填）：
 
 ```bash
 export EMAIL_LINK_ORIGIN='https://your-app.example.com'
@@ -209,16 +227,30 @@ export SMTP_PASSWORD='<smtp-password>'
 export SMTP_FROM='noreply@example.com'
 ```
 
-生产 CORS 仅允许 `WEB_ORIGIN` 配置的精确来源。未配置 SMTP 时邮件功能不可用，用户名流程照常使用。
+未配置 SMTP 时邮件功能不可用，用户名流程不受影响。
+
+### 移动端
+
+使用 EAS Build（`apps/client/eas.json`）：`development`（开发客户端）、`preview`（内部分发）、`production`。构建时通过各 profile 的 `EXPO_PUBLIC_API_ORIGIN` 指定 API 地址。Android 包名与 iOS Bundle ID 均为 `app.muchakucha.zwei`。
+
+```bash
+cd apps/client
+pnpm exec eas build --profile preview --platform android
+```
 
 ## CLI 参考
 
 | 命令 | 说明 |
 |------|------|
-| `pnpm dev` | 并行启动 API + 客户端开发服务器 |
-| `pnpm test` | 运行全部测试 |
+| `pnpm dev` | 并行启动 API 与 Expo 开发服务器 |
+| `pnpm --filter api dev` | 编译并启动 API |
+| `pnpm --filter client exec expo start --web --port 8081` | 启动 Web 客户端 |
+| `pnpm --filter api prisma:generate` | 生成 Prisma 客户端 |
+| `pnpm --filter api exec prisma migrate deploy` | 执行数据库迁移 |
+| `pnpm --recursive typecheck` | 全部类型检查 |
+| `pnpm test` | 运行全部 API（含集成，需要测试库）与客户端测试 |
+| `pnpm test:quick` | API 单元测试 + 客户端测试 |
 | `pnpm test:integration` | API 集成测试 |
-| `pnpm test:e2e:web` | Web E2E 测试 |
-| `pnpm test:quick` | 快速单元测试 |
-| `pnpm openapi:generate` | 从 API 装饰器重新生成 OpenAPI 客户端 |
-| `pnpm openapi:check` | 检查 OpenAPI 生成文件是否与提交一致 |
+| `pnpm test:e2e:web` | Web E2E |
+| `pnpm openapi:generate` | 重新生成 OpenAPI 契约与客户端 |
+| `pnpm openapi:check` | 检查生成产物是否与提交一致 |
