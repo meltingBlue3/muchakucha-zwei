@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsArray, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 
 export const LABEL_COLORS = [
   '#EF4444', '#F97316', '#F59E0B', '#84CC16', '#10B981',
@@ -64,6 +64,7 @@ export class LabelListResponseDto {
 
 export class TagEntitiesDto {
   @ApiProperty({ description: 'Label IDs to apply', type: [String] })
-  @IsString({ each: true })
+  @IsArray()
+  @IsUUID('4', { each: true })
   labelIds!: string[];
 }
