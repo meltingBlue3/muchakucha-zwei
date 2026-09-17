@@ -49,14 +49,14 @@ test.describe('Authenticated account actions', () => {
     expect(renamed.status()).toBe(200);
 
     const username = await registerAndLogin(page);
-    const nickname = page.getByLabel('昵称');
+    const nickname = page.getByRole('textbox', { name: '昵称' });
     await expect(nickname).toHaveValue(username);
     await nickname.fill(duplicateName);
     await page.getByRole('button', { name: '保存昵称' }).click();
     await expect(page.getByRole('status')).toHaveText('昵称已更新。');
     await page.reload();
     await expect(page).toHaveURL(/\/profile/);
-    await expect(page.getByLabel('昵称')).toHaveValue(duplicateName);
+    await expect(page.getByRole('textbox', { name: '昵称' })).toHaveValue(duplicateName);
     await expect(page.getByText(username, { exact: true })).toBeVisible();
   });
 

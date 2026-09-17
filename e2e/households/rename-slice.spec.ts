@@ -142,32 +142,28 @@ test('renames the explicit current household [RED:HOUSEHOLD_RENAME]', async ({ p
   await expect(page).toHaveURL(/\/households\/[^/]+\/settings$/);
   await expect(page.getByRole('main').getByText('温暖小家').first()).toBeVisible();
 
-  // --- Navigate to the settings route ---
+  // --- Rename the household from the settings dialog ---
   await page.goto(`/households/${encodeURIComponent(household.id)}/settings`);
-  await page.waitForURL(`/households/${encodeURIComponent(household.id)}/settings`);
-  await page.waitForTimeout(1500);
-
-  // --- Observe the destination note ---
-  // The settings form must repeat "保存到：{家庭名称}" as the explicit destination note.
-  await expect(page.getByText('保存到：温暖小家').first()).toBeVisible({ timeout: 5000 });
-
-  // --- Rename the household ---
-  const nameField = page.getByLabel('家庭名称');
-  await expect(nameField).toBeVisible();
+  await page.getByRole('button', { name: '编辑家庭名称' }).click();
+  const renameDialog = page.getByRole('dialog', { name: '编辑家庭名称' }).last();
+  const nameField = renameDialog.getByLabel('家庭名称', { exact: true });
+  await expect(nameField).toHaveValue('温暖小家');
   await nameField.fill('');
+  await expect(renameDialog.getByRole('button', { name: '保存', exact: true })).toBeDisabled();
   await nameField.fill('崭新的家');
 
   // No extra confirmation — click save directly.
-  await page.getByRole('button', { name: '保存' }).click();
-
-  // --- Verify the header updates to the new authoritative name ---
-  await expect(page.getByText('崭新的家').first()).toBeVisible({ timeout: 5000 });
-
-  // --- Verify the destination note updates too ---
-  await expect(page.getByText('保存到：崭新的家').first()).toBeVisible({ timeout: 5000 });
+  await renameDialog.getByRole('button', { name: '保存', exact: true }).click();
 
   // --- Verify the save success feedback ---
-  await expect(page.getByText('家庭名称已更新。')).toBeVisible({ timeout: 5000 });
+  await expect(renameDialog.getByRole('status')).toHaveText('家庭名称已更新。');
+  await expect(nameField).toHaveValue('崭新的家');
+
+  // --- Verify the page and household header update to the new authoritative name ---
+  await page.keyboard.press('Escape');
+  await expect(renameDialog).toBeHidden();
+  await expect(page.getByRole('button', { name: '当前家庭：崭新的家，切换家庭' })).toBeVisible();
+  await expect(page.getByRole('main').getByText('崭新的家', { exact: true }).last()).toBeVisible();
 
   // --- Verify the roster API reflects the rename ---
   const verifyResponse = await request.get(

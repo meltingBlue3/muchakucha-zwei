@@ -18,5 +18,5 @@ export async function loginEmailFixture(
   expect(response.status()).toBe(200);
   await page.goto(destination);
   await expect(page).not.toHaveURL(/\/login(?:\?|$)/);
-  await expect(page.getByLabel('正在恢复登录状态')).toBeHidden();
+  await expect(page.getByRole('progressbar', { name: '正在恢复登录状态' })).toBeHidden();
 }

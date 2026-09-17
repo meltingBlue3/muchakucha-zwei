@@ -55,12 +55,15 @@ test('shares a username invitation from settings [RED:INVITATION_SEND]', async (
     await page.goto(`/households/${encodeURIComponent(household.id)}/settings`);
     await expect(page.getByText('温暖小家').first()).toBeVisible();
 
-    const inviteUsername = page.getByLabel('用户名', { exact: true });
+    // The invite form lives in a dialog opened from the settings page.
+    const dialog = page.getByRole('dialog', { name: '邀请家人' }).last();
+    await page.getByRole('button', { name: '邀请家人' }).click();
+    const inviteUsername = dialog.getByLabel('用户名', { exact: true });
     await inviteUsername.fill(outsider.username);
-    await page.getByRole('button', { name: '发送邀请', exact: true }).click();
-    await expect(page.getByText('邀请链接已生成，请发给家人。')).toBeVisible();
+    await dialog.getByRole('button', { name: '发送邀请', exact: true }).click();
+    await expect(dialog.getByText('邀请链接已生成，请发给家人。')).toBeVisible();
     await expect(inviteUsername).toHaveValue('');
-    const shareLink = page.getByLabel('邀请链接', { exact: true });
+    const shareLink = dialog.getByLabel('邀请链接', { exact: true });
     await expect(shareLink).toBeVisible();
     const firstUrl = (await shareLink.textContent())!;
     const rawToken = decodeURIComponent(new URL(firstUrl).pathname.split('/').at(-1)!);
@@ -89,8 +92,12 @@ test('shares a username invitation from settings [RED:INVITATION_SEND]', async (
     });
     expect(JSON.stringify(stored.rows)).not.toContain(rawToken);
 
+    // Resending from the pending list reopens the dialog with a rotated link.
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
     await page.getByRole('button', { name: `重新发送邀请给 ${outsider.username}`, exact: true }).click();
-    await expect(page.getByText('邀请链接已更新，请发给家人。')).toBeVisible();
+    await expect(dialog.getByText('邀请链接已更新，请发给家人。')).toBeVisible();
+    await expect(shareLink).toBeVisible();
     await expect(shareLink).not.toHaveText(firstUrl);
     const rotated = await database.query<{ invalidated_at: Date | null }>(
       `SELECT "invalidated_at" FROM "invitations" WHERE "id" = $1`,
@@ -99,11 +106,13 @@ test('shares a username invitation from settings [RED:INVITATION_SEND]', async (
     expect(rotated.rows[0]?.invalidated_at).not.toBeNull();
 
     await inviteUsername.fill(member.username);
-    await page.getByRole('button', { name: '发送邀请', exact: true }).click();
-    await expect(page.getByText('这个账户已经是该家庭的成员。')).toBeVisible();
+    await dialog.getByRole('button', { name: '发送邀请', exact: true }).click();
+    await expect(dialog.getByText('这个账户已经是该家庭的成员。')).toBeVisible();
     await inviteUsername.fill(`missing_${Date.now().toString(36)}`);
-    await page.getByRole('button', { name: '发送邀请', exact: true }).click();
-    await expect(page.getByText('未找到这个用户名，请让家人先注册账户。')).toBeVisible();
+    await dialog.getByRole('button', { name: '发送邀请', exact: true }).click();
+    await expect(dialog.getByText('未找到这个用户名，请让家人先注册账户。')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
 
     const memberSend = await request.post(invitationsUrl, {
       headers: { authorization: `Bearer ${member.accessToken}` },

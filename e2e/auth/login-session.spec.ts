@@ -16,7 +16,7 @@ async function mockCurrentUser(context: BrowserContext): Promise<void> {
 }
 
 async function waitForBootstrap(page: Page): Promise<void> {
-  await expect(page.getByLabel('正在恢复登录状态')).toBeHidden();
+  await expect(page.getByRole('progressbar', { name: '正在恢复登录状态' })).toBeHidden();
 }
 
 test.describe('Web login and session restoration', () => {

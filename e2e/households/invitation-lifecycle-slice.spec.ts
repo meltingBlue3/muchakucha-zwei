@@ -216,15 +216,15 @@ test('manages invitation lifecycle', async ({ page, request }) => {
   // ============================================================================
 
   // Find the resend button for the pending invitation at resend@example.test
-  const resendButton = page.getByLabel('重新发送邀请给 resend@example.test');
-  await resendButton.click();
+  await page.getByRole('button', { name: '重新发送邀请给 resend@example.test' }).click();
 
-  // Wait for the resend to complete and the list to refresh
-  await page.waitForTimeout(2000);
+  // Resending opens the invite dialog with the result. Seeded email invitations
+  // are delivered by the legacy email flow, so no share link is shown.
+  const inviteDialog = page.getByRole('dialog', { name: '邀请家人' }).last();
+  await expect(inviteDialog.getByRole('status')).toHaveText('邀请已重新发送。');
+  await expect(inviteDialog.getByLabel('邀请链接', { exact: true })).toHaveCount(0);
 
-  // Verify the old invitation is now revoked (the original was invalidated)
-  // and a new one exists. The old one should show as "已撤销".
-  // We verify via API that the old token was invalidated.
+  // Verify via API that the resend produced a pending invitation.
   const listResponse = await request.get(
     `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
     { headers: { authorization: `Bearer ${owner.accessToken}` } },
@@ -232,43 +232,42 @@ test('manages invitation lifecycle', async ({ page, request }) => {
   expect(listResponse.status()).toBe(200);
   const listBody = (await listResponse.json()) as { invitations: Array<{ emailCanonical: string; status: string }> };
   const resendInvs = listBody.invitations.filter((i) => i.emailCanonical === 'resend@example.test');
-  // One should be revoked (the old one), one should be pending (the new one)
   expect(resendInvs.length).toBeGreaterThanOrEqual(1);
-  const hasPending = resendInvs.some((i) => i.status === 'pending');
-  expect(hasPending).toBe(true);
+  expect(resendInvs.some((i) => i.status === 'pending')).toBe(true);
+
+  await page.keyboard.press('Escape');
+  await expect(inviteDialog).toBeHidden();
 
   // ============================================================================
-  // REVOKE: confirmation page works, then invitation is revoked
+  // REVOKE: confirmation dialog keeps or revokes the invitation
   // ============================================================================
 
-  // Click the revoke button for revoke-test@example.test
-  const revokeButton = page.getByLabel('撤销邀请 revoke-test@example.test');
+  const revokeButton = page.getByRole('button', { name: '撤销邀请 revoke-test@example.test' });
+  const revokeDialog = page.getByRole('dialog', { name: '撤销邀请？' }).last();
+
+  // The safe action closes the dialog without revoking.
   await revokeButton.click();
+  await expect(revokeDialog.getByText('撤销后，原链接将不能使用。')).toBeVisible();
+  await revokeDialog.getByRole('button', { name: '保留邀请', exact: true }).click();
+  await expect(revokeDialog).toBeHidden();
+  await expect(revokeButton).toBeFocused();
 
-  // Should navigate to the revoke confirmation page
-  await page.waitForTimeout(1000);
-
-  // Verify confirmation page heading
-  await expect(page.getByText('撤销邀请？')).toBeVisible({ timeout: 5000 });
-
-  // Safe action ("保留邀请") should be first and navigate back without revoking
-  // But we'll first verify the destructive revoke works.
-
-  // Click the destructive revoke button
-  await page.getByRole('button', { name: '撤销邀请', exact: true }).click();
-
-  // Wait for redirect back to settings
-  await page.waitForTimeout(1000);
+  // The destructive action revokes it.
+  await revokeButton.click();
+  await revokeDialog.getByRole('button', { name: '撤销邀请', exact: true }).click();
+  await expect(revokeDialog).toBeHidden();
 
   // Verify the invitation is now revoked via API
-  const postRevokeList = await request.get(
-    `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
-    { headers: { authorization: `Bearer ${owner.accessToken}` } },
-  );
-  const postRevokeBody = (await postRevokeList.json()) as { invitations: Array<{ emailCanonical: string; status: string }> };
-  const revokedInvs = postRevokeBody.invitations.filter((i) => i.emailCanonical === 'revoke-test@example.test');
-  const allRevoked = revokedInvs.every((i) => i.status === 'revoked');
-  expect(allRevoked).toBe(true);
+  await expect.poll(async () => {
+    const postRevokeList = await request.get(
+      `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
+      { headers: { authorization: `Bearer ${owner.accessToken}` } },
+    );
+    const postRevokeBody = (await postRevokeList.json()) as { invitations: Array<{ emailCanonical: string; status: string }> };
+    return postRevokeBody.invitations
+      .filter((i) => i.emailCanonical === 'revoke-test@example.test')
+      .map((i) => i.status);
+  }).toEqual(['revoked']);
 
   // ============================================================================
   // CROSS-HOUSEHOLD / MEMBER: non-owner/admin cannot access

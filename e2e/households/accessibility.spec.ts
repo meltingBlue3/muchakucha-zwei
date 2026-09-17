@@ -25,6 +25,20 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
+async function tabSequence(page: Page, count: number): Promise<string[]> {
+  const names: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    await page.keyboard.press('Tab');
+    names.push(
+      await page.evaluate(() => {
+        const active = document.activeElement;
+        return active?.getAttribute('aria-label') ?? active?.textContent?.trim() ?? '';
+      }),
+    );
+  }
+  return names;
+}
+
 // ---- Account helpers ----
 
 async function prepareVerifiedAccount(
@@ -206,11 +220,27 @@ test.describe('household accessibility matrix', () => {
     await page.goto(`/households/${encodeURIComponent(household.id)}/settings`);
     await expect(page.getByRole('heading', { name: '成员', exact: true })).toBeVisible();
     await expect(page.getByText('家主', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('家庭名称', { exact: true })).toHaveValue('アクセシブル家');
-    await expect(page.getByRole('button', { name: '发送邀请', exact: true })).toBeVisible();
+    await expect(page.getByRole('main').getByText('アクセシブル家', { exact: true }).last()).toBeVisible();
+    await expect(page.getByRole('button', { name: '编辑家庭名称' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '邀请家人' })).toBeVisible();
 
     const settingsResults = await new AxeBuilder({ page }).analyze();
     expect(settingsResults.violations, 'household roster and settings').toEqual([]);
+
+    // Rename and invite forms open in dialogs; audit each while open.
+    await page.getByRole('button', { name: '编辑家庭名称' }).click();
+    await expect(page.getByRole('dialog').getByLabel('家庭名称', { exact: true })).toHaveValue('アクセシブル家');
+    const renameResults = await new AxeBuilder({ page }).analyze();
+    expect(renameResults.violations, 'rename household dialog').toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    await page.getByRole('button', { name: '邀请家人' }).click();
+    await expect(page.getByRole('dialog').getByRole('button', { name: '发送邀请', exact: true })).toBeVisible();
+    const inviteResults = await new AxeBuilder({ page }).analyze();
+    expect(inviteResults.violations, 'invite dialog').toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toBeHidden();
 
     await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
   });
@@ -225,15 +255,8 @@ test.describe('household accessibility matrix', () => {
     await page.goto('/household-handoff');
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
-    // Tab through the interactive elements on the handoff page.
-    await page.keyboard.press('Tab');
-    const firstFocused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '');
-    expect(firstFocused).toMatch(/创建家庭|我有邀请链接/);
-
-    // Verify both primary actions are keyboard-focusable.
-    await page.keyboard.press('Tab');
-    const secondFocused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '');
-    expect(secondFocused).toMatch(/创建家庭|我有邀请链接/);
+    // The header account action comes first, then both primary actions in visual order.
+    expect(await tabSequence(page, 3)).toEqual(['个人中心', '创建家庭', '我有邀请链接']);
   });
 
   test('keyboard tab order includes household form and actions', async ({ page }) => {
@@ -242,10 +265,14 @@ test.describe('household accessibility matrix', () => {
     await page.goto('/households/new');
     await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
 
-    // The household name field should be focusable before the submit button.
-    await page.keyboard.press('Tab');
-    const firstFocused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '');
-    expect(firstFocused).toMatch(/家庭名称|创建家庭/);
+    // Header actions come first; the household name field precedes the submit button.
+    // Tabbing past the empty field shows its error without pulling focus back.
+    expect(await tabSequence(page, 4)).toEqual(['返回', '个人中心', '家庭名称', '创建家庭']);
+    await expect(page.getByLabel('家庭名称', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+
+    // Submitting still moves focus to the first invalid field.
+    await page.getByRole('button', { name: '创建家庭' }).click();
+    await expect(page.getByLabel('家庭名称', { exact: true })).toBeFocused();
   });
 
   // ============================================================================
