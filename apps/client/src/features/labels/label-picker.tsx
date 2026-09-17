@@ -73,6 +73,8 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPi
           <Pressable
             key={label.id}
             onPress={() => handleToggle(label)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSelected }}
             accessibilityLabel={`${isSelected ? '取消选择' : '选择'}标签 ${label.name}`}
             style={({ pressed }) => ({
               opacity: pressed ? 0.7 : isSelected ? 1 : 0.5,

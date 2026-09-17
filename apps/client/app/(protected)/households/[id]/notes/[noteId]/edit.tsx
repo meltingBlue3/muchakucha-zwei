@@ -147,6 +147,7 @@ export default function EditNoteRoute() {
                 borderColor: activeTheme.colors.destructive,
                 opacity: pressed ? 0.7 : 1,
               })}
+              accessibilityRole="button"
               accessibilityLabel="删除笔记"
             >
               <Text variant="button" color="destructive">
@@ -172,6 +173,8 @@ export default function EditNoteRoute() {
                     borderColor: activeTheme.colors.border,
                     opacity: pressed ? 0.7 : 1,
                   })}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: deleting }}
                   accessibilityLabel="取消删除"
                 >
                   <Text variant="button" color="ink">取消</Text>
@@ -188,6 +191,8 @@ export default function EditNoteRoute() {
                     backgroundColor: deleting ? activeTheme.colors.disabled : activeTheme.colors.destructive,
                     opacity: pressed ? 0.7 : 1,
                   })}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: deleting, busy: deleting }}
                   accessibilityLabel="确认删除笔记"
                 >
                   <Text variant="button" color="surface">

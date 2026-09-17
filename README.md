@@ -9,7 +9,7 @@
 | **移动端 / Web** | React Native 0.86 + Expo 57 + Expo Router（Metro 打包 Web） |
 | **UI 系统** | Shopify Restyle 主题 + `apps/client/src/ui/` 共享组件，设计规范见 [docs/design.md](docs/design.md) |
 | **API 服务** | NestJS 11 + Fastify，统一前缀 `/api/v1` |
-| **数据库** | PostgreSQL（`compose.yaml` 提供 18.4；本机 PostgreSQL 16 亦可完成迁移） |
+| **数据库** | PostgreSQL（`compose.yaml` 提供 18.4；本机 PostgreSQL 16 可用于开发，但集成测试要求 17+） |
 | **ORM** | Prisma 7 + `@prisma/adapter-pg` |
 | **认证** | Argon2 密码哈希；HS256 Access Token（15 分钟，仅存内存）+ 轮换 Refresh Token（原生 SecureStore / Web HttpOnly Cookie） |
 | **API 契约** | 由 `generate-openapi.ts` 生成 `packages/api-client`（OpenAPI JSON + TypeScript 客户端） |
@@ -176,7 +176,7 @@ pnpm exec playwright test -c playwright.ui.config.ts
 - E2E 读取 `DATABASE_URL`，默认 `127.0.0.1:5432/muchakucha_test`。
 - 使用 Docker Compose 时参考 [`.env.test.example`](.env.test.example)，端口为 55432。根目录 `.env.test` **不会**被自动加载，需要自行导出变量。
 
-测试库需要先执行 `prisma migrate deploy`。
+集成测试会在启动时对测试库执行 `prisma migrate deploy`，且要求 PostgreSQL 17+；E2E 使用的测试库需要先手动迁移。
 
 修改 API 契约时，更新 `apps/api/src/openapi/generate-openapi.ts` 中的 DTO 与模板，然后运行 `pnpm openapi:generate`，不要手改 `packages/api-client`。
 
@@ -189,11 +189,11 @@ pnpm exec playwright test -c playwright.ui.config.ts
 - **任务**：待处理 → 进行中 → 已完成、优先级、多负责人，按状态、标签和是否重复筛选；筛选状态在切换页面后保留
 - **周期性重复**：事件与任务支持每天 / 每周（多选星期）/ 每月 / 每年，月末钳位并正确处理夏令时；可选择「仅此一次」或「此后所有」范围编辑 / 删除；周期规则列表与详情页支持编辑规则和结束重复
 - **笔记**：家庭共享笔记的增删改查；草稿在取消后保留，保存成功后清除
-- **标签**：创建、重命名、着色、删除；可用于事件和任务
+- **标签**：OWNER / ADMIN 可创建、重命名、着色、删除；所有成员都可给事件和任务打标签
 
 ### 已知缺口
 
-- 笔记与标签没有 API 集成测试，也没有真实后端的 E2E（仅在 `ux-regressions.spec.ts` 中有拦截 API 的 UI 用例）
+- 标签管理页未按角色隐藏创建 / 编辑 / 删除入口，MEMBER 操作时会被 API 拒绝并显示失败提示
 - 发布准备未完成：`apps/client/eas.json` 的 production `EXPO_PUBLIC_API_ORIGIN` 仍为占位地址 `https://api.yourdomain.com`
 - 家庭、日历、任务三块尚未完成 Android 真机验收
 

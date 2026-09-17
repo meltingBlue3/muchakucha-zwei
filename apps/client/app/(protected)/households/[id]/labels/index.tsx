@@ -243,6 +243,8 @@ export default function LabelsIndexRoute() {
                     justifyContent: 'center',
                     opacity: pressed ? 0.7 : 1,
                   })}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: creating || newName.trim() === '' }}
                   accessibilityLabel="创建标签"
                 >
                   <Text variant="button" color="surface">
@@ -260,7 +262,7 @@ export default function LabelsIndexRoute() {
                     onPress={() => setNewColor(color)}
                     accessibilityLabel={`选择颜色 ${color}`}
                     accessibilityRole="radio"
-                    accessibilityState={{ selected: newColor === color }}
+                    aria-checked={newColor === color}
                     hitSlop={activeTheme.spacing[3]}
                     style={{
                       width: 28,
@@ -330,6 +332,8 @@ export default function LabelsIndexRoute() {
                         paddingVertical: activeTheme.spacing[3],
                         opacity: pressed ? 0.7 : 1,
                       })}
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: editing || editName.trim() === '' }}
                       accessibilityLabel="保存"
                     >
                       <Text variant="button" color="surface">保存</Text>
@@ -340,6 +344,7 @@ export default function LabelsIndexRoute() {
                         padding: activeTheme.spacing[2],
                         opacity: pressed ? 0.7 : 1,
                       })}
+                      accessibilityRole="button"
                       accessibilityLabel="取消编辑"
                     >
                       <Text variant="label" color="inkMuted">取消</Text>
@@ -352,7 +357,7 @@ export default function LabelsIndexRoute() {
                         onPress={() => setEditColor(color)}
                         accessibilityLabel={`选择颜色 ${color}`}
                         accessibilityRole="radio"
-                        accessibilityState={{ selected: editColor === color }}
+                        aria-checked={editColor === color}
                         hitSlop={activeTheme.spacing[3]}
                         style={{
                           width: 24,
@@ -378,6 +383,7 @@ export default function LabelsIndexRoute() {
                         padding: activeTheme.spacing[2],
                         opacity: pressed ? 0.7 : 1,
                       })}
+                      accessibilityRole="button"
                       accessibilityLabel={`编辑标签 ${label.name}`}
                     >
                       <Text variant="bodySm" color="coral">编辑</Text>
@@ -385,12 +391,12 @@ export default function LabelsIndexRoute() {
                     {confirmDeleteId === label.id ? (
                       <View style={{ flexDirection: 'row', gap: activeTheme.spacing[1], alignItems: 'center' }}>
                         <Text variant="caption" color="destructive">确定删除？</Text>
-                        <Pressable onPress={handleDelete} disabled={deleting} hitSlop={activeTheme.spacing[4]} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
+                        <Pressable onPress={handleDelete} disabled={deleting} accessibilityRole="button" accessibilityState={{ disabled: deleting, busy: deleting }} accessibilityLabel={`确认删除标签 ${label.name}`} hitSlop={activeTheme.spacing[4]} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
                           <Text variant="caption" color="destructive" style={{ fontWeight: '600' as const }}>
                             {deleting ? '删除中…' : '确认'}
                           </Text>
                         </Pressable>
-                        <Pressable onPress={() => setConfirmDeleteId(null)} hitSlop={activeTheme.spacing[4]} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
+                        <Pressable onPress={() => setConfirmDeleteId(null)} accessibilityRole="button" accessibilityLabel="取消删除" hitSlop={activeTheme.spacing[4]} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
                           <Text variant="caption" color="inkMuted">取消</Text>
                         </Pressable>
                       </View>
@@ -402,6 +408,7 @@ export default function LabelsIndexRoute() {
                           padding: activeTheme.spacing[2],
                           opacity: pressed ? 0.7 : 1,
                         })}
+                        accessibilityRole="button"
                         accessibilityLabel={`删除标签 ${label.name}`}
                       >
                         <Text variant="bodySm" color="destructive">删除</Text>

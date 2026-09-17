@@ -52,7 +52,8 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
     const data: CreateNoteDto = {
       title: form.title.trim(),
     };
-    if (form.body.trim() !== '') data.body = form.body.trim();
+    // Updates omit unchanged fields, so an edit must send an empty body to clear it.
+    if (initial !== undefined || form.body.trim() !== '') data.body = form.body.trim();
 
     await onSubmit(data);
   }, [form, onSubmit]);
