@@ -146,6 +146,45 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
+for (const width of [390, 1440]) {
+  test(`household settings only offer rename and leave to the owner at ${width}px`, async ({ page }) => {
+    await setup(page);
+    await page.setViewportSize({ width, height: 900 });
+    let ownerMembershipId = 'other';
+    const members = [
+      { membershipId: 'member', userId: 'user', displayName: '小林', username: 'lin', email: '', role: 'MEMBER', isCurrentUser: true },
+      { membershipId: 'other', userId: 'other', displayName: '妈妈', username: 'mama', email: '', role: 'OWNER', isCurrentUser: false },
+    ];
+    await page.route(`**/api/v1/households/${a}`, async (route) => {
+      await route.fulfill({ json: { ...household(a), ownerMembershipId, members } });
+    });
+    await page.route(`**/api/v1/households/${a}/invitations`, async (route) => {
+      await route.fulfill({ json: { invitations: [] } });
+    });
+    await page.goto(`/households/${a}/settings`);
+    await expect(page.getByRole('heading', { name: '基本信息', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '编辑家庭名称' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '离开家庭' })).toHaveCount(0);
+
+    ownerMembershipId = 'member';
+    members[0]!.role = 'OWNER';
+    members[1] = { ...members[1]!, role: 'MEMBER' };
+    members.push({ membershipId: 'third', userId: 'third', displayName: '爸爸', username: 'papa', email: '', role: 'MEMBER', isCurrentUser: false });
+    await page.reload();
+    await expect(page.getByRole('button', { name: '编辑家庭名称' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^离开家庭/ })).toHaveCount(1);
+    await page.getByRole('button', { name: '离开家庭' }).click();
+    const dialog = page.getByRole('dialog', { name: '离开家庭' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '下一步' })).toBeDisabled();
+    await dialog.getByRole('radio', { name: '爸爸' }).click();
+    await expect(dialog.getByRole('radio', { name: '爸爸' })).toHaveAttribute('aria-checked', 'true');
+    await page.screenshot({ path: `test-results/settings-leave-dialog-${width}.png` });
+    await dialog.getByRole('button', { name: '下一步' }).click();
+    await expect(page).toHaveURL(new RegExp(`/households/${a}/ownership/leave\\?successorMembershipId=third`));
+  });
+}
+
 test('family management is a restorable destination', async ({ page }) => {
   await setup(page);
   await page.goto(`/households/${a}/more`);

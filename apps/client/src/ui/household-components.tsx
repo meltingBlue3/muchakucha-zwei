@@ -17,7 +17,6 @@ import Mail from 'lucide-react-native/icons/mail';
 import CircleArrowUp from 'lucide-react-native/icons/circle-arrow-up';
 import CircleArrowDown from 'lucide-react-native/icons/circle-arrow-down';
 import UserMinus from 'lucide-react-native/icons/user-minus';
-import LogOut from 'lucide-react-native/icons/log-out';
 
 import { useRouter } from 'expo-router';
 import React, { forwardRef, useCallback, useRef } from 'react';
@@ -550,6 +549,60 @@ export const RoleBadge = ({ role }: RoleBadgeProps) => {
   );
 };
 
+// ---- RowAction ----
+
+interface RowActionProps {
+  accessibilityLabel: string;
+  icon: React.ComponentType<{ color: string; size: number; strokeWidth: number }>;
+  color: string;
+  label: string;
+  /** Show the visible label next to the icon (wide layouts). */
+  showLabel?: boolean;
+  onPress?: (() => void) | undefined;
+  disabled?: boolean;
+  busyLabel?: string;
+}
+
+const RowAction = forwardRef<View, RowActionProps>(({
+  accessibilityLabel,
+  icon: Icon,
+  color,
+  label,
+  showLabel = false,
+  onPress,
+  disabled = false,
+  busyLabel,
+}, ref) => (
+  <Pressable
+    ref={ref}
+    accessibilityLabel={accessibilityLabel}
+    accessibilityRole="button"
+    disabled={disabled || busyLabel !== undefined}
+    onPress={onPress}
+    style={({ pressed }) => ({
+      alignItems: 'center',
+      backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
+      borderRadius: theme.borderRadii.md,
+      flexDirection: 'row',
+      gap: theme.spacing[1],
+      justifyContent: 'center',
+      minHeight: theme.controlSizes.touchTarget,
+      minWidth: theme.controlSizes.touchTarget,
+      opacity: disabled || busyLabel !== undefined ? 0.5 : 1,
+      paddingHorizontal: showLabel ? theme.spacing[2] : 0,
+    })}
+  >
+    {busyLabel !== undefined ? (
+      <Spinner label={busyLabel} />
+    ) : (
+      <Icon color={color} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+    )}
+    {showLabel ? <Text variant="label" style={{ color }}>{label}</Text> : null}
+  </Pressable>
+));
+
+RowAction.displayName = 'RowAction';
+
 // ---- MemberRow ----
 
 interface MemberRowProps {
@@ -562,9 +615,8 @@ interface MemberRowProps {
   /** Only ever true for the current owner acting on a non-self member. */
   canTransferTo?: boolean;
   onTransfer?: () => void;
-  /** Owner-leave-with-handoff, using this member as successor. */
-  canLeaveTo?: boolean;
-  onLeaveTo?: () => void;
+  /** Label each action and align the action row with the member name (wide layouts). */
+  labeledActions?: boolean;
 }
 
 export const MemberRow = ({
@@ -575,12 +627,11 @@ export const MemberRow = ({
   onRemove,
   canTransferTo = false,
   onTransfer,
-  canLeaveTo = false,
-  onLeaveTo,
+  labeledActions = false,
 }: MemberRowProps) => {
   const roleLabel = ROLE_LABELS[member.role] ?? member.role;
   const avatarChar = [...member.displayName.trim().normalize('NFC')][0] ?? '?';
-  const hasActions = roleAction !== undefined || canRemoveMember || canTransferTo || canLeaveTo;
+  const hasActions = roleAction !== undefined || canRemoveMember || canTransferTo;
 
   return (
     <View
@@ -650,78 +701,43 @@ export const MemberRow = ({
       </View>
 
       {hasActions ? (
-        <Inline gap={1} style={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <Inline
+          gap={1}
+          style={{
+            flexWrap: 'wrap',
+            justifyContent: labeledActions ? 'flex-start' : 'flex-end',
+            marginLeft: labeledActions ? theme.controlSizes.touchTarget + theme.spacing[3] - theme.spacing[2] : 0,
+          }}
+        >
           {roleAction !== undefined ? (
-            <Pressable
+            <RowAction
               accessibilityLabel={`${roleAction === 'promote' ? '提升' : '降级'} ${member.displayName}`}
-              accessibilityRole="button"
+              icon={roleAction === 'promote' ? CircleArrowUp : CircleArrowDown}
+              color={roleAction === 'promote' ? theme.colors.coral : theme.colors.ink}
+              label={roleAction === 'promote' ? '提升' : '降级'}
+              showLabel={labeledActions}
               onPress={onRoleAction}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
-                borderRadius: theme.borderRadii.md,
-                justifyContent: 'center',
-                minHeight: theme.controlSizes.touchTarget,
-                minWidth: theme.controlSizes.touchTarget,
-              })}
-            >
-              {roleAction === 'promote' ? (
-                <CircleArrowUp color={theme.colors.coral} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-              ) : (
-                <CircleArrowDown color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-              )}
-            </Pressable>
+            />
           ) : null}
           {canTransferTo ? (
-            <Pressable
+            <RowAction
               accessibilityLabel={`转让所有权给 ${member.displayName}`}
-              accessibilityRole="button"
+              icon={Crown}
+              color={theme.colors.coral}
+              label="转让所有权"
+              showLabel={labeledActions}
               onPress={onTransfer}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
-                borderRadius: theme.borderRadii.md,
-                justifyContent: 'center',
-                minHeight: theme.controlSizes.touchTarget,
-                minWidth: theme.controlSizes.touchTarget,
-              })}
-            >
-              <Crown color={theme.colors.coral} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-            </Pressable>
+            />
           ) : null}
           {canRemoveMember ? (
-            <Pressable
+            <RowAction
               accessibilityLabel={`移除 ${member.displayName}`}
-              accessibilityRole="button"
+              icon={UserMinus}
+              color={theme.colors.destructive}
+              label="移除"
+              showLabel={labeledActions}
               onPress={onRemove}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
-                borderRadius: theme.borderRadii.md,
-                justifyContent: 'center',
-                minHeight: theme.controlSizes.touchTarget,
-                minWidth: theme.controlSizes.touchTarget,
-              })}
-            >
-              <UserMinus color={theme.colors.destructive} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-            </Pressable>
-          ) : null}
-          {canLeaveTo ? (
-            <Pressable
-              accessibilityLabel={`离开家庭，所有权转让给 ${member.displayName}`}
-              accessibilityRole="button"
-              onPress={onLeaveTo}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
-                borderRadius: theme.borderRadii.md,
-                justifyContent: 'center',
-                minHeight: theme.controlSizes.touchTarget,
-                minWidth: theme.controlSizes.touchTarget,
-              })}
-            >
-              <LogOut color={theme.colors.destructive} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-            </Pressable>
+            />
           ) : null}
         </Inline>
       ) : null}
@@ -754,6 +770,8 @@ export interface InvitationRowProps {
   onRevoke?: (invitationId: string, trigger: View | null) => void;
   resendBusy?: boolean;
   revokeBusy?: boolean;
+  /** Show visible labels on the resend and revoke actions (wide layouts). */
+  labeledActions?: boolean;
 }
 
 export const InvitationRow = ({
@@ -763,6 +781,7 @@ export const InvitationRow = ({
   onRevoke,
   resendBusy = false,
   revokeBusy = false,
+  labeledActions = false,
 }: InvitationRowProps) => {
   const revokeTrigger = useRef<View>(null);
   const recipient = invitation.username ?? invitation.emailCanonical;
@@ -845,51 +864,29 @@ export const InvitationRow = ({
       {canResend || canRevoke ? (
         <Inline gap={1} style={{ marginLeft: 'auto' }}>
           {canResend ? (
-            <Pressable
+            <RowAction
               accessibilityLabel={`重新发送邀请给 ${recipient}`}
-              accessibilityRole="button"
-              disabled={resendBusy || revokeBusy}
+              icon={RefreshCw}
+              color={theme.colors.ink}
+              label="重新发送"
+              showLabel={labeledActions}
+              disabled={revokeBusy}
+              {...(resendBusy ? { busyLabel: '重新发送中' } : {})}
               onPress={() => onResend?.(invitation.id)}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
-                borderRadius: theme.borderRadii.md,
-                justifyContent: 'center',
-                minHeight: theme.controlSizes.touchTarget,
-                minWidth: theme.controlSizes.touchTarget,
-                opacity: resendBusy || revokeBusy ? 0.5 : 1,
-              })}
-            >
-              {resendBusy ? (
-                <Spinner label="重新发送中" />
-              ) : (
-                <RefreshCw color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-              )}
-            </Pressable>
+            />
           ) : null}
           {canRevoke ? (
-            <Pressable
-              accessibilityLabel={`撤销邀请 ${recipient}`}
+            <RowAction
               ref={revokeTrigger}
-              accessibilityRole="button"
-              disabled={resendBusy || revokeBusy}
+              accessibilityLabel={`撤销邀请 ${recipient}`}
+              icon={Ban}
+              color={theme.colors.destructive}
+              label="撤销"
+              showLabel={labeledActions}
+              disabled={resendBusy}
+              {...(revokeBusy ? { busyLabel: '撤销中' } : {})}
               onPress={() => onRevoke?.(invitation.id, revokeTrigger.current)}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
-                borderRadius: theme.borderRadii.md,
-                justifyContent: 'center',
-                minHeight: theme.controlSizes.touchTarget,
-                minWidth: theme.controlSizes.touchTarget,
-                opacity: resendBusy || revokeBusy ? 0.5 : 1,
-              })}
-            >
-              {revokeBusy ? (
-                <Spinner label="撤销中" />
-              ) : (
-                <Ban color={theme.colors.destructive} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-              )}
-            </Pressable>
+            />
           ) : null}
         </Inline>
       ) : null}

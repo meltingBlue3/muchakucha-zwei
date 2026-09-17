@@ -8,6 +8,7 @@ import House from 'lucide-react-native/icons/house';
 import Users from 'lucide-react-native/icons/users';
 import UserPlus from 'lucide-react-native/icons/user-plus';
 import Mail from 'lucide-react-native/icons/mail';
+import LogOut from 'lucide-react-native/icons/log-out';
 import { SettingsSection } from '../../ui/settings-section';
 
 import type { HouseholdApi } from './household-api';
@@ -27,6 +28,7 @@ import {
 import {
   Banner,
   Button,
+  Inline,
   Spinner,
   Stack,
   Text,
@@ -88,6 +90,9 @@ export function HouseholdSettings({
   const [activeForm, setActiveForm] = useState<'rename' | 'invite' | null>(null);
   const editTrigger = useRef<View>(null);
   const inviteTrigger = useRef<View>(null);
+  const leaveTrigger = useRef<View>(null);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [successorId, setSuccessorId] = useState<string | null>(null);
   const revokeTrigger = useRef<View>(null);
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
@@ -454,34 +459,85 @@ export function HouseholdSettings({
 
   // Use authoritative household name from the response so rename updates the header.
   const authoritativeName = data.name;
+  const canManage = actorRole === 'OWNER' || actorRole === 'ADMIN';
+  const wide = width >= theme.layout.navigationBreakpoint;
+  // Wide layouts move the invite entry into the overview column beside the rename action.
+  const inviteInOverview = wide && showRename;
+  const pendingInvitationCount = invitationList.filter((inv) => inv.status === 'pending').length;
+
+  const otherMembers = data.members.filter((m) => !m.isCurrentUser);
+  const leaveable = actorIsOwner && canLeave(actorRole, actorIsOwner, otherMembers.length) && governance.leave !== undefined;
+
+  const editButton = actorIsOwner ? (
+    <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel="编辑家庭名称" onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
+      <Text variant="label" color="coral">编辑</Text>
+    </Pressable>
+  ) : null;
+
+  const leaveEntry = leaveable ? (
+    <Pressable ref={leaveTrigger} accessibilityRole="button" accessibilityLabel="离开家庭" onPress={() => { setSuccessorId(null); setLeaveOpen(true); }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', gap: theme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.destructiveSoft : 'transparent' })}>
+      <LogOut size={theme.controlSizes.icon} color={theme.colors.destructive} strokeWidth={theme.controlSizes.iconStroke} />
+      <Text variant="label" color="destructive">离开家庭</Text>
+    </Pressable>
+  ) : null;
+
+  const householdHeader = (
+    <HouseholdHeader
+      householdName={authoritativeName}
+      onOpenSwitcher={onOpenSwitcher}
+    />
+  );
 
   return (
     <AppShell accessibilityLabel={`${authoritativeName}的成员`} title={navTitle} showBack={navShowBack} showProfile={navShowProfile}>
       <Stack gap={6}>
-        <HouseholdHeader
-          householdName={authoritativeName}
-          onOpenSwitcher={onOpenSwitcher}
-        />
+        {wide ? <View style={{ width: theme.layout.settingsNavWidth }}>{householdHeader}</View> : householdHeader}
 
-        <View style={{ flexDirection: width >= theme.breakpoints.web ? 'row' : 'column', gap: theme.spacing[4], alignItems: 'flex-start' }}>
-        <Stack gap={4} style={{ flex: width >= theme.breakpoints.web ? 1 : undefined, width: '100%', minWidth: 0 }}>
+        <View style={{ flexDirection: wide ? 'row' : 'column', gap: wide ? theme.spacing[6] : theme.spacing[4], alignItems: wide ? 'flex-start' : 'stretch' }}>
+        <Stack gap={4} style={{ width: wide ? theme.layout.settingsNavWidth : '100%' }}>
         {/* Rename form — only shown on the settings route */}
         {showRename ? (
           <SettingsSection title="基本信息" icon={<House size={theme.controlSizes.icon} color={theme.colors.coral} />}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
-              <Text variant="label">家庭名称</Text>
-              <Text style={{ flex: 1 }} numberOfLines={1}>{authoritativeName}</Text>
-              <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel="编辑家庭名称" onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
-                <Text variant="label" color="coral">编辑</Text>
-              </Pressable>
-            </View>
+            {wide ? (
+              <Stack gap={4}>
+                <Stack gap={1}>
+                  <Text variant="label">家庭名称</Text>
+                  <Inline gap={2}>
+                    <Text variant="section" style={{ flex: 1 }} numberOfLines={2}>{authoritativeName}</Text>
+                    {editButton}
+                  </Inline>
+                </Stack>
+                <Stack gap={0} style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[2] }}>
+                  <Inline gap={2} style={{ justifyContent: 'space-between', minHeight: theme.controlSizes.touchTarget }}>
+                    <Text variant="bodySm" color="inkMuted">成员</Text>
+                    <Text variant="label">{data.members.length} 位</Text>
+                  </Inline>
+                  {showInvite && canManage ? (
+                    <Inline gap={2} style={{ justifyContent: 'space-between', minHeight: theme.controlSizes.touchTarget }}>
+                      <Text variant="bodySm" color="inkMuted">待接受邀请</Text>
+                      <Text variant="label">{invitationListLoading ? '—' : `${pendingInvitationCount} 个`}</Text>
+                    </Inline>
+                  ) : null}
+                </Stack>
+                {showInvite && canManage ? (
+                  <Pressable ref={inviteTrigger} accessibilityRole="button" accessibilityLabel="邀请家人" onPress={() => setActiveForm('invite')} style={({ pressed }) => ({ minHeight: theme.controlSizes.primary, flexDirection: 'row', gap: theme.spacing[2], paddingHorizontal: theme.spacing[4], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.coralPressed : theme.colors.coral })}>
+                    <UserPlus size={theme.controlSizes.icon} color={theme.colors.surface} /><Text variant="button" color="surface">邀请家人</Text>
+                  </Pressable>
+                ) : null}
+              </Stack>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], minHeight: theme.controlSizes.touchTarget }}>
+                <Text variant="label">家庭名称</Text>
+                <Text style={{ flex: 1 }} numberOfLines={1}>{authoritativeName}</Text>
+                {editButton}
+              </View>
+            )}
           </SettingsSection>
         ) : null}
-
-
+        {wide ? leaveEntry : null}
         </Stack>
-        <Stack gap={4} style={{ flex: width >= theme.breakpoints.web ? 1 : undefined, width: '100%', minWidth: 0 }}>
-        <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.teal} />} action={showInvite && (actorRole === 'OWNER' || actorRole === 'ADMIN') ? (
+        <Stack gap={4} style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', minWidth: 0 }}>
+        <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.teal} />} action={showInvite && canManage && !inviteInOverview ? (
           <Pressable ref={inviteTrigger} accessibilityRole="button" accessibilityLabel="邀请家人" onPress={() => setActiveForm('invite')} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', gap: theme.spacing[2], paddingHorizontal: theme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.tealSoft : theme.colors.surfaceSubtle })}>
             <UserPlus size={theme.controlSizes.icon} color={theme.colors.teal} /><Text variant="label" color="teal">邀请</Text>
           </Pressable>
@@ -492,8 +548,6 @@ export function HouseholdSettings({
             const action = governanceAction(actorRole, actorIsOwner, member.role, targetIsOwner, member.isCurrentUser);
             const removable = canRemoveMember(actorRole, member.role, targetIsOwner, member.isCurrentUser) && governance.remove !== undefined;
             const transferable = canTransferOwnership(actorRole, actorIsOwner, member.isCurrentUser) && governance.transfer !== undefined;
-            const leaveable = actorIsOwner && !member.isCurrentUser
-              && canLeave(actorRole, actorIsOwner, data.members.length - 1) && governance.leave !== undefined;
 
             const onRoleAction = action === 'promote'
               ? () => governance.promote?.(member.membershipId, member.displayName)
@@ -511,8 +565,7 @@ export function HouseholdSettings({
                 onRemove={() => governance.remove?.(member.membershipId, member.displayName, member.role)}
                 canTransferTo={transferable}
                 onTransfer={() => governance.transfer?.(member.membershipId, member.displayName)}
-                canLeaveTo={leaveable}
-                onLeaveTo={() => governance.leave?.(member.membershipId, member.displayName)}
+                labeledActions={wide}
               />
             );
           })}
@@ -520,47 +573,86 @@ export function HouseholdSettings({
         </SettingsSection>
 
         {/* Invitation list — visible to owner/admin when showInvite is enabled */}
-        {(() => {
-          const currentMember = data.members.find((m) => m.isCurrentUser);
-          const canManage = currentMember !== undefined && (currentMember.role === 'OWNER' || currentMember.role === 'ADMIN');
-          if (!showInvite || !canManage) return null;
+        {showInvite && canManage ? (
+          <SettingsSection title="邀请" icon={<Mail size={theme.controlSizes.icon} color={theme.colors.coral} />}>
 
-          return (
-            <SettingsSection title="邀请" icon={<Mail size={theme.controlSizes.icon} color={theme.colors.coral} />}>
+            {invitationListError !== undefined ? (
+              <Banner title="邀请列表加载失败">{invitationListError}</Banner>
+            ) : null}
 
-              {invitationListError !== undefined ? (
-                <Banner title="邀请列表加载失败">{invitationListError}</Banner>
-              ) : null}
-
-              {invitationListLoading ? (
-                <Stack gap={4} style={{ paddingVertical: theme.spacing[4] }}>
-                  {[1, 2].map((i) => (
-                    <Spinner key={i} label={`加载邀请 ${i}`} />
-                  ))}
-                </Stack>
-              ) : invitationList.length === 0 ? (
-                <Text variant="bodySm">还没有待处理的邀请。</Text>
-              ) : (
-                <Stack>
-                  {invitationList.map((inv) => (
-                    <InvitationRow
-                      key={inv.id}
-                      invitation={inv}
-                      canManage={canManage}
-                      onResend={handleResend}
-                      onRevoke={handleRevoke}
-                      resendBusy={resendingId === inv.id}
-                    />
-                  ))}
-                </Stack>
-              )}
-            </SettingsSection>
-          );
-        })()}
+            {invitationListLoading ? (
+              <Stack gap={4} style={{ paddingVertical: theme.spacing[4] }}>
+                {[1, 2].map((i) => (
+                  <Spinner key={i} label={`加载邀请 ${i}`} />
+                ))}
+              </Stack>
+            ) : invitationList.length === 0 ? (
+              <Text variant="bodySm">还没有待处理的邀请。</Text>
+            ) : (
+              <Stack>
+                {invitationList.map((inv) => (
+                  <InvitationRow
+                    key={inv.id}
+                    invitation={inv}
+                    canManage={canManage}
+                    onResend={handleResend}
+                    onRevoke={handleRevoke}
+                    resendBusy={resendingId === inv.id}
+                    labeledActions={wide}
+                  />
+                ))}
+              </Stack>
+            )}
+          </SettingsSection>
+        ) : null}
+        {wide ? null : leaveEntry}
         </Stack>
         </View>
     </Stack>
 
+      {leaveOpen && leaveable ? (
+        <AppDialog title="离开家庭" busy={false} onClose={() => setLeaveOpen(false)} trigger={leaveTrigger}>
+          <Stack gap={4}>
+            <Text>离开前需要把所有权转让给另一位成员。请选择新的所有者：</Text>
+            <View accessibilityRole="radiogroup" accessibilityLabel="新的所有者" style={{ gap: theme.spacing[2] }}>
+              {otherMembers.map((member) => {
+                const selected = successorId === member.membershipId;
+                return (
+                  <Pressable
+                    key={member.membershipId}
+                    accessibilityRole="radio"
+                    accessibilityLabel={member.displayName}
+                    accessibilityState={{ checked: selected }}
+                    aria-checked={selected}
+                    onPress={() => setSuccessorId(member.membershipId)}
+                    style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, borderWidth: theme.borderWidths.default, borderColor: selected ? theme.colors.coral : theme.colors.separator, backgroundColor: selected ? theme.colors.coralSoft : pressed ? theme.colors.surfaceMuted : theme.colors.surface })}
+                  >
+                    <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1}>{member.displayName}</Text>
+                      <Text variant="caption" numberOfLines={1}>{member.username ?? member.email}</Text>
+                    </Stack>
+                    {selected ? <Text variant="label" color="coral">已选择</Text> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={{ flexDirection: 'row', gap: theme.spacing[3] }}>
+              <Button label="取消" tone="secondary" onPress={() => setLeaveOpen(false)} style={{ flex: 1 }} />
+              <Button
+                label="下一步"
+                disabled={successorId === null}
+                onPress={() => {
+                  const successor = otherMembers.find((m) => m.membershipId === successorId);
+                  if (successor === undefined) return;
+                  setLeaveOpen(false);
+                  governance.leave?.(successor.membershipId, successor.displayName);
+                }}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Stack>
+        </AppDialog>
+      ) : null}
       {revokeId !== null ? (
         <AppDialog title="撤销邀请？" busy={revokeBusy} onClose={() => setRevokeId(null)} trigger={revokeTrigger}>
           <Stack gap={4}>
