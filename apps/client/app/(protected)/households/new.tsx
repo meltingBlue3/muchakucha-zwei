@@ -43,7 +43,7 @@ export default function NewHouseholdRoute() {
   } = useForm<HouseholdFormValues>({
     defaultValues: { name: '' },
   });
-  const { errors, isSubmitting } = formState;
+  const { errors, isSubmitting, submitCount } = formState;
 
   const validateName = (): boolean => {
     const parsed = nameSchema.safeParse(getValues('name'));
@@ -140,6 +140,7 @@ export default function NewHouseholdRoute() {
               disabled={isSubmitting}
               {...(errors.name?.message === undefined ? {} : { error: errors.name.message })}
               label="家庭名称"
+              submitAttempt={submitCount}
               hint="1–40 个字符，之后可以在家庭设置中修改。"
               placeholder="例如：我们的小家"
               returnKeyType="done"

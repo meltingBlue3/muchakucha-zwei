@@ -92,7 +92,7 @@ export const RegisterForm = ({
   const {
     clearErrors,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, submitCount },
     getValues,
     handleSubmit,
     setError,
@@ -158,6 +158,7 @@ export const RegisterForm = ({
         name="username"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <TextField
+            submitAttempt={submitCount}
             disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="username"
@@ -178,6 +179,7 @@ export const RegisterForm = ({
         name="password"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <PasswordField
+            submitAttempt={submitCount}
             disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="new-password"
@@ -201,6 +203,7 @@ export const RegisterForm = ({
         name="confirmPassword"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <PasswordField
+            submitAttempt={submitCount}
             disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="new-password"

@@ -50,7 +50,7 @@ export const LoginForm = ({
   const {
     clearErrors,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, submitCount },
     getValues,
     handleSubmit,
     setError,
@@ -124,6 +124,7 @@ export const LoginForm = ({
         name="username"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <TextField
+            submitAttempt={submitCount}
             disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="username"
@@ -146,6 +147,7 @@ export const LoginForm = ({
         name="password"
         render={({ field: { onBlur, onChange, ref, value } }) => (
           <PasswordField
+            submitAttempt={submitCount}
             disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="current-password"

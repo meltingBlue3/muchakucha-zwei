@@ -226,16 +226,25 @@ export const IconButton = ({ icon, label, style, visibleLabel = false, ...props 
   );
 };
 
+// Tracks whether the latest web interaction was a Tab key press rather than a pointer or other key.
+const webFocusIntent = { tabbing: false };
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  document.addEventListener('keydown', (event) => { webFocusIntent.tabbing = event.key === 'Tab'; }, true);
+  document.addEventListener('pointerdown', () => { webFocusIntent.tabbing = false; }, true);
+}
+
 type FieldProps = TextInputProps & {
   disabled?: boolean;
   error?: string;
   label: string;
   hint?: string;
+  /** Submit attempt counter; each increase re-focuses the first invalid field even if its error is unchanged. */
+  submitAttempt?: number;
   trailing?: ReactNode;
 };
 
 export const TextField = forwardRef<NativeTextInput, FieldProps>(
-  ({ disabled, error, hint, trailing, label, nativeID, onBlur, onFocus, style, ...props }, ref) => {
+  ({ disabled, error, hint, submitAttempt, trailing, label, nativeID, onBlur, onFocus, style, ...props }, ref) => {
     const activeTheme = useTheme<Theme>();
     const preferences = useAccessibilityPreferences();
     const generatedId = useId();
@@ -244,11 +253,14 @@ export const TextField = forwardRef<NativeTextInput, FieldProps>(
     const [focused, setFocused] = useState(false);
     useEffect(() => {
       if (!error || Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+      // Blur validation must not pull focus back while the user tabs through the form;
+      // only errors raised by a submit (click or Enter) move focus to the invalid field.
+      if (webFocusIntent.tabbing) return undefined;
       const timeout = setTimeout(() => {
         document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
       }, 0);
       return () => clearTimeout(timeout);
-    }, [error]);
+    }, [error, submitAttempt]);
     return (
       <Stack gap={2}>
         <Text nativeID={`${inputId}-label`} variant="label">

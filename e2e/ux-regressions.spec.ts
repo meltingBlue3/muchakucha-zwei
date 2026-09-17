@@ -7,7 +7,7 @@ const taskId = '33333333-3333-4333-8333-333333333333';
 const household = (id: string) => ({ id, name: id === a ? '家庭 A' : '家庭 B', role: 'OWNER', memberCount: 1, ownerMembershipId: 'member' });
 
 async function dialogAppearance(page: Page) {
-  return page.getByRole('dialog', { name: /^(个人资料|退出登录|编辑家庭名称|邀请家人|撤销邀请？)$/ }).evaluate((panel) => {
+  return page.getByRole('dialog', { name: /^(个人资料|退出登录|编辑家庭名称|邀请家人|撤销邀请？)$/ }).getByTestId('app-dialog-panel').evaluate((panel) => {
     const read = (element: Element, properties: string[]) => {
       const style = getComputedStyle(element);
       return properties.map((property) => style.getPropertyValue(property));
