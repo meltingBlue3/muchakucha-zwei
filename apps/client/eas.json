@@ -11,13 +11,13 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_ORIGIN": "http://124.223.222.13:3000"
+        "EXPO_PUBLIC_API_ORIGIN": "http://192.168.1.7:3000"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_ORIGIN": "https://muchakucha.ddns.net"
+        "EXPO_PUBLIC_API_ORIGIN": "https://REPLACE-WITH-SERVER-IP"
       }
     }
   },

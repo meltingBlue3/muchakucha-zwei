@@ -196,6 +196,7 @@ pnpm exec playwright test -c playwright.ui.config.ts
 ### 已知缺口
 
 - 标签管理页未按角色隐藏创建 / 编辑 / 删除入口，MEMBER 操作时会被 API 拒绝并显示失败提示
+- 服务器未购置：`apps/client/eas.json` 的 production `EXPO_PUBLIC_API_ORIGIN` 为占位值，IP 证书与反向代理流程未经实机验证
 - 家庭、日历、任务三块尚未完成 Android 真机验收
 
 ## 生产部署
@@ -204,24 +205,46 @@ pnpm exec playwright test -c playwright.ui.config.ts
 
 本项目部署在固定 IP 的服务器上，不使用自有域名。生产环境**必须**走 HTTPS：`NODE_ENV=production` 时 `WEB_ORIGIN` 只接受 HTTPS 来源，Web 端的刷新令牌 Cookie 带 `__Secure-` 前缀且恒为 `Secure`，iOS 也默认拒绝明文 HTTP。因此 API 前置一个负责 TLS 的反向代理，由它对外提供 HTTPS，内部转发到本机 3000 端口。
 
-#### 域名与证书
+#### 证书
 
-用 [No-IP](https://www.noip.com/) 领一个免费主机名，记录类型选 **DNS Host (A)**，地址填服务器 IP。服务器是固定 IP，不需要安装 No-IP 的 DUC 客户端。
+不使用域名。Let's Encrypt 自 2026-01-15 起[正式签发 IP 地址证书](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability)，直接为服务器公网 IP 取得受信任证书：
 
-`ddns.net`、`hopto.org` 等 No-IP 免费域位于 Public Suffix List 上，每个主机名独立计算 Let's Encrypt 的签发配额。`sslip.io`、`nip.io` 不在该列表上，全部用户共享一份已被耗尽过的配额，不要用于生产。
+```bash
+certbot certonly --preferred-profile shortlived \
+  --webroot --webroot-path /var/www/html \
+  --ip-address <服务器公网 IP>
+```
 
-Caddy 会自动申请并续期证书。开放 80 和 443 端口后：
+由 Caddy 终止 TLS 并转发到本机 3000 端口：
 
 ```caddyfile
 # /etc/caddy/Caddyfile
-muchakucha.ddns.net {
+https://<服务器公网 IP> {
+	tls /etc/letsencrypt/live/<服务器公网 IP>/fullchain.pem /etc/letsencrypt/live/<服务器公网 IP>/privkey.pem
 	reverse_proxy 127.0.0.1:3000
+}
+
+# 供 certbot 续期使用的 HTTP-01 质询目录
+http://<服务器公网 IP> {
+	root * /var/www/html
+	file_server
 }
 ```
 
-换成自己注册的主机名即可，同时需要同步 `apps/client/eas.json` 中 production profile 的 `EXPO_PUBLIC_API_ORIGIN`。
+> **IP 证书有效期仅 160 小时（约 6.7 天）**，远短于域名证书的 90 天。自动续期必须验证确实在运行（`systemctl list-timers | grep certbot`，并用 `certbot renew --dry-run` 实跑一次），否则不到一周即中断服务。续期后需要让 Caddy 重载证书。
 
-> **免费主机名每 30 天必须确认一次**，第 23 天起 No-IP 会发确认邮件，逾期主机名被删除。届时 API 域名停止解析，而 `EXPO_PUBLIC_API_ORIGIN` 已编译进安装包，所有已发布的客户端会同时失联；主机名被他人抢注则后果更严重。请设置 20 天周期的提醒，或改用不需要定期确认的 DNS 服务。
+服务器尚未购置，以上流程未经实机验证。`apps/client/eas.json` 的 production profile 目前是占位值 `https://REPLACE-WITH-SERVER-IP`，取得公网 IP 后需同步替换。
+
+#### 局域网联调
+
+买服务器之前，用 `preview` profile 直连局域网内的开发机：
+
+```bash
+export HOST=0.0.0.0   # 开发环境默认只监听 127.0.0.1，手机无法连接
+pnpm dev
+```
+
+`apps/client/eas.json` 的 preview profile 指向 `http://192.168.1.7:3000`，换成开发机实际的局域网地址即可。此阶段走明文 HTTP：`NODE_ENV` 非 production 时不强制 HTTPS 来源，Android 已开启 `usesCleartextTraffic`。**iOS 无 ATS 例外，连不上明文地址**，局域网联调只能用 Android 或 Web。
 
 #### 启动 API
 
@@ -229,7 +252,7 @@ muchakucha.ddns.net {
 export NODE_ENV=production
 export DATABASE_URL='postgresql://...'
 export JWT_ACCESS_SECRET='<强随机密钥，≥32 字节，如 openssl rand -base64 48>'
-export WEB_ORIGIN='https://muchakucha.ddns.net'   # 必填，必须是 HTTPS 精确来源
+export WEB_ORIGIN='https://<服务器公网 IP>'         # 必填，必须是 HTTPS 精确来源
 export HOST=127.0.0.1                             # 只监听本机，强制流量经过代理
 export TRUST_PROXY=127.0.0.1                      # 见下文，缺失会让限流失效
 
@@ -265,7 +288,7 @@ export SMTP_FROM='noreply@example.com'
 
 使用 EAS Build（`apps/client/eas.json`）：`development`（开发客户端）、`preview`（内部分发）、`production`。构建时通过各 profile 的 `EXPO_PUBLIC_API_ORIGIN` 指定 API 地址。Android 包名与 iOS Bundle ID 均为 `app.muchakucha.zwei`。
 
-`production` 指向 HTTPS 域名；`preview` 仍直连 `http://124.223.222.13:3000`，用于绕过代理排查问题。`app.json` 只为 Android 开启了 `usesCleartextTraffic`，iOS 没有 ATS 例外，所以 preview 的明文地址在 iOS 上不可用。
+`production` 使用公网 IP 的 HTTPS 地址，取得服务器后替换占位值；`preview` 直连局域网开发机的明文地址，仅 Android 与 Web 可用。
 
 ```bash
 cd apps/client
