@@ -99,3 +99,81 @@ describe('versioned Fastify application boundary', () => {
       .toThrow('WEB_ORIGIN entries must be exact origins');
   });
 });
+
+describe('proxy-aware client attribution', () => {
+  const proxiedEnvironment = {
+    NODE_ENV: 'test',
+    WEB_ORIGIN: allowedOrigin,
+    JWT_ACCESS_SECRET: 'test-only-secret-with-at-least-32-bytes-of-entropy',
+    LOG_LEVEL: 'silent',
+    DATABASE_URL: process.env.DATABASE_URL,
+  } as const;
+
+  // Registration is the cheapest throttled route to exhaust: the global guard runs
+  // before validation, so a rejected body still consumes the 5-per-hour quota.
+  async function registerAttempt(
+    application: NestFastifyApplication,
+    forwardedFor: string,
+  ): Promise<number> {
+    const response = await application.getHttpAdapter().getInstance().inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      headers: { origin: allowedOrigin, 'x-forwarded-for': forwardedFor },
+      payload: {},
+    });
+    return response.statusCode;
+  }
+
+  test('leaves the proxy untrusted by default', () => {
+    expect(parseRuntimeConfig({ NODE_ENV: 'test', WEB_ORIGIN: allowedOrigin }).trustProxy).toBe(false);
+    expect(parseRuntimeConfig({ NODE_ENV: 'test', WEB_ORIGIN: allowedOrigin, TRUST_PROXY: '  ' }).trustProxy)
+      .toBe(false);
+  });
+
+  test('accepts named proxy addresses and ranges', () => {
+    expect(
+      parseRuntimeConfig({ NODE_ENV: 'test', WEB_ORIGIN: allowedOrigin, TRUST_PROXY: '127.0.0.1, 10.0.0.0/8' })
+        .trustProxy,
+    ).toEqual(['127.0.0.1', '10.0.0.0/8']);
+  });
+
+  test('rejects blanket proxy trust that would let callers spoof their address', () => {
+    for (const value of ['true', '*', 'proxy.example.test', '127.0.0.1/8/8']) {
+      expect(() => parseRuntimeConfig({ NODE_ENV: 'test', WEB_ORIGIN: allowedOrigin, TRUST_PROXY: value }))
+        .toThrow('TRUST_PROXY must be a comma-separated list');
+    }
+  });
+
+  test('meters each forwarded client separately behind a trusted proxy', async () => {
+    const proxied = await createApplication({ ...proxiedEnvironment, TRUST_PROXY: '127.0.0.1' });
+    try {
+      await proxied.init();
+      await proxied.getHttpAdapter().getInstance().ready();
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        expect(await registerAttempt(proxied, '203.0.113.10')).toBe(400);
+      }
+      expect(await registerAttempt(proxied, '203.0.113.10')).toBe(429);
+
+      // A different household on the same proxy keeps its own quota.
+      expect(await registerAttempt(proxied, '203.0.113.11')).toBe(400);
+    } finally {
+      await proxied.close();
+    }
+  });
+
+  test('ignores forwarded addresses when no proxy is trusted', async () => {
+    const direct = await createApplication(proxiedEnvironment);
+    try {
+      await direct.init();
+      await direct.getHttpAdapter().getInstance().ready();
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        expect(await registerAttempt(direct, '203.0.113.20')).toBe(400);
+      }
+      expect(await registerAttempt(direct, '203.0.113.21')).toBe(429);
+    } finally {
+      await direct.close();
+    }
+  });
+});

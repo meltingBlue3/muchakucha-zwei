@@ -17,7 +17,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_ORIGIN": "https://api.yourdomain.com"
+        "EXPO_PUBLIC_API_ORIGIN": "https://muchakucha.duckdns.org"
       }
     }
   },

@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { isIP } from 'node:net';
 import { randomUUID } from 'node:crypto';
 
 try {
@@ -32,6 +33,7 @@ interface RuntimeConfig {
   host: string;
   logLevel: string;
   port: number;
+  trustProxy: string[] | false;
   webOrigins: ReadonlySet<string>;
   nodeEnvironment: string;
 }
@@ -64,6 +66,31 @@ function parsePort(value: string | undefined): number {
     throw new Error('PORT must be an integer between 1 and 65535.');
   }
   return port;
+}
+
+/**
+ * Behind a reverse proxy every request arrives from the proxy's own address, so
+ * rate limiting would count all clients as one without a forwarded-for source.
+ * Only explicitly named proxies are trusted: a blanket `true` would let any
+ * caller spoof `X-Forwarded-For` and claim a fresh quota.
+ */
+function parseTrustedProxies(value: string | undefined): string[] | false {
+  const entries = value?.split(',').map((entry) => entry.trim()).filter(Boolean) ?? [];
+  if (entries.length === 0) {
+    return false;
+  }
+
+  for (const entry of entries) {
+    const [address, prefix, ...extra] = entry.split('/');
+    const prefixIsValid = prefix === undefined || /^\d{1,3}$/.test(prefix);
+    if (extra.length > 0 || address === undefined || isIP(address) === 0 || !prefixIsValid) {
+      throw new Error(
+        'TRUST_PROXY must be a comma-separated list of proxy IP addresses or CIDR ranges, such as 127.0.0.1.',
+      );
+    }
+  }
+
+  return entries;
 }
 
 function parseExactOrigins(value: string | undefined, nodeEnvironment: string): ReadonlySet<string> {
@@ -106,6 +133,7 @@ export function parseRuntimeConfig(environment: Environment = process.env): Runt
     host: environment.HOST ?? (nodeEnvironment === 'production' ? '0.0.0.0' : '127.0.0.1'),
     logLevel: environment.LOG_LEVEL ?? (nodeEnvironment === 'test' ? 'silent' : 'info'),
     port: parsePort(environment.PORT),
+    trustProxy: parseTrustedProxies(environment.TRUST_PROXY),
     webOrigins: parseExactOrigins(environment.WEB_ORIGIN, nodeEnvironment),
     nodeEnvironment,
   };
@@ -198,6 +226,7 @@ export async function createApplication(
       },
     },
     requestIdHeader: false,
+    trustProxy: config.trustProxy,
   });
   const app = await NestFactory.create<NestFastifyApplication>(AppModule.register(environment), adapter, {
     abortOnError: true,

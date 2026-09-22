@@ -20,6 +20,8 @@ Every DTO property carries a `class-validator` decorator, and array properties v
 
 A global throttler allows 60 requests per minute per client. Authentication routes tighten this per route with `@Throttle`, down to 5 per hour for password reset and similar flows.
 
+Counting is per client address, so a deployment behind a reverse proxy sets `TRUST_PROXY` to the proxy's own address — without it every caller shares one quota. The variable takes explicit IPs or CIDR ranges only; `true` and hostnames fail at startup, since trusting any upstream would let a caller forge `X-Forwarded-For` and mint a fresh quota.
+
 The limiter is bypassed only when `NODE_ENV=test` and `E2E_DISABLE_RATE_LIMITS=true`. A test suite that issues many requests sets both in the app environment; one that does not will start seeing `429 RATE_LIMITED` partway through and fail in a way that looks like a logic bug.
 
 ## Permissions

@@ -196,26 +196,52 @@ pnpm exec playwright test -c playwright.ui.config.ts
 ### 已知缺口
 
 - 标签管理页未按角色隐藏创建 / 编辑 / 删除入口，MEMBER 操作时会被 API 拒绝并显示失败提示
-- 发布准备未完成：`apps/client/eas.json` 的 production `EXPO_PUBLIC_API_ORIGIN` 仍为占位地址 `https://api.yourdomain.com`
 - 家庭、日历、任务三块尚未完成 Android 真机验收
 
 ## 生产部署
 
 ### API
 
+本项目部署在固定 IP 的服务器上，不使用自有域名。生产环境**必须**走 HTTPS：`NODE_ENV=production` 时 `WEB_ORIGIN` 只接受 HTTPS 来源，Web 端的刷新令牌 Cookie 带 `__Secure-` 前缀且恒为 `Secure`，iOS 也默认拒绝明文 HTTP。因此 API 前置一个负责 TLS 的反向代理，由它对外提供 HTTPS，内部转发到本机 3000 端口。
+
+#### 域名与证书
+
+用 [DuckDNS](https://www.duckdns.org/) 领一个免费子域名并指向服务器 IP。DuckDNS 位于 Public Suffix List 上，每个子域独立计算 Let's Encrypt 的签发配额；`sslip.io`、`nip.io` 这类服务不在该列表上，所有用户共享一份配额且已被耗尽过，不要用于生产。
+
+Caddy 会自动申请并续期证书。开放 80 和 443 端口后：
+
+```caddyfile
+# /etc/caddy/Caddyfile
+muchakucha.duckdns.org {
+	reverse_proxy 127.0.0.1:3000
+}
+```
+
+换成自己注册的子域名即可，同时需要同步 `apps/client/eas.json` 中 production profile 的 `EXPO_PUBLIC_API_ORIGIN`。
+
+#### 启动 API
+
 ```bash
 export NODE_ENV=production
 export DATABASE_URL='postgresql://...'
 export JWT_ACCESS_SECRET='<强随机密钥，≥32 字节，如 openssl rand -base64 48>'
-export WEB_ORIGIN='https://your-app.example.com'   # 必填，必须是 HTTPS 精确来源
+export WEB_ORIGIN='https://muchakucha.duckdns.org'   # 必填，必须是 HTTPS 精确来源
+export HOST=127.0.0.1                                # 只监听本机，强制流量经过代理
+export TRUST_PROXY=127.0.0.1                         # 见下文，缺失会让限流失效
 
 pnpm install --frozen-lockfile
 pnpm --filter api prisma:generate
 pnpm --filter api exec prisma migrate deploy
-pnpm --filter api dev    # 编译到 dist/ 并运行 node dist/main.js，生产默认监听 0.0.0.0:3000
+pnpm --filter api dev    # 编译到 dist/ 并运行 node dist/main.js
 ```
 
-生产环境只允许 `WEB_ORIGIN` 中的精确来源跨域访问。建议在 API 前放置 HTTPS 反向代理。
+生产环境只允许 `WEB_ORIGIN` 中的精确来源跨域访问。
+
+#### TRUST_PROXY
+
+限流按客户端 IP 计数。经过反向代理后，每个请求的来源地址都是代理自身，未配置 `TRUST_PROXY` 时全体用户会共用同一份配额——全局 60 次/分钟、注册与密码重置 5 次/小时都会变成全站共享，一个人用完其他人全被拒。
+
+`TRUST_PROXY` 填写**代理自身**的地址，支持逗号分隔的 IP 或 CIDR。代理与 API 同机时填 `127.0.0.1`。该项只接受明确地址：`true`、`*` 和域名都会导致启动失败，因为无条件信任 `X-Forwarded-For` 会让任何调用方伪造来源、绕过限流。不经过代理直连时不要设置它。
 
 用户名注册和家庭邀请不需要邮件服务。只有需要旧邮箱 API 时才配置以下变量（生产环境设置了 `SMTP_HOST` 后，其余项均为必填）：
 
@@ -234,6 +260,8 @@ export SMTP_FROM='noreply@example.com'
 ### 移动端
 
 使用 EAS Build（`apps/client/eas.json`）：`development`（开发客户端）、`preview`（内部分发）、`production`。构建时通过各 profile 的 `EXPO_PUBLIC_API_ORIGIN` 指定 API 地址。Android 包名与 iOS Bundle ID 均为 `app.muchakucha.zwei`。
+
+`production` 指向 HTTPS 域名；`preview` 仍直连 `http://124.223.222.13:3000`，用于绕过代理排查问题。`app.json` 只为 Android 开启了 `usesCleartextTraffic`，iOS 没有 ATS 例外，所以 preview 的明文地址在 iOS 上不可用。
 
 ```bash
 cd apps/client
