@@ -206,18 +206,22 @@ pnpm exec playwright test -c playwright.ui.config.ts
 
 #### 域名与证书
 
-用 [DuckDNS](https://www.duckdns.org/) 领一个免费子域名并指向服务器 IP。DuckDNS 位于 Public Suffix List 上，每个子域独立计算 Let's Encrypt 的签发配额；`sslip.io`、`nip.io` 这类服务不在该列表上，所有用户共享一份配额且已被耗尽过，不要用于生产。
+用 [No-IP](https://www.noip.com/) 领一个免费主机名，记录类型选 **DNS Host (A)**，地址填服务器 IP。服务器是固定 IP，不需要安装 No-IP 的 DUC 客户端。
+
+`ddns.net`、`hopto.org` 等 No-IP 免费域位于 Public Suffix List 上，每个主机名独立计算 Let's Encrypt 的签发配额。`sslip.io`、`nip.io` 不在该列表上，全部用户共享一份已被耗尽过的配额，不要用于生产。
 
 Caddy 会自动申请并续期证书。开放 80 和 443 端口后：
 
 ```caddyfile
 # /etc/caddy/Caddyfile
-muchakucha.duckdns.org {
+muchakucha.ddns.net {
 	reverse_proxy 127.0.0.1:3000
 }
 ```
 
-换成自己注册的子域名即可，同时需要同步 `apps/client/eas.json` 中 production profile 的 `EXPO_PUBLIC_API_ORIGIN`。
+换成自己注册的主机名即可，同时需要同步 `apps/client/eas.json` 中 production profile 的 `EXPO_PUBLIC_API_ORIGIN`。
+
+> **免费主机名每 30 天必须确认一次**，第 23 天起 No-IP 会发确认邮件，逾期主机名被删除。届时 API 域名停止解析，而 `EXPO_PUBLIC_API_ORIGIN` 已编译进安装包，所有已发布的客户端会同时失联；主机名被他人抢注则后果更严重。请设置 20 天周期的提醒，或改用不需要定期确认的 DNS 服务。
 
 #### 启动 API
 
@@ -225,9 +229,9 @@ muchakucha.duckdns.org {
 export NODE_ENV=production
 export DATABASE_URL='postgresql://...'
 export JWT_ACCESS_SECRET='<强随机密钥，≥32 字节，如 openssl rand -base64 48>'
-export WEB_ORIGIN='https://muchakucha.duckdns.org'   # 必填，必须是 HTTPS 精确来源
-export HOST=127.0.0.1                                # 只监听本机，强制流量经过代理
-export TRUST_PROXY=127.0.0.1                         # 见下文，缺失会让限流失效
+export WEB_ORIGIN='https://muchakucha.ddns.net'   # 必填，必须是 HTTPS 精确来源
+export HOST=127.0.0.1                             # 只监听本机，强制流量经过代理
+export TRUST_PROXY=127.0.0.1                      # 见下文，缺失会让限流失效
 
 pnpm install --frozen-lockfile
 pnpm --filter api prisma:generate
