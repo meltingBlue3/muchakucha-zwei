@@ -41,7 +41,7 @@ muchakucha-zwei/
 ├── packages/
 │   └── api-client/                # 生成产物，请勿手改
 ├── e2e/                           # Playwright 用例（auth、households、events、tasks、support）
-├── docs/                          # 设计规范、设计调研与历史方案、security/ ASVS 审计
+├── docs/                          # 设计规范与调研、产品路线图、agent/ 操作手册、security/ ASVS 审计
 ├── scripts/                       # OpenAPI 漂移检查；PowerShell 测试门禁脚本
 ├── compose.yaml                   # 测试用 PostgreSQL + Mailpit
 ├── playwright.config.ts           # 完整 Web E2E（启动 API + Web）
@@ -61,6 +61,8 @@ Task → 状态、优先级、多个负责人（TaskAssignee），可关联 Recu
 Note → 家庭共享笔记（标题 + 正文，不支持标签）
 Label → 家庭内唯一名称 + 颜色
 ```
+
+AI 编码代理从 [AGENTS.md](AGENTS.md) 进入：它是常驻入口，按任务类型路由到 `docs/agent/` 下的单篇手册，避免一次性加载全部文档。
 
 ## 本地开发
 

@@ -120,4 +120,4 @@
 
 ## 参考资料
 
-[设计调研](apple-inspired-design-research.md) 提供参考来源；[重构记录](frontend-design-refactor.md) 与 [体验改版记录](product-experience-redesign.md) 保存历史背景。历史方案不作为当前设计约束，后续通用规范集中维护在本文。
+[设计调研](apple-inspired-design-research.md) 保存本文各项决定的一手来源与理由；尚未实现的产品意图、非目标与验收目标见 [产品路线图](roadmap.md)。通用设计规范集中维护在本文。

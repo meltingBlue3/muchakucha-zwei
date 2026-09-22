@@ -1,46 +1,45 @@
 # AGENTS.md
 
-Muchakucha Zwei is a mobile-first family app for shared calendars, tasks, notes, and labels. Android and iOS are primary; Web is secondary. This is a fresh rebuild with no legacy code or data migration.
+Muchakucha Zwei is a mobile-first family app for shared calendars, tasks, notes, and labels. Android and iOS are primary; Web is secondary. It is a fresh rebuild with no legacy code or data migration.
+
+This file is the always-loaded entry point. Load a playbook when its row matches the request, and leave the rest unread.
 
 ## Layout
 
-- `apps/client/`: Expo, React Native, Expo Router, and Restyle. Routes live in `app/`; feature logic, shared UI, and platform adapters live in `src/`.
-- `apps/api/`: NestJS + Fastify. Business modules live in `src/modules/`; Prisma schema and migrations live in `prisma/`.
-- `packages/api-client/`: generated OpenAPI contract and TypeScript client.
+- `apps/client/` — Expo, React Native, Expo Router, Restyle. Routes live in `app/`; feature logic, shared UI, and platform adapters live in `src/`.
+- `apps/api/` — NestJS + Fastify. Business modules live in `src/modules/`; Prisma schema and migrations live in `prisma/`.
+- `packages/api-client/` — the generated OpenAPI contract and TypeScript client. Generated output only.
+- `e2e/` — Playwright specs. `docs/` — design and agent playbooks. `scripts/` — contract-drift and test helpers.
 
-## Workflow
+## Start at the target
 
-- Follow existing code patterns and strict TypeScript settings. Use `package.json` and `pnpm-lock.yaml` for versions and scripts.
-- Preserve unrelated changes. Report what changed, checks performed, and anything unverified.
+Open the file, route, endpoint, or error the request names, plus its direct dependencies and one existing implementation of the same kind. A clear target needs no repository survey, no reconstruction of past progress from git history, and no reading of `test-results/`.
 
-## Commands
+## Choose one row
 
-Run from the repository root:
+| Operation | Read first |
+| --- | --- |
+| Answer, explain, trace, or diagnose a named target | Nothing; inspect the target and its direct dependency |
+| Documentation or configuration-only edit | Nothing; check the edited content, its links, and its commands |
+| Screen layout, visual style, shared UI component, or theme token | [docs/design.md](docs/design.md) |
+| Client routing, data loading, session, draft state, or platform adapter | [docs/agent/client.md](docs/agent/client.md) |
+| Accessible name, role, focus order, or keyboard behavior on Web | [docs/agent/web-accessibility.md](docs/agent/web-accessibility.md) |
+| Endpoint, DTO, error code, permission rule, Prisma schema, or migration | [docs/agent/api.md](docs/agent/api.md) |
+| Choosing which checks to run, writing or repairing a test, reporting evidence | [docs/agent/testing.md](docs/agent/testing.md) |
+| Starting a server, database, or mail capture; port selection; anything that writes to a database | [docs/agent/environment.md](docs/agent/environment.md) |
+| Ownership or entry point of a module is unclear | [docs/agent/context.md](docs/agent/context.md) |
 
-```sh
-pnpm install --frozen-lockfile
-pnpm --filter api prisma:generate
-pnpm dev
-pnpm --recursive typecheck
-pnpm test:quick
-pnpm test:integration
-pnpm test:e2e:web
-pnpm openapi:generate
-```
+A request spanning several rows reads only those rows. Links inside a playbook follow the same rule: take one when its own trigger matches.
 
-For Web, use `pnpm --filter client exec expo start --web --port 8081`; the current `web` script conflicts with the test mailbox port.
+## Every branch
 
-## Implementation
+- Match the surrounding code: existing patterns, strict TypeScript, no new dependency without a stated reason.
+- Preserve unrelated working-tree changes. Review only the files this task touched.
+- Commands and versions live in `package.json` and [README.md](README.md). Read them there instead of trusting a remembered command.
+- Report the result, the checks actually run, and anything left unverified. State a skipped step rather than implying it.
 
-- Before adding or changing frontend layouts, visual styles, shared UI components, or theme tokens, read and follow [docs/design.md](docs/design.md). Keep general design changes synchronized with that document.
-- Reuse `apps/client/src/ui/` components and theme tokens. Keep platform differences in native/Web adapters.
-- Keep `/api/v1` backward compatible. Update DTOs and templates in `apps/api/src/openapi/generate-openapi.ts`, then regenerate; do not hand-edit generated output or expose Prisma models to clients.
-- Enforce household membership and resource ownership on the server. Preserve database constraints and transactions; add migrations for schema changes.
-- Keep access tokens in memory. Store rotating refresh tokens in native SecureStore or Web HttpOnly cookies, with hashes only on the server.
-- Store time points as UTC `timestamptz`; keep calendar dates and recurrence time zones distinct.
+## Standing safety
 
-## Validation
-
-Run checks relevant to the change: Vitest for API, Jest for client, and Playwright for Web. Add regression coverage for behavior fixes; documentation-only edits need a diff check.
-
-Before database or browser tests, read `.env.test.example`, `apps/api/test/reset-database.ts`, and `playwright.config.ts`. Integration tests clear the database: use a disposable local test database and explicitly configure test variables. Root `.env.test` is not loaded automatically.
+- Integration tests and E2E truncate their database. Keep them on a disposable loopback database whose name carries a standalone `test` segment; `apps/api/test/reset-database.ts` enforces this, and that guard stays as strict as it is.
+- The human may already be running `pnpm dev` on ports 3000 and 8081. Start your own services on free ports, and stop only processes this task started.
+- Product data, `.env` files, and deployment targets stay untouched unless the current request names the exact change.
