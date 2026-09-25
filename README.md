@@ -196,7 +196,7 @@ pnpm exec playwright test -c playwright.ui.config.ts
 ### 已知缺口
 
 - 标签管理页未按角色隐藏创建 / 编辑 / 删除入口，MEMBER 操作时会被 API 拒绝并显示失败提示
-- 服务器未购置：`apps/client/eas.json` 的 production `EXPO_PUBLIC_API_ORIGIN` 为占位值，IP 证书与反向代理流程未经实机验证
+- 生产环境尚未部署：证书签发链路已用 certbot staging dry-run 验证通过，但正式证书、反向代理、数据库与 API 进程都还没在服务器上落地
 - 家庭、日历、任务三块尚未完成 Android 真机验收
 
 ## 生产部署
@@ -207,37 +207,49 @@ pnpm exec playwright test -c playwright.ui.config.ts
 
 #### 证书
 
-不使用域名。Let's Encrypt 自 2026-01-15 起[正式签发 IP 地址证书](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability)，直接为服务器公网 IP 取得受信任证书：
+不使用域名。Let's Encrypt 自 2026-01-15 起[正式签发 IP 地址证书](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability)，直接为服务器公网 IP 取得受信任证书。
+
+`--ip-address` 需要 certbot ≥ 5.3，**Ubuntu 24.04 的 apt 源只有 2.9.0，装了也没有这个参数**，必须用 snap：
 
 ```bash
-certbot certonly --preferred-profile shortlived \
-  --webroot --webroot-path /var/www/html \
-  --ip-address <服务器公网 IP>
+snap install --classic certbot   # 当前为 5.8.0
+```
+
+首次签发时 Caddy 还没起来，用 `--standalone` 让 certbot 自己临时占用 80 端口：
+
+```bash
+certbot certonly --standalone \
+  --preferred-profile shortlived \
+  --ip-address 47.117.148.16
 ```
 
 由 Caddy 终止 TLS 并转发到本机 3000 端口：
 
 ```caddyfile
 # /etc/caddy/Caddyfile
-https://<服务器公网 IP> {
-	tls /etc/letsencrypt/live/<服务器公网 IP>/fullchain.pem /etc/letsencrypt/live/<服务器公网 IP>/privkey.pem
+https://47.117.148.16 {
+	tls /etc/letsencrypt/live/47.117.148.16/fullchain.pem /etc/letsencrypt/live/47.117.148.16/privkey.pem
 	reverse_proxy 127.0.0.1:3000
 }
 
 # 供 certbot 续期使用的 HTTP-01 质询目录
-http://<服务器公网 IP> {
+http://47.117.148.16 {
 	root * /var/www/html
 	file_server
 }
 ```
 
-> **IP 证书有效期仅 160 小时（约 6.7 天）**，远短于域名证书的 90 天。自动续期必须验证确实在运行（`systemctl list-timers | grep certbot`，并用 `certbot renew --dry-run` 实跑一次），否则不到一周即中断服务。续期后需要让 Caddy 重载证书。
+> **IP 证书有效期仅 160 小时（约 6.7 天）**，远短于域名证书的 90 天。续期一旦停摆，不到一周就会中断服务；续期成功后还需要让 Caddy 重载证书。
 
-服务器尚未购置，以上流程未经实机验证。`apps/client/eas.json` 的 production profile 目前是占位值 `https://REPLACE-WITH-SERVER-IP`，取得公网 IP 后需同步替换。
+Caddy 接管 80 端口后，续期改走 `--webroot`，质询目录即上面 Caddy 暴露的 `/var/www/html`。
+
+snap 安装会自带 `snap.certbot.renew.timer`（每日两次），无需自建定时任务。用 `systemctl list-timers | grep certbot` 确认它在跑，并用 `certbot renew --dry-run` 实跑一次。
+
+已在本机验证：安全组放行 80 / 443，`certbot certonly --dry-run --standalone --preferred-profile shortlived --ip-address 47.117.148.16` 对 Let's Encrypt staging 通过，说明境外校验流量能到达该实例。**正式证书尚未签发，Caddy 与 API 尚未部署。**
 
 #### 局域网联调
 
-买服务器之前，用 `preview` profile 直连局域网内的开发机：
+生产环境就绪前，用 `preview` profile 直连局域网内的开发机：
 
 ```bash
 export HOST=0.0.0.0   # 开发环境默认只监听 127.0.0.1，手机无法连接
@@ -252,9 +264,9 @@ pnpm dev
 export NODE_ENV=production
 export DATABASE_URL='postgresql://...'
 export JWT_ACCESS_SECRET='<强随机密钥，≥32 字节，如 openssl rand -base64 48>'
-export WEB_ORIGIN='https://<服务器公网 IP>'         # 必填，必须是 HTTPS 精确来源
-export HOST=127.0.0.1                             # 只监听本机，强制流量经过代理
-export TRUST_PROXY=127.0.0.1                      # 见下文，缺失会让限流失效
+export WEB_ORIGIN='https://47.117.148.16'  # 必填，必须是 HTTPS 精确来源
+export HOST=127.0.0.1                      # 只监听本机，强制流量经过代理
+export TRUST_PROXY=127.0.0.1               # 见下文，缺失会让限流失效
 
 pnpm install --frozen-lockfile
 pnpm --filter api prisma:generate
@@ -263,6 +275,8 @@ pnpm --filter api dev    # 编译到 dist/ 并运行 node dist/main.js
 ```
 
 生产环境只允许 `WEB_ORIGIN` 中的精确来源跨域访问。
+
+当前服务器为 `ecs.e-c1m1.large`（2 vCPU / 2 GiB，未配置 swap）。在这台机器上直接编译容易因内存不足被 OOM 杀掉，先加 swap 或改为本地构建后上传 `dist/`。
 
 #### TRUST_PROXY
 
@@ -288,7 +302,7 @@ export SMTP_FROM='noreply@example.com'
 
 使用 EAS Build（`apps/client/eas.json`）：`development`（开发客户端）、`preview`（内部分发）、`production`。构建时通过各 profile 的 `EXPO_PUBLIC_API_ORIGIN` 指定 API 地址。Android 包名与 iOS Bundle ID 均为 `app.muchakucha.zwei`。
 
-`production` 使用公网 IP 的 HTTPS 地址，取得服务器后替换占位值；`preview` 直连局域网开发机的明文地址，仅 Android 与 Web 可用。
+`production` 指向 `https://47.117.148.16`，证书就绪后才能使用；`preview` 直连局域网开发机的明文地址，仅 Android 与 Web 可用。
 
 ```bash
 cd apps/client

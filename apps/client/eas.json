@@ -17,7 +17,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_ORIGIN": "https://REPLACE-WITH-SERVER-IP"
+        "EXPO_PUBLIC_API_ORIGIN": "https://47.117.148.16"
       }
     }
   },
