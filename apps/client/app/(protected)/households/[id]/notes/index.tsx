@@ -9,13 +9,14 @@ import type { NoteResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import { NoteCard } from '../../../../../src/features/notes/note-card';
+import { searchNotesByTitle } from '../../../../../src/features/notes/note-search';
 import {
   AccessChangedPanel,
   AppShell,
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../../src/ui/household-components';
-import { Stack, Text, Button } from '../../../../../src/ui/primitives';
+import { Stack, Text, Button, TextField } from '../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../src/ui/theme';
 
 export default function NotesListRoute() {
@@ -36,9 +37,11 @@ export default function NotesListRoute() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
+  const visibleNotes = searchNotesByTitle(notes, query);
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === '') return;
@@ -129,6 +132,18 @@ export default function NotesListRoute() {
 
           <PageIntro title="笔记" action={<Button label="新建" accessibilityLabel="创建笔记" onPress={handleCreateNote} />} />
 
+          {!loading && error === null && notes.length > 0 && (
+            <TextField
+              label="搜索笔记"
+              placeholder="按标题搜索"
+              value={query}
+              onChangeText={setQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+          )}
+
           {loading && (
             <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
               <ActivityIndicator color={activeTheme.colors.coral} />
@@ -154,14 +169,24 @@ export default function NotesListRoute() {
           )}
 
           {!loading && error === null && notes.length === 0 && (
-            <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[8] }}>
+            <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[8], gap: activeTheme.spacing[3] }}>
               <Text variant="bodySm" color="inkMuted">
-                还没有笔记。点击上方按钮创建第一篇笔记。
+                还没有笔记。适合记采购清单、旅行计划、家电说明这类要一起查的事。
               </Text>
+              <Button label="新建笔记" accessibilityLabel="创建第一篇笔记" onPress={handleCreateNote} />
             </View>
           )}
 
-          {notes.map((note) => (
+          {!loading && error === null && notes.length > 0 && visibleNotes.length === 0 && (
+            <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[8], gap: activeTheme.spacing[3] }}>
+              <Text variant="bodySm" color="inkMuted">
+                没有标题匹配「{query.trim()}」的笔记。
+              </Text>
+              <Button label="清除搜索" accessibilityLabel="清除搜索" tone="secondary" onPress={() => setQuery('')} />
+            </View>
+          )}
+
+          {visibleNotes.map((note) => (
             <NoteCard key={note.id} note={note} onPress={handleNotePress} />
           ))}
         </Stack>

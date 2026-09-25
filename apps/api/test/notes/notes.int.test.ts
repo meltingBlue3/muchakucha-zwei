@@ -196,7 +196,7 @@ describe('notes API contract', () => {
     expect(response.statusCode).toBe(201);
   });
 
-  test('lists household notes newest first with a total', async () => {
+  test('lists household notes most recently updated first with a total', async () => {
     const firstId = await createNote(owner, householdId, { title: '第一条' });
     const secondId = await createNote(member, householdId, { title: '第二条' });
     const otherHouseholdId = await createHousehold(outsider.accessToken, '别人的家');
@@ -208,6 +208,21 @@ describe('notes API contract', () => {
     const body = response.json();
     expect(body.total).toBe(2);
     expect(body.notes.map((note: { id: string }) => note.id)).toEqual([secondId, firstId]);
+  });
+
+  test('an edited note moves to the front of the list', async () => {
+    const firstId = await createNote(owner, householdId, { title: '先建的' });
+    const secondId = await createNote(member, householdId, { title: '后建的' });
+
+    // Ordering by creation would keep the newer note first; only updatedAt
+    // moves the edited one, so this fails if the sort regresses.
+    const edit = await noteApi(owner, householdId, 'PUT', `/${firstId}`, { title: '先建的（改过）' });
+    expect(edit.statusCode).toBe(200);
+
+    const response = await noteApi(member, householdId, 'GET');
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().notes.map((note: { id: string }) => note.id)).toEqual([firstId, secondId]);
   });
 
   test('retrieves a note by id for any household member', async () => {

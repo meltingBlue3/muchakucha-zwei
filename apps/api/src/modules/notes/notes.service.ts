@@ -77,7 +77,9 @@ export class NotesService {
     const [notes, total] = await Promise.all([
       this.prisma.note.findMany({
         where: { householdId },
-        orderBy: { createdAt: 'desc' },
+        // Most recently touched first: a note earns its place by being worked
+        // on, not by when it happened to be created.
+        orderBy: { updatedAt: 'desc' },
       }),
       this.prisma.note.count({ where: { householdId } }),
     ]);

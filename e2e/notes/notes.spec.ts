@@ -91,7 +91,7 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   const notesPath = `/households/${encodeURIComponent(householdId)}/notes`;
 
   await loginEmailFixture(page, owner.email, password, notesPath);
-  await expect(page.getByText('还没有笔记。点击上方按钮创建第一篇笔记。')).toBeVisible();
+  await expect(page.getByText(/还没有笔记。适合记采购清单、旅行计划、家电说明/)).toBeVisible();
 
   // --- Create: an empty title stays on the form with an inline error ---
   await page.getByRole('button', { name: '创建笔记' }).click();
@@ -144,12 +144,12 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   await page.getByRole('button', { name: '确认删除笔记' }).click();
 
   await expect(page).toHaveURL(new RegExp(`${notesPath}$`));
-  await expect(page.getByText('还没有笔记。点击上方按钮创建第一篇笔记。')).toBeVisible();
+  await expect(page.getByText(/还没有笔记。适合记采购清单、旅行计划、家电说明/)).toBeVisible();
   const afterDelete = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`);
   expect(afterDelete.status).toBe(404);
 });
 
-test('household members see notes shared by others, newest first', async ({ page }) => {
+test('household members see shared notes, most recently updated first, and can search them', async ({ page }) => {
   const owner = await prepareVerifiedAccount('shared-owner', '笔记主人');
   const member = await prepareVerifiedAccount('shared-member', '笔记成员');
   const householdId = await createHousehold(owner.accessToken, '共享笔记之家');
@@ -166,4 +166,17 @@ test('household members see notes shared by others, newest first', async ({ page
   await expect(cards).toHaveCount(2);
   await expect(cards.nth(0)).toHaveAccessibleName('笔记：垃圾分类时间');
   await expect(cards.nth(1)).toHaveAccessibleName('笔记：Wi-Fi 密码');
+
+  // --- Title search narrows the list without a round trip ---
+  const search = page.getByLabel('搜索笔记');
+  await search.fill('密码');
+  await expect(cards).toHaveCount(1);
+  await expect(cards.nth(0)).toHaveAccessibleName('笔记：Wi-Fi 密码');
+
+  // --- A query matching nothing explains itself and can be cleared ---
+  await search.fill('不存在的标题');
+  await expect(cards).toHaveCount(0);
+  await expect(page.getByText(/没有标题匹配/)).toBeVisible();
+  await page.getByRole('button', { name: '清除搜索' }).click();
+  await expect(cards).toHaveCount(2);
 });
