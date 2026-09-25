@@ -7,6 +7,7 @@ import type { LabelResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import { LabelChip } from '../../../../../src/features/labels/label-chip';
+import { canManageLabels } from '../../../../../src/features/labels/label-permissions';
 import {
   AccessChangedPanel,
   AppShell,
@@ -55,6 +56,7 @@ export default function LabelsIndexRoute() {
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
+  const canManage = canManageLabels(currentHousehold?.role);
 
   const fetchLabels = useCallback(async () => {
     if (householdId === undefined || householdId === '') return;
@@ -210,73 +212,81 @@ export default function LabelsIndexRoute() {
 
           <Heading>标签管理</Heading>
 
+          {!canManage && (
+            <Text variant="bodySm" color="inkMuted">
+              标签由家主和管理员维护，你可以查看并给事件和任务使用它们。
+            </Text>
+          )}
+
           {/* Create new label */}
-          <View style={{
-            backgroundColor: activeTheme.colors.surface,
-            borderRadius: activeTheme.borderRadii.md,
-            padding: activeTheme.spacing[4],
-            borderWidth: 1,
-            borderColor: activeTheme.colors.border,
-          }}>
-            <Stack gap={3}>
-              <Text variant="label">创建新标签</Text>
-              <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
-                <TextInput
-                  value={newName}
-                  onChangeText={(v) => {
-                    setNewName(v);
-                    setCreateError(null);
-                  }}
-                  placeholder="标签名称"
-                  placeholderTextColor={activeTheme.colors.inkMuted}
-                  style={inputStyle}
-                  maxLength={30}
-                  accessibilityLabel="标签名称"
-                />
-                <Pressable
-                  onPress={handleCreate}
-                  disabled={creating || newName.trim() === ''}
-                  style={({ pressed }) => ({
-                    backgroundColor: creating || newName.trim() === '' ? activeTheme.colors.disabled : activeTheme.colors.coral,
-                    borderRadius: activeTheme.borderRadii.sm,
-                    paddingHorizontal: activeTheme.spacing[4],
-                    justifyContent: 'center',
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: creating || newName.trim() === '' }}
-                  accessibilityLabel="创建标签"
-                >
-                  <Text variant="button" color="surface">
-                    {creating ? '…' : '创建'}
-                  </Text>
-                </Pressable>
-              </View>
-              {createError !== null && (
-                <Text variant="caption" color="destructive">{createError}</Text>
-              )}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
-                {PRESET_COLORS.map((color) => (
-                  <Pressable
-                    key={color}
-                    onPress={() => setNewColor(color)}
-                    accessibilityLabel={`选择颜色 ${color}`}
-                    accessibilityRole="radio"
-                    aria-checked={newColor === color}
-                    hitSlop={activeTheme.spacing[3]}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: activeTheme.borderRadii.full,
-                      backgroundColor: color,
-                      borderWidth: newColor === color ? 3 : 0,
-                      borderColor: activeTheme.colors.ink,
+          {canManage && (
+            <View style={{
+              backgroundColor: activeTheme.colors.surface,
+              borderRadius: activeTheme.borderRadii.md,
+              padding: activeTheme.spacing[4],
+              borderWidth: 1,
+              borderColor: activeTheme.colors.border,
+            }}>
+              <Stack gap={3}>
+                <Text variant="label">创建新标签</Text>
+                <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
+                  <TextInput
+                    value={newName}
+                    onChangeText={(v) => {
+                      setNewName(v);
+                      setCreateError(null);
                     }}
+                    placeholder="标签名称"
+                    placeholderTextColor={activeTheme.colors.inkMuted}
+                    style={inputStyle}
+                    maxLength={30}
+                    accessibilityLabel="标签名称"
                   />
-                ))}
-              </View>
-            </Stack>
-          </View>
+                  <Pressable
+                    onPress={handleCreate}
+                    disabled={creating || newName.trim() === ''}
+                    style={({ pressed }) => ({
+                      backgroundColor: creating || newName.trim() === '' ? activeTheme.colors.disabled : activeTheme.colors.coral,
+                      borderRadius: activeTheme.borderRadii.sm,
+                      paddingHorizontal: activeTheme.spacing[4],
+                      justifyContent: 'center',
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: creating || newName.trim() === '' }}
+                    accessibilityLabel="创建标签"
+                  >
+                    <Text variant="button" color="surface">
+                      {creating ? '…' : '创建'}
+                    </Text>
+                  </Pressable>
+                </View>
+                {createError !== null && (
+                  <Text variant="caption" color="destructive">{createError}</Text>
+                )}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+                  {PRESET_COLORS.map((color) => (
+                    <Pressable
+                      key={color}
+                      onPress={() => setNewColor(color)}
+                      accessibilityLabel={`选择颜色 ${color}`}
+                      accessibilityRole="radio"
+                      aria-checked={newColor === color}
+                      hitSlop={activeTheme.spacing[3]}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: activeTheme.borderRadii.full,
+                        backgroundColor: color,
+                        borderWidth: newColor === color ? 3 : 0,
+                        borderColor: activeTheme.colors.ink,
+                      }}
+                    />
+                  ))}
+                </View>
+              </Stack>
+            </View>
+          )}
 
           {/* Labels list */}
           {loading && (
@@ -297,7 +307,9 @@ export default function LabelsIndexRoute() {
 
           {!loading && error === null && labels.length === 0 && (
             <Text variant="bodySm" color="inkMuted">
-              还没有标签。使用上方表单创建标签，然后可以给事件和任务打标签。
+              {canManage
+                ? '还没有标签。使用上方表单创建标签，然后可以给事件和任务打标签。'
+                : '还没有标签。等家主或管理员创建后，就可以给事件和任务打标签。'}
             </Text>
           )}
 
@@ -312,7 +324,7 @@ export default function LabelsIndexRoute() {
                 borderColor: activeTheme.colors.border,
               }}
             >
-              {editingId === label.id ? (
+              {editingId === label.id && canManage ? (
                 <Stack gap={3}>
                   <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2], alignItems: 'center' }}>
                     <TextInput
@@ -374,47 +386,49 @@ export default function LabelsIndexRoute() {
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <LabelChip label={label} />
-                  <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
-                    <Pressable
-                      onPress={() => handleStartEdit(label)}
-                      disabled={confirmDeleteId === label.id}
-                      hitSlop={activeTheme.spacing[2]}
-                      style={({ pressed }) => ({
-                        padding: activeTheme.spacing[2],
-                        opacity: pressed ? 0.7 : 1,
-                      })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`编辑标签 ${label.name}`}
-                    >
-                      <Text variant="bodySm" color="coral">编辑</Text>
-                    </Pressable>
-                    {confirmDeleteId === label.id ? (
-                      <View style={{ flexDirection: 'row', gap: activeTheme.spacing[1], alignItems: 'center' }}>
-                        <Text variant="caption" color="destructive">确定删除？</Text>
-                        <Pressable onPress={handleDelete} disabled={deleting} accessibilityRole="button" accessibilityState={{ disabled: deleting, busy: deleting }} accessibilityLabel={`确认删除标签 ${label.name}`} hitSlop={activeTheme.spacing[4]} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
-                          <Text variant="caption" color="destructive" style={{ fontWeight: '600' as const }}>
-                            {deleting ? '删除中…' : '确认'}
-                          </Text>
-                        </Pressable>
-                        <Pressable onPress={() => setConfirmDeleteId(null)} accessibilityRole="button" accessibilityLabel="取消删除" hitSlop={activeTheme.spacing[4]} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
-                          <Text variant="caption" color="inkMuted">取消</Text>
-                        </Pressable>
-                      </View>
-                    ) : (
+                  {canManage && (
+                    <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
                       <Pressable
-                        onPress={() => setConfirmDeleteId(label.id)}
+                        onPress={() => handleStartEdit(label)}
+                        disabled={confirmDeleteId === label.id}
                         hitSlop={activeTheme.spacing[2]}
                         style={({ pressed }) => ({
                           padding: activeTheme.spacing[2],
                           opacity: pressed ? 0.7 : 1,
                         })}
                         accessibilityRole="button"
-                        accessibilityLabel={`删除标签 ${label.name}`}
+                        accessibilityLabel={`编辑标签 ${label.name}`}
                       >
-                        <Text variant="bodySm" color="destructive">删除</Text>
+                        <Text variant="bodySm" color="coral">编辑</Text>
                       </Pressable>
-                    )}
-                  </View>
+                      {confirmDeleteId === label.id ? (
+                        <View style={{ flexDirection: 'row', gap: activeTheme.spacing[1], alignItems: 'center' }}>
+                          <Text variant="caption" color="destructive">确定删除？</Text>
+                          <Pressable onPress={handleDelete} disabled={deleting} accessibilityRole="button" accessibilityState={{ disabled: deleting, busy: deleting }} accessibilityLabel={`确认删除标签 ${label.name}`} hitSlop={activeTheme.spacing[4]} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
+                            <Text variant="caption" color="destructive" style={{ fontWeight: '600' as const }}>
+                              {deleting ? '删除中…' : '确认'}
+                            </Text>
+                          </Pressable>
+                          <Pressable onPress={() => setConfirmDeleteId(null)} accessibilityRole="button" accessibilityLabel="取消删除" hitSlop={activeTheme.spacing[4]} style={{ paddingHorizontal: activeTheme.spacing[1] }}>
+                            <Text variant="caption" color="inkMuted">取消</Text>
+                          </Pressable>
+                        </View>
+                      ) : (
+                        <Pressable
+                          onPress={() => setConfirmDeleteId(label.id)}
+                          hitSlop={activeTheme.spacing[2]}
+                          style={({ pressed }) => ({
+                            padding: activeTheme.spacing[2],
+                            opacity: pressed ? 0.7 : 1,
+                          })}
+                          accessibilityRole="button"
+                          accessibilityLabel={`删除标签 ${label.name}`}
+                        >
+                          <Text variant="bodySm" color="destructive">删除</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  )}
                 </View>
               )}
             </View>

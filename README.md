@@ -195,7 +195,6 @@ pnpm exec playwright test -c playwright.ui.config.ts
 
 ### 已知缺口
 
-- 标签管理页未按角色隐藏创建 / 编辑 / 删除入口，MEMBER 操作时会被 API 拒绝并显示失败提示
 - 备份只有本机每日 `pg_dump`（见生产部署），**未配置阿里云快照**，系统盘损坏或实例丢失仍会丢掉全部数据
 - 没有测试覆盖 `dist/` 的运行时资源：测试从 `src/` 读密码字典，`build` 若漏掉复制步骤，只有线上旧邮箱接口会抛 ENOENT
 - 家庭、日历、任务三块尚未完成 Android 真机验收
