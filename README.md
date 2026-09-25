@@ -196,7 +196,7 @@ pnpm exec playwright test -c playwright.ui.config.ts
 ### 已知缺口
 
 - 标签管理页未按角色隐藏创建 / 编辑 / 删除入口，MEMBER 操作时会被 API 拒绝并显示失败提示
-- 生产环境已有真实账号与数据，但**没有任何备份**：数据库只存在于那台 ECS 的系统盘上，未配置快照，也没有 `pg_dump` 定时任务
+- 备份只有本机每日 `pg_dump`（见生产部署），**未配置阿里云快照**，系统盘损坏或实例丢失仍会丢掉全部数据
 - 没有测试覆盖 `dist/` 的运行时资源：测试从 `src/` 读密码字典，`build` 若漏掉复制步骤，只有线上旧邮箱接口会抛 ENOENT
 - 家庭、日历、任务三块尚未完成 Android 真机验收
 
@@ -212,6 +212,7 @@ pnpm exec playwright test -c playwright.ui.config.ts
 | 反向代理 | systemd `caddy` | 唯一对外监听 80 / 443 的进程 |
 | 数据库 | systemd `postgresql`（18.6） | 只监听 localhost，库与角色均为 `muchakucha` |
 | 证书续期 | `snap.certbot.renew.timer` | 每日两次 |
+| 备份 | systemd `muchakucha-backup.timer` | 每日 `pg_dump -Fc` 到 `/var/backups/muchakucha/`，保留 14 天 |
 | 代码 | `/opt/muchakucha` | git 仓库，当前为 main |
 | Web 静态产物 | `/var/www/muchakucha` | 本地 `expo export` 的结果 |
 | 密钥 | `/etc/muchakucha/api.env` | `0600 root`，由 systemd `EnvironmentFile` 读取，**不在仓库内** |
@@ -347,6 +348,27 @@ JWT_ACCESS_SECRET=<强随机密钥，≥32 字节，如 openssl rand -base64 48>
 ```
 
 生产环境只允许 `WEB_ORIGIN` 中的精确来源跨域访问。
+
+### 备份
+
+`muchakucha-backup.timer` 每日触发 `/usr/local/sbin/muchakucha-backup`：`pg_dump -Fc` 写到 `/var/backups/muchakucha/`，保留 14 天。
+
+脚本先写 `.partial` 再改名，中断的 dump 不会被误认成可用备份。timer 带 `Persistent=true`，机器错过了触发时刻会在下次启动时补跑。
+
+```bash
+systemctl start muchakucha-backup.service          # 立即备份一次
+systemctl list-timers muchakucha-backup.timer      # 确认还在排程
+```
+
+恢复演练（**不要往正式库里 restore**，先进临时库确认再说）：
+
+```bash
+sudo -u postgres createdb muchakucha_restore_drill
+sudo -u postgres pg_restore -d muchakucha_restore_drill --exit-on-error <dump>
+sudo -u postgres dropdb muchakucha_restore_drill
+```
+
+> 这些 dump **和数据库在同一块盘上**，只防误删和逻辑损坏，**挡不住系统盘损坏或实例丢失**。整盘级别的兜底要在阿里云控制台配自动快照策略，仓库里的任何脚本都做不到这件事。
 
 ### TRUST_PROXY
 
