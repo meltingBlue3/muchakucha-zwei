@@ -9,6 +9,7 @@ import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@
 import Calendar from 'lucide-react-native/icons/calendar';
 import Clock from 'lucide-react-native/icons/clock';
 import Hourglass from 'lucide-react-native/icons/hourglass';
+import Inbox from 'lucide-react-native/icons/inbox';
 import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
 
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
@@ -38,23 +39,31 @@ function isToday(iso: string | null): boolean {
 export function partitionTodayTasks(tasks: TaskResponseDto[]) {
   const overdueTasks: TaskResponseDto[] = [];
   const todayTasks: TaskResponseDto[] = [];
+  const unscheduledTasks: TaskResponseDto[] = [];
   const approachingTasks: TaskResponseDto[] = [];
   const otherUpcomingTasks: TaskResponseDto[] = [];
 
   for (const task of tasks) {
     if (task.status === 'completed' || task.status === 'cancelled') continue;
-    if (isOverdue(task.dueDate ?? null)) {
+    const dueDate = task.dueDate ?? null;
+    // A task with no due date is unscheduled, not due today. Folding the two
+    // together presented "no date" as "due today" and inflated the count the
+    // summary reports, so the absence of a date is decided first and never
+    // relies on how the date helpers treat null.
+    if (dueDate === null || dueDate === '') {
+      unscheduledTasks.push(task);
+    } else if (isOverdue(dueDate)) {
       overdueTasks.push(task);
-    } else if (isToday(task.dueDate ?? null) || task.dueDate === null || task.dueDate === '') {
+    } else if (isToday(dueDate)) {
       todayTasks.push(task);
-    } else if (isApproachingDeadline(task.dueDate ?? null, 7)) {
+    } else if (isApproachingDeadline(dueDate, 7)) {
       approachingTasks.push(task);
     } else {
       otherUpcomingTasks.push(task);
     }
   }
 
-  return { overdueTasks, todayTasks, approachingTasks, otherUpcomingTasks };
+  return { overdueTasks, todayTasks, unscheduledTasks, approachingTasks, otherUpcomingTasks };
 }
 
 export function nextTaskStatus(status: string): 'pending' | 'in_progress' | 'completed' | null {
@@ -100,7 +109,7 @@ export default function TodayRoute() {
   }, [members]);
 
   // Split tasks into groups
-  const { overdueTasks, todayTasks, approachingTasks, otherUpcomingTasks } = useMemo(
+  const { overdueTasks, todayTasks, unscheduledTasks, approachingTasks, otherUpcomingTasks } = useMemo(
     () => partitionTodayTasks(tasks),
     [tasks],
   );
@@ -366,6 +375,36 @@ export default function TodayRoute() {
               </View>
             )}
 
+            {/* Not urgent, but never folded away: collapsing these would hide
+                work the household has actually recorded. */}
+            {unscheduledTasks.length > 0 && (
+              <View>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: activeTheme.spacing[2],
+                  marginBottom: activeTheme.spacing[2],
+                }}>
+                  <Inbox size={16} color={activeTheme.colors.inkMuted} />
+                  <Text accessibilityRole="header" aria-level={2} variant="section">
+                  待安排 ({unscheduledTasks.length})
+                  </Text>
+                </View>
+                <Stack gap={2}>
+                  {unscheduledTasks.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
+                      onPress={handleTaskPress}
+                      onStatusChange={handleTaskStatusChange}
+                      statusChanging={statusChangingTaskId === task.id}
+                    />
+                  ))}
+                </Stack>
+              </View>
+            )}
+
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ expanded: showUpcoming }}
@@ -434,7 +473,7 @@ export default function TodayRoute() {
             </> : null}
 
             {/* Empty state */}
-            {events.length === 0 && overdueTasks.length === 0 && todayTasks.length === 0 && (
+            {events.length === 0 && overdueTasks.length === 0 && todayTasks.length === 0 && unscheduledTasks.length === 0 && (
               <View style={{
                 alignItems: 'center',
                 paddingVertical: activeTheme.spacing[8],

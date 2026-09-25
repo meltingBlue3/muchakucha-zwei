@@ -61,6 +61,7 @@ describe('cancelled task status', () => {
 
     expect(partitions.todayTasks).toHaveLength(0);
     expect(partitions.overdueTasks).toHaveLength(0);
+    expect(partitions.unscheduledTasks).toHaveLength(0);
     expect(partitions.approachingTasks).toHaveLength(0);
     expect(partitions.otherUpcomingTasks).toHaveLength(0);
   });
@@ -97,5 +98,52 @@ describe('cancelled task status', () => {
     expect(toggle.props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(toggle);
     expect(onStatusChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('unscheduled tasks are separated from today', () => {
+  test.each([
+    ['null', null],
+    ['an empty string', ''],
+  ])('a task whose due date is %s is unscheduled, not due today', (_label, dueDate) => {
+    const item = task({ id: 'no-date', title: '修水龙头', dueDate });
+
+    const partitions = partitionTodayTasks([item]);
+
+    expect(partitions.unscheduledTasks).toEqual([item]);
+    expect(partitions.todayTasks).toHaveLength(0);
+    expect(partitions.overdueTasks).toHaveLength(0);
+    expect(partitions.approachingTasks).toHaveLength(0);
+    expect(partitions.otherUpcomingTasks).toHaveLength(0);
+  });
+
+  test('a task actually due today stays in 今日待办', () => {
+    const item = task({ id: 'today', dueDate: dateAtOffset(0) });
+
+    const partitions = partitionTodayTasks([item]);
+
+    expect(partitions.todayTasks).toEqual([item]);
+    expect(partitions.unscheduledTasks).toHaveLength(0);
+  });
+
+  test('the today count the summary reports excludes undated work', () => {
+    const dueToday = task({ id: 'today', dueDate: dateAtOffset(0) });
+    const undated = [
+      task({ id: 'undated-1', dueDate: null }),
+      task({ id: 'undated-2', dueDate: null }),
+    ];
+
+    const partitions = partitionTodayTasks([dueToday, ...undated]);
+
+    // TodaySummary is handed todayTasks.length, so undated work leaking in here
+    // is what made the headline number untrustworthy.
+    expect(partitions.todayTasks).toHaveLength(1);
+    expect(partitions.unscheduledTasks).toHaveLength(2);
+  });
+
+  test('an undated task is never reported as overdue', () => {
+    const partitions = partitionTodayTasks([task({ id: 'no-date', dueDate: null })]);
+
+    expect(partitions.overdueTasks).toHaveLength(0);
   });
 });
