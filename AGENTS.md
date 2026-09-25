@@ -28,6 +28,7 @@ Open the file, route, endpoint, or error the request names, plus its direct depe
 | Choosing which checks to run, writing or repairing a test, reporting evidence | [docs/agent/testing.md](docs/agent/testing.md) |
 | Starting a server, database, or mail capture; port selection; anything that writes to a database | [docs/agent/environment.md](docs/agent/environment.md) |
 | Ownership or entry point of a module is unclear | [docs/agent/context.md](docs/agent/context.md) |
+| Deploying, the production server, TLS certificate, or reverse proxy | [README.md](README.md) — 生产部署 |
 
 A request spanning several rows reads only those rows. Links inside a playbook follow the same rule: take one when its own trigger matches.
 
@@ -42,4 +43,4 @@ A request spanning several rows reads only those rows. Links inside a playbook f
 
 - Integration tests and E2E truncate their database. Keep them on a disposable loopback database whose name carries a standalone `test` segment; `apps/api/test/reset-database.ts` enforces this, and that guard stays as strict as it is.
 - The human may already be running `pnpm dev` on ports 3000 and 8081. Start your own services on free ports, and stop only processes this task started.
-- Product data, `.env` files, and deployment targets stay untouched unless the current request names the exact change.
+- Product data, `.env` files, and deployment targets stay untouched unless the current request names the exact change. A live server at `47.117.148.16` serves real family data and holds its secrets outside the repository, in `/etc/muchakucha/api.env`; it is not a scratch host.

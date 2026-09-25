@@ -196,26 +196,38 @@ pnpm exec playwright test -c playwright.ui.config.ts
 ### 已知缺口
 
 - 标签管理页未按角色隐藏创建 / 编辑 / 删除入口，MEMBER 操作时会被 API 拒绝并显示失败提示
-- 生产环境尚未部署：证书签发链路已用 certbot staging dry-run 验证通过，但正式证书、反向代理、数据库与 API 进程都还没在服务器上落地
+- 生产环境还没有任何账号，也未经真实使用验证；`tsc` 不复制 `auth/data` 密码字典，部署脚本必须手动补这一步（见生产部署）
 - 家庭、日历、任务三块尚未完成 Android 真机验收
 
 ## 生产部署
 
-### API
+已部署在 `47.117.148.16`（阿里云 ECS，cn-shanghai，Ubuntu 24.04，`ecs.e-c1m1.large` 2 vCPU / 2 GiB）。
 
-本项目部署在固定 IP 的服务器上，不使用自有域名。生产环境**必须**走 HTTPS：`NODE_ENV=production` 时 `WEB_ORIGIN` 只接受 HTTPS 来源，Web 端的刷新令牌 Cookie 带 `__Secure-` 前缀且恒为 `Secure`，iOS 也默认拒绝明文 HTTP。因此 API 前置一个负责 TLS 的反向代理，由它对外提供 HTTPS，内部转发到本机 3000 端口。
+**单一来源架构**：Caddy 在 443 终止 TLS，`/api/*` 转发到本机 3000 的 API，其余路径交给 Expo web 静态导出。Web 端与 API 同源，因此不涉及 CORS，`__Secure-` 刷新令牌 Cookie 也成立。
 
-#### 证书
+| 组件 | 单元 / 位置 | 说明 |
+|------|------|------|
+| API | systemd `muchakucha-api` | 以 `muchakucha` 系统用户运行 `node dist/main.js`，只监听 `127.0.0.1:3000` |
+| 反向代理 | systemd `caddy` | 唯一对外监听 80 / 443 的进程 |
+| 数据库 | systemd `postgresql`（18.6） | 只监听 localhost，库与角色均为 `muchakucha` |
+| 证书续期 | `snap.certbot.renew.timer` | 每日两次 |
+| 代码 | `/opt/muchakucha` | git 仓库，当前为 main |
+| Web 静态产物 | `/var/www/muchakucha` | 本地 `expo export` 的结果 |
+| 密钥 | `/etc/muchakucha/api.env` | `0600 root`，由 systemd `EnvironmentFile` 读取，**不在仓库内** |
+
+对外只开放 22 / 80 / 443。PostgreSQL 与 API 都绑定 localhost，无法从公网直达。
+
+### 证书
 
 不使用域名。Let's Encrypt 自 2026-01-15 起[正式签发 IP 地址证书](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability)，直接为服务器公网 IP 取得受信任证书。
 
-`--ip-address` 需要 certbot ≥ 5.3，**Ubuntu 24.04 的 apt 源只有 2.9.0，装了也没有这个参数**，必须用 snap：
+`--ip-address` 需要 certbot ≥ 5.3，**Ubuntu 24.04 的 apt 源只有 2.9.0，装上也没有这个参数**，必须用 snap（附带 `snap.certbot.renew.timer`，无需自建定时任务）：
 
 ```bash
-snap install --classic certbot   # 当前为 5.8.0
+snap install --classic certbot
 ```
 
-首次签发时 Caddy 还没起来，用 `--standalone` 让 certbot 自己临时占用 80 端口：
+首签时 Caddy 尚未占用 80 端口，用 `--standalone`：
 
 ```bash
 certbot certonly --standalone \
@@ -223,33 +235,130 @@ certbot certonly --standalone \
   --ip-address 47.117.148.16
 ```
 
-由 Caddy 终止 TLS 并转发到本机 3000 端口：
+> **IP 证书有效期仅 160 小时（约 6.7 天）**，远短于域名证书的 90 天。续期一旦停摆，不到一周就会中断服务。
+
+#### 续期：必须改成 webroot
+
+首签留下的续期配置是 `authenticator = standalone`，而 Caddy 之后会一直占着 80 端口，**照原样续期必然失败**。改 `/etc/letsencrypt/renewal/47.117.148.16.conf`：
+
+```ini
+authenticator = webroot
+
+[[webroot_map]]
+47.117.148.16 = /var/www/html
+```
+
+质询目录由 Caddy 的 80 端口站点对外提供，见下面的 Caddyfile。
+
+#### 续期后让 Caddy 拿到新证书
+
+certbot 把证书写成 root 独占，且**每次续期都会重置权限**，而 Caddy 以 `caddy` 用户运行，读不到私钥。`/etc/letsencrypt/renewal-hooks/deploy/10-caddy.sh` 一并解决权限与重载：
+
+```sh
+#!/bin/sh
+set -e
+SRC=/etc/letsencrypt/live/47.117.148.16
+install -d -m 750 -o root -g caddy /etc/caddy/tls
+install -m 640 -o root -g caddy "$SRC/fullchain.pem" /etc/caddy/tls/fullchain.pem
+install -m 640 -o root -g caddy "$SRC/privkey.pem"   /etc/caddy/tls/privkey.pem
+systemctl reload caddy
+```
+
+用 `certbot renew --dry-run` 实跑一次确认整条链路。
+
+### Caddyfile
 
 ```caddyfile
-# /etc/caddy/Caddyfile
-https://47.117.148.16 {
-	tls /etc/letsencrypt/live/47.117.148.16/fullchain.pem /etc/letsencrypt/live/47.117.148.16/privkey.pem
-	reverse_proxy 127.0.0.1:3000
+{
+	auto_https off
 }
 
-# 供 certbot 续期使用的 HTTP-01 质询目录
-http://47.117.148.16 {
-	root * /var/www/html
-	file_server
+:80 {
+	handle /.well-known/acme-challenge/* {
+		root * /var/www/html
+		file_server
+	}
+	handle {
+		redir https://47.117.148.16{uri} permanent
+	}
+}
+
+:443 {
+	tls /etc/caddy/tls/fullchain.pem /etc/caddy/tls/privkey.pem
+
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		root * /var/www/muchakucha
+		try_files {path} /index.html
+		file_server
+	}
 }
 ```
 
-> **IP 证书有效期仅 160 小时（约 6.7 天）**，远短于域名证书的 90 天。续期一旦停摆，不到一周就会中断服务；续期成功后还需要让 Caddy 重载证书。
+> 站点必须按**端口**（`:443`）而不是按主机（`https://47.117.148.16`）声明。SNI 不允许填 IP 字面量（RFC 6066），所以直连 IP 的客户端根本不发 SNI，按主机声明的站点永远匹配不上，握手会以 `tlsv1 alert internal error` 失败。
 
-Caddy 接管 80 端口后，续期改走 `--webroot`，质询目录即上面 Caddy 暴露的 `/var/www/html`。
+Expo web 导出是单页应用，只有一个 `index.html`，所以需要 `try_files` 兜底，否则刷新深层路由会 404。`encode` 让 2 MB 的 JS bundle 压到约 500 KB。
 
-snap 安装会自带 `snap.certbot.renew.timer`（每日两次），无需自建定时任务。用 `systemctl list-timers | grep certbot` 确认它在跑，并用 `certbot renew --dry-run` 实跑一次。
+### 部署与更新
 
-已在本机验证：安全组放行 80 / 443，`certbot certonly --dry-run --standalone --preferred-profile shortlived --ip-address 47.117.148.16` 对 Let's Encrypt staging 通过，说明境外校验流量能到达该实例。**正式证书尚未签发，Caddy 与 API 尚未部署。**
+服务器只跑 API，不在上面构建 Web，也不在上面装客户端依赖：
 
-#### 局域网联调
+```bash
+pnpm install --frozen-lockfile --filter api...
+pnpm --filter api prisma:generate
+pnpm --filter api exec prisma migrate deploy
+pnpm --filter api exec tsc -p tsconfig.build.json
 
-生产环境就绪前，用 `preview` profile 直连局域网内的开发机：
+# tsc 不会复制运行时读取的密码字典，漏掉会让旧邮箱注册 / 改密接口抛 ENOENT
+cp -r apps/api/src/modules/auth/data apps/api/dist/modules/auth/data
+
+systemctl restart muchakucha-api
+```
+
+Web 静态产物在开发机上构建后上传（服务器只有 2 GiB，就地构建会被 OOM 杀掉）：
+
+```bash
+EXPO_PUBLIC_API_ORIGIN=https://47.117.148.16 pnpm --filter client exec expo export --platform web
+rsync -az --delete apps/client/dist/ <server>:/var/www/muchakucha/
+```
+
+大陆服务器上有两个网络坑：
+
+- **GitHub HTTPS 会被重置**（`GnuTLS recv error (-110)`），克隆不下来。用能连 GitHub 的机器 `git bundle create` 后 scp 过去，再从 bundle 克隆。
+- **`registry.npmjs.org` 慢到不可用**（约 160 KB/s）。`/root/.npmrc` 写 `registry=https://registry.npmmirror.com`；`--frozen-lockfile` 仍按 lockfile 的哈希校验每个包，镜像不影响完整性。
+
+服务器初始 `vm.swappiness = 0`（阿里云镜像默认），加了 swap 也不会真用上，需要一并调高，否则构建照样 OOM。
+
+### 环境变量
+
+`/etc/muchakucha/api.env`（`0600`，由 systemd 读取，不要提交进仓库）：
+
+```bash
+NODE_ENV=production
+PORT=3000
+HOST=127.0.0.1                      # 只监听本机，强制流量经过代理
+TRUST_PROXY=127.0.0.1               # 见下文，缺失会让限流失效
+WEB_ORIGIN=https://47.117.148.16    # 必填，必须是 HTTPS 精确来源
+DATABASE_URL=postgresql://muchakucha:<密码>@127.0.0.1:5432/muchakucha?schema=public
+JWT_ACCESS_SECRET=<强随机密钥，≥32 字节，如 openssl rand -base64 48>
+```
+
+生产环境只允许 `WEB_ORIGIN` 中的精确来源跨域访问。
+
+### TRUST_PROXY
+
+限流按客户端 IP 计数。经过反向代理后，每个请求的来源地址都是代理自身，未配置 `TRUST_PROXY` 时全体用户会共用同一份配额——全局 60 次/分钟、注册与密码重置 5 次/小时都会变成全站共享，一个人用完其他人全被拒。
+
+`TRUST_PROXY` 填写**代理自身**的地址，支持逗号分隔的 IP 或 CIDR。代理与 API 同机时填 `127.0.0.1`。该项只接受明确地址：`true`、`*` 和域名都会导致启动失败，因为无条件信任 `X-Forwarded-For` 会让任何调用方伪造来源、绕过限流。不经过代理直连时不要设置它。
+
+### 局域网联调
+
+开发阶段用 `preview` profile 直连局域网内的开发机：
 
 ```bash
 export HOST=0.0.0.0   # 开发环境默认只监听 127.0.0.1，手机无法连接
@@ -258,31 +367,7 @@ pnpm dev
 
 `apps/client/eas.json` 的 preview profile 指向 `http://192.168.1.7:3000`，换成开发机实际的局域网地址即可。此阶段走明文 HTTP：`NODE_ENV` 非 production 时不强制 HTTPS 来源，Android 已开启 `usesCleartextTraffic`。**iOS 无 ATS 例外，连不上明文地址**，局域网联调只能用 Android 或 Web。
 
-#### 启动 API
-
-```bash
-export NODE_ENV=production
-export DATABASE_URL='postgresql://...'
-export JWT_ACCESS_SECRET='<强随机密钥，≥32 字节，如 openssl rand -base64 48>'
-export WEB_ORIGIN='https://47.117.148.16'  # 必填，必须是 HTTPS 精确来源
-export HOST=127.0.0.1                      # 只监听本机，强制流量经过代理
-export TRUST_PROXY=127.0.0.1               # 见下文，缺失会让限流失效
-
-pnpm install --frozen-lockfile
-pnpm --filter api prisma:generate
-pnpm --filter api exec prisma migrate deploy
-pnpm --filter api dev    # 编译到 dist/ 并运行 node dist/main.js
-```
-
-生产环境只允许 `WEB_ORIGIN` 中的精确来源跨域访问。
-
-当前服务器为 `ecs.e-c1m1.large`（2 vCPU / 2 GiB，未配置 swap）。在这台机器上直接编译容易因内存不足被 OOM 杀掉，先加 swap 或改为本地构建后上传 `dist/`。
-
-#### TRUST_PROXY
-
-限流按客户端 IP 计数。经过反向代理后，每个请求的来源地址都是代理自身，未配置 `TRUST_PROXY` 时全体用户会共用同一份配额——全局 60 次/分钟、注册与密码重置 5 次/小时都会变成全站共享，一个人用完其他人全被拒。
-
-`TRUST_PROXY` 填写**代理自身**的地址，支持逗号分隔的 IP 或 CIDR。代理与 API 同机时填 `127.0.0.1`。该项只接受明确地址：`true`、`*` 和域名都会导致启动失败，因为无条件信任 `X-Forwarded-For` 会让任何调用方伪造来源、绕过限流。不经过代理直连时不要设置它。
+### 邮件（可选）
 
 用户名注册和家庭邀请不需要邮件服务。只有需要旧邮箱 API 时才配置以下变量（生产环境设置了 `SMTP_HOST` 后，其余项均为必填）：
 
@@ -302,7 +387,7 @@ export SMTP_FROM='noreply@example.com'
 
 使用 EAS Build（`apps/client/eas.json`）：`development`（开发客户端）、`preview`（内部分发）、`production`。构建时通过各 profile 的 `EXPO_PUBLIC_API_ORIGIN` 指定 API 地址。Android 包名与 iOS Bundle ID 均为 `app.muchakucha.zwei`。
 
-`production` 指向 `https://47.117.148.16`，证书就绪后才能使用；`preview` 直连局域网开发机的明文地址，仅 Android 与 Web 可用。
+`production` 指向 `https://47.117.148.16`，证书已就绪，可直接构建；`preview` 直连局域网开发机的明文地址，仅 Android 与 Web 可用。
 
 ```bash
 cd apps/client
