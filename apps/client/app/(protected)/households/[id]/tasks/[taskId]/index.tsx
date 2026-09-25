@@ -6,13 +6,15 @@ import type { GetHouseholdMemberDto, TaskResponseDto } from '@muchakucha/api-cli
 import Ban from 'lucide-react-native/icons/ban';
 import Pencil from 'lucide-react-native/icons/pencil';
 
+import { ApiClientError } from '@muchakucha/api-client';
+
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
 import { formatDueDate, isOverdue, priorityLabel, statusLabel } from '../../../../../../src/features/tasks/task-utils';
 import { AppShell } from '../../../../../../src/ui/household-components';
-import { Heading, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Button, Heading, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
 function currentTimeZone(fallback: string): string {
@@ -63,6 +65,39 @@ export default function TaskDetailRoute() {
       void fetchTask();
     }, [fetchTask]),
   );
+
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  // 进行中 lives here rather than on the card: it is a deliberate stage, not a
+  // step on the way to done, and putting it in the list's completion control
+  // made finishing a task take two taps.
+  const writeStatus = useCallback(async (next: 'pending' | 'in_progress' | 'completed') => {
+    if (id === undefined || taskId === undefined || task === null) return;
+    setStatusBusy(true);
+    setStatusError(null);
+    try {
+      const token = await sessionTransport.getAccessToken();
+      if (token === null) {
+        setStatusError('登录已过期，请重新登录。');
+        return;
+      }
+      await sessionApiClient.updateTask(token, id, taskId, {
+        title: task.title,
+        status: next,
+        priority: task.priority,
+      });
+      await fetchTask();
+    } catch (caught: unknown) {
+      setStatusError(
+        caught instanceof ApiClientError && caught.status === 403
+          ? '你没有权限修改这个任务。'
+          : '状态没有更新成功，请重试。',
+      );
+    } finally {
+      setStatusBusy(false);
+    }
+  }, [id, taskId, task, fetchTask]);
 
   const handleEdit = useCallback(() => {
     void router.push(`/households/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/edit`);
@@ -167,6 +202,50 @@ export default function TaskDetailRoute() {
             <Text variant="caption" color="destructive">已逾期</Text>
           )}
         </View>
+
+        {!cancelled && (
+          <Stack gap={2}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+              {task.status === 'completed' ? (
+                <Button
+                  label="标记为未完成"
+                  tone="secondary"
+                  accessibilityLabel="标记为未完成"
+                  disabled={statusBusy}
+                  onPress={() => { void writeStatus('pending'); }}
+                />
+              ) : (
+                <Button
+                  label="标记为完成"
+                  accessibilityLabel="标记为完成"
+                  disabled={statusBusy}
+                  onPress={() => { void writeStatus('completed'); }}
+                />
+              )}
+              {task.status !== 'in_progress' && task.status !== 'completed' && (
+                <Button
+                  label="标记为进行中"
+                  tone="secondary"
+                  accessibilityLabel="标记为进行中"
+                  disabled={statusBusy}
+                  onPress={() => { void writeStatus('in_progress'); }}
+                />
+              )}
+              {task.status === 'in_progress' && (
+                <Button
+                  label="退回待办"
+                  tone="secondary"
+                  accessibilityLabel="退回待办"
+                  disabled={statusBusy}
+                  onPress={() => { void writeStatus('pending'); }}
+                />
+              )}
+            </View>
+            {statusError !== null && (
+              <Text variant="caption" color="destructive" accessibilityRole="alert" accessibilityLiveRegion="polite">{statusError}</Text>
+            )}
+          </Stack>
+        )}
 
         <Stack gap={1}>
           <Text variant="label" color="inkMuted">截止日期</Text>

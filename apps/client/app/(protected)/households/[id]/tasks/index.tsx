@@ -5,13 +5,13 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
-import { ApiClientError } from '@muchakucha/api-client';
 import type { TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
 import ListFilter from 'lucide-react-native/icons/list-filter';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
+import { useTaskCompletion } from '../../../../../src/features/tasks/use-task-completion';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import {
   applyRecurringFilter,
@@ -70,7 +70,6 @@ export default function TaskListRoute() {
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useWorkspaceState<FilterKey>(`view:${id}:tasks:filter`, 'all');
   const [priorityFilter, setPriorityFilter] = useWorkspaceState<PriorityFilterKey>(`view:${id}:tasks:priorityFilter`, 'all');
@@ -78,7 +77,6 @@ export default function TaskListRoute() {
   const [labelFilter, setLabelFilter] = useWorkspaceState<string>(`view:${id}:tasks:labelFilter`, 'all');
   const [recurringFilter, setRecurringFilter] = useWorkspaceState<RecurringFilterKey>(`view:${id}:tasks:recurringFilter`, 'all');
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [statusChangingTaskId, setStatusChangingTaskId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useWorkspaceState(`view:${id}:tasks:filtersOpen`, false);
 
   const householdId = id ?? currentHouseholdId;
@@ -191,38 +189,7 @@ export default function TaskListRoute() {
     [router, householdId],
   );
 
-  const handleTaskStatusChange = useCallback(async (task: TaskResponseDto) => {
-    if (householdId === undefined || householdId === '') return;
-    const nextStatus =
-      task.status === 'pending' ? 'in_progress'
-        : task.status === 'in_progress' ? 'completed'
-        : 'pending';
-    setActionError(null);
-    setStatusChangingTaskId(task.id);
-    try {
-      const token = await sessionTransport.getAccessToken();
-      if (token === null) { setActionError('登录已过期，请重新登录。'); return; }
-      await sessionApiClient.updateTask(token, householdId, task.id, {
-        title: task.title,
-        status: nextStatus,
-        priority: task.priority,
-      });
-      void fetchData();
-    } catch (caught: unknown) {
-      // WR-14: see today.tsx's handleTaskStatusChange for the full
-      // rationale — a silently-swallowed failure and a genuine success
-      // looked identical, most confusingly for a recurring occurrence
-      // another member could have cancelled or split away moments earlier.
-      setActionError(
-        caught instanceof ApiClientError && caught.status === 403
-          ? '你没有权限修改这个任务。'
-          : '状态没有更新成功，请重试。',
-      );
-      void fetchData();
-    } finally {
-      setStatusChangingTaskId(null);
-    }
-  }, [householdId, fetchData]);
+  const completion = useTaskCompletion(householdId, fetchData);
 
   const handleCreateTask = useCallback(() => {
     void router.push(`/households/${encodeURIComponent(householdId!)}/tasks/new`);
@@ -555,7 +522,6 @@ export default function TaskListRoute() {
         )}
 
         {/* Error */}
-        {actionError !== null ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" color="destructive">{actionError}</Text> : null}
         {error !== null && (
           <View style={{
             backgroundColor: activeTheme.colors.destructiveSoft,
@@ -604,8 +570,7 @@ export default function TaskListRoute() {
             task={task}
             assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
             onPress={handleTaskPress}
-            onStatusChange={handleTaskStatusChange}
-            statusChanging={statusChangingTaskId === task.id}
+            {...completion.cardProps(task)}
           />
         ))}
       </Stack>

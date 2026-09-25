@@ -60,8 +60,10 @@ test('deep links use the route household and preserve operation failures', async
   const requests = await setup(page);
   await page.goto(`/households/${a}/today`);
   await expect(page.getByRole('button', { name: '当前家庭：家庭 A，切换家庭' })).toBeVisible();
-  await page.getByRole('button', { name: '开始任务', exact: true }).click();
+  await page.getByRole('button', { name: '完成任务', exact: true }).click();
+  // The refusal is reported on the card that was tapped, not in a page banner.
   await expect(page.getByText('你没有权限修改这个任务。')).toBeVisible();
+  await expect(page.getByRole('button', { name: '重试：检查任务' })).toBeVisible();
   await expect(page.getByText('检查任务', { exact: true })).toBeVisible();
   expect(requests.some((r) => r.method === 'PUT' && r.path === `/api/v1/households/${a}/tasks/${taskId}`)).toBe(true);
 });

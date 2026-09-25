@@ -1,7 +1,8 @@
 import type { TaskResponseDto } from '@muchakucha/api-client';
 import { fireEvent, render } from '@testing-library/react-native';
 
-import { partitionTodayTasks, nextTaskStatus } from '../../../../app/(protected)/households/[id]/today';
+import { partitionTodayTasks } from '../../../../app/(protected)/households/[id]/today';
+import { completionToggleTarget, completionActionLabel } from '../task-completion';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { TaskCard } from '../task-card';
 
@@ -38,8 +39,8 @@ describe('cancelled task status', () => {
     const onPress = jest.fn();
     const onStatusChange = jest.fn();
     const item = task({ status: 'pending' });
-    const view = await render(<MuchakuchaThemeProvider><TaskCard task={item} onPress={onPress} onStatusChange={onStatusChange} /></MuchakuchaThemeProvider>);
-    await fireEvent.press(view.getByRole('button', { name: '开始任务' }));
+    const view = await render(<MuchakuchaThemeProvider><TaskCard task={item} onPress={onPress} onToggleComplete={onStatusChange} /></MuchakuchaThemeProvider>);
+    await fireEvent.press(view.getByRole('button', { name: '完成任务' }));
     expect(onStatusChange).toHaveBeenCalledWith(item);
     expect(onPress).not.toHaveBeenCalled();
     await fireEvent.press(view.getByRole('button', { name: '任务：重复家务，重复' }));
@@ -73,9 +74,9 @@ describe('cancelled task status', () => {
     expect(partitionTodayTasks([pending, cancelled]).todayTasks).toEqual([pending]);
   });
 
-  test('makes the status cycle a no-op for cancelled tasks', () => {
-    expect(nextTaskStatus('cancelled')).toBeNull();
-    expect(nextTaskStatus('pending')).toBe('in_progress');
+  test('offers no completion toggle for a cancelled occurrence', () => {
+    expect(completionToggleTarget('cancelled')).toBeNull();
+    expect(completionActionLabel('cancelled')).toBe('这次重复已取消');
   });
 
   test('renders cancellation text and strikethrough with a disabled status control', async () => {
@@ -84,7 +85,7 @@ describe('cancelled task status', () => {
       <MuchakuchaThemeProvider>
         <TaskCard
           onPress={jest.fn()}
-          onStatusChange={onStatusChange}
+          onToggleComplete={onStatusChange}
           task={task({ status: 'cancelled' })}
         />
       </MuchakuchaThemeProvider>,

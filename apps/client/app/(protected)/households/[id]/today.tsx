@@ -4,7 +4,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
-import { ApiClientError } from '@muchakucha/api-client';
 import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import Calendar from 'lucide-react-native/icons/calendar';
 import Clock from 'lucide-react-native/icons/clock';
@@ -13,6 +12,7 @@ import Inbox from 'lucide-react-native/icons/inbox';
 import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
 
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
+import { useTaskCompletion } from '../../../../src/features/tasks/use-task-completion';
 import { useHouseholdContext } from '../../../../src/features/households/household-context';
 import { EventCard } from '../../../../src/features/events/event-card';
 import { TaskCard } from '../../../../src/features/tasks/task-card';
@@ -36,7 +36,12 @@ function isToday(iso: string | null): boolean {
   return toDateIso(new Date(iso)) === todayIso();
 }
 
-export function partitionTodayTasks(tasks: TaskResponseDto[]) {
+/**
+ * `retainCompletedId` keeps one just-completed task in its bucket so the undo
+ * offered on its card survives the refetch that follows the write. Without it
+ * the card vanishes the instant it is completed, taking the undo with it.
+ */
+export function partitionTodayTasks(tasks: TaskResponseDto[], retainCompletedId: string | null = null) {
   const overdueTasks: TaskResponseDto[] = [];
   const todayTasks: TaskResponseDto[] = [];
   const unscheduledTasks: TaskResponseDto[] = [];
@@ -44,7 +49,8 @@ export function partitionTodayTasks(tasks: TaskResponseDto[]) {
   const otherUpcomingTasks: TaskResponseDto[] = [];
 
   for (const task of tasks) {
-    if (task.status === 'completed' || task.status === 'cancelled') continue;
+    const retained = task.id === retainCompletedId && task.status === 'completed';
+    if (!retained && (task.status === 'completed' || task.status === 'cancelled')) continue;
     const dueDate = task.dueDate ?? null;
     // A task with no due date is unscheduled, not due today. Folding the two
     // together presented "no date" as "due today" and inflated the count the
@@ -66,13 +72,6 @@ export function partitionTodayTasks(tasks: TaskResponseDto[]) {
   return { overdueTasks, todayTasks, unscheduledTasks, approachingTasks, otherUpcomingTasks };
 }
 
-export function nextTaskStatus(status: string): 'pending' | 'in_progress' | 'completed' | null {
-  if (status === 'cancelled') return null;
-  if (status === 'pending') return 'in_progress';
-  if (status === 'in_progress') return 'completed';
-  return 'pending';
-}
-
 export default function TodayRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -91,11 +90,9 @@ export default function TodayRoute() {
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [showUpcoming, setShowUpcoming] = useState(false);
-  const [statusChangingTaskId, setStatusChangingTaskId] = useState<string | null>(null);
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
@@ -107,12 +104,6 @@ export default function TodayRoute() {
     }
     return map;
   }, [members]);
-
-  // Split tasks into groups
-  const { overdueTasks, todayTasks, unscheduledTasks, approachingTasks, otherUpcomingTasks } = useMemo(
-    () => partitionTodayTasks(tasks),
-    [tasks],
-  );
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === '') return;
@@ -141,6 +132,14 @@ export default function TodayRoute() {
       setLoading(false);
     }
   }, [householdId]);
+
+  const completion = useTaskCompletion(householdId, fetchData);
+
+  // Split tasks into groups
+  const { overdueTasks, todayTasks, unscheduledTasks, approachingTasks, otherUpcomingTasks } = useMemo(
+    () => partitionTodayTasks(tasks, completion.undoTaskId),
+    [tasks, completion.undoTaskId],
+  );
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -175,40 +174,6 @@ export default function TodayRoute() {
     [router, householdId],
   );
 
-  const handleTaskStatusChange = useCallback(async (task: TaskResponseDto) => {
-    if (householdId === undefined || householdId === '') return;
-    const nextStatus = nextTaskStatus(task.status);
-    if (nextStatus === null) return;
-    setActionError(null);
-    setStatusChangingTaskId(task.id);
-    try {
-      const token = await sessionTransport.getAccessToken();
-      if (token === null) { setActionError('登录已过期，请重新登录。'); return; }
-      await sessionApiClient.updateTask(token, householdId, task.id, {
-        title: task.title,
-        status: nextStatus,
-        priority: task.priority,
-      });
-      void fetchData();
-    } catch (caught: unknown) {
-      // WR-14: a 403 (another member's task), a 404 (the occurrence was
-      // cancelled or split away by someone else), or an offline device all
-      // used to look identical — the spinner stops, the card re-renders
-      // unchanged, and the tap silently appears not to have registered.
-      // That ambiguity matters more for a recurring occurrence, which can
-      // legitimately be cancelled or split away by another household
-      // member seconds earlier. Surface it and refetch so the card
-      // reflects authoritative state either way.
-      setActionError(
-        caught instanceof ApiClientError && caught.status === 403
-          ? '你没有权限修改这个任务。'
-          : '状态没有更新成功，请重试。',
-      );
-      void fetchData();
-    } finally {
-      setStatusChangingTaskId(null);
-    }
-  }, [householdId, fetchData]);
 
   const dateLabel = useMemo(() => {
     const now = new Date();
@@ -270,7 +235,6 @@ export default function TodayRoute() {
         )}
 
         {/* Error */}
-        {actionError !== null ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" color="destructive">{actionError}</Text> : null}
         {error !== null && (
           <View style={{
             backgroundColor: activeTheme.colors.destructiveSoft,
@@ -312,8 +276,7 @@ export default function TodayRoute() {
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
                       onPress={handleTaskPress}
-                      onStatusChange={handleTaskStatusChange}
-                      statusChanging={statusChangingTaskId === task.id}
+                      {...completion.cardProps(task)}
                     />
                   ))}
                 </Stack>
@@ -367,8 +330,7 @@ export default function TodayRoute() {
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
                       onPress={handleTaskPress}
-                      onStatusChange={handleTaskStatusChange}
-                      statusChanging={statusChangingTaskId === task.id}
+                      {...completion.cardProps(task)}
                     />
                   ))}
                 </Stack>
@@ -397,8 +359,7 @@ export default function TodayRoute() {
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
                       onPress={handleTaskPress}
-                      onStatusChange={handleTaskStatusChange}
-                      statusChanging={statusChangingTaskId === task.id}
+                      {...completion.cardProps(task)}
                     />
                   ))}
                 </Stack>
@@ -441,8 +402,7 @@ export default function TodayRoute() {
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
                       onPress={handleTaskPress}
-                      onStatusChange={handleTaskStatusChange}
-                      statusChanging={statusChangingTaskId === task.id}
+                      {...completion.cardProps(task)}
                     />
                   ))}
                 </Stack>
@@ -462,8 +422,7 @@ export default function TodayRoute() {
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
                       onPress={handleTaskPress}
-                      onStatusChange={handleTaskStatusChange}
-                      statusChanging={statusChangingTaskId === task.id}
+                      {...completion.cardProps(task)}
                     />
                   ))}
                 </Stack>
