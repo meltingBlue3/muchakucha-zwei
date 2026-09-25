@@ -196,7 +196,8 @@ pnpm exec playwright test -c playwright.ui.config.ts
 ### 已知缺口
 
 - 标签管理页未按角色隐藏创建 / 编辑 / 删除入口，MEMBER 操作时会被 API 拒绝并显示失败提示
-- 生产环境还没有任何账号，也未经真实使用验证；`tsc` 不复制 `auth/data` 密码字典，部署脚本必须手动补这一步（见生产部署）
+- 生产环境还没有任何账号，也未经真实使用验证
+- 没有测试覆盖 `dist/` 的运行时资源：测试从 `src/` 读密码字典，`build` 若漏掉复制步骤，只有线上旧邮箱接口会抛 ENOENT
 - 家庭、日历、任务三块尚未完成 Android 真机验收
 
 ## 生产部署
@@ -312,10 +313,7 @@ Expo web 导出是单页应用，只有一个 `index.html`，所以需要 `try_f
 pnpm install --frozen-lockfile --filter api...
 pnpm --filter api prisma:generate
 pnpm --filter api exec prisma migrate deploy
-pnpm --filter api exec tsc -p tsconfig.build.json
-
-# tsc 不会复制运行时读取的密码字典，漏掉会让旧邮箱注册 / 改密接口抛 ENOENT
-cp -r apps/api/src/modules/auth/data apps/api/dist/modules/auth/data
+pnpm --filter api build          # tsc + 复制运行时资源
 
 systemctl restart muchakucha-api
 ```

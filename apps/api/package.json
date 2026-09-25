@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsc -p tsconfig.build.json && node dist/main.js",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/modules/auth/data','dist/modules/auth/data',{recursive:true})\"",
+    "dev": "pnpm run build && node dist/main.js",
     "prisma:generate": "prisma generate",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "pretest": "prisma generate",
     "test": "vitest run",
     "test:quick": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
-    "openapi:generate": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/modules/auth/data','dist/modules/auth/data',{recursive:true})\" && node dist/openapi/generate-openapi.js",
+    "openapi:generate": "pnpm run build && node dist/openapi/generate-openapi.js",
     "openapi:check": "node ../../scripts/check-openapi-drift.mjs"
   },
   "dependencies": {
