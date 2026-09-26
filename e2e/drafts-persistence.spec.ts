@@ -122,7 +122,7 @@ async function getHouseholdMemberships(
 
 const draftKey = (userId: string) => `muchakucha:drafts:v1:${userId}`;
 
-test('note drafts survive browser restart, stay household scoped, and clear on save or discard', async ({ page, context }, testInfo) => {
+test('note drafts survive browser restart, stay household scoped, and clear on save', async ({ page, context }, testInfo) => {
   const account = await prepareAccount('draft', '草稿用户');
   const first = await createHousehold(account.accessToken, '草稿家庭 A');
   const second = await createHousehold(account.accessToken, '草稿家庭 B');
@@ -142,25 +142,21 @@ test('note drafts survive browser restart, stay household scoped, and clear on s
   await fresh.goto(`${WEB_ORIGIN}/households/${first.id}/notes`);
   await fresh.getByRole('button', { name: '创建笔记', exact: true }).click();
   await expect(fresh.getByLabel('笔记标题')).toHaveValue('重启后继续');
-  await fresh.getByRole('button', { name: '丢弃草稿', exact: true }).click();
-  const dialog = fresh.getByRole('dialog', { name: '丢弃草稿？', exact: true });
+  await expect(fresh.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
+  const dialog = fresh.getByRole('dialog', { name: '创建笔记', exact: true });
   await expect(fresh.getByRole('dialog')).toHaveCount(1);
   for (const width of [320, 390, 1440]) {
     await fresh.setViewportSize({ width, height: 900 });
-    await expect(dialog.getByRole('button', { name: '继续编辑', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '创建', exact: true })).toBeVisible();
     expect((await new AxeBuilder({ page: fresh }).analyze()).violations).toEqual([]);
     expect(await fresh.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await fresh.screenshot({ path: testInfo.outputPath(`discard-${width}.png`) });
+    await fresh.screenshot({ path: testInfo.outputPath(`draft-${width}.png`) });
   }
-  await dialog.getByRole('button', { name: '继续编辑', exact: true }).click();
-  await expect(fresh.getByLabel('笔记标题')).toHaveValue('重启后继续');
-  await fresh.getByRole('button', { name: '丢弃草稿', exact: true }).click();
-  await dialog.getByRole('button', { name: '确认丢弃草稿', exact: true }).click();
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
   await expect(fresh).toHaveURL(new RegExp(`/households/${first.id}/notes$`));
-  await fresh.goto(`${WEB_ORIGIN}/households/${first.id}/notes`);
   await fresh.getByRole('button', { name: '创建笔记', exact: true }).click();
-  await expect(fresh.getByLabel('笔记标题')).toHaveValue('');
-  await fresh.getByLabel('笔记标题').fill('保存后不再是草稿');
+  await expect(fresh.getByLabel('笔记标题')).toHaveValue('重启后继续');
+  await expect(fresh.getByLabel('笔记内容')).toHaveValue('未保存的内容');
   await fresh.getByRole('button', { name: '创建', exact: true }).click();
   await expect(fresh).toHaveURL(new RegExp(`/households/${first.id}/notes$`));
   await fresh.goto(`${WEB_ORIGIN}/households/${first.id}/notes/new`);

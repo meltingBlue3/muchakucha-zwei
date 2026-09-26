@@ -287,7 +287,7 @@ export default function RecurrenceRuleDetailRoute() {
                   startsOn: the picker force-syncs `value.startsOn` to whatever
                   it is handed, so the original date here would rewrite the
                   user's selection on every render. */}
-              <DraftNotice draftKey={draftPrefix + 'form'} busy={busy} onDiscard={backToList} />
+              <DraftNotice />
               {conflict.panel}
               <RecurrencePicker
                 value={recurrence}

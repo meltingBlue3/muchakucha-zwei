@@ -52,6 +52,7 @@ for (const width of [320, 390, 1440]) {
     await expect(edit).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(1);
     await edit.getByRole('textbox', { name: '任务标题', exact: true }).fill('已修改的聚餐安排');
+    await expect(edit.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
     await edit.getByRole('button', { name: '保存修改', exact: true }).click();
     await expect(detail).toBeVisible();
     await expect(detail.getByText('已修改的聚餐安排', { exact: true })).toBeVisible();

@@ -45,7 +45,7 @@ export default function CreateEventRoute() {
               {error}
             </Text>
           )}
-          {created !== null ? <Stack gap={4}><DraftNotice draftKey={draftPrefix + 'created'} busy={isSubmitting} onDiscard={close} /><Text>日程已创建</Text><Button label="重试保存标签" loading={isSubmitting} onPress={() => void retry()} /></Stack> : <EventForm
+          {created !== null ? <Stack gap={4}><DraftNotice /><Text>日程已创建</Text><Button label="重试保存标签" loading={isSubmitting} onPress={() => void retry()} /></Stack> : <EventForm
             draftKey={draftPrefix + 'form'}
             defaultDate={selectedDate ?? toDateIso(new Date())}
             onSubmit={handleSubmit}

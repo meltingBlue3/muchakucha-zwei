@@ -100,7 +100,7 @@ export default function CreateTaskRoute() {
         <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
 
         {created !== null ? (
-          <Stack gap={4}><DraftNotice draftKey={draftPrefix + 'created'} busy={submitting} onDiscard={handleClose} /><Text>任务已创建</Text><Text accessibilityRole="alert">{submitError ?? '内容已创建，标签尚未保存。'}</Text><Button label="重试保存标签" loading={submitting} onPress={() => void retry()} /></Stack>
+          <Stack gap={4}><DraftNotice /><Text>任务已创建</Text><Text accessibilityRole="alert">{submitError ?? '内容已创建，标签尚未保存。'}</Text><Button label="重试保存标签" loading={submitting} onPress={() => void retry()} /></Stack>
         ) : loading ? (
           <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
             <ActivityIndicator color={activeTheme.colors.coral} />

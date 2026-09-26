@@ -17,6 +17,7 @@ test('note drafts survive leaving the editor, stay household-scoped and clear af
   }
   const view = await render(<MuchakuchaThemeProvider><WorkspaceStateProvider><Demo /></WorkspaceStateProvider></MuchakuchaThemeProvider>);
   await fireEvent.changeText(view.getByLabelText('笔记标题'), '未保存的采购单');
+  expect(view.queryByLabelText('丢弃草稿')).toBeNull();
   await fireEvent.press(view.getByLabelText('取消'));
   await fireEvent.press(view.getByRole('button', { name: '打开 B' }));
   expect(view.getByLabelText('笔记标题').props.value).toBe('');

@@ -50,9 +50,9 @@ for (const width of [320, 390, 1440]) {
     await page.screenshot({ path: testInfo.outputPath(`note-detail-${width}.png`) });
     await page.getByRole('button', { name: '编辑笔记', exact: true }).click();
     await page.getByLabel('笔记标题', { exact: true }).fill('暑假改好的计划');
-    await page.getByRole('button', { name: '丢弃草稿', exact: true }).click();
-    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
     await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: '编辑笔记', exact: true }).click();
     await expect(page.getByLabel('笔记标题', { exact: true })).toHaveValue('暑假改好的计划');
     await page.getByLabel('笔记内容', { exact: true }).fill('');
     await page.getByRole('button', { name: '保存', exact: true }).click();
@@ -88,15 +88,15 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
-test('direct note edits restore drafts and discard returns to detail without stacked dialogs', async ({ page }) => {
+test('direct note edits restore drafts and closing returns to detail without stacked dialogs', async ({ page }) => {
   await setup(page);
   await page.goto(`${base}/notes/${noteId}/edit`);
   await page.getByLabel('笔记标题', { exact: true }).fill('保存到设备的草稿');
   await page.reload();
   await expect(page.getByLabel('笔记标题', { exact: true })).toHaveValue('保存到设备的草稿');
-  await page.getByRole('button', { name: '丢弃草稿', exact: true }).click();
+  await expect(page.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(1);
-  await page.getByRole('button', { name: '确认丢弃草稿', exact: true }).click();
+  await page.getByRole('button', { name: '关闭编辑笔记', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '笔记详情', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(`${base}/notes`);

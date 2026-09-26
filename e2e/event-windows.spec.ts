@@ -58,6 +58,7 @@ for (const width of [320, 390, 1440]) {
     const edit = page.getByRole('dialog', { name: '编辑日程', exact: true });
     await expect(page.getByRole('dialog')).toHaveCount(1);
     await edit.getByRole('textbox', { name: '事件标题', exact: true }).fill('已修改的日程');
+    await expect(edit.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
     await edit.getByRole('button', { name: '保存', exact: true }).click();
     await expect(detail.getByRole('heading', { name: '已修改的日程', exact: true })).toBeVisible();
     expect(events.get(eventId)!.title).toBe('已修改的日程');

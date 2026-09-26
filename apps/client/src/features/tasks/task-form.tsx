@@ -240,7 +240,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
 
   return (
     <Stack gap={4}>
-      {draftKey ? <DraftNotice draftKey={draftKey} busy={isSubmitting} onDiscard={onCancel} /> : null}
+      {draftKey ? <DraftNotice /> : null}
       {/* Title */}
       <Stack gap={1}>
         <Text variant="label">标题</Text>
