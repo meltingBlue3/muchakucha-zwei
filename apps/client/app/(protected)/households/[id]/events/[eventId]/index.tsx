@@ -1,19 +1,17 @@
+import { EventWindow } from '../../../../../../src/features/events/event-window';
+import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto } from '@muchakucha/api-client';
-import Ban from 'lucide-react-native/icons/ban';
-import Pencil from 'lucide-react-native/icons/pencil';
-import MapPin from 'lucide-react-native/icons/map-pin';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { formatTime } from '../../../../../../src/features/events/calendar-utils';
-import { AppShell } from '../../../../../../src/ui/household-components';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
-import { Heading, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Button, Heading, Spinner, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
 function formatFullDateTime(iso: string, allDay: boolean): string {
@@ -40,7 +38,6 @@ export default function EventDetailRoute() {
 
   const fetchEvent = useCallback(async () => {
     if (id === undefined || eventId === undefined) return;
-    setLoading(true);
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
@@ -51,7 +48,7 @@ export default function EventDetailRoute() {
       const result = await sessionApiClient.getEvent(token, id, eventId);
       setEvent(result);
     } catch {
-      setError('无法加载事件。');
+      setError('无法加载日程，请重试或确认它是否已被删除。');
     } finally {
       setLoading(false);
     }
@@ -67,30 +64,17 @@ export default function EventDetailRoute() {
   );
 
   const handleEdit = useCallback(() => {
+    rememberRouteTrigger();
     void router.push(`/households/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}/edit`);
   }, [router, id, eventId]);
 
-  if (loading) {
-    return (
-      <AppShell accessibilityLabel="加载事件中" title="事件详情" showBack showProfile>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: activeTheme.spacing[12] }}>
-          <ActivityIndicator color={activeTheme.colors.coral} />
-        </View>
-      </AppShell>
-    );
-  }
-
-  if (event === null || error !== null) {
-    return (
-      <AppShell accessibilityLabel="事件加载失败" title="事件详情" showBack showProfile>
-        <Stack gap={4}>
-          <Text>{error ?? '事件未找到。'}</Text>
-          <Pressable onPress={() => router.back()} hitSlop={activeTheme.spacing[4]}>
-            <Text variant="label" color="coral">返回日历</Text>
-          </Pressable>
-        </Stack>
-      </AppShell>
-    );
+  if (loading || event === null || error !== null) {
+    return <EventWindow title="日程详情"><Stack gap={4}>
+      {loading ? <Spinner label="正在加载日程" /> : <>
+        <Text accessibilityRole="alert">{error ?? '日程未找到或已被删除。'}</Text>
+        <Button label="重试" tone="secondary" onPress={() => void fetchEvent()} />
+      </>}
+    </Stack></EventWindow>;
   }
 
   const recurrence = recurrenceInputFromResponse(event.recurrence);
@@ -100,120 +84,33 @@ export default function EventDetailRoute() {
       : formatRecurrenceSummary(recurrence, currentTimeZone(recurrence.timezone));
   const cancelled = event.cancelledAt != null;
 
+  const sameDay = new Date(event.startTime).toDateString() === new Date(event.endTime).toDateString();
+  const when = sameDay
+    ? `${formatFullDateTime(event.startTime, event.allDay)}${event.allDay ? ' · 全天' : ` – ${formatTime(event.endTime)}`}`
+    : `${formatFullDateTime(event.startTime, event.allDay)} 至 ${formatFullDateTime(event.endTime, event.allDay)}${event.allDay ? ' · 全天' : ''}`;
   return (
-    <AppShell accessibilityLabel="事件详情" title="事件详情" showBack showProfile>
-      <Stack gap={6} style={{ backgroundColor: activeTheme.colors.surface, borderRadius: activeTheme.borderRadii.xl, padding: activeTheme.spacing[5] }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: activeTheme.spacing[3] }}>
-          <Stack gap={2} style={{ flex: 1 }}>
-            <Heading>{event.title}</Heading>
-            {cancelled && (
-              <View
-                style={{
-                  alignItems: 'center',
-                  alignSelf: 'flex-start',
-                  backgroundColor: activeTheme.colors.surfaceMuted,
-                  borderRadius: activeTheme.borderRadii.sm,
-                  flexDirection: 'row',
-                  gap: activeTheme.spacing[1],
-                  paddingHorizontal: activeTheme.spacing[2],
-                  paddingVertical: activeTheme.spacing[1],
-                }}
-              >
-                <Ban color={activeTheme.colors.inkMuted} size={14} strokeWidth={2} />
-                <Text variant="caption" color="inkMuted">已取消</Text>
-              </View>
-            )}
-          </Stack>
-          <Pressable
-            onPress={handleEdit}
-            accessibilityLabel="编辑事件"
-            accessibilityRole="button"
-            hitSlop={activeTheme.spacing[2]}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: activeTheme.controlSizes.touchTarget,
-              minWidth: activeTheme.controlSizes.touchTarget,
-              borderRadius: activeTheme.borderRadii.md,
-              backgroundColor: pressed ? activeTheme.colors.surfaceMuted : 'transparent',
-            })}
-          >
-            <Pencil
-              size={activeTheme.controlSizes.icon}
-              color={activeTheme.colors.coral}
-              strokeWidth={activeTheme.controlSizes.iconStroke}
-            />
-          </Pressable>
-        </View>
-
-        {event.allDay && (
-          <View
-            style={{
-              alignSelf: 'flex-start',
-              backgroundColor: activeTheme.colors.tealSoft,
-              paddingHorizontal: activeTheme.spacing[3],
-              paddingVertical: activeTheme.spacing[1],
-              borderRadius: activeTheme.borderRadii.full,
-            }}
-          >
-            <Text variant="caption" color="teal">全天事件</Text>
-          </View>
-        )}
-
-        <Stack gap={1}>
-          <Text variant="label" color="inkMuted">开始</Text>
-          <Text variant="body">{formatFullDateTime(event.startTime, event.allDay)}</Text>
+    <EventWindow title="日程详情" footer={<Button label="编辑日程" accessibilityLabel="编辑事件" onPress={handleEdit} />}>
+      <Stack gap={5}>
+        <Stack gap={2}>
+          <Heading>{event.title}</Heading>
+          {cancelled ? <Text variant="label" color="inkMuted">已取消</Text> : null}
         </Stack>
-
-        <Stack gap={1}>
-          <Text variant="label" color="inkMuted">结束</Text>
-          <Text variant="body">{formatFullDateTime(event.endTime, event.allDay)}</Text>
+        <Stack gap={3} style={{ backgroundColor: activeTheme.colors.surfaceSubtle, padding: activeTheme.spacing[4], borderRadius: activeTheme.borderRadii.lg }}>
+          <Stack gap={1}><Text variant="label" color="inkMuted">时间</Text><Text>{when}</Text></Stack>
+          {event.location ? <Stack gap={1}><Text variant="label" color="inkMuted">地点</Text><Text>{event.location}</Text></Stack> : null}
+          {recurrenceSummary ? <Stack gap={1}>
+            <Text variant="label" color="inkMuted">重复安排</Text><Text>{recurrenceSummary.summary}</Text>
+            {recurrenceSummary.clampNote ? <Text variant="caption" color="inkMuted">{recurrenceSummary.clampNote}</Text> : null}
+            {recurrenceSummary.timeZoneNote ? <Text variant="caption" color="inkMuted">{recurrenceSummary.timeZoneNote}</Text> : null}
+            <Text variant="caption" color="inkMuted">{cancelled ? '这次重复已取消。' : '当前查看这一次日程，编辑时可选择影响范围。'}</Text>
+          </Stack> : null}
         </Stack>
-
-        {event.recurrenceRuleId != null && recurrenceSummary !== null && (
-          <Stack gap={1}>
-            <Text variant="label" color="inkMuted">重复</Text>
-            <Text variant="body">{recurrenceSummary.summary}</Text>
-            {recurrenceSummary.clampNote !== null && (
-              <Text variant="caption" color="inkMuted">{recurrenceSummary.clampNote}</Text>
-            )}
-            {recurrenceSummary.timeZoneNote !== null && (
-              <Text variant="caption" color="inkMuted">{recurrenceSummary.timeZoneNote}</Text>
-            )}
-            {cancelled && (
-              <Text variant="caption" color="inkMuted">这次重复已取消。</Text>
-            )}
-          </Stack>
-        )}
-
-        {event.location !== null && event.location !== '' && (
-          <Stack gap={1}>
-            <Text variant="label" color="inkMuted">地点</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] }}>
-              <MapPin size={16} color={activeTheme.colors.inkMuted} strokeWidth={1.5} />
-              <Text variant="body">{event.location}</Text>
-            </View>
-          </Stack>
-        )}
-
-        {event.description !== null && event.description !== '' && (
-          <Stack gap={1}>
-            <Text variant="label" color="inkMuted">描述</Text>
-            <Text variant="body">{event.description}</Text>
-          </Stack>
-        )}
-
-        {event.labels.length > 0 && (
-          <Stack gap={1}>
-            <Text variant="label" color="inkMuted">标签</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
-              {event.labels.map((label) => (
-                <LabelChip key={label.id} label={label} />
-              ))}
-            </View>
-          </Stack>
-        )}
+        {event.description ? <Stack gap={2}><Text variant="label" color="inkMuted">描述</Text><Text>{event.description}</Text></Stack> : null}
+        {(event.labels ?? []).length ? <Stack gap={2}>
+          <Text variant="label" color="inkMuted">标签</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>{event.labels.map(label => <LabelChip key={label.id} label={label} />)}</View>
+        </Stack> : null}
       </Stack>
-    </AppShell>
+    </EventWindow>
   );
 }

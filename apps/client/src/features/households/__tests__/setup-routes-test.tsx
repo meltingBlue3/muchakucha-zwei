@@ -11,7 +11,10 @@ const mockRefresh = jest.fn();
 const mockSwitch = jest.fn();
 const mockCreate = jest.fn();
 let mockViewState: HouseholdViewState = 'noHousehold';
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
+jest.mock('expo-router', () => ({
+  ...jest.requireActual('../../../../__mocks__/expo-router'),
+  useRouter: () => mockRouter,
+}));
 jest.mock('../household-context', () => ({ useHouseholdContext: () => ({
   viewState: mockViewState, households: [], currentHouseholdId: null,
   refreshHouseholds: mockRefresh, switchHousehold: mockSwitch,

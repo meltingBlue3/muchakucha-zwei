@@ -61,6 +61,7 @@ test('no-household onboarding offers both routes and profile access', async ({ p
   await page.getByRole('button', { name: '创建家庭', exact: true }).click();
   await expect(page.getByLabel('家庭名称', { exact: true })).toBeVisible();
   await checkLayout(page);
+  await page.getByRole('button', { name: '关闭创建家庭', exact: true }).click();
   await page.getByRole('button', { name: '个人中心' }).click();
   await page.getByRole('menuitem', { name: '个人资料' }).click();
   await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();

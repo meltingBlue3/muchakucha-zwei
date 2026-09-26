@@ -1,18 +1,18 @@
+import { HouseholdActionWindow, useHouseholdActionClose } from '../../../../../../src/features/households/household-action-window';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
 
 import { sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { sessionStateStore } from '../../../../../../src/features/auth/session-runtime';
 import { ApiClient } from '@muchakucha/api-client';
-import { ConfirmationPage } from '../../../../../../src/ui/household-components';
-import { Banner } from '../../../../../../src/ui/primitives';
-import { theme } from '../../../../../../src/ui/theme';
+import { Banner, Button, Stack, Text } from '../../../../../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
 export default function RevokeInvitationPage() {
   const router = useRouter();
+  const close = useHouseholdActionClose();
+  const exitAllowed = useRef(false);
   const { id: householdId, invitationId } = useLocalSearchParams<{
     id: string;
     invitationId: string;
@@ -21,8 +21,8 @@ export default function RevokeInvitationPage() {
   const [error, setError] = useState<string | undefined>(undefined);
 
   const handleSafeAction = useCallback(() => {
-    router.back();
-  }, [router]);
+    close();
+  }, [close]);
 
   const handleRevoke = useCallback(async () => {
     const accessToken = sessionTransport.getAccessToken();
@@ -39,12 +39,13 @@ export default function RevokeInvitationPage() {
         invitationId,
       );
 
-      router.back();
+      exitAllowed.current = true;
+      close();
     } catch (_err: unknown) {
       setError('撤销失败，家庭邀请状态未改变。请重试。');
       setBusy(false);
     }
-  }, [householdId, invitationId, router]);
+  }, [householdId, invitationId, close]);
 
   // Check auth state — redirect if not authenticated. This must run after
   // every hook above: an early return before a hook call changes the hook
@@ -56,22 +57,12 @@ export default function RevokeInvitationPage() {
     return null;
   }
 
-  return (
-    <>
-      {error !== undefined ? (
-        <View style={{ padding: theme.spacing[4] }}>
-          <Banner title="撤销失败">{error}</Banner>
-        </View>
-      ) : null}
-      <ConfirmationPage
-        heading="撤销邀请？"
-        body="撤销后，原链接将不能使用。"
-        safeActionLabel="保留邀请"
-        safeActionOnPress={handleSafeAction}
-        destructiveActionLabel="撤销邀请"
-        destructiveActionOnPress={() => { void handleRevoke(); }}
-        busy={busy}
-      />
-    </>
-  );
+  return <HouseholdActionWindow title="撤销邀请？" busy={busy} onClose={handleSafeAction} exitAllowed={exitAllowed}>
+    <Stack gap={4}>
+      {error ? <Banner title="撤销失败">{error}</Banner> : null}
+      <Text>撤销后，对方将无法接受这份邀请。</Text>
+      <Button label="保留邀请" tone="secondary" disabled={busy} onPress={handleSafeAction} />
+      <Button label="撤销邀请" loading={busy} onPress={() => void handleRevoke()} />
+    </Stack>
+  </HouseholdActionWindow>;
 }

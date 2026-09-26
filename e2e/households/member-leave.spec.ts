@@ -142,12 +142,12 @@ for (const role of ['MEMBER', 'ADMIN']) {
     await loginUsernameFixture(page, member.username, password);
     await page.goto(`${WEB_ORIGIN}/households/${household.id}/settings`);
     await page.getByRole('button', { name: '离开家庭', exact: true }).click();
-    await expect(page.getByRole('main', { name: '离开家庭确认', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: '确认离开家庭', exact: true })).toBeVisible();
     for (const width of [320, 390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.getByRole('button', { name: '取消离开', exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: '确认离开家庭', exact: true })).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       if (role === 'MEMBER') await page.screenshot({ path: testInfo.outputPath(`leave-${width}.png`) });
     }
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
@@ -203,4 +203,35 @@ test('owner transfers ownership in settings before choosing to leave', async ({ 
   await page.getByRole('button', { name: '确认离开家庭', exact: true }).click();
   await expect(page).toHaveURL(/\/households$/);
   expect((await getHouseholdMemberships(successor.accessToken, household.id)).some((m) => m.userId === owner.userId)).toBe(false);
+});
+
+test('owner manages roles and removal through one window without losing the settings entry', async ({ page }) => {
+  const owner = await prepareAccount('window-owner', '家主');
+  const member = await prepareAccount('window-member', '协作成员');
+  const household = await createHousehold(owner.accessToken, '成员操作窗口');
+  await addMembershipViaDb(household.id, member.userId, 'MEMBER');
+  await loginUsernameFixture(page, owner.username, password, `/households/${household.id}/settings`);
+  const role = async () => (await getHouseholdMemberships(owner.accessToken, household.id)).find(item => item.userId === member.userId)?.role;
+  await page.getByRole('button', { name: '提升 协作成员', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await page.getByRole('button', { name: '保留成员权限', exact: true }).click();
+  expect(await role()).toBe('MEMBER');
+  await expect(page.getByRole('button', { name: '提升 协作成员', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: '提升 协作成员', exact: true }).click();
+  await page.getByRole('button', { name: '确认提升为管理员', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/households/${household.id}/settings$`));
+  expect(await role()).toBe('ADMIN');
+  await page.getByRole('button', { name: '降级 协作成员', exact: true }).click();
+  await page.getByRole('button', { name: '降级为成员', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/households/${household.id}/settings$`));
+  expect(await role()).toBe('MEMBER');
+  await page.getByRole('button', { name: '移除 协作成员', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.keyboard.press('Escape');
+  expect(await role()).toBe('MEMBER');
+  await page.getByRole('button', { name: '移除 协作成员', exact: true }).click();
+  await page.getByRole('button', { name: '移除成员', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/households/${household.id}/settings$`));
+  expect(await role()).toBeUndefined();
 });

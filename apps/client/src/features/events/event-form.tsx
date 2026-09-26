@@ -1,7 +1,7 @@
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useState } from 'react';
-import { Switch, TextInput, View } from 'react-native';
+import { Pressable, Switch, TextInput, View, useWindowDimensions } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
@@ -40,6 +40,7 @@ const EMPTY_INPUT: EventInput = {
 interface EventFormProps {
   draftKey?: string;
   initial?: EventResponseDto;
+  defaultDate?: string;
   onSubmit: (data: CreateEventDto) => Promise<void>;
   onCancel: () => void;
   submitLabel: string;
@@ -49,8 +50,10 @@ interface EventFormProps {
   onLabelChange?: (labelIds: string[]) => void;
 }
 
-export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: EventFormProps) {
+export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: EventFormProps) {
   const activeTheme = useTheme<Theme>();
+  const { width } = useWindowDimensions();
+  const compact = width < activeTheme.layout.formColumnsBreakpoint;
   // CR-03: the /series endpoint has no way to detach an occurrence into a
   // standalone item — selecting 不重复 here omits `recurrence` from the
   // payload, which the server reads as "unchanged" and just continues the
@@ -74,8 +77,10 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
         recurrence: recurrenceInputFromResponse(initial.recurrence),
       };
     }
-    return { ...EMPTY_INPUT };
+    const date = defaultDate ?? toDateIso(new Date());
+    return { ...EMPTY_INPUT, startDate: date, endDate: date };
   });
+  const [moreOpen, setMoreOpen] = useState(Boolean(form.recurrence || form.location || form.description || selectedLabelIds?.length));
   const [error, setError] = useState<string | null>(null);
   const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, string>>({});
   const [recurrenceValid, setRecurrenceValid] = useState(true);
@@ -91,7 +96,7 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
       setError('请输入事件标题。');
       return;
     }
-    if (!recurrenceValid) return;
+    if (!recurrenceValid) { setMoreOpen(true); return; }
 
     // Validate end is after start
     const startDateTime = new Date(
@@ -104,6 +109,10 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
         ? `${form.endDate}T23:59:59`
         : `${form.endDate}T${form.endTime}:00`,
     );
+    if (!Number.isFinite(startDateTime.getTime()) || !Number.isFinite(endDateTime.getTime())) {
+      setError('请填写有效的开始和结束日期、时间。');
+      return;
+    }
     if (endDateTime <= startDateTime) {
       setError('结束时间必须晚于开始时间。');
       return;
@@ -114,6 +123,7 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
     // non-recurring event has no such cap — only the recurring branch
     // derives a per-occurrence duration from this span.
     if (form.recurrence !== null && endDateTime.getTime() - startDateTime.getTime() > 24 * 60 * 60 * 1000) {
+      setMoreOpen(true);
       setError('重复事件的单次时长不能超过 24 小时。');
       return;
     }
@@ -143,6 +153,7 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
       const fieldErrors = recurrenceErrorsFromApi(submitError);
       if (Object.keys(fieldErrors).length > 0) {
         setRecurrenceErrors(fieldErrors);
+        setMoreOpen(true);
       } else {
         setError('重复规则没有保存成功。请检查网络后重试。');
       }
@@ -170,6 +181,7 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
       <Stack gap={1}>
         <Text variant="label">标题</Text>
         <TextInput
+          editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}
           placeholder="事件标题"
@@ -184,6 +196,7 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text variant="label">全天事件</Text>
         <Switch
+          disabled={isSubmitting}
           accessibilityLabel="全天事件"
           value={form.allDay}
           onValueChange={(v) => updateField('allDay', v)}
@@ -195,7 +208,7 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
       {/* Start date/time */}
       <Stack gap={1}>
         <Text variant="label">开始</Text>
-        <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
+        <View style={{ flexDirection: compact ? 'column' : 'row', gap: activeTheme.spacing[2] }}>
           <DateField
             disabled={isSubmitting}
             value={form.startDate}
@@ -220,7 +233,7 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
       {/* End date/time */}
       <Stack gap={1}>
         <Text variant="label">结束</Text>
-        <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2] }}>
+        <View style={{ flexDirection: compact ? 'column' : 'row', gap: activeTheme.spacing[2] }}>
           <DateField
             disabled={isSubmitting}
             value={form.endDate}
@@ -242,6 +255,11 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
         </View>
       </Stack>
 
+      <Pressable accessibilityRole="button" accessibilityLabel="更多日程选项" accessibilityState={{ expanded: moreOpen }} aria-expanded={moreOpen} disabled={isSubmitting} onPress={() => setMoreOpen(value => !value)} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', gap: activeTheme.spacing[1] }}>
+        <Text variant="label" color="link">{moreOpen ? '收起更多选项' : '更多选项'}</Text>
+        <Text variant="caption" color="inkMuted">{[form.recurrence ? '重复安排' : '', form.location, form.description ? '已填写描述' : '', selectedLabelIds?.length ? `${selectedLabelIds.length} 个标签` : ''].filter(Boolean).join(' · ') || '重复、地点、描述和标签'}</Text>
+      </Pressable>
+      <Stack gap={4} style={{ display: moreOpen ? 'flex' : 'none' }}>
       {/* Location */}
       <RecurrencePicker
         disabled={isSubmitting}
@@ -257,6 +275,7 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
       <Stack gap={1}>
         <Text variant="label">地点（可选）</Text>
         <TextInput
+          editable={!isSubmitting}
           value={form.location}
           onChangeText={(v) => updateField('location', v)}
           placeholder="地点"
@@ -271,6 +290,7 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
       <Stack gap={1}>
         <Text variant="label">描述（可选）</Text>
         <TextInput
+          editable={!isSubmitting}
           value={form.description}
           onChangeText={(v) => updateField('description', v)}
           placeholder="事件描述"
@@ -294,9 +314,11 @@ export function EventForm({ draftKey, initial, onSubmit, onCancel, submitLabel, 
         </Stack>
       )}
 
+      </Stack>
+
       {/* Error */}
       {error !== null && (
-        <Text variant="bodySm" color="destructive">
+        <Text variant="bodySm" color="destructive" accessibilityRole="alert">
           {error}
         </Text>
       )}

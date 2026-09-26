@@ -74,7 +74,8 @@ async function openCalendar(page: Page) {
 async function openNewEvent(page: Page) {
   await openCalendar(page);
   await page.getByLabel('创建事件').click();
-  await expect(page.getByRole('main', { name: '创建事件' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '创建日程' })).toBeVisible();
+  await page.getByRole('button', { name: '更多日程选项' }).click();
 }
 
 async function openEventDetail(page: Page, fixture: Fixture) {
@@ -82,13 +83,13 @@ async function openEventDetail(page: Page, fixture: Fixture) {
   const day = Number(new Date().toISOString().slice(8, 10));
   await page.getByLabel(new RegExp(`^\\d{4}-\\d{2}-${String(day).padStart(2, '0')}(?:，今天)?，\\d+个事件$`)).click();
   await page.getByLabel(`事件：${fixture.title}，重复`).click();
-  await expect(page.getByRole('main', { name: '事件详情' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
 }
 
 async function openEventEdit(page: Page, fixture: Fixture) {
   await openEventDetail(page, fixture);
   await page.getByLabel('编辑事件').click();
-  await expect(page.getByRole('main', { name: '编辑事件' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '编辑日程' })).toBeVisible();
 }
 
 async function expectNoSeriousAxeViolations(page: Page) {
@@ -126,8 +127,10 @@ test.describe('event recurrence accessibility', () => {
     await page.getByLabel('不重复', { exact: true }).focus();
     await page.keyboard.press('ArrowRight');
     await expect(page.getByLabel('每天', { exact: true })).toBeChecked();
+    await expect(page.getByLabel('每天', { exact: true })).toBeFocused();
     await page.keyboard.press('ArrowRight');
     await expect(page.getByLabel('每周', { exact: true })).toBeChecked();
+    await expect(page.getByLabel('每周', { exact: true })).toBeFocused();
     await expect(page.getByRole('radiogroup', { name: '重复频率' })).toBeVisible();
     await expect(page.getByRole('checkbox')).toHaveCount(7);
   });
@@ -145,19 +148,21 @@ test.describe('event recurrence accessibility', () => {
     await expect(page.getByText('至少需要选择一天。')).toHaveAttribute('aria-live', 'polite');
   });
 
-  test('traps focus in SeriesScopeSheet, closes on Escape, and returns focus', async ({ page }) => {
+  test('keeps scope selection in one window and Escape returns to editing', async ({ page }) => {
     await loginFixture(page, fixture.username);
     await openEventEdit(page, fixture);
     const deleteTrigger = page.getByLabel('删除事件');
     await deleteTrigger.click();
     const dialog = page.getByRole('dialog', { name: '删除这次重复？' });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByLabel('取消')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(dialog.getByLabel('仅此一次')).toBeFocused();
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: '关闭删除这次重复？' })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(dialog.getByRole('button', { name: '取消', exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
-    await expect(deleteTrigger).toBeFocused();
+    await expect(page.getByRole('button', { name: '关闭编辑日程' })).toBeFocused();
+    await expect(deleteTrigger).toBeVisible();
   });
 
   test('remains usable at 200% zoom without horizontal overflow or inert weekday chips', async ({ page }) => {

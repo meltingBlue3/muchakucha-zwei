@@ -1,3 +1,5 @@
+import { RouteWindow, useRouteWindowClose } from '../../../../../../src/ui/route-window';
+import RecurrenceListScreen from '../../../../../../src/features/recurrence/recurrence-list-screen';
 import { DraftNotice } from '../../../../../../src/ui/draft-notice';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
@@ -22,8 +24,6 @@ import {
 import {
   AccessChangedPanel,
   AppShell,
-  HouseholdHeader,
-  HouseholdSwitcher,
 } from '../../../../../../src/ui/household-components';
 import { Banner, Button, Heading, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
@@ -55,6 +55,8 @@ function resolveDeviceTimeZone(): string {
 export default function RecurrenceRuleDetailRoute() {
   const { id, ruleId } = useLocalSearchParams<{ id: string; ruleId: string }>();
   const router = useRouter();
+  const exitAllowed = useRef(false);
+  const { close: dismiss } = useRouteWindowClose('recurrence-rules');
   const activeTheme = useTheme<Theme>();
   const {
     viewState,
@@ -62,7 +64,6 @@ export default function RecurrenceRuleDetailRoute() {
     currentHouseholdId,
     accessChangedHouseholdName,
     refreshHouseholds,
-    switchHousehold,
   } = useHouseholdContext();
 
   const [rule, setRule] = useState<RecurrenceRuleListItemDto | null>(null);
@@ -76,10 +77,8 @@ export default function RecurrenceRuleDetailRoute() {
   const [saving, setSaving] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [ending, setEnding] = useState(false);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
   const deviceTimeZone = resolveDeviceTimeZone();
   const busy = saving || ending;
 
@@ -126,23 +125,12 @@ export default function RecurrenceRuleDetailRoute() {
     }, [fetchRule]),
   );
 
-  const handleSwitch = useCallback(async (nextHouseholdId: string) => {
-    if (nextHouseholdId === currentHouseholdId) {
-      setSwitcherOpen(false);
-      return;
-    }
-    const success = await switchHousehold(nextHouseholdId);
-    if (success) {
-      void router.replace(`/households/${encodeURIComponent(nextHouseholdId)}/recurrence-rules`);
-    }
-    setSwitcherOpen(false);
-  }, [id, currentHouseholdId, switchHousehold, router]);
-
   const backToList = useCallback(() => {
     if (householdId === undefined || householdId === '') return;
     // Return to the list and let its `useFocusEffect` re-read authoritative
     // state. Nothing is updated optimistically on the way out.
-    void router.replace(`/households/${encodeURIComponent(householdId)}/recurrence-rules`);
+    exitAllowed.current = true;
+    void router.dismissTo(`/households/${encodeURIComponent(householdId)}/recurrence-rules`);
   }, [householdId, router]);
 
   // Only a confirm action writes. The trigger below merely opens this row.
@@ -233,28 +221,20 @@ export default function RecurrenceRuleDetailRoute() {
     );
   }
 
-  const confirmRowStyle = {
-    alignItems: 'center' as const,
-    flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
-    gap: activeTheme.spacing[2],
+  const close = () => {
+    if (saveConfirmOpen) setSaveConfirmOpen(false);
+    else if (endConfirmOpen) setEndConfirmOpen(false);
+    else dismiss();
   };
-  const confirmActionStyle = ({ pressed }: { pressed: boolean }) => ({
-    minHeight: activeTheme.controlSizes.touchTarget,
-    justifyContent: 'center' as const,
-    paddingHorizontal: activeTheme.spacing[2],
-    opacity: pressed ? 0.7 : 1,
-  });
-
   return (
-    <>
-      <AppShell accessibilityLabel="周期规则详情" title="周期规则" showBack showProfile>
+      <RouteWindow resource="recurrence-rules" title={saveConfirmOpen ? '确认保存重复安排' : endConfirmOpen ? '结束重复安排' : '重复安排'} busy={busy} onClose={close} onBackStep={saveConfirmOpen || endConfirmOpen ? close : undefined} exitAllowed={exitAllowed} fallback={<RecurrenceListScreen />}>
+        {saveConfirmOpen || endConfirmOpen ? <Stack gap={3}>
+          <Text>{saveConfirmOpen ? SAVE_CONFIRM_PROMPT : END_CONFIRM_PROMPT}</Text>
+          {writeError ? <Banner>{writeError}</Banner> : null}
+          <Button label="取消" tone="secondary" disabled={busy} onPress={close} />
+          <Button label={saveConfirmOpen ? '确认保存' : '确认结束'} loading={busy} onPress={() => { void (saveConfirmOpen ? handleConfirmSave() : handleConfirmEnd()); }} />
+        </Stack> : <>
         <Stack gap={4}>
-          <HouseholdHeader
-            householdName={currentHousehold?.name ?? ''}
-            onOpenSwitcher={() => setSwitcherOpen(true)}
-          />
-
           {writeError !== null && <Banner>{writeError}</Banner>}
 
           {loading && (
@@ -269,7 +249,8 @@ export default function RecurrenceRuleDetailRoute() {
               padding: activeTheme.spacing[4],
               borderRadius: activeTheme.borderRadii.md,
             }}>
-              <Text variant="bodySm" color="destructive">{error}</Text>
+              <Text variant="bodySm" color="destructive" accessibilityRole="alert">{error}</Text>
+              <Button label="重试" tone="secondary" onPress={() => void fetchRule()} />
             </View>
           )}
 
@@ -329,37 +310,6 @@ export default function RecurrenceRuleDetailRoute() {
                   onPress={() => setSaveConfirmOpen(true)}
                 />
 
-                {saveConfirmOpen && (
-                  <View style={confirmRowStyle}>
-                    <Text accessibilityLiveRegion="polite" variant="caption" color="inkMuted">
-                      {SAVE_CONFIRM_PROMPT}
-                    </Text>
-                    <Pressable
-                      accessibilityLabel="确认保存"
-                      accessibilityRole="button"
-                      accessibilityState={{ busy: saving, disabled: busy }}
-                      disabled={busy}
-                      hitSlop={activeTheme.spacing[2]}
-                      onPress={() => { void handleConfirmSave(); }}
-                      style={confirmActionStyle}
-                    >
-                      <Text variant="caption" color={busy ? 'inkMuted' : 'coral'}>
-                        {saving ? '保存中…' : '确认保存'}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityLabel="取消"
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: busy }}
-                      disabled={busy}
-                      hitSlop={activeTheme.spacing[2]}
-                      onPress={() => setSaveConfirmOpen(false)}
-                      style={confirmActionStyle}
-                    >
-                      <Text variant="caption" color="inkMuted">取消</Text>
-                    </Pressable>
-                  </View>
-                )}
               </Stack>
 
               <Stack gap={2}>
@@ -386,54 +336,11 @@ export default function RecurrenceRuleDetailRoute() {
                   <Text variant="caption" color="inkMuted">{ENDED_NOTE}</Text>
                 )}
 
-                {endConfirmOpen && (
-                  <View style={confirmRowStyle}>
-                    <Text accessibilityLiveRegion="polite" variant="caption" color="destructive">
-                      {END_CONFIRM_PROMPT}
-                    </Text>
-                    <Pressable
-                      accessibilityLabel="确认结束"
-                      accessibilityRole="button"
-                      accessibilityState={{ busy: ending, disabled: busy }}
-                      disabled={busy}
-                      hitSlop={activeTheme.spacing[2]}
-                      onPress={() => { void handleConfirmEnd(); }}
-                      style={confirmActionStyle}
-                    >
-                      <Text variant="caption" color={busy ? 'inkMuted' : 'destructive'}>
-                        {ending ? '结束中…' : '确认结束'}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityLabel="取消"
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: busy }}
-                      disabled={busy}
-                      hitSlop={activeTheme.spacing[2]}
-                      onPress={() => setEndConfirmOpen(false)}
-                      style={confirmActionStyle}
-                    >
-                      <Text variant="caption" color="inkMuted">取消</Text>
-                    </Pressable>
-                  </View>
-                )}
               </Stack>
             </Stack>
           )}
         </Stack>
-      </AppShell>
-
-      <HouseholdSwitcher
-        currentHouseholdId={id ?? currentHouseholdId}
-        households={households}
-        onCreateNew={() => {
-          void router.push('/households/new');
-          setSwitcherOpen(false);
-        }}
-        onClose={() => setSwitcherOpen(false)}
-        onSelect={(hid) => { void handleSwitch(hid); }}
-        visible={switcherOpen}
-      />
-    </>
+        </>}
+      </RouteWindow>
   );
 }

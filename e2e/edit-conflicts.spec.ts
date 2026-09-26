@@ -122,7 +122,7 @@ for (const resource of ['notes', 'tasks', 'events'] as const) {
     if (resource === 'notes') {
       for (const width of [320, 390, 1440]) {
         await page.setViewportSize({ width, height: 900 });
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
         await page.screenshot({ path: testInfo.outputPath(`conflict-${width}.png`), fullPage: true });
       }

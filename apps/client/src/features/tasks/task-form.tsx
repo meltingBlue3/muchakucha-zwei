@@ -1,3 +1,4 @@
+import { formatRecurrenceSummary } from '../recurrence/recurrence-summary';
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useState } from 'react';
@@ -109,6 +110,8 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
     }
     return { ...EMPTY_TASK };
   });
+  const [moreOpen, setMoreOpen] = useState(Boolean(form.description || form.priority !== 'medium' || (isCreate && form.status !== 'pending') || selectedLabelIds?.length));
+  const [recurrenceOpen, setRecurrenceOpen] = useState(form.recurrence !== null);
   const [error, setError] = useState<string | null>(null);
   const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, string>>({});
   const [recurrenceValid, setRecurrenceValid] = useState(true);
@@ -124,7 +127,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
       setError('请输入任务标题。');
       return;
     }
-    if (!recurrenceValid) return;
+    if (!recurrenceValid) { setRecurrenceOpen(true); return; }
 
     const data: CreateTaskDto = {
       title: form.title.trim(),
@@ -150,6 +153,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
     } catch (submitError: unknown) {
       const fieldErrors = recurrenceErrorsFromApi(submitError);
       if (Object.keys(fieldErrors).length > 0) {
+        setRecurrenceOpen(true);
         setRecurrenceErrors(fieldErrors);
       } else {
         setError('重复规则没有保存成功。请检查网络后重试。');
@@ -172,6 +176,8 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
   };
 
   const chipStyle = (isSelected: boolean) => ({
+    minHeight: activeTheme.controlSizes.touchTarget,
+    justifyContent: 'center' as const,
     paddingHorizontal: activeTheme.spacing[3],
     paddingVertical: activeTheme.spacing[2],
     borderRadius: activeTheme.borderRadii.full,
@@ -182,6 +188,56 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
 
   const chipTextColor = (isSelected: boolean) => (isSelected ? 'surface' as const : 'inkMuted' as const);
 
+  const statusFields = (
+    <Stack gap={1}>
+      <Text variant="label">状态</Text>
+      {form.status === 'cancelled' && (
+        <View style={{ alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap' }}>
+          <View
+            accessibilityLabel="已取消"
+            accessibilityRole="radio"
+            accessibilityState={{ checked: true, disabled: true }}
+            style={chipStyle(true)}
+          >
+            <Text variant="bodySm" color={chipTextColor(true)}>已取消</Text>
+          </View>
+          <Pressable
+            accessibilityLabel="恢复这一次"
+            accessibilityRole="button"
+            onPress={() => updateField('status', 'pending')}
+            style={({ pressed }) => ({
+              justifyContent: 'center',
+              minHeight: activeTheme.controlSizes.touchTarget,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Text variant="label" color="link">恢复这一次</Text>
+          </Pressable>
+        </View>
+      )}
+      <View accessibilityRole="radiogroup" accessibilityLabel="任务状态" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {STATUSES.map((s) => (
+          <Pressable
+            key={s.value}
+            onPress={() => updateField('status', s.value)}
+            style={({ pressed }) => [
+              chipStyle(form.status === s.value),
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: form.status === s.value }}
+            aria-checked={form.status === s.value}
+            accessibilityLabel={s.label}
+          >
+            <Text variant="bodySm" color={chipTextColor(form.status === s.value)}>
+              {s.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </Stack>
+  );
+
   return (
     <Stack gap={4}>
       {draftKey ? <DraftNotice draftKey={draftKey} busy={isSubmitting} onDiscard={onCancel} /> : null}
@@ -189,6 +245,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
       <Stack gap={1}>
         <Text variant="label">标题</Text>
         <TextInput
+          editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}
           placeholder="任务标题"
@@ -199,73 +256,20 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
         />
       </Stack>
 
-      {/* Status */}
-      <Stack gap={1}>
-        <Text variant="label">状态</Text>
-        {form.status === 'cancelled' && (
-          <View style={{ alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap' }}>
-            <View
-              accessibilityLabel="已取消"
-              accessibilityRole="radio"
-              accessibilityState={{ checked: true, disabled: true }}
-              style={chipStyle(true)}
-            >
-              <Text variant="bodySm" color={chipTextColor(true)}>已取消</Text>
-            </View>
-            <Pressable
-              accessibilityLabel="恢复这一次"
-              accessibilityRole="button"
-              onPress={() => updateField('status', 'pending')}
-              style={({ pressed }) => ({
-                justifyContent: 'center',
-                minHeight: activeTheme.controlSizes.touchTarget,
-                opacity: pressed ? 0.7 : 1,
-              })}
-            >
-              <Text variant="label" color="link">恢复这一次</Text>
-            </Pressable>
-          </View>
-        )}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {STATUSES.map((s) => (
-            <Pressable
-              key={s.value}
-              onPress={() => updateField('status', s.value)}
-              style={({ pressed }) => [
-                chipStyle(form.status === s.value),
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
-              accessibilityLabel={s.label}
-            >
-              <Text variant="bodySm" color={chipTextColor(form.status === s.value)}>
-                {s.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </Stack>
-
-      {/* Priority */}
-      <Stack gap={1}>
-        <Text variant="label">优先级</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {PRIORITIES.map((p) => (
-            <Pressable
-              key={p.value}
-              onPress={() => updateField('priority', p.value)}
-              style={({ pressed }) => [
-                chipStyle(form.priority === p.value),
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
-              accessibilityLabel={`优先级: ${p.label}`}
-            >
-              <Text variant="bodySm" color={chipTextColor(form.priority === p.value)}>
-                {p.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </Stack>
+      {/* Due date — hidden for a new recurring task: the server ignores it
+          once `recurrence` is set, and requiring it produced the startsOn
+          validation error this comment block explains above. */}
+      {!(isCreate && form.recurrence !== null) && (
+        <DateField
+          disabled={isSubmitting}
+          value={form.dueDate}
+          onChange={(v) => updateField('dueDate', v)}
+          mode="date"
+          label="截止日期（可选）"
+          placeholder="YYYY-MM-DD"
+          accessibilityLabel="截止日期"
+        />
+      )}
 
       {/* Assignees (multiple allowed) */}
       <Stack gap={1}>
@@ -275,6 +279,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
             onPress={() => updateField('assigneeIds', [])}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: form.assigneeIds.length === 0 }}
+            aria-checked={form.assigneeIds.length === 0}
             style={({ pressed }) => [
               chipStyle(form.assigneeIds.length === 0),
               { opacity: pressed ? 0.7 : 1 },
@@ -300,6 +305,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
                 }
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: selected }}
+                aria-checked={selected}
                 style={({ pressed }) => [
                   chipStyle(selected),
                   { opacity: pressed ? 0.7 : 1 },
@@ -315,68 +321,101 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
         </View>
       </Stack>
 
-      {/* Due date — hidden for a new recurring task: the server ignores it
-          once `recurrence` is set, and requiring it produced the startsOn
-          validation error this comment block explains above. */}
-      {!(isCreate && form.recurrence !== null) && (
-        <DateField
+      {!isCreate ? statusFields : null}
+
+      <Pressable accessibilityRole="button" accessibilityLabel="任务重复设置" accessibilityState={{ expanded: recurrenceOpen }} aria-expanded={recurrenceOpen} disabled={isSubmitting} onPress={() => setRecurrenceOpen(value => !value)} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', gap: activeTheme.spacing[1] }}>
+        <Text variant="label" color="link">{recurrenceOpen ? '收起重复设置' : '重复安排'}</Text>
+        <Text variant="bodySm" color="inkMuted">{form.recurrence ? formatRecurrenceSummary(form.recurrence, Intl.DateTimeFormat().resolvedOptions().timeZone).summary : '不重复'}</Text>
+      </Pressable>
+      {/* Keep the picker mounted so collapsed validation and draft fields survive. */}
+      <View style={{ display: recurrenceOpen ? 'flex' : 'none' }}>
+        <RecurrencePicker
           disabled={isSubmitting}
-          value={form.dueDate}
-          onChange={(v) => updateField('dueDate', v)}
-          mode="date"
-          label="截止日期（可选）"
-          placeholder="YYYY-MM-DD"
-          accessibilityLabel="截止日期"
+          disableTurnOff={isExistingRecurring}
+          errors={recurrenceErrors}
+          onChange={(next) => updateField('recurrence', next)}
+          onValidityChange={setRecurrenceValid}
+          // WR-07: the same startsOn: '' failure the block above documents for
+          // create is equally reachable on edit — an existing task with no due
+          // date (the field is optional) hits it the moment recurrence is
+          // turned on, or a recurring task re-saved after its due date was
+          // cleared. Empty due date always falls back to todayIso, not just
+          // in create mode.
+          startDate={isCreate || form.dueDate === '' ? todayIso : form.dueDate}
+          value={form.recurrence}
         />
-      )}
 
-      {/* Description */}
-      <RecurrencePicker
-        disabled={isSubmitting}
-        disableTurnOff={isExistingRecurring}
-        errors={recurrenceErrors}
-        onChange={(next) => updateField('recurrence', next)}
-        onValidityChange={setRecurrenceValid}
-        // WR-07: the same startsOn: '' failure the block above documents for
-        // create is equally reachable on edit — an existing task with no due
-        // date (the field is optional) hits it the moment recurrence is
-        // turned on, or a recurring task re-saved after its due date was
-        // cleared. Empty due date always falls back to todayIso, not just
-        // in create mode.
-        startDate={isCreate || form.dueDate === '' ? todayIso : form.dueDate}
-        value={form.recurrence}
-      />
+      </View>
 
-      {/* Description */}
-      <Stack gap={1}>
-        <Text variant="label">描述（可选）</Text>
-        <TextInput
-          value={form.description}
-          onChangeText={(v) => updateField('description', v)}
-          placeholder="任务描述"
-          placeholderTextColor={activeTheme.colors.inkMuted}
-          style={[inputStyle, { minHeight: 80, textAlignVertical: 'top' }]}
-          multiline
-          numberOfLines={4}
-          accessibilityLabel="任务描述"
-        />
-      </Stack>
-
-      {/* Labels */}
-      {householdId !== undefined && selectedLabelIds !== undefined && onLabelChange !== undefined && (
+      <Pressable accessibilityRole="button" accessibilityLabel="更多任务选项" accessibilityState={{ expanded: moreOpen }} aria-expanded={moreOpen} disabled={isSubmitting} onPress={() => setMoreOpen(value => !value)} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', gap: activeTheme.spacing[1] }}>
+        <Text variant="label" color="link">{moreOpen ? '收起更多选项' : '更多选项'}</Text>
+        <Text variant="caption" color="inkMuted">{[
+          isCreate && form.status !== 'pending' ? STATUSES.find(status => status.value === form.status)?.label : '',
+          form.priority !== 'medium' ? `${PRIORITIES.find(priority => priority.value === form.priority)?.label}优先级` : '',
+          form.description ? '已填写描述' : '',
+          selectedLabelIds?.length ? `${selectedLabelIds.length} 个标签` : '',
+        ].filter(Boolean).join(' · ') || (isCreate ? '状态、优先级、描述和标签' : '优先级、描述和标签')}</Text>
+      </Pressable>
+      <Stack gap={4} style={{ display: moreOpen ? 'flex' : 'none' }}>
+        {isCreate ? statusFields : null}
+        {/* Priority */}
         <Stack gap={1}>
-          <Text variant="label">标签</Text>
-          <LabelPicker
-            householdId={householdId}
-            selectedLabelIds={selectedLabelIds}
-            onChange={onLabelChange}
+          <Text variant="label">优先级</Text>
+          <View accessibilityRole="radiogroup" accessibilityLabel="任务优先级" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {PRIORITIES.map((p) => (
+              <Pressable
+                key={p.value}
+                onPress={() => updateField('priority', p.value)}
+                style={({ pressed }) => [
+                  chipStyle(form.priority === p.value),
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: form.priority === p.value }}
+                aria-checked={form.priority === p.value}
+                accessibilityLabel={`优先级: ${p.label}`}
+              >
+                <Text variant="bodySm" color={chipTextColor(form.priority === p.value)}>
+                  {p.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Stack>
+
+        {/* Description */}
+        <Stack gap={1}>
+          <Text variant="label">描述（可选）</Text>
+          <TextInput
+            editable={!isSubmitting}
+            value={form.description}
+            onChangeText={(v) => updateField('description', v)}
+            placeholder="任务描述"
+            placeholderTextColor={activeTheme.colors.inkMuted}
+            style={[inputStyle, { minHeight: 80, textAlignVertical: 'top' }]}
+            multiline
+            numberOfLines={4}
+            accessibilityLabel="任务描述"
           />
         </Stack>
-      )}
+
+        {/* Labels */}
+        {householdId !== undefined && selectedLabelIds !== undefined && onLabelChange !== undefined && (
+          <Stack gap={1}>
+            <Text variant="label">标签</Text>
+            <LabelPicker
+              householdId={householdId}
+              selectedLabelIds={selectedLabelIds}
+              onChange={onLabelChange}
+            />
+          </Stack>
+        )}
+
+      </Stack>
 
       {/* Error */}
       {error !== null && (
-        <Text variant="bodySm" color="destructive">
+        <Text accessibilityRole="alert" variant="bodySm" color="destructive">
           {error}
         </Text>
       )}

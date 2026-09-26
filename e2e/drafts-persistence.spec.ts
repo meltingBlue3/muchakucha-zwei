@@ -144,6 +144,7 @@ test('note drafts survive browser restart, stay household scoped, and clear on s
   await expect(fresh.getByLabel('笔记标题')).toHaveValue('重启后继续');
   await fresh.getByRole('button', { name: '丢弃草稿', exact: true }).click();
   const dialog = fresh.getByRole('dialog', { name: '丢弃草稿？', exact: true });
+  await expect(fresh.getByRole('dialog')).toHaveCount(1);
   for (const width of [320, 390, 1440]) {
     await fresh.setViewportSize({ width, height: 900 });
     await expect(dialog.getByRole('button', { name: '继续编辑', exact: true })).toBeVisible();
@@ -155,6 +156,7 @@ test('note drafts survive browser restart, stay household scoped, and clear on s
   await expect(fresh.getByLabel('笔记标题')).toHaveValue('重启后继续');
   await fresh.getByRole('button', { name: '丢弃草稿', exact: true }).click();
   await dialog.getByRole('button', { name: '确认丢弃草稿', exact: true }).click();
+  await expect(fresh).toHaveURL(new RegExp(`/households/${first.id}/notes$`));
   await fresh.goto(`${WEB_ORIGIN}/households/${first.id}/notes`);
   await fresh.getByRole('button', { name: '创建笔记', exact: true }).click();
   await expect(fresh.getByLabel('笔记标题')).toHaveValue('');
@@ -176,6 +178,7 @@ test('task and event drafts restore after reload, then logout clears account dra
     await page.reload();
     await expect(page.getByLabel(label)).toHaveValue(title);
   }
+  await page.getByRole('button', { name: '关闭创建日程', exact: true }).click();
   await page.getByRole('button', { name: '个人中心', exact: true }).click();
   await page.getByRole('menuitem', { name: '退出登录', exact: true }).click();
   await page.getByRole('dialog', { name: '退出登录', exact: true }).getByRole('button', { name: '确认退出登录', exact: true }).click();

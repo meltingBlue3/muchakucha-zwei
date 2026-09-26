@@ -68,7 +68,7 @@ test('creates and displays the authoritative household', async ({ page, request 
   const nameField = page.getByLabel('家庭名称');
   await expect(nameField).toBeVisible();
   await nameField.fill('我的家');
-  await page.getByRole('button', { name: '创建家庭' }).click();
+  await page.getByRole('dialog', { name: '创建家庭' }).getByRole('button', { name: '创建家庭', exact: true }).click();
 
   // Assert the authoritative result is displayed on the same route.
   await expect(page.getByRole('heading', { name: '家庭已创建' })).toBeVisible();

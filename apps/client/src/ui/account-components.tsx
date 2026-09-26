@@ -1,3 +1,4 @@
+import { rememberRouteTrigger } from '../platform/overlays/route-trigger';
 import type { PropsWithChildren } from 'react';
 import { Pressable } from 'react-native';
 import HousePlus from 'lucide-react-native/icons/house-plus';
@@ -20,7 +21,7 @@ export function HouseholdSetup({ onCreate, onJoin }: { onCreate(): void; onJoin(
         { title: '创建家庭', description: '由你开始，之后再邀请家人一起加入。', action: onCreate, icon: HousePlus, primary: true },
         { title: '查看家庭邀请', description: '家人已经邀请你？前往收件箱接受邀请。', action: onJoin, icon: Mail, primary: false },
       ].map(({ title, description, action, icon: Icon, primary }) => (
-        <Pressable key={title} accessibilityRole="button" accessibilityLabel={title} accessibilityHint={description} onPress={action}
+        <Pressable key={title} accessibilityRole="button" accessibilityLabel={title} accessibilityHint={description} onPress={() => { rememberRouteTrigger(); action(); }}
           style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], padding: theme.spacing[5], borderRadius: theme.borderRadii.xl, borderWidth: theme.borderWidths.default, borderColor: primary ? theme.colors.coral : theme.colors.border, backgroundColor: pressed ? theme.colors.surfaceMuted : primary ? theme.colors.coralSoft : theme.colors.surface })}>
           <Icon color={primary ? theme.colors.coral : theme.colors.teal} size={theme.spacing[6]} />
           <Stack gap={2} style={{ flex: 1 }}><Text variant="label">{title}</Text><Text variant="bodySm">{description}</Text></Stack>

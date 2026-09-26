@@ -168,6 +168,8 @@ export const theme = createTheme({
     accountMenuWidth: 160,
     accountMenuHeight: 120,
     dialogMaxWidth: 440,
+    editorDialogMaxWidth: 640,
+    formColumnsBreakpoint: 480,
   },
   blur: { dialog: 36 },
   motion: {

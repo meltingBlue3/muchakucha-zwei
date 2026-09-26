@@ -140,7 +140,7 @@ test.describe('recurring event and task journeys', () => {
     }
     await page.getByRole('button', { name: `${futureDate}，1个事件`, exact: true }).click();
     await page.getByRole('button', { name: new RegExp(`事件：${title}`) }).click();
-    await expect(page.getByRole('main', { name: '事件详情' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     const persisted = await listEvents(account.accessToken, householdId, futureDate, futureDate);
     expect(persisted.some((event) => event.occurrenceDate === futureDate && event.title === title)).toBe(true);
@@ -159,7 +159,7 @@ test.describe('recurring event and task journeys', () => {
     await page.getByRole('tab', { name: '日历', exact: true }).click();
     await expect(page.getByLabel('创建事件')).toBeVisible();
     await page.getByLabel('创建事件').click();
-    await expect(page.getByRole('main', { name: '创建事件' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: '创建日程' })).toBeVisible();
     await page.getByLabel('事件标题').fill(title);
     const startDateInput = page.getByLabel('开始日期');
     await startDateInput.fill(startDate);
@@ -169,6 +169,7 @@ test.describe('recurring event and task journeys', () => {
     await page.getByLabel('开始时间').fill('09:00');
     await page.getByLabel('结束时间').fill('10:00');
 
+    await page.getByRole('button', { name: '更多日程选项' }).click();
     await page.getByLabel('每天', { exact: true }).click();
     await expect(page.getByLabel('每天', { exact: true })).toBeChecked();
     await page.getByLabel('每周', { exact: true }).click();
@@ -203,7 +204,7 @@ test.describe('recurring event and task journeys', () => {
     await page.getByLabel(new RegExp(`^${String(detailOccurrence.occurrenceDate).slice(0, 10)}(?:，今天)?，\\d+个事件$`)).click();
     await page.getByLabel(`事件：${title}，重复`).click();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
-    await expect(page.getByText('重复', { exact: true })).toBeVisible();
+    await expect(page.getByText('重复安排', { exact: true })).toBeVisible();
     await expect(page.getByText(/每周.*重复，共 4 次/)).toBeVisible();
   });
 
@@ -246,7 +247,7 @@ test.describe('recurring event and task journeys', () => {
     await page.getByLabel(new RegExp(`^${String(selected.occurrenceDate).slice(0, 10)}(?:，今天)?，\\d+个事件$`)).click();
     await page.getByLabel(`事件：${eventTitle}，重复`).click();
     await page.getByLabel('编辑事件').click();
-    await expect(page.getByRole('main', { name: '编辑事件' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: '编辑日程' })).toBeVisible();
     await page.getByLabel(weekdayLabel(removedWeekday)).click();
     await page.reload();
     await expect(page.getByLabel(weekdayLabel(removedWeekday))).not.toBeChecked();
@@ -337,7 +338,7 @@ test.describe('recurring event and task journeys', () => {
     await page.getByLabel('删除任务').click();
     const deleteDialog = page.getByRole('dialog', { name: '删除这次重复？' });
     await expect(deleteDialog).toBeVisible();
-    await expect(deleteDialog.getByLabel('取消')).toBeFocused();
+    await expect(deleteDialog.getByRole('button', { name: '关闭删除这次重复？' })).toBeFocused();
     await deleteDialog.getByLabel('仅此一次').click();
     await expect(deleteDialog).toHaveCount(0);
 

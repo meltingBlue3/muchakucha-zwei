@@ -1,14 +1,12 @@
+import { HouseholdActionWindow, useHouseholdActionClose } from '../../../../../src/features/households/household-action-window';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
 
 import { sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { sessionStateStore } from '../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import { ApiClient } from '@muchakucha/api-client';
-import { FinalConfirmation } from '../../../../../src/ui/household-components';
-import { Banner, Button, Heading, Stack, Text } from '../../../../../src/ui/primitives';
-import { theme } from '../../../../../src/ui/theme';
+import { Banner, Button, Stack, Text } from '../../../../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
@@ -19,7 +17,7 @@ const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000'
  * household name, and the irreversible consequences of leaving
  * (ownership transferred, membership deleted, access lost).
  *
- * Stage 2 — FinalConfirmation: D-10 safe-default final confirmation
+ * Stage 2 — Confirmation inside the same window
  * with "取消离开" (safe, no mutation) and "确认离开家庭" (destructive)
  * in safe-first DOM order.
  *
@@ -29,6 +27,8 @@ const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000'
  */
 export default function LeaveHouseholdPage() {
   const router = useRouter();
+  const close = useHouseholdActionClose();
+  const exitAllowed = useRef(false);
   const { enterAccessChanged } = useHouseholdContext();
   const params = useLocalSearchParams<{
     id: string;
@@ -66,6 +66,7 @@ export default function LeaveHouseholdPage() {
       // further routing. If the user has no other households, they land on
       // the D-01 create/accept handoff page.
       enterAccessChanged(householdName, householdId);
+      exitAllowed.current = true;
       router.replace('/households');
     } catch (_err: unknown) {
       setError('离开家庭失败，当前家庭状态未改变。请重试。');
@@ -73,11 +74,11 @@ export default function LeaveHouseholdPage() {
       // On failure, return to consequence stage so user can re-evaluate.
       setStage('consequence');
     }
-  }, [enterAccessChanged, householdId, householdName, successorMembershipId, router]);
+  }, [enterAccessChanged, householdId, householdName, successorMembershipId, router, close]);
 
   const handleCancel = useCallback(() => {
-    router.back();
-  }, [router]);
+    close();
+  }, [close]);
 
   const handleContinue = useCallback(() => {
     setError(undefined);
@@ -94,68 +95,14 @@ export default function LeaveHouseholdPage() {
     return null;
   }
 
-  // ---- Stage 1: Consequence summary ----
-
-  if (stage === 'consequence') return (
-    <>
-      {error !== undefined ? (
-        <View style={{ padding: theme.spacing[4] }}>
-          <Banner title="离开家庭失败">{error}</Banner>
-        </View>
-      ) : null}
-      <View
-        accessibilityLabel="离开家庭确认"
-        accessibilityLiveRegion="assertive"
-        accessibilityRole="alert"
-        style={{
-          alignItems: 'center',
-          flex: 1,
-          justifyContent: 'center',
-          padding: theme.spacing[6],
-        }}
-      >
-        <Stack gap={6} style={{ alignItems: 'stretch', maxWidth: 480, width: '100%' }}>
-          <Stack gap={4}>
-            <Heading>离开家庭</Heading>
-            <Text>
-              你即将离开「{householdName}」并将所有权移交给 {successorDisplayName}。
-            </Text>
-            <Stack gap={2}>
-              <Text variant="bodySm">
-                离开后：
-              </Text>
-              <Text variant="bodySm">
-                - {successorDisplayName} 将成为新的所有者
-              </Text>
-              <Text variant="bodySm">
-                - 你将不再属于这个家庭
-              </Text>
-              <Text variant="bodySm">
-                - 你将失去管理家庭和访问家庭数据的权限
-              </Text>
-              <Text variant="bodySm">
-                - 此操作不可撤销
-              </Text>
-            </Stack>
-          </Stack>
-          <Stack gap={3}>
-            <Button label="取消离开" onPress={handleCancel} />
-            <Button label="继续" onPress={handleContinue} />
-          </Stack>
-        </Stack>
-      </View>
-    </>
-  );
-
-  return (
-    <FinalConfirmation
-      heading="确认离开家庭"
-      body={`确认后将离开「${householdName}」，所有权将永久转移给 ${successorDisplayName}。\n\n你将不再是该家庭的成员。此操作不可撤销。`}
-      safeActionLabel="取消离开"
-      destructiveActionLabel="确认离开家庭"
-      onSafeAction={handleCancel}
-      onDestructiveAction={() => { void handleConfirm(); }}
-      busy={busy}
-    />
-  );
+  const closeStep = () => { if (stage === 'final') setStage('consequence'); else handleCancel(); };
+  return <HouseholdActionWindow title={stage === 'final' ? '确认离开家庭' : '离开家庭'} busy={busy} onClose={closeStep} onBackStep={stage === 'final' ? closeStep : undefined} exitAllowed={exitAllowed}>
+    <Stack gap={4}>
+      {error ? <Banner>{error}</Banner> : null}
+      <Text>你即将离开「{householdName}」，并将所有权移交给 {successorDisplayName}。离开后你将无法访问家庭，共享日程、任务和笔记会保留在家庭中。</Text>
+      {stage === 'final' ? <Text>请确认上述变更。此操作不可撤销。</Text> : null}
+      <Button label="取消离开" tone="secondary" disabled={busy} onPress={() => { exitAllowed.current = true; handleCancel(); }} />
+      {stage === 'consequence' ? <Button label="继续" onPress={handleContinue} /> : <Button label="确认离开家庭" loading={busy} onPress={() => void handleConfirm()} />}
+    </Stack>
+  </HouseholdActionWindow>;
 }

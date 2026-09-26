@@ -375,6 +375,7 @@ describe('task form recurrence integration', () => {
       </MuchakuchaThemeProvider>,
     );
 
+    await fireEvent.press(view.getByRole('button', { name: '任务重复设置' }));
     expect(view.getByLabelText('不重复').props.accessibilityState.disabled).toBe(false);
   });
 });

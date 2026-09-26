@@ -1,0 +1,119 @@
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+
+import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
+import { useHouseholdContext } from '../households/household-context';
+import { HouseholdSettings } from '../households/household-settings';
+import {
+  AccessChangedPanel,
+  AppShell,
+  HouseholdSwitcher,
+} from '../../ui/household-components';
+import { Stack, Text } from '../../ui/primitives';
+
+export default function HouseholdSettingsRoute() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const {
+    viewState,
+    households,
+    currentHouseholdId,
+    accessChangedHouseholdName,
+    switchHousehold,
+    refreshHouseholds,
+    enterAccessChanged,
+  } = useHouseholdContext();
+
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
+  const householdName = currentHousehold?.name ?? '';
+
+  const deps = useMemo(
+    () => ({
+      householdApi: sessionApiClient,
+      getAccessToken: () => sessionTransport.getAccessToken(),
+    }),
+    [],
+  );
+
+  const handleSwitch = useCallback(async (householdId: string) => {
+    if (householdId === (id ?? currentHouseholdId)) {
+      setSwitcherOpen(false);
+      return;
+    }
+    const success = await switchHousehold(householdId);
+    if (success) {
+      void router.replace(`/households/${encodeURIComponent(householdId)}/settings`);
+    }
+    setSwitcherOpen(false);
+  }, [id, currentHouseholdId, switchHousehold, router]);
+
+  const handleRenameAccessChanged = useCallback((lostHouseholdName: string) => {
+    enterAccessChanged(lostHouseholdName, id ?? currentHouseholdId ?? undefined);
+  }, [enterAccessChanged, id, currentHouseholdId]);
+
+  const handleInviteAccessChanged = useCallback((lostHouseholdName: string) => {
+    enterAccessChanged(lostHouseholdName, id ?? currentHouseholdId ?? undefined);
+  }, [enterAccessChanged, id, currentHouseholdId]);
+
+  // ---- AccessChanged or member lost access ----
+  if (viewState === 'accessChanged') {
+    const hasOtherHouseholds = households.length > 0;
+    return (
+      <AppShell accessibilityLabel="家庭访问权已变化">
+        <AccessChangedPanel
+          hasOtherHouseholds={hasOtherHouseholds}
+          {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
+          onChooseOther={() => {
+            void refreshHouseholds().then(() => router.replace('/households'));
+          }}
+          onCreateNew={() => {
+            void router.replace('/household-handoff');
+          }}
+        />
+      </AppShell>
+    );
+  }
+
+  // ---- Route ID mismatch guard ----
+  if (id === undefined || id === '') {
+    return (
+      <AppShell accessibilityLabel="页面未找到">
+        <Stack gap={4}>
+          <Text>这个页面暂时无法访问。</Text>
+        </Stack>
+      </AppShell>
+    );
+  }
+
+  return (
+    <>
+      <HouseholdSettings
+        deps={deps}
+        householdId={id}
+        householdName={householdName}
+        onOpenSwitcher={() => setSwitcherOpen(true)}
+        onRenameAccessChanged={handleRenameAccessChanged}
+        showRename
+        onInviteAccessChanged={handleInviteAccessChanged}
+
+        showInvite
+        navTitle="家庭设置"
+        navShowBack
+        navShowProfile
+      />
+      <HouseholdSwitcher
+        currentHouseholdId={id ?? currentHouseholdId}
+        households={households}
+        onCreateNew={() => {
+          void router.push('/households/new');
+          setSwitcherOpen(false);
+        }}
+        onClose={() => setSwitcherOpen(false)}
+        onSelect={(hid) => { void handleSwitch(hid); }}
+        visible={switcherOpen}
+      />
+    </>
+  );
+}

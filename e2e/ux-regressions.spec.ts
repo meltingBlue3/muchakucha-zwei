@@ -196,7 +196,6 @@ test('family management is a restorable destination', async ({ page }) => {
 test('task filters and calendar month survive tab switches', async ({ page }) => {
   await setup(page);
   await page.goto(`/households/${a}/tasks`);
-  await page.getByRole('button', { name: '筛选任务', exact: true }).click();
   await page.getByLabel('筛选：待办', { exact: true }).click();
   await page.getByRole('tab', { name: '日历', exact: true }).click();
   await page.getByLabel('下一个月').click();
@@ -217,6 +216,7 @@ for (const kind of ['tasks', 'events'] as const) {
       await expect(page.getByText('保存到：家庭 A', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: /当前家庭/ })).toHaveCount(0);
     }
+    if (kind === 'events') await page.getByRole('button', { name: '更多日程选项' }).click();
     await page.getByLabel('选择标签 家务', { exact: true }).click();
     await page.getByLabel(kind === 'tasks' ? '创建任务' : '创建', { exact: true }).filter({ visible: true }).last().click();
     await expect(page.getByText('内容已创建，但标签未保存。重试只会保存标签，不会重复创建。')).toBeVisible();

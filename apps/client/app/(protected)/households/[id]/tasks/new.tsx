@@ -1,8 +1,9 @@
+import { TaskWindow, useTaskWindowClose } from '../../../../../src/features/tasks/task-window';
 import { DraftNotice } from '../../../../../src/ui/draft-notice';
 import { useCreateWithLabels } from '../../../../../src/features/households/use-create-with-labels';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { GetHouseholdMemberDto } from '@muchakucha/api-client';
@@ -24,6 +25,8 @@ export default function CreateTaskRoute() {
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:tasks:new:`;
   const router = useRouter();
+  const exitAllowed = useRef(false);
+  const { close: handleClose } = useTaskWindowClose();
   const activeTheme = useTheme<Theme>();
   const {
     viewState,
@@ -74,7 +77,7 @@ export default function CreateTaskRoute() {
       if (token === null) throw new Error('Session expired');
       return sessionApiClient.tagTask(token, id!, resourceId, { labelIds });
     },
-    onComplete: () => { workspace.clear(draftPrefix); router.back(); },
+    onComplete: () => { workspace.clear(draftPrefix); exitAllowed.current = true; handleClose(); },
   });
   const handleSubmit = (data: CreateTaskDto) => submit(data, selectedLabelIds);
 
@@ -92,12 +95,12 @@ export default function CreateTaskRoute() {
   }
 
   return (
-    <AppShell accessibilityLabel="创建任务" title="创建任务" showBack showProfile>
+    <TaskWindow title="创建任务" busy={submitting} exitAllowed={exitAllowed}>
       <Stack gap={4}>
         <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
 
         {created !== null ? (
-          <Stack gap={4}><DraftNotice draftKey={draftPrefix + 'created'} busy={submitting} onDiscard={() => router.back()} /><Text>任务已创建</Text><Text accessibilityRole="alert">{submitError ?? '内容已创建，标签尚未保存。'}</Text><Button label="重试保存标签" loading={submitting} onPress={() => void retry()} /></Stack>
+          <Stack gap={4}><DraftNotice draftKey={draftPrefix + 'created'} busy={submitting} onDiscard={handleClose} /><Text>任务已创建</Text><Text accessibilityRole="alert">{submitError ?? '内容已创建，标签尚未保存。'}</Text><Button label="重试保存标签" loading={submitting} onPress={() => void retry()} /></Stack>
         ) : loading ? (
           <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
             <ActivityIndicator color={activeTheme.colors.coral} />
@@ -117,7 +120,7 @@ export default function CreateTaskRoute() {
             draftKey={draftPrefix + 'form'}
               members={memberOptions}
               onSubmit={handleSubmit}
-              onCancel={() => router.back()}
+              onCancel={handleClose}
               submitLabel="创建任务"
               isSubmitting={submitting}
               householdId={householdId}
@@ -127,6 +130,6 @@ export default function CreateTaskRoute() {
           </Stack>
         )}
       </Stack>
-    </AppShell>
+    </TaskWindow>
   );
 }

@@ -1,13 +1,11 @@
+import { HouseholdActionWindow, useHouseholdActionClose } from '../../../../../../src/features/households/household-action-window';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
 
 import { sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { sessionStateStore } from '../../../../../../src/features/auth/session-runtime';
 import { ApiClient } from '@muchakucha/api-client';
-import { ConfirmationPage } from '../../../../../../src/ui/household-components';
-import { Banner } from '../../../../../../src/ui/primitives';
-import { theme } from '../../../../../../src/ui/theme';
+import { Banner, Button, Stack, Text } from '../../../../../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
@@ -25,6 +23,8 @@ const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000'
  */
 export default function RemoveMemberPage() {
   const router = useRouter();
+  const close = useHouseholdActionClose();
+  const exitAllowed = useRef(false);
   const params = useLocalSearchParams<{
     id: string;
     membershipId: string;
@@ -54,16 +54,17 @@ export default function RemoveMemberPage() {
         membershipId,
       );
 
-      router.back();
+      exitAllowed.current = true;
+      close();
     } catch (_err: unknown) {
       setError('移除失败，当前家庭状态未改变。请重试。');
       setBusy(false);
     }
-  }, [householdId, membershipId, router]);
+  }, [householdId, membershipId, close]);
 
   const handleSafeAction = useCallback(() => {
-    router.back();
-  }, [router]);
+    close();
+  }, [close]);
 
   // Check auth state — redirect if not authenticated. This must run after
   // every hook above: an early return before a hook call changes the hook
@@ -77,26 +78,12 @@ export default function RemoveMemberPage() {
 
   const isAdminTarget = targetRole === 'ADMIN';
 
-  return (
-    <>
-      {error !== undefined ? (
-        <View style={{ padding: theme.spacing[4] }}>
-          <Banner title="成员移除失败">{error}</Banner>
-        </View>
-      ) : null}
-      <ConfirmationPage
-        heading={`将 ${displayName} 从家庭中移除？`}
-        body={
-          isAdminTarget
-            ? `${displayName} 将失去对家庭的所有管理权限和访问权。`
-            : `${displayName} 将失去对家庭的访问权。此操作不可撤销。`
-        }
-        safeActionLabel="保留成员资格"
-        safeActionOnPress={handleSafeAction}
-        destructiveActionLabel="移除成员"
-        destructiveActionOnPress={() => { void handleRemove(); }}
-        busy={busy}
-      />
-    </>
-  );
+  return <HouseholdActionWindow title={`将 ${displayName} 从家庭中移除？`} busy={busy} onClose={handleSafeAction} exitAllowed={exitAllowed}>
+    <Stack gap={4}>
+      {error ? <Banner title="成员移除失败">{error}</Banner> : null}
+      <Text>{isAdminTarget ? `${displayName} 将失去对家庭的所有管理权限和访问权。` : `${displayName} 将失去对家庭的访问权。此操作不可撤销。`}</Text>
+      <Button label="保留成员资格" tone="secondary" disabled={busy} onPress={handleSafeAction} />
+      <Button label="移除成员" loading={busy} onPress={() => void handleRemove()} />
+    </Stack>
+  </HouseholdActionWindow>;
 }

@@ -1,15 +1,15 @@
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable } from 'react-native';
 import { useTheme } from '@shopify/restyle';
-import type { NoteResponseDto } from '@muchakucha/api-client';
+import type { NoteResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { NoteForm } from '../../../../../../src/features/notes/note-form';
-import { AppShell } from '../../../../../../src/ui/household-components';
-import { Stack, Text } from '../../../../../../src/ui/primitives';
+import { NoteWindow } from '../../../../../../src/features/notes/note-window';
+import { Button, Spinner, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 import type { CreateNoteDto } from '@muchakucha/api-client';
 
@@ -18,6 +18,8 @@ export default function EditNoteRoute() {
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:notes:${noteId}:`;
   const router = useRouter();
+  const exitAllowed = useRef(false);
+  const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const activeTheme = useTheme<Theme>();
   const [note, setNote] = useState<NoteResponseDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,13 +37,15 @@ export default function EditNoteRoute() {
   const fetchNote = useCallback(async () => {
     if (id === undefined || noteId === undefined) return;
     setLoading(true);
+    setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
         setError('登录已过期。');
         return;
       }
-      const result = await sessionApiClient.getNote(token, id, noteId);
+      const [result, household] = await Promise.all([sessionApiClient.getNote(token, id, noteId), sessionApiClient.getHousehold(token, id)]);
+      setMembers(household.members);
       captureEditBaseline(workspace, draftPrefix, result);
       setNote(result);
     } catch {
@@ -67,6 +71,7 @@ export default function EditNoteRoute() {
         }
         await sessionApiClient.updateNote(token, id!, noteId!, { ...data, expectedUpdatedAt: conflict.precondition.expectedUpdatedAt });
         workspace.clear(draftPrefix);
+        exitAllowed.current = true;
         router.dismissTo(`/households/${encodeURIComponent(id!)}/notes/${encodeURIComponent(noteId!)}`);
       } catch (caught: unknown) {
         if (!conflict.handle(caught)) setError('保存失败，请重试。');
@@ -89,6 +94,7 @@ export default function EditNoteRoute() {
       await sessionApiClient.deleteNote(token, id!, noteId!);
       // Go straight back to the note list, not router.back() — a single
       // pop would land on the now-deleted note's detail screen.
+      exitAllowed.current = true;
       router.dismissTo(`/households/${encodeURIComponent(id!)}/notes`);
     } catch {
       setError('删除失败，请重试。');
@@ -97,122 +103,29 @@ export default function EditNoteRoute() {
     }
   }, [id, noteId, router]);
 
-  if (loading) {
-    return (
-      <AppShell accessibilityLabel="加载笔记中" title="编辑笔记" showBack showProfile>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: activeTheme.spacing[12] }}>
-          <ActivityIndicator color={activeTheme.colors.coral} />
-        </View>
-      </AppShell>
-    );
-  }
-
-  if (note === null) {
-    return (
-      <AppShell accessibilityLabel="笔记加载失败" title="编辑笔记" showBack showProfile>
-        <Stack gap={4}>
-          <Text variant="heading">笔记</Text>
-          <Text>{error ?? '笔记未找到。'}</Text>
-          <Pressable onPress={() => router.back()} hitSlop={activeTheme.spacing[4]}>
-            <Text variant="label" color="coral">
-              返回笔记列表
-            </Text>
-          </Pressable>
-        </Stack>
-      </AppShell>
-    );
-  }
+  const actor = members.find(member => member.isCurrentUser);
+  const canDelete = actor !== undefined && (actor.role === 'OWNER' || actor.role === 'ADMIN' || actor.userId === note?.createdBy);
+  const close = () => {
+    if (confirmDelete) setConfirmDelete(false);
+    else router.dismissTo(`/households/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`);
+  };
 
   return (
-    <AppShell accessibilityLabel="编辑笔记" title="编辑笔记" showBack showProfile>
-      <Stack gap={4}>
-        <Text variant="heading">编辑笔记</Text>
-        {error !== null && (
-          <Text variant="bodySm" color="destructive">
-            {error}
-          </Text>
-        )}
+    <NoteWindow title={confirmDelete ? '删除笔记' : '编辑笔记'} busy={isSubmitting || deleting} onClose={close} onBackStep={confirmDelete ? close : undefined} exitAllowed={exitAllowed}>
+      {confirmDelete ? <Stack gap={3}>
+        <Text>确定要删除这篇笔记吗？此操作不可撤销。</Text>
+        {error ? <Text color="destructive" accessibilityRole="alert">{error}</Text> : null}
+        <Button label="取消删除" tone="secondary" disabled={deleting} onPress={close} />
+        <Button label="确认删除笔记" loading={deleting} onPress={() => void handleDelete()} />
+      </Stack> : loading ? <Spinner label="正在加载笔记" /> : note === null ? <Stack gap={3}>
+        <Text accessibilityRole="alert">{error ?? '笔记未找到或已被删除。'}</Text>
+        <Button label="重试" tone="secondary" onPress={() => void fetchNote()} />
+      </Stack> : <Stack gap={4}>
+        {error ? <Text color="destructive" accessibilityRole="alert">{error}</Text> : null}
         {conflict.panel}
-        <NoteForm
-          draftKey={draftPrefix + 'form'}
-          initial={note}
-          onSubmit={handleSubmit}
-          onCancel={() => router.back()}
-          submitLabel="保存"
-          isSubmitting={isSubmitting}
-        />
-
-        {/* Delete section */}
-        <View style={{ marginTop: activeTheme.spacing[4], borderTopWidth: 1, borderTopColor: activeTheme.colors.border, paddingTop: activeTheme.spacing[4] }}>
-          {!confirmDelete ? (
-            <Pressable
-              onPress={() => setConfirmDelete(true)}
-              hitSlop={activeTheme.spacing[1]}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                paddingVertical: activeTheme.spacing[3],
-                borderRadius: activeTheme.borderRadii.sm,
-                borderWidth: 1,
-                borderColor: activeTheme.colors.destructive,
-                opacity: pressed ? 0.7 : 1,
-              })}
-              accessibilityRole="button"
-              accessibilityLabel="删除笔记"
-            >
-              <Text variant="button" color="destructive">
-                删除笔记
-              </Text>
-            </Pressable>
-          ) : (
-            <Stack gap={3}>
-              <Text variant="bodySm" color="destructive">
-                确定要删除这个笔记吗？此操作不可撤销。
-              </Text>
-              <View style={{ flexDirection: 'row', gap: activeTheme.spacing[3] }}>
-                <Pressable
-                  onPress={() => setConfirmDelete(false)}
-                  disabled={deleting}
-                  hitSlop={activeTheme.spacing[1]}
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    alignItems: 'center',
-                    paddingVertical: activeTheme.spacing[3],
-                    borderRadius: activeTheme.borderRadii.sm,
-                    borderWidth: 1,
-                    borderColor: activeTheme.colors.border,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: deleting }}
-                  accessibilityLabel="取消删除"
-                >
-                  <Text variant="button" color="ink">取消</Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleDelete}
-                  disabled={deleting}
-                  hitSlop={activeTheme.spacing[1]}
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    alignItems: 'center',
-                    paddingVertical: activeTheme.spacing[3],
-                    borderRadius: activeTheme.borderRadii.sm,
-                    backgroundColor: deleting ? activeTheme.colors.disabled : activeTheme.colors.destructive,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: deleting, busy: deleting }}
-                  accessibilityLabel="确认删除笔记"
-                >
-                  <Text variant="button" color="surface">
-                    {deleting ? '删除中…' : '确认删除'}
-                  </Text>
-                </Pressable>
-              </View>
-            </Stack>
-          )}
-        </View>
-      </Stack>
-    </AppShell>
+        <NoteForm draftKey={draftPrefix + 'form'} initial={note} onSubmit={handleSubmit} onCancel={close} submitLabel="保存" isSubmitting={isSubmitting} />
+        {canDelete ? <Pressable accessibilityRole="button" accessibilityLabel="删除笔记" disabled={isSubmitting} onPress={() => setConfirmDelete(true)} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', alignSelf: 'flex-start' }}><Text variant="label" color="destructive">删除笔记</Text></Pressable> : null}
+      </Stack>}
+    </NoteWindow>
   );
 }

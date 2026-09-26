@@ -1,10 +1,10 @@
 import { useWorkspaceStore } from '../../../../../src/ui/workspace-state';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { NoteForm } from '../../../../../src/features/notes/note-form';
-import { AppShell } from '../../../../../src/ui/household-components';
+import { NoteWindow, useNoteWindowClose } from '../../../../../src/features/notes/note-window';
 import { Stack, Text } from '../../../../../src/ui/primitives';
 import type { CreateNoteDto } from '@muchakucha/api-client';
 
@@ -12,7 +12,8 @@ export default function CreateNoteRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:notes:new:`;
-  const router = useRouter();
+  const { close } = useNoteWindowClose();
+  const exitAllowed = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,20 +29,20 @@ export default function CreateNoteRoute() {
         }
         await sessionApiClient.createNote(token, id!, data);
         workspace.clear(draftPrefix);
-        router.back();
+        exitAllowed.current = true;
+        close();
       } catch {
         setError('创建笔记失败，请重试。');
       } finally {
         setIsSubmitting(false);
       }
     },
-    [id, router, workspace, draftPrefix],
+    [id, close, workspace, draftPrefix],
   );
 
   return (
-    <AppShell accessibilityLabel="创建笔记" title="创建笔记" showBack showProfile>
+    <NoteWindow title="创建笔记" busy={isSubmitting} exitAllowed={exitAllowed}>
       <Stack gap={4}>
-        <Text variant="heading">创建笔记</Text>
         {error !== null && (
           <Text variant="bodySm" color="destructive">
             {error}
@@ -50,11 +51,11 @@ export default function CreateNoteRoute() {
         <NoteForm
           draftKey={draftPrefix + 'form'}
           onSubmit={handleSubmit}
-          onCancel={() => router.back()}
+          onCancel={close}
           submitLabel="创建"
           isSubmitting={isSubmitting}
         />
       </Stack>
-    </AppShell>
+    </NoteWindow>
   );
 }

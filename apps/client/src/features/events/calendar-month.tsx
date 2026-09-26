@@ -18,6 +18,7 @@ interface CalendarMonthProps {
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onSelectDate: (dateIso: string) => void;
+  onToday?: () => void;
 }
 
 export function CalendarMonth({
@@ -28,6 +29,7 @@ export function CalendarMonth({
   onPrevMonth,
   onNextMonth,
   onSelectDate,
+  onToday,
 }: CalendarMonthProps) {
   const activeTheme = useTheme<Theme>();
   const dayNames = getDayNames();
@@ -67,7 +69,10 @@ export function CalendarMonth({
         >
           <ChevronLeft color={activeTheme.colors.coral} size={activeTheme.controlSizes.icon} />
         </Pressable>
-        <Text variant="body" style={{ fontWeight: '600', flexShrink: 1 }}>{formatMonthLabel(year, month)}</Text>
+        <View style={{ alignItems: 'center', flexShrink: 1 }}>
+          <Text variant="body" style={{ fontWeight: '600' }}>{formatMonthLabel(year, month)}</Text>
+          {onToday ? <Pressable accessibilityRole="button" accessibilityLabel="回到今天" onPress={onToday} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: activeTheme.spacing[3] }}><Text variant="label" color="link">今天</Text></Pressable> : null}
+        </View>
         <Pressable
           onPress={onNextMonth}
           accessibilityLabel="下一个月"
@@ -120,6 +125,7 @@ export function CalendarMonth({
                 onPress={() => handleSelectDay(day)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
+                aria-pressed={isSelected}
                 accessibilityLabel={`${day.iso}${day.isToday ? '，今天' : ''}${eventCount > 0 ? `，${eventCount}个事件` : ''}`}
                 style={({ pressed }) => ({
                   flex: 1,

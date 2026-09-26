@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Banner, Heading, Spinner, Stack, Text } from '../../ui/primitives';
+import { Banner, Button, Heading, Spinner, Stack, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
 
 export type SeriesScope = 'this_only' | 'this_and_following';
@@ -32,6 +32,22 @@ const MODE_COPY: Record<SeriesScopeMode, { body: string; title: string }> = {
     title: '更改重复规则？',
   },
 };
+
+/** Embedded step for a host dialog; no second modal or focus trap. */
+export function seriesScopeTitle(mode: SeriesScopeMode): string { return MODE_COPY[mode].title; }
+
+export function SeriesScopeContent({ mode, error, onClose, onSelect, submitting = null }: Omit<SeriesScopeSheetProps, 'visible'>) {
+  const busy = submitting !== null;
+  return <Stack gap={3}>
+    <Text>{MODE_COPY[mode].body}</Text>
+    <Text variant="bodySm" color="inkMuted">「此后所有」只影响这一次和之后的重复，已经过去的不受影响。</Text>
+    {error ? <Text accessibilityRole="alert" color="destructive">{error}</Text> : null}
+    <Button label="仅此一次" disabled={busy || mode === 'rule-change'} loading={submitting === 'this_only'} onPress={() => onSelect('this_only')} />
+    {mode === 'rule-change' ? <Text variant="caption" color="inkMuted">重复规则的改动只能应用到这一次和之后。</Text> : null}
+    <Button label="此后所有" tone="secondary" disabled={busy} loading={submitting === 'this_and_following'} onPress={() => onSelect('this_and_following')} />
+    <Button label="取消" tone="secondary" disabled={busy} onPress={onClose} />
+  </Stack>;
+}
 
 const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',

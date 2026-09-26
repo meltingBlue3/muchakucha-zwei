@@ -161,6 +161,7 @@ test(`the detail page carries 进行中 as its own action${recurring ? ' (recurr
     `/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`,
   );
 
+  await page.getByRole('button', { name: '更多任务操作' }).click();
   await page.getByRole('button', { name: '标记为进行中' }).click();
 
   await expect(page.getByRole('button', { name: '退回待办' })).toBeVisible();

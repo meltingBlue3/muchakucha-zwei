@@ -83,10 +83,9 @@ describe('canManageLabels', () => {
 
 describe('labels screen offers only the actions the API will accept', () => {
   test.each(['OWNER', 'ADMIN'] as const)('%s sees create, edit, and delete', async (actorRole) => {
-    const { getByLabelText, queryByText } = await renderAs(actorRole);
+    const { getByLabelText } = await renderAs(actorRole);
 
-    expect(queryByText('创建新标签')).not.toBeNull();
-    expect(getByLabelText('创建标签')).toBeTruthy();
+    expect(getByLabelText('新建标签')).toBeTruthy();
     await waitFor(() => expect(getByLabelText('编辑标签 采购')).toBeTruthy());
     expect(getByLabelText('删除标签 采购')).toBeTruthy();
   });
@@ -98,8 +97,7 @@ describe('labels screen offers only the actions the API will accept', () => {
     // though they cannot maintain the label set.
     await waitFor(() => expect(queryByText('采购')).not.toBeNull());
 
-    expect(queryByText('创建新标签')).toBeNull();
-    expect(queryByLabelText('创建标签')).toBeNull();
+    expect(queryByLabelText('新建标签')).toBeNull();
     expect(queryByLabelText('编辑标签 采购')).toBeNull();
     expect(queryByLabelText('删除标签 采购')).toBeNull();
   });
@@ -115,6 +113,6 @@ describe('labels screen offers only the actions the API will accept', () => {
 
     await waitFor(() => expect(queryByText(/还没有标签/)).not.toBeNull());
     expect(queryByText(/使用上方表单创建标签/)).toBeNull();
-    expect(queryByText(/等家主或管理员创建后/)).not.toBeNull();
+    expect(queryByText(/家主或管理员创建后/)).not.toBeNull();
   });
 });

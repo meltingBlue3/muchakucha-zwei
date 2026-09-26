@@ -49,8 +49,11 @@ export function useFocusEffect(): void {
   // No-op: navigation focus lifecycle is exercised by Playwright E2E, not Jest.
 }
 
+export function useIsFocused() { return true; }
+
 export function useNavigation() {
   return {
+    getState: () => ({ routes: [], index: 0 }),
     addListener: jest.fn(() => jest.fn()),
     setOptions: jest.fn(),
   };

@@ -39,6 +39,7 @@ type RuleListItem = {
   id: string;
   kind: 'task' | 'event' | null;
   title: string;
+  freq: string;
   nextOccurrenceDate: string | null;
 };
 
@@ -226,7 +227,7 @@ function ruleListScreen(page: Page) {
 }
 
 function ruleDetailScreen(page: Page) {
-  return page.getByRole('main', { name: '周期规则详情', exact: true });
+  return page.getByRole('dialog', { name: /^(重复安排|确认保存重复安排|结束重复安排)$/ });
 }
 
 async function openRuleList(page: Page, householdId: string): Promise<void> {
@@ -425,9 +426,8 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(list.getByText(ENDED_ROW_LINE, { exact: true })).toBeVisible();
     await expectNoSeriousAxeViolations(page);
 
-    // Detail of the still-running rule: axe, then the two-step confirm's
-    // keyboard contract — 确认 and 取消 follow the trigger in DOM order, so
-    // Tab reaches them directly without hunting elsewhere on the page.
+    // The confirmation replaces the editor in the same window. Focus starts
+    // on close and cycles back through the confirmation and cancel actions.
     await list.getByLabel(`任务周期规则：${activeTitle}，每天重复，永不结束`).click();
     await expect(detail).toBeVisible();
     await expectNoSeriousAxeViolations(page);
@@ -437,10 +437,11 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(endTrigger).toBeFocused();
     await endTrigger.click();
     await expect(detail.getByText(END_CONFIRM_PROMPT, { exact: true })).toBeVisible();
-    await page.keyboard.press('Tab');
+    await expect(detail.getByRole('button', { name: '关闭结束重复安排' })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
     await expect(detail.getByLabel(END_CONFIRM_ACTION)).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(detail.getByLabel('取消')).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(detail.getByLabel('取消', { exact: true })).toBeFocused();
     await detail.getByLabel('取消').click();
     await expect(detail.getByText(END_CONFIRM_PROMPT, { exact: true })).toHaveCount(0);
 
@@ -453,4 +454,34 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(detail.getByLabel(END_ACTION)).toHaveAttribute('aria-disabled', 'true');
     await expect(detail.getByLabel('保存更改')).toHaveAttribute('aria-disabled', 'true');
   });
+});
+
+test('a direct rule window preserves draft choices and saves only after confirmation', async ({ page }, testInfo) => {
+  const account = await prepareAccount('window-edit');
+  const householdId = await createHousehold(account.accessToken, '重复安排窗口');
+  const ruleId = await createDailyTaskRule(account.accessToken, householdId, '每周整理');
+  await loginUsernameFixture(page, account.username, password, `/households/${householdId}/recurrence-rules/${ruleId}`);
+  await page.getByRole('radio', { name: '每周', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('radio', { name: '每周', exact: true })).toBeChecked();
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`rule-window-${width}.png`) });
+  }
+  await page.getByRole('button', { name: '保存更改', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  const unchanged = await apiCall(account.accessToken, 'GET', `/api/v1/households/${householdId}/recurrence-rules/${ruleId}`);
+  expect(unchanged.status).toBe(200);
+  expect(unchanged.body.freq).toBe('daily');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('radio', { name: '每周', exact: true })).toBeChecked();
+  await page.getByRole('button', { name: '保存更改', exact: true }).click();
+  await page.getByRole('button', { name: '确认保存', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/households/${householdId}/recurrence-rules$`));
+  const saved = await listRules(account.accessToken, householdId);
+  expect(saved.some(rule => rule.freq === 'weekly')).toBe(true);
+  const todayTasks = await listTasks(account.accessToken, householdId);
+  expect(todayTasks.some(task => task.title === '每周整理' && task.occurrenceDate === localIsoDate(0))).toBe(true);
 });

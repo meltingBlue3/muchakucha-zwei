@@ -1,7 +1,9 @@
 import { draftWorkspace } from '../../src/ui/workspace-runtime';
 import { WorkspaceStateProvider } from '../../src/ui/workspace-state';
 import { Stack } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
+import { BlurTargetView } from 'expo-blur';
+import { DialogBackground } from '../../src/ui/dialog-background';
 import { StyleSheet, View } from 'react-native';
 
 import { sessionApiClient, sessionTransport } from '../../src/features/auth/session-runtime';
@@ -18,9 +20,11 @@ import { theme } from '../../src/ui/theme';
  */
 function ResolvingGate({ children }: { children: React.ReactNode }) {
   const { viewState } = useHouseholdContext();
+  const blurTarget = useRef<View>(null);
 
   return (
-    <View style={styles.container}>
+    <DialogBackground.Provider value={blurTarget}>
+    <BlurTargetView ref={blurTarget} style={styles.container}>
       {/* Always keep the Stack mounted so expo-router state survives
           household switches and refreshes. */}
       {children}
@@ -38,7 +42,8 @@ function ResolvingGate({ children }: { children: React.ReactNode }) {
           </AppShell>
         </View>
       ) : null}
-    </View>
+    </BlurTargetView>
+    </DialogBackground.Provider>
   );
 }
 
@@ -78,7 +83,11 @@ export default function ProtectedLayout() {
     React.createElement(
       ResolvingGate,
       null,
-      React.createElement(WorkspaceStateProvider, { store: draftWorkspace }, React.createElement(Stack, { screenOptions: { headerShown: false } })),
+      React.createElement(WorkspaceStateProvider, { store: draftWorkspace }, React.createElement(Stack, { screenOptions: { headerShown: false } },
+        ...['households/[id]/tasks/new', 'households/[id]/tasks/[taskId]/index', 'households/[id]/tasks/[taskId]/edit', 'households/[id]/events/new', 'households/[id]/events/[eventId]/index', 'households/[id]/events/[eventId]/edit', 'households/[id]/notes/new', 'households/[id]/notes/[noteId]/index', 'households/[id]/notes/[noteId]/edit', 'households/new', 'households/[id]/recurrence-rules/[ruleId]/index', 'households/[id]/members/[membershipId]/remove', 'households/[id]/members/[membershipId]/role', 'households/[id]/ownership/transfer', 'households/[id]/ownership/leave', 'households/[id]/leave', 'households/[id]/invitations/[invitationId]/revoke'].map(name =>
+          React.createElement(Stack.Screen, { key: name, name, options: { presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } } }),
+        ),
+      )),
     ),
   );
 }

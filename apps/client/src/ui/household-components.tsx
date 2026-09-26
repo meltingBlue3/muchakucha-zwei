@@ -1,3 +1,4 @@
+import { rememberRouteTrigger } from '../platform/overlays/route-trigger';
 import { BlurTargetView } from 'expo-blur';
 import Inbox from 'lucide-react-native/icons/inbox';
 import { AccountMenu } from './account-menu';
@@ -411,7 +412,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
             </Pressable>
           ))}
           <View style={{ padding: theme.spacing[4], paddingBottom: theme.spacing[4] + insets.bottom }}>
-            <Button label="创建家庭" onPress={onCreateNew} />
+            <Button label="创建家庭" onPress={() => { rememberRouteTrigger(); onCreateNew(); }} />
           </View>
         </ScrollView>
       </View>

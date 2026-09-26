@@ -134,7 +134,7 @@ test.describe('household accessibility matrix', () => {
       await page.setViewportSize({ width, height: 900 });
       await loginFixture(page, noHouseholdUsername);
       await page.goto('/households/new');
-      await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
+      await expect(page.getByRole('button', { name: '创建家庭', exact: true })).toBeVisible();
       const results = await new AxeBuilder({ page }).analyze();
       expect(results.violations, `households/new at ${width}px`).toEqual([]);
       await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
@@ -262,15 +262,20 @@ test.describe('household accessibility matrix', () => {
     await page.setViewportSize({ width: 390, height: 900 });
     await loginFixture(page, noHouseholdUsername);
     await page.goto('/households/new');
-    await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '创建家庭', exact: true })).toBeVisible();
 
-    // Header actions come first; the household name field precedes the submit button.
-    // Tabbing past the empty field shows its error without pulling focus back.
-    expect(await tabSequence(page, 5)).toEqual(['返回', '收件箱', '个人中心', '家庭名称', '创建家庭']);
+    // The window traps focus. Its scroll region is keyboard reachable before the form.
+    await page.getByRole('button', { name: '关闭创建家庭', exact: true }).focus();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('dialog').getByTestId('app-dialog-panel').locator('[tabindex="0"]').filter({ has: page.getByLabel('家庭名称', { exact: true }) }).last()).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByLabel('家庭名称', { exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: '创建家庭', exact: true })).toBeFocused();
     await expect(page.getByLabel('家庭名称', { exact: true })).toHaveAttribute('aria-invalid', 'true');
 
     // Submitting still moves focus to the first invalid field.
-    await page.getByRole('button', { name: '创建家庭' }).click();
+    await page.getByRole('button', { name: '创建家庭', exact: true }).click();
     await expect(page.getByLabel('家庭名称', { exact: true })).toBeFocused();
   });
 
@@ -321,7 +326,7 @@ test.describe('household accessibility matrix', () => {
     expect(results.violations, 'reduced-motion handoff').toEqual([]);
 
     await page.goto('/households/new');
-    await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '创建家庭', exact: true })).toBeVisible();
 
     const newResults = await new AxeBuilder({ page }).analyze();
     expect(newResults.violations, 'reduced-motion create').toEqual([]);
@@ -345,7 +350,7 @@ test.describe('household accessibility matrix', () => {
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
     // Primary action buttons should remain distinguishable.
-    await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '创建家庭', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '查看家庭邀请' })).toBeVisible();
 
     // No horizontal overflow.
@@ -364,7 +369,7 @@ test.describe('household accessibility matrix', () => {
 
     // Create household page should have live region support for status feedback.
     await page.goto('/households/new');
-    await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '创建家庭', exact: true })).toBeVisible();
 
     // Check that the page structure includes status-role elements or polite live regions.
     const liveRegions = await page.locator('[aria-live], [role="status"]').count();

@@ -113,7 +113,6 @@ export function DateField({
       color: isEmpty ? activeTheme.colors.inkMuted : activeTheme.colors.ink,
       minHeight: activeTheme.controlSizes.field,
       fontFamily: 'inherit',
-      outline: 'none',
       width: '100%',
       boxSizing: 'border-box',
     };

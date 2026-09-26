@@ -1,3 +1,4 @@
+import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import type { ApiClient, ChangeMemberRoleDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
@@ -234,6 +235,7 @@ export function useMemberGovernance(
 
   const gotoRole = useCallback(
     (membershipId: string, displayName: string, currentRole: 'ADMIN' | 'MEMBER') => {
+      rememberRouteTrigger();
       void router.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (`/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/role` +
@@ -255,6 +257,7 @@ export function useMemberGovernance(
 
   const remove = useCallback(
     (membershipId: string, displayName: string, targetRole: 'OWNER' | 'ADMIN' | 'MEMBER') => {
+      rememberRouteTrigger();
       void router.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (`/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/remove` +
@@ -266,6 +269,7 @@ export function useMemberGovernance(
 
   const transfer = useCallback(
     (successorMembershipId: string, successorDisplayName: string) => {
+      rememberRouteTrigger();
       void router.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (`/households/${encodeURIComponent(householdId)}/ownership/transfer?successorMembershipId=${encodeURIComponent(successorMembershipId)}` +
@@ -277,6 +281,7 @@ export function useMemberGovernance(
 
   const leave = useCallback(
     (successorMembershipId: string, successorDisplayName: string) => {
+      rememberRouteTrigger();
       void router.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (`/households/${encodeURIComponent(householdId)}/ownership/leave?successorMembershipId=${encodeURIComponent(successorMembershipId)}` +

@@ -135,7 +135,7 @@ describe('notes screen search', () => {
 
     await waitFor(() => expect(queryByText(/还没有笔记/)).not.toBeNull());
     expect(queryByText(/采购清单、旅行计划、家电说明/)).not.toBeNull();
-    expect(queryByLabelText('创建第一篇笔记')).not.toBeNull();
+    expect(queryByLabelText('创建笔记')).not.toBeNull();
     // Nothing to search through, so the field would only be noise.
     expect(queryByPlaceholderText('按标题搜索')).toBeNull();
   });

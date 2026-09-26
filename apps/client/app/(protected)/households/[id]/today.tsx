@@ -1,7 +1,9 @@
+import { rememberRouteTrigger } from '../../../../src/platform/overlays/route-trigger';
+import { useWorkspaceState } from '../../../../src/ui/workspace-state';
 import { TodaySummary } from '../../../../src/ui/page-intro';
 import { HouseholdNavigation } from '../../../../src/ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
@@ -24,7 +26,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../src/ui/household-components';
-import { Heading, Stack, Text } from '../../../../src/ui/primitives';
+import { Button, Heading, Stack, Text } from '../../../../src/ui/primitives';
 import type { Theme } from '../../../../src/ui/theme';
 
 function todayIso(): string {
@@ -107,10 +109,14 @@ export default function TodayRoute() {
   const [tasks, setTasks] = useState<TaskResponseDto[]>([]);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const loaded = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [showUpcoming, setShowUpcoming] = useState(false);
+  const [, setCalendarDate] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, todayIso());
+  const [showUpcoming, setShowUpcoming] = useWorkspaceState(`view:${id}:today:upcoming`, false);
+  const [allOverdue, setAllOverdue] = useWorkspaceState(`view:${id}:today:allOverdue`, false);
+  const [allUnscheduled, setAllUnscheduled] = useWorkspaceState(`view:${id}:today:allUnscheduled`, false);
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
@@ -125,7 +131,7 @@ export default function TodayRoute() {
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === '') return;
-    setLoading(true);
+    if (!loaded.current) setLoading(true);
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
@@ -141,11 +147,12 @@ export default function TodayRoute() {
         sessionApiClient.getHousehold(token, householdId),
       ]);
 
+      loaded.current = true;
       setEvents(eventsResult.events);
       setMembers(householdResult.members);
       setTasks(tasksResult.tasks);
     } catch (err) {
-      setError('无法加载今日数据，请检查网络连接后重试。');
+      setError(loaded.current ? '刷新失败，仍显示上次的安排。请检查网络后重试。' : '无法加载今日数据，请检查网络连接后重试。');
     } finally {
       setLoading(false);
     }
@@ -158,6 +165,10 @@ export default function TodayRoute() {
     () => partitionTodayTasks(tasks, completion.undoTaskId),
     [tasks, completion.undoTaskId],
   );
+
+  const previewTasks = (items: TaskResponseDto[], expanded: boolean) => expanded
+    ? items
+    : items.filter((task, index) => index < 3 || task.id === completion.undoTaskId);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -176,6 +187,7 @@ export default function TodayRoute() {
 
   const handleEventPress = useCallback(
     (event: EventResponseDto) => {
+      rememberRouteTrigger();
       void router.push(
         `/households/${encodeURIComponent(householdId!)}/events/${encodeURIComponent(event.id)}`,
       );
@@ -185,6 +197,7 @@ export default function TodayRoute() {
 
   const handleTaskPress = useCallback(
     (task: TaskResponseDto) => {
+      rememberRouteTrigger();
       void router.push(
         `/households/${encodeURIComponent(householdId!)}/tasks/${encodeURIComponent(task.id)}`,
       );
@@ -271,38 +284,18 @@ export default function TodayRoute() {
           </View>
         )}
 
-        {!loading && error === null && (
+        {!loading && (error === null || loaded.current) && (
           <>
-            {/* Overdue tasks banner */}
-            {overdueTasks.length > 0 && (
-              <View>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: activeTheme.spacing[2],
-                  marginBottom: activeTheme.spacing[2],
-                }}>
-                  <TriangleAlert size={16} color={activeTheme.colors.destructive} />
-                  <Text accessibilityRole="header" aria-level={2} variant="section" color="destructive">
-                  逾期任务 ({overdueTasks.length})
-                  </Text>
-                </View>
-                <Stack gap={2}>
-                  {overdueTasks.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress}
-                      {...completion.cardProps(task)}
-                    />
-                  ))}
-                </Stack>
+            {/* Empty primary groups */}
+            {events.length === 0 && todayTasks.length === 0 ? <Stack gap={3}>
+              <Text color="inkMuted">今天没有待处理安排。</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+                <Button label="新建日程" tone="secondary" onPress={() => { setCalendarDate(todayIso()); rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(id)}/events/new`); }} />
+                <Button label="新建任务" tone="secondary" onPress={() => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(id)}/tasks/new`); }} />
               </View>
-            )}
-
+            </Stack> : null}
             {/* Today's events */}
-            <View>
+            {events.length > 0 ? <View>
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -325,7 +318,7 @@ export default function TodayRoute() {
                   ))}
                 </Stack>
               )}
-            </View>
+            </View> : null}
 
             {/* Today's tasks */}
             {todayTasks.length > 0 && (
@@ -355,9 +348,7 @@ export default function TodayRoute() {
               </View>
             )}
 
-            {/* Not urgent, but never folded away: collapsing these would hide
-                work the household has actually recorded. */}
-            {unscheduledTasks.length > 0 && (
+            {overdueTasks.length > 0 && (
               <View>
                 <View style={{
                   flexDirection: 'row',
@@ -365,13 +356,13 @@ export default function TodayRoute() {
                   gap: activeTheme.spacing[2],
                   marginBottom: activeTheme.spacing[2],
                 }}>
-                  <Inbox size={16} color={activeTheme.colors.inkMuted} />
-                  <Text accessibilityRole="header" aria-level={2} variant="section">
-                  待安排 ({unscheduledTasks.length})
+                  <TriangleAlert size={16} color={activeTheme.colors.destructive} />
+                  <Text accessibilityRole="header" aria-level={2} variant="section" color="destructive">
+                  逾期任务 ({overdueTasks.length})
                   </Text>
                 </View>
                 <Stack gap={2}>
-                  {unscheduledTasks.map((task) => (
+                  {previewTasks(overdueTasks, allOverdue).map((task) => (
                     <TaskCard
                       key={task.id}
                       task={task}
@@ -381,12 +372,14 @@ export default function TodayRoute() {
                     />
                   ))}
                 </Stack>
+                {overdueTasks.length > 3 ? <Button label={allOverdue ? '收起逾期任务' : `查看全部逾期任务（${overdueTasks.length}）`} tone="secondary" onPress={() => setAllOverdue(value => !value)} /> : null}
               </View>
             )}
 
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ expanded: showUpcoming }}
+              aria-expanded={showUpcoming}
               onPress={() => setShowUpcoming((value) => !value)}
               style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}
             >
@@ -449,17 +442,36 @@ export default function TodayRoute() {
 
             </> : null}
 
-            {/* Empty state */}
-            {events.length === 0 && overdueTasks.length === 0 && todayTasks.length === 0 && unscheduledTasks.length === 0 && (
-              <View style={{
-                alignItems: 'center',
-                paddingVertical: activeTheme.spacing[8],
-              }}>
-                <Text variant="bodySm" color="inkMuted">
-                  今天没有待处理安排。
-                </Text>
+            {/* A bounded preview keeps unscheduled work reachable without burying the day. */}
+            {unscheduledTasks.length > 0 && (
+              <View>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: activeTheme.spacing[2],
+                  marginBottom: activeTheme.spacing[2],
+                }}>
+                  <Inbox size={16} color={activeTheme.colors.inkMuted} />
+                  <Text accessibilityRole="header" aria-level={2} variant="section">
+                  待安排 ({unscheduledTasks.length})
+                  </Text>
+                </View>
+                <Stack gap={2}>
+                  {previewTasks(unscheduledTasks, allUnscheduled).map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
+                      onPress={handleTaskPress}
+                      {...completion.cardProps(task)}
+                    />
+                  ))}
+                </Stack>
+                {unscheduledTasks.length > 3 ? <Button label={allUnscheduled ? '收起待安排' : `查看全部待安排（${unscheduledTasks.length}）`} tone="secondary" onPress={() => setAllUnscheduled(value => !value)} /> : null}
               </View>
             )}
+
+
           </>
         )}
       </Stack>

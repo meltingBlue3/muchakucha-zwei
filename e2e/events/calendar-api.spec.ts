@@ -299,6 +299,7 @@ test('a household member edits a shared event in the browser', async ({ page }) 
   await loginUsernameFixture(page, member.username, password, `/households/${householdId}/events/${eventId}`);
   await page.getByRole('button', { name: '编辑事件', exact: true }).click();
   await page.getByLabel('事件标题').fill('家庭聚餐');
+  await page.getByRole('button', { name: '更多日程选项' }).click();
   await page.getByLabel('地点', { exact: true }).fill('新餐厅');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('button', { name: '编辑事件', exact: true })).toBeVisible();

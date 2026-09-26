@@ -116,7 +116,7 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   // --- Read ---
   await card.click();
   await expect(page).toHaveURL(new RegExp(`${notesPath}/${noteId}$`));
-  const detail = page.getByRole('main', { name: '笔记详情' });
+  const detail = page.getByRole('dialog', { name: '笔记详情' });
   await expect(detail.getByRole('heading', { name: '暑假计划' })).toBeVisible();
   await expect(detail.getByText('看外婆')).toBeVisible();
 
@@ -136,9 +136,9 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   // --- Delete: cancel keeps the note, confirm returns to the empty list ---
   await page.getByRole('button', { name: '编辑笔记' }).click();
   await page.getByRole('button', { name: '删除笔记' }).click();
-  await expect(page.getByText('确定要删除这个笔记吗？此操作不可撤销。')).toBeVisible();
+  await expect(page.getByText('确定要删除这篇笔记吗？此操作不可撤销。')).toBeVisible();
   await page.getByRole('button', { name: '取消删除' }).click();
-  await expect(page.getByText('确定要删除这个笔记吗？此操作不可撤销。')).toBeHidden();
+  await expect(page.getByText('确定要删除这篇笔记吗？此操作不可撤销。')).toBeHidden();
 
   await page.getByRole('button', { name: '删除笔记' }).click();
   await page.getByRole('button', { name: '确认删除笔记' }).click();
@@ -197,6 +197,7 @@ test('a member edits another member’s shared note without gaining deletion rig
   await loginUsernameFixture(page, member.username, password, `/households/${householdId}/notes`);
   await page.getByRole('button', { name: '笔记：采购清单', exact: true }).click();
   await page.getByRole('button', { name: '编辑笔记', exact: true }).click();
+  await expect(page.getByRole('button', { name: '删除笔记', exact: true })).toHaveCount(0);
   await page.getByLabel('笔记标题').fill('周末采购清单');
   await page.getByLabel('笔记内容').fill('牛奶、面包');
   await page.getByRole('button', { name: '保存', exact: true }).click();

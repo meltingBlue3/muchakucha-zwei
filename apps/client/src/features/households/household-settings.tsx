@@ -1,3 +1,4 @@
+import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import type { GetHouseholdResponseDto, InvitationListItemDto } from '@muchakucha/api-client';
 import { ApiClientError } from '@muchakucha/api-client';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -473,7 +474,7 @@ export function HouseholdSettings({
   const leaveEntry = !actorIsOwner || canTransferBeforeLeaving ? (
     <Pressable ref={leaveTrigger} accessibilityRole="button" accessibilityLabel="离开家庭" onPress={() => {
       if (actorIsOwner) { setSuccessorId(null); setLeaveOpen(true); }
-      else router.push(`/households/${encodeURIComponent(householdId)}/leave?householdName=${encodeURIComponent(authoritativeName)}`);
+      else { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/leave?householdName=${encodeURIComponent(authoritativeName)}`); }
     }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', gap: theme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.destructiveSoft : 'transparent' })}>
       <LogOut size={theme.controlSizes.icon} color={theme.colors.destructive} strokeWidth={theme.controlSizes.iconStroke} />
       <Text variant="label" color="destructive">离开家庭</Text>
@@ -656,7 +657,7 @@ export function HouseholdSettings({
         <AppDialog title="撤销邀请？" busy={revokeBusy} onClose={() => setRevokeId(null)} trigger={revokeTrigger}>
           <Stack gap={4}>
             {revokeError ? <Banner title="撤销失败">{revokeError}</Banner> : null}
-            <Text>撤销后，原链接将不能使用。</Text>
+            <Text>撤销后，对方将无法接受这份邀请。</Text>
             <View style={{ flexDirection: 'row', gap: theme.spacing[3] }}>
               <Button label="保留邀请" tone="secondary" disabled={revokeBusy} onPress={() => setRevokeId(null)} style={{ flex: 1 }} />
               <Button label="撤销邀请" loading={revokeBusy} onPress={() => { void confirmRevoke(); }} style={{ flex: 1 }} />

@@ -1,7 +1,8 @@
+import { TaskWindow } from '../../../../../../src/features/tasks/task-window';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import { ApiClientError } from '@muchakucha/api-client';
@@ -16,7 +17,8 @@ import { useHouseholdContext } from '../../../../../../src/features/households/h
 import { TaskForm } from '../../../../../../src/features/tasks/task-form';
 import { seriesScopeModeFor } from '../../../../../../src/features/recurrence/series-scope-mode';
 import {
-  SeriesScopeSheet,
+  SeriesScopeContent,
+  seriesScopeTitle,
   type SeriesScope,
   type SeriesScopeMode,
 } from '../../../../../../src/features/recurrence/series-scope-sheet';
@@ -25,7 +27,7 @@ import {
   AppShell,
   HouseholdContextNote,
 } from '../../../../../../src/ui/household-components';
-import { Stack, Text } from '../../../../../../src/ui/primitives';
+import { Button, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 import type { CreateTaskDto } from '@muchakucha/api-client';
 
@@ -62,6 +64,7 @@ export default function EditTaskRoute() {
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:tasks:${taskId}:`;
   const router = useRouter();
+  const exitAllowed = useRef(false);
   const activeTheme = useTheme<Theme>();
   const {
     viewState,
@@ -85,6 +88,9 @@ export default function EditTaskRoute() {
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
+
+  const actor = members.find(member => member.isCurrentUser);
+  const canDelete = actor !== undefined && (actor.role === 'OWNER' || actor.role === 'ADMIN' || actor.userId === task?.createdBy);
 
   const memberOptions = useMemo(
     () => members.map((m) => ({ userId: m.userId, displayName: m.displayName })),
@@ -145,6 +151,7 @@ export default function EditTaskRoute() {
       }
       await sessionApiClient.updateTask(token, householdId, taskId, { ...data, ...conflict.precondition, labelIds: selectedLabelIds });
       workspace.clear(draftPrefix);
+      exitAllowed.current = true;
       router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`);
     } catch (error: unknown) {
       if (conflict.handle(error)) {
@@ -172,12 +179,14 @@ export default function EditTaskRoute() {
     setDeleting(true);
     try {
       const token = await sessionTransport.getAccessToken();
-      if (token === null) return;
+      if (token === null) throw new Error('Session expired');
       await sessionApiClient.deleteTask(token, householdId, taskId);
       // Go straight back to the task list, not router.back() — a single
       // pop would land on the now-deleted task's detail screen.
+      exitAllowed.current = true;
       router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks`);
     } catch {
+      setSubmitError('删除失败，请检查网络或权限后重试。');
       setDeleting(false);
     }
   }, [householdId, taskId, router]);
@@ -188,6 +197,7 @@ export default function EditTaskRoute() {
       setPendingSeriesAction({ kind: 'delete', mode: 'delete' });
       return;
     }
+    setSubmitError(null);
     setConfirmDelete(true);
   }, [task]);
 
@@ -211,6 +221,7 @@ export default function EditTaskRoute() {
       if (pendingSeriesAction.kind === 'delete') {
         await sessionApiClient.deleteTaskSeries(token, householdId, taskId, scope);
         setPendingSeriesAction(null);
+        exitAllowed.current = true;
         router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks`);
         return;
       }
@@ -228,8 +239,10 @@ export default function EditTaskRoute() {
       setPendingSeriesAction(null);
       workspace.clear(draftPrefix);
       if (scope === 'this_only') {
+        exitAllowed.current = true;
         router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`);
       } else {
+        exitAllowed.current = true;
         router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks`);
       }
     } catch (caught: unknown) {
@@ -249,6 +262,12 @@ export default function EditTaskRoute() {
     }
   }, [fetchTask, householdId, pendingSeriesAction, router, selectedLabelIds, taskId, workspace, draftPrefix, conflict]);
 
+  const closeEdit = () => {
+    if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
+    else if (confirmDelete) setConfirmDelete(false);
+    else router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`);
+  };
+
   if (viewState === 'accessChanged') {
     return (
       <AppShell accessibilityLabel="家庭访问权已变化">
@@ -263,11 +282,19 @@ export default function EditTaskRoute() {
   }
 
   return (
-    <AppShell accessibilityLabel="编辑任务" title="编辑任务" showBack showProfile>
+    <TaskWindow title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : confirmDelete ? "删除任务" : "编辑任务"} busy={submitting || deleting || seriesSubmitting !== null} onClose={closeEdit} onBackStep={pendingSeriesAction || confirmDelete ? closeEdit : undefined} exitAllowed={exitAllowed}>
       <Stack gap={4}>
         <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
 
-        {loading ? (
+        {pendingSeriesAction ? <SeriesScopeContent
+          error={seriesError} mode={pendingSeriesAction.mode} onClose={closeEdit}
+          onSelect={scope => void handleSeriesSelect(scope)} submitting={seriesSubmitting}
+        /> : confirmDelete ? <Stack gap={3}>
+          <Text>确定要删除这个任务吗？此操作不可撤销。</Text>
+          {submitError ? <Text accessibilityRole="alert" color="destructive">{submitError}</Text> : null}
+          <Button label="取消删除" tone="secondary" onPress={closeEdit} disabled={deleting} />
+          <Button label="确认删除任务" onPress={() => void handleDelete()} loading={deleting} />
+        </Stack> : loading ? (
           <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
             <ActivityIndicator color={activeTheme.colors.coral} />
           </View>
@@ -288,95 +315,21 @@ export default function EditTaskRoute() {
               initial={task}
               members={memberOptions}
               onSubmit={handleSubmit}
-              onCancel={() => router.back()}
+              onCancel={closeEdit}
               submitLabel="保存修改"
               isSubmitting={submitting}
               householdId={householdId}
               selectedLabelIds={selectedLabelIds}
               onLabelChange={setSelectedLabelIds}
             />
-            {/* Delete section */}
-            <View style={{ marginTop: activeTheme.spacing[4], borderTopWidth: 1, borderTopColor: activeTheme.colors.border, paddingTop: activeTheme.spacing[4] }}>
-              {!confirmDelete ? (
-                <Pressable
-                  onPress={openDelete}
-                  disabled={deleting}
-                  hitSlop={activeTheme.spacing[1]}
-                  style={({ pressed }) => ({
-                    alignItems: 'center',
-                    paddingVertical: activeTheme.spacing[3],
-                    borderRadius: activeTheme.borderRadii.sm,
-                    borderWidth: 1,
-                    borderColor: activeTheme.colors.destructive,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                  accessibilityLabel="删除任务"
-                >
-                  <Text variant="button" color="destructive">
-                    删除任务
-                  </Text>
-                </Pressable>
-              ) : (
-                <Stack gap={3}>
-                  <Text variant="bodySm" color="destructive">
-                    确定要删除这个任务吗？此操作不可撤销。
-                  </Text>
-                  <View style={{ flexDirection: 'row', gap: activeTheme.spacing[3] }}>
-                    <Pressable
-                      onPress={() => setConfirmDelete(false)}
-                      disabled={deleting}
-                      hitSlop={activeTheme.spacing[1]}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        alignItems: 'center',
-                        paddingVertical: activeTheme.spacing[3],
-                        borderRadius: activeTheme.borderRadii.sm,
-                        borderWidth: 1,
-                        borderColor: activeTheme.colors.border,
-                        opacity: pressed ? 0.7 : 1,
-                      })}
-                      accessibilityLabel="取消删除"
-                    >
-                      <Text variant="button" color="ink">取消</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={handleDelete}
-                      disabled={deleting}
-                      hitSlop={activeTheme.spacing[1]}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        alignItems: 'center',
-                        paddingVertical: activeTheme.spacing[3],
-                        borderRadius: activeTheme.borderRadii.sm,
-                        backgroundColor: deleting ? activeTheme.colors.disabled : activeTheme.colors.destructive,
-                        opacity: pressed ? 0.7 : 1,
-                      })}
-                      accessibilityLabel="确认删除任务"
-                    >
-                      <Text variant="button" color="surface">
-                        {deleting ? '删除中…' : '确认删除'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                </Stack>
-              )}
-            </View>
-            <SeriesScopeSheet
-              error={seriesError}
-              mode={pendingSeriesAction?.mode ?? 'edit'}
-              onClose={() => {
-                setPendingSeriesAction(null);
-                setSeriesError(null);
-              }}
-              onSelect={(scope) => void handleSeriesSelect(scope)}
-              submitting={seriesSubmitting}
-              visible={pendingSeriesAction !== null}
-            />
+            {canDelete ? <Pressable accessibilityRole="button" accessibilityLabel="删除任务" onPress={openDelete} disabled={submitting} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', alignSelf: 'flex-start' }}>
+              <Text variant="label" color="destructive">删除任务</Text>
+            </Pressable> : null}
           </Stack>
         ) : (
           <Text variant="bodySm" color="inkMuted">任务未找到。</Text>
         )}
       </Stack>
-    </AppShell>
+    </TaskWindow>
   );
 }

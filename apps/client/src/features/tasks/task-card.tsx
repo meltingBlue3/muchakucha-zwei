@@ -67,20 +67,20 @@ export function TaskCard({
           onPress={() => onPress(task)}
           style={({ pressed }) => ({ flex: 1, minWidth: 0, padding: activeTheme.spacing[2], borderRadius: activeTheme.borderRadii.md, backgroundColor: pressed ? activeTheme.colors.surfaceSubtle : activeTheme.colors.transparent })}
         >
-          <Stack gap={2}>
+          <Stack gap={1}>
             <Text variant="body" numberOfLines={2} color={completed || cancelled ? 'inkMuted' : 'ink'} style={{ fontWeight: '600', textDecorationLine: completed || cancelled ? 'line-through' : 'none' }}>{task.title}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[2] }}>
-              <Text variant="caption" color={task.status === 'in_progress' || completed ? 'teal' : 'inkMuted'}>{cancelled ? '已取消' : statusLabel(task.status)}</Text>
-              <Text variant="caption" color={task.priority === 'urgent' ? 'destructive' : task.priority === 'high' ? 'coral' : 'inkMuted'}>{priorityLabel(task.priority)}</Text>
+              {task.status !== 'pending' ? <Text variant="caption" color={task.status === 'in_progress' || completed ? 'teal' : 'inkMuted'}>{cancelled ? '已取消' : statusLabel(task.status)}</Text> : null}
+              {task.priority === 'high' || task.priority === 'urgent' ? <Text variant="caption" color={task.priority === 'urgent' ? 'destructive' : 'coral'}>{priorityLabel(task.priority)}</Text> : null}
               {overdue ? <Text variant="caption" color="destructive">逾期</Text> : null}
               {task.recurrenceRuleId != null ? <RecurrenceBadge /> : null}
             </View>
             {task.dueDate ? <Text variant="caption" color={overdue ? 'destructive' : 'inkMuted'}>截止：{formatDueDate(task.dueDate)}</Text> : null}
             {assigneeNames && assigneeNames.length > 0 ? <Text variant="caption">负责人：{assigneeNames.join('、')}</Text> : null}
-            {task.description ? <Text variant="bodySm" numberOfLines={2}>{task.description}</Text> : null}
             {(task.labels ?? []).length > 0 ? (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[1] }}>
-                {(task.labels ?? []).map((label) => <LabelChip key={label.id} label={label} small />)}
+                {(task.labels ?? []).slice(0, 2).map((label) => <LabelChip key={label.id} label={label} small />)}
+                {(task.labels?.length ?? 0) > 2 ? <Text variant="caption" color="inkMuted">+{task.labels!.length - 2}</Text> : null}
               </View>
             ) : null}
           </Stack>

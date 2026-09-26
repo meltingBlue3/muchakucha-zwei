@@ -78,33 +78,37 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   const householdPath = `/households/${encodeURIComponent(householdId)}`;
 
   await loginUsernameFixture(page, owner.username, password, `${householdPath}/labels`);
-  await expect(page.getByText('还没有标签。使用上方表单创建标签，然后可以给事件和任务打标签。')).toBeVisible();
+  await expect(page.getByText('还没有标签，点击“新建”为日程和任务分类。')).toBeVisible();
 
   // --- Create with a chosen color ---
+  await page.getByRole('button', { name: '新建标签', exact: true }).click();
   const createButton = page.getByRole('button', { name: '创建标签' });
-  await expect(createButton).toBeDisabled();
+  await createButton.click();
+  await expect(page.getByText('请输入标签名称。')).toBeVisible();
   await page.getByLabel('标签名称', { exact: true }).fill('学校');
   await page.getByLabel('选择颜色 #277A72').click();
   await expect(page.getByRole('radio', { name: '选择颜色 #277A72' })).toBeChecked();
   await createButton.click();
 
   await expect(page.getByLabel('标签：学校')).toBeVisible();
-  await expect(page.getByLabel('标签名称', { exact: true })).toHaveValue('');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   let labels = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/labels`);
   expect(labels.body.labels).toEqual([expect.objectContaining({ name: '学校', color: '#277A72' })]);
   const labelId = labels.body.labels[0].id as string;
 
-  // --- A duplicate name is rejected by the API and reported inline ---
+  // --- A duplicate name is rejected without losing the form ---
+  await page.getByRole('button', { name: '新建标签', exact: true }).click();
   await page.getByLabel('标签名称', { exact: true }).fill('学校');
   await createButton.click();
-  await expect(page.getByText('创建标签失败。')).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('保存失败');
+  await expect(page.getByLabel('标签名称', { exact: true })).toHaveValue('学校');
+  await page.keyboard.press('Escape');
 
   // --- Rename and recolor ---
   await page.getByRole('button', { name: '编辑标签 学校' }).click();
   await expect(page.getByLabel('编辑标签名称')).toHaveValue('学校');
   await page.getByLabel('编辑标签名称').fill('学习');
-  // The create form and the edit row both render swatches; the edit row comes second.
-  await page.getByLabel('选择颜色 #3B7DD8').last().click();
+  await page.getByLabel('选择颜色 #3B7DD8').click();
   await page.getByRole('button', { name: '保存' }).click();
 
   await expect(page.getByLabel('标签：学习')).toBeVisible();
@@ -129,18 +133,18 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   expect(task?.labels.map((label) => label.id)).toEqual([labelId]);
 
   await page.goto(`${householdPath}/tasks/${task!.id}`);
-  await expect(page.getByLabel('标签：学习')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '任务详情' }).getByLabel('标签：学习')).toBeVisible();
 
   // --- Deleting the label asks for confirmation and detaches it from the task ---
   await page.goto(`${householdPath}/labels`);
   await page.getByRole('button', { name: '删除标签 学习' }).click();
-  await expect(page.getByText('确定删除？')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '删除标签', exact: true })).toContainText('日程和任务本身会保留');
   await page.getByRole('button', { name: '取消删除' }).click();
   await expect(page.getByLabel('标签：学习')).toBeVisible();
 
   await page.getByRole('button', { name: '删除标签 学习' }).click();
   await page.getByRole('button', { name: '确认删除标签 学习' }).click();
-  await expect(page.getByText('还没有标签。使用上方表单创建标签，然后可以给事件和任务打标签。')).toBeVisible();
+  await expect(page.getByText('还没有标签，点击“新建”为日程和任务分类。')).toBeVisible();
 
   const detached = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/tasks/${task!.id}`);
   expect(detached.body.labels).toEqual([]);

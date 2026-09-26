@@ -1,9 +1,8 @@
 import { AppShell } from '../../../src/ui/household-components';
-import { AccountCard } from '../../../src/ui/account-components';
-import { theme } from '../../../src/ui/theme';
+import { RouteWindow } from '../../../src/ui/route-window';
 import { Controller, useForm } from 'react-hook-form';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { sessionApiClient, sessionTransport } from '../../../src/features/auth/session-runtime';
@@ -29,6 +28,7 @@ type HouseholdFormValues = { name: string };
 
 export default function NewHouseholdRoute() {
   const router = useRouter();
+  const exitAllowed = useRef(false);
   const { refreshHouseholds } = useHouseholdContext();
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
@@ -64,6 +64,7 @@ export default function NewHouseholdRoute() {
         setEnterError(true);
         return;
       }
+      exitAllowed.current = true;
       router.replace(`/households/${encodeURIComponent(successHouseholdId)}`);
     } catch {
       setEnterError(true);
@@ -99,7 +100,7 @@ export default function NewHouseholdRoute() {
 
   if (successHouseholdId !== null) {
     return (
-      <AppShell title="创建家庭" showBack showProfile onBack={() => router.canGoBack() ? router.back() : router.replace('/household-handoff')}><Stack style={{ width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center' }}><AccountCard>
+      <RouteWindow title="创建家庭" resource="households" busy={isSubmitting || entering} exitAllowed={exitAllowed} fallback={<AppShell title="家庭"><Text>一起管理家里的日程、任务和笔记。</Text></AppShell>}>
         <Stack gap={6}>
           <Stack gap={2}>
             <Text variant="label" color="teal">准备好了</Text>
@@ -116,15 +117,14 @@ export default function NewHouseholdRoute() {
             onPress={() => void handleEnterHousehold()}
           />
         </Stack>
-      </AccountCard></Stack></AppShell>
+      </RouteWindow>
     );
   }
 
   return (
-    <AppShell title="创建家庭" showBack showProfile onBack={() => router.canGoBack() ? router.back() : router.replace('/household-handoff')}><Stack style={{ width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center' }}><AccountCard>
+    <RouteWindow title="创建家庭" resource="households" busy={isSubmitting || entering} exitAllowed={exitAllowed} fallback={<AppShell title="家庭"><Text>一起管理家里的日程、任务和笔记。</Text></AppShell>}>
       <Stack gap={6}>
         <Stack gap={2}>
-          <Heading>创建家庭</Heading>
           <Text>给你们的共享空间起个名字。只需这一步，之后可以再邀请家人。</Text>
         </Stack>
         {errors.root?.server?.message ? (
@@ -163,6 +163,6 @@ export default function NewHouseholdRoute() {
           onPress={() => void submit()}
         />
       </Stack>
-    </AccountCard></Stack></AppShell>
+    </RouteWindow>
   );
 }

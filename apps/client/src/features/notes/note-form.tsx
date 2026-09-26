@@ -80,6 +80,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
       <Stack gap={1}>
         <Text variant="label">标题</Text>
         <TextInput
+          editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}
           placeholder="笔记标题"
@@ -92,8 +93,9 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
 
       {/* Body */}
       <Stack gap={1}>
-        <Text variant="label">内容（可选，支持 Markdown）</Text>
+        <Text variant="label">内容（可选）</Text>
         <TextInput
+          editable={!isSubmitting}
           value={form.body}
           onChangeText={(v) => updateField('body', v)}
           placeholder="笔记内容..."
@@ -107,7 +109,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
 
       {/* Error */}
       {error !== null && (
-        <Text variant="bodySm" color="destructive">
+        <Text variant="bodySm" color="destructive" accessibilityRole="alert">
           {error}
         </Text>
       )}

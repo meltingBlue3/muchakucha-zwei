@@ -1,11 +1,11 @@
+import { TaskWindow } from '../../../../../../src/features/tasks/task-window';
+import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
 import { isEditConflict } from '../../../../../../src/ui/edit-conflict';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { GetHouseholdMemberDto, TaskResponseDto } from '@muchakucha/api-client';
-import Ban from 'lucide-react-native/icons/ban';
-import Pencil from 'lucide-react-native/icons/pencil';
 
 import { ApiClientError } from '@muchakucha/api-client';
 
@@ -14,7 +14,6 @@ import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
 import { formatDueDate, isOverdue, priorityLabel, statusLabel } from '../../../../../../src/features/tasks/task-utils';
-import { AppShell } from '../../../../../../src/ui/household-components';
 import { Button, Heading, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
@@ -33,11 +32,11 @@ export default function TaskDetailRoute() {
   const [task, setTask] = useState<TaskResponseDto | null>(null);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTask = useCallback(async () => {
     if (id === undefined || taskId === undefined) return;
-    setLoading(true);
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
@@ -102,30 +101,19 @@ export default function TaskDetailRoute() {
   }, [id, taskId, task, fetchTask]);
 
   const handleEdit = useCallback(() => {
+    rememberRouteTrigger();
     void router.push(`/households/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/edit`);
   }, [router, id, taskId]);
 
-  if (loading) {
-    return (
-      <AppShell accessibilityLabel="加载任务中" title="任务详情" showBack showProfile>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: activeTheme.spacing[12] }}>
-          <ActivityIndicator color={activeTheme.colors.coral} />
-        </View>
-      </AppShell>
-    );
-  }
-
-  if (task === null || error !== null) {
-    return (
-      <AppShell accessibilityLabel="任务加载失败" title="任务详情" showBack showProfile>
-        <Stack gap={4}>
-          <Text>{error ?? '任务未找到。'}</Text>
-          <Pressable onPress={() => router.back()} hitSlop={activeTheme.spacing[4]}>
-            <Text variant="label" color="coral">返回任务列表</Text>
-          </Pressable>
-        </Stack>
-      </AppShell>
-    );
+  if (loading || task === null || error !== null) {
+    return <TaskWindow title="任务详情" busy={statusBusy}>
+      <Stack gap={4}>
+        {loading ? <ActivityIndicator accessibilityLabel="正在加载任务" color={activeTheme.colors.coral} /> : <>
+          <Text accessibilityRole="alert">{error ?? '任务未找到或已被删除。'}</Text>
+          <Button label="重试" tone="secondary" onPress={() => void fetchTask()} />
+        </>}
+      </Stack>
+    </TaskWindow>;
   }
 
   const assigneeNames = (task.assigneeIds ?? []).map(
@@ -139,162 +127,56 @@ export default function TaskDetailRoute() {
       ? null
       : formatRecurrenceSummary(recurrence, currentTimeZone(recurrence.timezone));
 
-  return (
-    <AppShell accessibilityLabel="任务详情" title="任务详情" showBack showProfile>
-      <Stack gap={6} style={{ backgroundColor: activeTheme.colors.surface, borderRadius: activeTheme.borderRadii.xl, padding: activeTheme.spacing[5] }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: activeTheme.spacing[3] }}>
-          <Heading style={{ flex: 1 }}>{task.title}</Heading>
-          <Pressable
-            onPress={handleEdit}
-            accessibilityLabel="编辑任务"
-            accessibilityRole="button"
-            hitSlop={activeTheme.spacing[2]}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: activeTheme.controlSizes.touchTarget,
-              minWidth: activeTheme.controlSizes.touchTarget,
-              borderRadius: activeTheme.borderRadii.md,
-              backgroundColor: pressed ? activeTheme.colors.surfaceMuted : 'transparent',
-            })}
-          >
-            <Pencil
-              size={activeTheme.controlSizes.icon}
-              color={activeTheme.colors.coral}
-              strokeWidth={activeTheme.controlSizes.iconStroke}
-            />
-          </Pressable>
-        </View>
-
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], alignItems: 'center' }}>
-          <View
-            style={{
-              alignItems: 'center',
-              backgroundColor: cancelled
-                ? activeTheme.colors.surfaceMuted
-                : task.status === 'completed' || task.status === 'in_progress'
-                  ? activeTheme.colors.teal
-                  : activeTheme.colors.border,
-              flexDirection: 'row',
-              gap: activeTheme.spacing[1],
-              paddingHorizontal: activeTheme.spacing[3],
-              paddingVertical: activeTheme.spacing[1],
-              borderRadius: activeTheme.borderRadii.full,
-            }}
-          >
-            {cancelled && <Ban color={activeTheme.colors.inkMuted} size={14} strokeWidth={2} />}
-            <Text variant="caption" color={cancelled ? 'inkMuted' : 'surface'}>
-              {cancelled ? '已取消' : statusLabel(task.status)}
-            </Text>
-          </View>
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: task.priority === 'urgent' ? activeTheme.colors.destructive : activeTheme.colors.border,
-              paddingHorizontal: activeTheme.spacing[3],
-              paddingVertical: activeTheme.spacing[1],
-              borderRadius: activeTheme.borderRadii.full,
-            }}
-          >
-            <Text variant="caption" color={task.priority === 'urgent' ? 'destructive' : 'inkMuted'}>
-              优先级：{priorityLabel(task.priority)}
-            </Text>
-          </View>
-          {overdue && (
-            <Text variant="caption" color="destructive">已逾期</Text>
-          )}
-        </View>
-
-        {!cancelled && (
-          <Stack gap={2}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
-              {task.status === 'completed' ? (
-                <Button
-                  label="标记为未完成"
-                  tone="secondary"
-                  accessibilityLabel="标记为未完成"
-                  disabled={statusBusy}
-                  onPress={() => { void writeStatus('pending'); }}
-                />
-              ) : (
-                <Button
-                  label="标记为完成"
-                  accessibilityLabel="标记为完成"
-                  disabled={statusBusy}
-                  onPress={() => { void writeStatus('completed'); }}
-                />
-              )}
-              {task.status !== 'in_progress' && task.status !== 'completed' && (
-                <Button
-                  label="标记为进行中"
-                  tone="secondary"
-                  accessibilityLabel="标记为进行中"
-                  disabled={statusBusy}
-                  onPress={() => { void writeStatus('in_progress'); }}
-                />
-              )}
-              {task.status === 'in_progress' && (
-                <Button
-                  label="退回待办"
-                  tone="secondary"
-                  accessibilityLabel="退回待办"
-                  disabled={statusBusy}
-                  onPress={() => { void writeStatus('pending'); }}
-                />
-              )}
-            </View>
-            {statusError !== null && (
-              <Text variant="caption" color="destructive" accessibilityRole="alert" accessibilityLiveRegion="polite">{statusError}</Text>
-            )}
-          </Stack>
-        )}
-
-        <Stack gap={1}>
-          <Text variant="label" color="inkMuted">截止日期</Text>
-          <Text variant="body" color={overdue ? 'destructive' : 'ink'}>
-            {task.dueDate !== null && task.dueDate !== undefined && task.dueDate !== '' ? formatDueDate(task.dueDate) : '未设置'}
-          </Text>
-        </Stack>
-
-        {task.recurrenceRuleId != null && recurrenceSummary !== null && (
-          <Stack gap={1}>
-            <Text variant="label" color="inkMuted">重复</Text>
-            <Text variant="body">{recurrenceSummary.summary}</Text>
-            {recurrenceSummary.clampNote !== null && (
-              <Text variant="caption" color="inkMuted">{recurrenceSummary.clampNote}</Text>
-            )}
-            {recurrenceSummary.timeZoneNote !== null && (
-              <Text variant="caption" color="inkMuted">{recurrenceSummary.timeZoneNote}</Text>
-            )}
-            {cancelled && (
-              <Text variant="caption" color="inkMuted">这次重复已取消。</Text>
-            )}
-          </Stack>
-        )}
-
-        <Stack gap={1}>
-          <Text variant="label" color="inkMuted">负责人</Text>
-          <Text variant="body">{assigneeNames.length > 0 ? assigneeNames.join('、') : '未分配'}</Text>
-        </Stack>
-
-        {task.description !== null && task.description !== '' && (
-          <Stack gap={1}>
-            <Text variant="label" color="inkMuted">描述</Text>
-            <Text variant="body">{task.description}</Text>
-          </Stack>
-        )}
-
-        {task.labels.length > 0 && (
-          <Stack gap={1}>
-            <Text variant="label" color="inkMuted">标签</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
-              {task.labels.map((label) => (
-                <LabelChip key={label.id} label={label} />
-              ))}
-            </View>
-          </Stack>
-        )}
-      </Stack>
-    </AppShell>
+  const footer = (
+    <Stack gap={2}>
+      {statusError ? <Text variant="bodySm" color="destructive" accessibilityRole="alert">{statusError}</Text> : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+        {!cancelled ? <Button label={task.status === 'completed' ? '标记为未完成' : '标记为完成'} loading={statusBusy} onPress={() => void writeStatus(task.status === 'completed' ? 'pending' : 'completed')} style={{ flexGrow: 1 }} /> : null}
+        <Button label="编辑" accessibilityLabel="编辑任务" tone="secondary" disabled={statusBusy} onPress={handleEdit} style={{ flexGrow: 1 }} />
+      </View>
+      {!cancelled && task.status !== 'completed' ? <>
+        <Pressable accessibilityRole="button" accessibilityLabel="更多任务操作" accessibilityState={{ expanded: moreOpen }} disabled={statusBusy} onPress={() => setMoreOpen(v => !v)} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', alignSelf: 'flex-start' }}>
+          <Text variant="label" color="inkMuted">{moreOpen ? '收起操作' : '更多操作'}</Text>
+        </Pressable>
+        {moreOpen ? <Button label={task.status === 'in_progress' ? '退回待办' : '标记为进行中'} tone="secondary" disabled={statusBusy} onPress={() => void writeStatus(task.status === 'in_progress' ? 'pending' : 'in_progress')} /> : null}
+      </> : null}
+    </Stack>
   );
+  return (
+    <TaskWindow title="任务详情" busy={statusBusy} footer={footer}>
+      <Stack gap={5}>
+        <Stack gap={2}>
+          <Heading>{task.title}</Heading>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+            <Text variant="label" color={task.status === 'completed' || task.status === 'in_progress' ? 'teal' : 'inkMuted'}>{cancelled ? '已取消' : statusLabel(task.status)}</Text>
+            {overdue ? <Text variant="label" color="destructive">已逾期</Text> : null}
+          </View>
+        </Stack>
+        <View style={{ backgroundColor: activeTheme.colors.surfaceSubtle, borderRadius: activeTheme.borderRadii.lg, padding: activeTheme.spacing[4], gap: activeTheme.spacing[3] }}>
+          <DetailRow label="截止日期" value={task.dueDate ? formatDueDate(task.dueDate) : '未设置'} urgent={overdue} />
+          <DetailRow label="负责人" value={assigneeNames.join('、') || '未分配'} />
+          <DetailRow label="优先级" value={priorityLabel(task.priority)} urgent={task.priority === 'urgent'} />
+          {recurrenceSummary ? <Stack gap={1}>
+            <DetailRow label="重复安排" value={recurrenceSummary.summary} />
+            {recurrenceSummary.clampNote ? <Text variant="caption" color="inkMuted">{recurrenceSummary.clampNote}</Text> : null}
+            {recurrenceSummary.timeZoneNote ? <Text variant="caption" color="inkMuted">{recurrenceSummary.timeZoneNote}</Text> : null}
+            <Text variant="caption" color="inkMuted">{cancelled ? '这次重复已取消。' : '当前查看这一次任务，编辑时可选择影响范围。'}</Text>
+          </Stack> : null}
+        </View>
+        {task.description ? <Stack gap={2}><Text variant="label" color="inkMuted">描述</Text><Text>{task.description}</Text></Stack> : null}
+        {(task.labels ?? []).length ? <Stack gap={2}>
+          <Text variant="label" color="inkMuted">标签</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>{task.labels?.map(label => <LabelChip key={label.id} label={label} />)}</View>
+        </Stack> : null}
+      </Stack>
+    </TaskWindow>
+  );
+}
+
+function DetailRow({ label, value, urgent = false }: { label: string; value: string; urgent?: boolean }) {
+  const theme = useTheme<Theme>();
+  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2], alignItems: 'flex-start' }}>
+    <Text variant="bodySm" color="inkMuted">{label}</Text>
+    <Text variant="bodySm" color={urgent ? 'destructive' : 'ink'} style={{ flexGrow: 1, flexShrink: 1, textAlign: 'right' }}>{value}</Text>
+  </View>;
 }

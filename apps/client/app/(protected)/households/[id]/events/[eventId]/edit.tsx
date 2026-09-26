@@ -1,22 +1,23 @@
+import { EventWindow } from '../../../../../../src/features/events/event-window';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import { ApiClientError } from '@muchakucha/api-client';
-import type { CreateEventDto, EventResponseDto, UpdateSeriesDto } from '@muchakucha/api-client';
+import type { CreateEventDto, EventResponseDto, GetHouseholdMemberDto, UpdateSeriesDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { EventForm } from '../../../../../../src/features/events/event-form';
 import { seriesScopeModeFor } from '../../../../../../src/features/recurrence/series-scope-mode';
 import {
-  SeriesScopeSheet,
+  SeriesScopeContent,
+  seriesScopeTitle,
   type SeriesScope,
   type SeriesScopeMode,
 } from '../../../../../../src/features/recurrence/series-scope-sheet';
-import { AppShell } from '../../../../../../src/ui/household-components';
-import { Stack, Text } from '../../../../../../src/ui/primitives';
+import { Button, Spinner, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
 type PendingSeriesAction =
@@ -54,6 +55,8 @@ export default function EditEventRoute() {
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:events:${eventId}:`;
   const router = useRouter();
+  const exitAllowed = useRef(false);
+  const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const activeTheme = useTheme<Theme>();
   const [event, setEvent] = useState<EventResponseDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,6 +69,9 @@ export default function EditEventRoute() {
   const [seriesSubmitting, setSeriesSubmitting] = useState<SeriesScope | null>(null);
   const [seriesError, setSeriesError] = useState<string | null>(null);
 
+  const actor = members.find(member => member.isCurrentUser);
+  const canDelete = actor !== undefined && (actor.role === 'OWNER' || actor.role === 'ADMIN' || actor.userId === event?.createdBy);
+
   const conflict = useEditConflict(draftPrefix, event, async () => {
     const token = await sessionTransport.getAccessToken();
     if (token === null) throw new Error('Session expired');
@@ -74,14 +80,15 @@ export default function EditEventRoute() {
 
   const fetchEvent = useCallback(async (showLoading = true) => {
     if (id === undefined || eventId === undefined) return;
-    if (showLoading) setLoading(true);
+    if (showLoading) { setLoading(true); setError(null); }
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
         setError('登录已过期。');
         return;
       }
-      const result = await sessionApiClient.getEvent(token, id, eventId);
+      const [result, household] = await Promise.all([sessionApiClient.getEvent(token, id, eventId), sessionApiClient.getHousehold(token, id)]);
+      setMembers(household.members);
       captureEditBaseline(workspace, draftPrefix, result);
       setEvent(result);
       workspace.seed(draftPrefix + 'labels', (result.labels ?? []).map((l) => l.id));
@@ -117,6 +124,7 @@ export default function EditEventRoute() {
         }
         await sessionApiClient.updateEvent(token, id!, eventId!, { ...data, ...conflict.precondition, labelIds: selectedLabelIds });
         workspace.clear(draftPrefix);
+        exitAllowed.current = true;
         router.dismissTo(`/households/${encodeURIComponent(id!)}/events/${encodeURIComponent(eventId!)}`);
       } catch (err: unknown) {
         if (!conflict.handle(err)) setError('保存失败，请重试。');
@@ -139,10 +147,10 @@ export default function EditEventRoute() {
       await sessionApiClient.deleteEvent(token, id!, eventId!);
       // Go straight back to the calendar list, not router.back() — a single
       // pop would land on the now-deleted event's detail screen.
+      exitAllowed.current = true;
       router.dismissTo(`/households/${encodeURIComponent(id!)}/events`);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : '删除失败，请重试。';
-      setError(message);
+      setError('删除失败，请检查网络或权限后重试。');
     } finally {
       setDeleting(false);
     }
@@ -171,6 +179,7 @@ export default function EditEventRoute() {
       if (pendingSeriesAction.kind === 'delete') {
         await sessionApiClient.deleteEventSeries(token, id, eventId, scope);
         setPendingSeriesAction(null);
+        exitAllowed.current = true;
         router.dismissTo(`/households/${encodeURIComponent(id)}/events`);
         return;
       }
@@ -188,8 +197,10 @@ export default function EditEventRoute() {
       setPendingSeriesAction(null);
       workspace.clear(draftPrefix);
       if (scope === 'this_only') {
+        exitAllowed.current = true;
         router.dismissTo(`/households/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}`);
       } else {
+        exitAllowed.current = true;
         router.dismissTo(`/households/${encodeURIComponent(id)}/events`);
       }
     } catch (caught: unknown) {
@@ -209,135 +220,29 @@ export default function EditEventRoute() {
     }
   }, [eventId, fetchEvent, id, pendingSeriesAction, router, selectedLabelIds, workspace, draftPrefix, conflict]);
 
-  const handleCancel = useCallback(() => {
-    router.back();
-  }, [router]);
-
-  if (loading) {
-    return (
-      <AppShell accessibilityLabel="加载事件中" title="编辑事件" showBack showProfile>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: activeTheme.spacing[12] }}>
-          <ActivityIndicator color={activeTheme.colors.coral} />
-        </View>
-      </AppShell>
-    );
-  }
-
-  if (event === null) {
-    return (
-      <AppShell accessibilityLabel="事件加载失败" title="编辑事件" showBack showProfile>
-        <Stack gap={4}>
-          <Text variant="heading">事件</Text>
-          <Text>{error ?? '事件未找到。'}</Text>
-          <Pressable onPress={() => router.back()} hitSlop={activeTheme.spacing[4]}>
-            <Text variant="label" color="coral">
-              返回日历
-            </Text>
-          </Pressable>
-        </Stack>
-      </AppShell>
-    );
-  }
+  const handleCancel = () => {
+    if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
+    else if (confirmDelete) setConfirmDelete(false);
+    else router.dismissTo(`/households/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}`);
+  };
 
   return (
-    <AppShell accessibilityLabel="编辑事件" title="编辑事件" showBack showProfile>
-        <Stack gap={4}>
-          <Text variant="heading">编辑事件</Text>
-          {error !== null && (
-            <Text variant="bodySm" color="destructive">
-              {error}
-            </Text>
-          )}
+    <EventWindow title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : confirmDelete ? '删除日程' : '编辑日程'} busy={isSubmitting || deleting || seriesSubmitting !== null} onClose={handleCancel} onBackStep={pendingSeriesAction || confirmDelete ? handleCancel : undefined} exitAllowed={exitAllowed}>
+      {pendingSeriesAction ? <SeriesScopeContent mode={pendingSeriesAction.mode} error={seriesError} submitting={seriesSubmitting} onClose={handleCancel} onSelect={scope => void handleSeriesSelect(scope)} />
+        : confirmDelete ? <Stack gap={3}>
+          <Text>确定要删除这个日程吗？此操作不可撤销。</Text>
+          {error ? <Text accessibilityRole="alert" color="destructive">{error}</Text> : null}
+          <Button label="取消删除" tone="secondary" disabled={deleting} onPress={handleCancel} />
+          <Button label="确认删除日程" accessibilityLabel="确认删除事件" loading={deleting} onPress={() => void handleDelete()} />
+        </Stack> : loading ? <Spinner label="正在加载日程" /> : event === null ? <Stack gap={3}>
+          <Text accessibilityRole="alert">{error ?? '日程未找到或已被删除。'}</Text>
+          <Button label="重试" tone="secondary" onPress={() => void fetchEvent()} />
+        </Stack> : <Stack gap={4}>
+          {error ? <Text variant="bodySm" color="destructive" accessibilityRole="alert">{error}</Text> : null}
           {conflict.panel}
-            <EventForm
-            draftKey={draftPrefix + 'form'}
-            initial={event}
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
-            submitLabel="保存"
-            isSubmitting={isSubmitting}
-            householdId={id}
-            selectedLabelIds={selectedLabelIds}
-            onLabelChange={setSelectedLabelIds}
-          />
-
-          {/* Delete section */}
-          <View style={{ marginTop: activeTheme.spacing[4], borderTopWidth: 1, borderTopColor: activeTheme.colors.border, paddingTop: activeTheme.spacing[4] }}>
-            {!confirmDelete ? (
-              <Pressable
-                onPress={openDelete}
-                hitSlop={activeTheme.spacing[1]}
-                style={({ pressed }) => ({
-                  alignItems: 'center',
-                  paddingVertical: activeTheme.spacing[3],
-                  borderRadius: activeTheme.borderRadii.sm,
-                  borderWidth: 1,
-                  borderColor: activeTheme.colors.destructive,
-                  opacity: pressed ? 0.7 : 1,
-                })}
-                accessibilityLabel="删除事件"
-              >
-                <Text variant="button" color="destructive">
-                  删除事件
-                </Text>
-              </Pressable>
-            ) : (
-              <Stack gap={3}>
-                <Text variant="bodySm" color="destructive">
-                  确定要删除这个事件吗？此操作不可撤销。
-                </Text>
-                <View style={{ flexDirection: 'row', gap: activeTheme.spacing[3] }}>
-                  <Pressable
-                    onPress={() => setConfirmDelete(false)}
-                    disabled={deleting}
-                    hitSlop={activeTheme.spacing[1]}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      alignItems: 'center',
-                      paddingVertical: activeTheme.spacing[3],
-                      borderRadius: activeTheme.borderRadii.sm,
-                      borderWidth: 1,
-                      borderColor: activeTheme.colors.border,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
-                    accessibilityLabel="取消删除"
-                  >
-                    <Text variant="button" color="ink">取消</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleDelete}
-                    disabled={deleting}
-                    hitSlop={activeTheme.spacing[1]}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      alignItems: 'center',
-                      paddingVertical: activeTheme.spacing[3],
-                      borderRadius: activeTheme.borderRadii.sm,
-                      backgroundColor: deleting ? activeTheme.colors.disabled : activeTheme.colors.destructive,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
-                    accessibilityLabel="确认删除事件"
-                  >
-                    <Text variant="button" color="surface">
-                      {deleting ? '删除中…' : '确认删除'}
-                    </Text>
-                  </Pressable>
-                </View>
-              </Stack>
-            )}
-          </View>
-          <SeriesScopeSheet
-            error={seriesError}
-            mode={pendingSeriesAction?.mode ?? 'edit'}
-            onClose={() => {
-              setPendingSeriesAction(null);
-              setSeriesError(null);
-            }}
-            onSelect={(scope) => void handleSeriesSelect(scope)}
-            submitting={seriesSubmitting}
-            visible={pendingSeriesAction !== null}
-          />
-        </Stack>
-    </AppShell>
+          <EventForm draftKey={draftPrefix + 'form'} initial={event} onSubmit={handleSubmit} onCancel={handleCancel} submitLabel="保存" isSubmitting={isSubmitting} householdId={id} selectedLabelIds={selectedLabelIds} onLabelChange={setSelectedLabelIds} />
+          {canDelete ? <Pressable accessibilityRole="button" accessibilityLabel="删除事件" disabled={isSubmitting} onPress={openDelete} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', alignSelf: 'flex-start' }}><Text variant="label" color="destructive">删除日程</Text></Pressable> : null}
+        </Stack>}
+    </EventWindow>
   );
 }

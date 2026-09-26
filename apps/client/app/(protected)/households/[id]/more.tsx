@@ -6,6 +6,8 @@ import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import Repeat from 'lucide-react-native/icons/repeat';
 import Tag from 'lucide-react-native/icons/tag';
+import Settings from 'lucide-react-native/icons/settings';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
 
 import { useHouseholdContext } from '../../../../src/features/households/household-context';
 import {
@@ -105,89 +107,17 @@ export default function HouseholdMoreRoute() {
 
 
           <PageIntro title="家庭" />
-          {/* Settings quick-access */}
-          <Pressable
-            onPress={() => void router.push(`/households/${encodeURIComponent(id)}/settings`)}
-            accessibilityRole="button"
-            accessibilityLabel="打开家庭设置"
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: activeTheme.spacing[3],
-              backgroundColor: activeTheme.colors.surface,
-              borderRadius: activeTheme.borderRadii.xl,
-              padding: activeTheme.spacing[5],
-              borderWidth: 1,
-              borderColor: activeTheme.colors.separator,
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            <View style={{ flex: 1 }}>
-              <Text variant="label">家庭设置</Text>
-              <Text variant="bodySm" color="inkMuted">
-                管理成员、发送邀请、重命名家庭
-              </Text>
-            </View>
-            <Text variant="caption" color="coral">
-              进入 ›
-            </Text>
-          </Pressable>
-          {/* Labels quick-access */}
-          <Pressable
-            onPress={handleOpenLabels}
-            accessibilityRole="button"
-            accessibilityLabel="管理标签"
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: activeTheme.spacing[3],
-              backgroundColor: activeTheme.colors.surface,
-              borderRadius: activeTheme.borderRadii.xl,
-              padding: activeTheme.spacing[5],
-              borderWidth: 1,
-              borderColor: activeTheme.colors.separator,
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            <Tag size={24} color={activeTheme.colors.coral} strokeWidth={1.5} />
-            <View style={{ flex: 1 }}>
-              <Text variant="label">标签管理</Text>
-              <Text variant="bodySm" color="inkMuted">
-                创建和管理标签，给事件和任务分类
-              </Text>
-            </View>
-            <Text variant="caption" color="coral">
-              进入 ›
-            </Text>
-          </Pressable>
-          {/* Recurrence management */}
-          <Pressable
-            onPress={handleOpenRecurrenceRules}
-            accessibilityRole="button"
-            accessibilityLabel="管理周期规则"
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: activeTheme.spacing[3],
-              backgroundColor: activeTheme.colors.surface,
-              borderRadius: activeTheme.borderRadii.xl,
-              padding: activeTheme.spacing[5],
-              borderWidth: 1,
-              borderColor: activeTheme.colors.separator,
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            <Repeat size={24} color={activeTheme.colors.teal} strokeWidth={1.5} />
-            <View style={{ flex: 1 }}>
-              <Text variant="label">周期规则</Text>
-              <Text variant="bodySm" color="inkMuted">
-                查看和管理所有重复的任务和事件
-              </Text>
-            </View>
-            <Text variant="caption" color="coral">
-              进入 ›
-            </Text>
-          </Pressable>
+          <View style={{ backgroundColor: activeTheme.colors.surface, borderRadius: activeTheme.borderRadii.xl, paddingHorizontal: activeTheme.spacing[4] }}>
+            {[
+              { name: '家庭设置', label: '打开家庭设置', description: '成员、邀请和家庭名称', Icon: Settings, onPress: () => router.push(`/households/${encodeURIComponent(id)}/settings`) },
+              { name: '标签管理', label: '管理标签', description: '给日程和任务分类', Icon: Tag, onPress: handleOpenLabels },
+              { name: '重复安排', label: '管理周期规则', description: '管理重复的日程和任务', Icon: Repeat, onPress: handleOpenRecurrenceRules },
+            ].map(({ name, label, description, Icon, onPress }, index) => <Pressable key={name} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[3], paddingVertical: activeTheme.spacing[4], borderTopWidth: index ? activeTheme.borderWidths.default : 0, borderColor: activeTheme.colors.separator, opacity: pressed ? 0.7 : 1 })}>
+              <Icon size={activeTheme.controlSizes.icon} color={activeTheme.colors.coral} strokeWidth={activeTheme.controlSizes.iconStroke} />
+              <Stack gap={1} style={{ flex: 1 }}><Text variant="label">{name}</Text><Text variant="bodySm" color="inkMuted">{description}</Text></Stack>
+              <ChevronRight size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />
+            </Pressable>)}
+          </View>
         </Stack>
       </AppShell>
       <HouseholdSwitcher

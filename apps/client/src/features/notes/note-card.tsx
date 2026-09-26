@@ -1,7 +1,6 @@
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { NoteResponseDto } from '@muchakucha/api-client';
-import FileText from 'lucide-react-native/icons/file-text';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text } from '../../ui/primitives';
 
@@ -26,18 +25,15 @@ export function NoteCard({ note, onPress }: NoteCardProps) {
       accessibilityLabel={`笔记：${note.title}`}
       style={({ pressed }) => ({
         backgroundColor: activeTheme.colors.surface,
-        borderRadius: activeTheme.borderRadii.xl,
-        padding: activeTheme.spacing[5],
+        borderRadius: activeTheme.borderRadii.md,
+        padding: activeTheme.spacing[4],
         borderWidth: 1,
         borderColor: activeTheme.colors.separator,
         opacity: pressed ? 0.8 : 1,
       })}
     >
       <View style={{ flexDirection: 'row', gap: activeTheme.spacing[3] }}>
-        <View style={{ padding: activeTheme.spacing[3], backgroundColor: activeTheme.colors.tealSoft, borderRadius: activeTheme.borderRadii.lg, alignSelf: 'flex-start' }}>
-          <FileText size={20} color={activeTheme.colors.teal} strokeWidth={1.5} />
-        </View>
-        <Stack gap={3} style={{ flex: 1 }}>
+        <Stack gap={1} style={{ flex: 1 }}>
           <Text variant="body" style={{ fontWeight: '600' }} numberOfLines={2}>
             {note.title}
           </Text>
