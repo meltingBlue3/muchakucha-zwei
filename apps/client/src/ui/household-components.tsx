@@ -58,6 +58,7 @@ interface AppShellProps {
   showProfile?: boolean;
   footer?: React.ReactNode;
   headerContent?: React.ReactNode;
+  floatingAction?: React.ReactNode;
 }
 
 export const AppShell = ({
@@ -71,6 +72,7 @@ export const AppShell = ({
   showProfile = false,
   footer,
   headerContent,
+  floatingAction,
 }: AppShellProps) => {
   const router = useRouter();
   const blurTarget = useRef<View>(null);
@@ -158,7 +160,7 @@ export const AppShell = ({
             flexGrow: 1,
             paddingHorizontal: width < theme.breakpoints.mobile ? theme.layout.compactInset : theme.layout.mobileInset,
             paddingTop: footer !== undefined ? theme.spacing[3] : theme.spacing[6],
-            paddingBottom: theme.spacing[10],
+            paddingBottom: floatingAction ? theme.spacing[16] + theme.spacing[10] : theme.spacing[10],
             maxWidth: Platform.OS === 'web' ? theme.layout.householdMaxWidth : undefined,
             alignSelf: Platform.OS === 'web' ? 'center' : undefined,
             width: '100%',
@@ -177,6 +179,7 @@ export const AppShell = ({
         >
           {children}
         </ScrollView>
+        {floatingAction ? <View pointerEvents="box-none" style={{ position: 'absolute', right: theme.layout.mobileInset, bottom: theme.spacing[4] }}>{floatingAction}</View> : null}
       </KeyboardAvoidingView>
       </View>
       {!wideNavigation ? footer : null}

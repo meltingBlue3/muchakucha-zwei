@@ -1,3 +1,4 @@
+import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../ui/workspace-state';
@@ -135,10 +136,10 @@ export default function NotesListRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="家庭笔记" refreshing={refreshing} onRefresh={handleRefresh} title="家庭笔记" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="notes" />}>
+      <AppShell accessibilityLabel="家庭笔记" refreshing={refreshing} onRefresh={handleRefresh} title="家庭笔记" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="notes" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton label="创建笔记" onPress={handleCreateNote} /> : null}>
         <Stack gap={4}>
 
-          <PageIntro title="笔记" action={<Button label="新建" accessibilityLabel="创建笔记" onPress={handleCreateNote} />} />
+          <PageIntro title="笔记" />
 
           {(notes.length > 0 || query !== '') && (
             <TextField

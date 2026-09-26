@@ -1,3 +1,4 @@
+import { FloatingCreateButton } from '../../../../src/ui/floating-create-button';
 import { useContentDelete } from '../../../../src/features/content/use-content-delete';
 import { rememberRouteTrigger } from '../../../../src/platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../../../src/ui/workspace-state';
@@ -256,7 +257,11 @@ export default function TodayRoute() {
       <AppShell accessibilityLabel="今日视图" refreshing={refreshing} onRefresh={handleRefresh} title="今日视图" showProfile headerContent={<HouseholdHeader
           householdName={currentHousehold?.name ?? ''}
           onOpenSwitcher={() => setSwitcherOpen(true)}
-        />} footer={<HouseholdNavigation householdId={householdId} active="today" />}>
+        />} footer={<HouseholdNavigation householdId={householdId} active="today" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton actions={[
+        { kind: 'events', label: '新增日历', onPress: () => { setCalendarDate(todayIso()); rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/events/new`); } },
+        { kind: 'tasks', label: '新增任务', onPress: () => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/tasks/new`); } },
+        { kind: 'notes', label: '新增笔记', onPress: () => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/notes/new`); } },
+      ]} /> : null}>
       <Stack gap={4}>
         <Heading variant="caption" color="coral" style={{ fontSize: activeTheme.typography.section.fontSize, lineHeight: activeTheme.typography.section.lineHeight }}>{dateLabel}</Heading>
         {!loading && error === null ? <TodaySummary events={events.length} tasks={todayTasks.length} overdue={overdueTasks.length} /> : null}
@@ -292,10 +297,6 @@ export default function TodayRoute() {
             {/* Empty primary groups */}
             {events.length === 0 && todayTasks.length === 0 ? <Stack gap={3}>
               <Text color="inkMuted">今天没有待处理安排。</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
-                <Button label="新建日程" tone="secondary" onPress={() => { setCalendarDate(todayIso()); rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(id)}/events/new`); }} />
-                <Button label="新建任务" tone="secondary" onPress={() => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(id)}/tasks/new`); }} />
-              </View>
             </Stack> : null}
             {/* Today's events */}
             {events.length > 0 ? <View>

@@ -1,3 +1,4 @@
+import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { AppDialog } from '../../ui/app-dialog';
@@ -210,11 +211,11 @@ export default function CalendarScreen() {
 
   return (
   <>
-    <AppShell accessibilityLabel="家庭日历" refreshing={refreshing} onRefresh={handleRefresh} title="家庭日历" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="events" />}>
+    <AppShell accessibilityLabel="家庭日历" refreshing={refreshing} onRefresh={handleRefresh} title="家庭日历" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="events" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton label="创建事件" onPress={handleCreateEvent} /> : null}>
       <Stack gap={4}>
         {/* Header with household name and create button */}
 
-          <PageIntro title="日历" action={<Button label="新建" accessibilityLabel="创建事件" onPress={handleCreateEvent} />} />
+          <PageIntro title="日历" />
 
         <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2], alignItems: 'center' }}>
           <Pressable ref={filterTrigger} accessibilityRole="button" accessibilityLabel="筛选日程" onPress={() => setFiltersOpen(true)} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}><Text variant="label" color="link">筛选</Text></Pressable>

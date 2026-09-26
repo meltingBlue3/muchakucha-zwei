@@ -1,3 +1,4 @@
+import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete } from '../content/use-content-delete';
 import { FilterOptions } from '../../ui/filter-options';
 import { AppDialog } from '../../ui/app-dialog';
@@ -256,12 +257,12 @@ export default function TaskListScreen() {
 
   return (
   <>
-    <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="tasks" />}>
+    <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="tasks" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton label="创建任务" onPress={handleCreateTask} /> : null}>
       <Stack gap={4}>
 
         {/* Header */}
 
-          <PageIntro title="任务" action={<Button label="新建" accessibilityLabel="创建任务" onPress={handleCreateTask} />} />
+          <PageIntro title="任务" />
 
         <FilterOptions label="任务状态" options={FILTERS.map(f => ({ value: f.key, label: f.label, name: `筛选：${f.label}` }))} value={filter} onChange={value => setFilter(value as FilterKey)} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}>
@@ -324,7 +325,7 @@ export default function TaskListScreen() {
           ) : (
             <Text variant="bodySm" color="inkMuted">
               {activeFilterCount === 0
-                ? '还没有任务。点击上方按钮创建第一个任务。'
+                ? '还没有任务。点击右下角“＋”创建第一个任务。'
                 : recurringFilter === 'recurring' &&
                     filter === 'all' &&
                     priorityFilter === 'all' &&

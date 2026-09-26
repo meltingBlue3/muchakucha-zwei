@@ -185,3 +185,13 @@ test('recurring card deletion submits the selected series scope', async ({ page 
   await expect(page).toHaveURL(`${base}/events`);
   expect(selectedScope).toBe('this_only');
 });
+
+test('Today floating creation menu offers three destinations', async ({ page }) => {
+  await setup(page);
+  await page.goto(`${base}/today`);
+  await page.getByRole('button', { name: '新增', exact: true }).click();
+  for (const name of ['新增日历', '新增任务', '新增笔记']) await expect(page.getByRole('menuitem', { name, exact: true })).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.getByRole('menuitem', { name: '新增日历', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '创建日程', exact: true })).toBeVisible();
+});
