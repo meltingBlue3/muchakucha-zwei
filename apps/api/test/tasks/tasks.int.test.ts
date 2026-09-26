@@ -1,3 +1,4 @@
+import { fixtureEditPayload } from '../../../../scripts/test-edit-version.js';
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
@@ -16,7 +17,7 @@ let passwordHash: string;
 interface ActorFixture {
   accessToken: string;
   userId: string;
-  email: string;
+  username: string;
   displayName: string;
 }
 
@@ -30,15 +31,15 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function insertActor(email: string, displayName: string): Promise<ActorFixture> {
+async function insertActor(username: string, displayName: string): Promise<ActorFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
-  const canonical = email.trim().normalize('NFC').toLowerCase();
+  const canonical = username.trim().normalize('NFC').toLowerCase();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, canonical, displayName, passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, canonical, displayName, passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -48,7 +49,7 @@ async function insertActor(email: string, displayName: string): Promise<ActorFix
   });
   return {
     userId,
-    email,
+    username,
     displayName,
     accessToken: await jwt.signAsync({ sub: userId, sid: sessionId }),
   };
@@ -85,6 +86,10 @@ async function taskApi(
   path: string,
   payload?: unknown,
 ): Promise<{ statusCode: number; json: () => any }> {
+  payload = await fixtureEditPayload(method, `/api/v1/households/${encodeURIComponent(householdId)}/tasks${path}`, payload, async (readUrl) => {
+    const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
+    return snapshot.json();
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
@@ -131,9 +136,9 @@ describe('tasks CRUD API contract', () => {
 
   beforeEach(async () => {
     [owner, member, outsider] = await Promise.all([
-      insertActor('owner-tasks@example.test', '任务主人'),
-      insertActor('member-tasks@example.test', '任务成员'),
-      insertActor('outsider-tasks@example.test', '无关人员'),
+      insertActor('owner-tasks', '任务主人'),
+      insertActor('member-tasks', '任务成员'),
+      insertActor('outsider-tasks', '无关人员'),
     ]);
     householdId = await createHousehold(owner.accessToken, '任务组');
     await addMemberViaDb(householdId, member, 'MEMBER');
@@ -358,22 +363,27 @@ describe('tasks CRUD API contract', () => {
     expect(response.json().title).toBe('成员更新了');
   });
 
-  test('rejects MEMBER from editing another member\'s task', async () => {
-    const secondMember = await insertActor('second-member@example.test', '第二成员');
+  test('allows an unassigned MEMBER to edit another member\'s task', async () => {
+    const secondMember = await insertActor('second-member', '第二成员');
     await addMemberViaDb(householdId, secondMember, 'MEMBER');
 
     const created = await taskApi(member.accessToken, householdId, 'POST', '', { title: '第一成员的任务' });
     const taskId = (created.json() as { id: string }).id;
 
     const response = await taskApi(secondMember.accessToken, householdId, 'PUT', `/${encodeURIComponent(taskId)}`, {
-      title: '越权修改',
+      title: '共同修改', description: '成员协作', status: 'completed', priority: 'high',
+      assigneeIds: [secondMember.userId],
     });
-    expect(response.statusCode).toBe(403);
-    expect(response.json().error.code).toBe('FORBIDDEN');
+    expect(response.statusCode).toBe(200);
+    const saved = await taskApi(member.accessToken, householdId, 'GET', `/${taskId}`);
+    expect(saved.json()).toMatchObject({ title: '共同修改', description: '成员协作', status: 'completed', priority: 'high', assigneeIds: [secondMember.userId], createdBy: member.userId });
+    const denied = await taskApi(outsider.accessToken, householdId, 'PUT', `/${taskId}`, { title: '越权修改' });
+    expect(denied.statusCode).toBe(404);
+    expect((await taskApi(member.accessToken, householdId, 'GET', `/${taskId}`)).json().title).toBe('共同修改');
   });
 
   test('rejects MEMBER from deleting another member\'s task', async () => {
-    const secondMember = await insertActor('second-del@example.test', '第二成员删除');
+    const secondMember = await insertActor('second-del', '第二成员删除');
     await addMemberViaDb(householdId, secondMember, 'MEMBER');
 
     const created = await taskApi(member.accessToken, householdId, 'POST', '', { title: '不受删除' });

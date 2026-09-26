@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const user = { id: 'ui-user', username: 'family_member', displayName: '小林', email: null, emailVerified: false, hasHousehold: false };
+const user = { id: 'ui-user', username: 'family_member', displayName: '小林', hasHousehold: false };
 
 async function mockApi(page: Page, authenticated: boolean) {
   await page.route('**/api/v1/**', async (route) => {
@@ -13,6 +13,8 @@ async function mockApi(page: Page, authenticated: boolean) {
       body = authenticated ? { accessToken: 'ui-only-token' } : { error: { code: 'UNAUTHORIZED' } };
     } else if (path.endsWith('/users/me')) {
       body = route.request().method() === 'PATCH' ? { ...user, ...route.request().postDataJSON() } : user;
+    } else if (path.endsWith('/invitations/inbox')) {
+      body = { invitations: [] };
     } else if (path.endsWith('/households')) {
       body = [];
     } else {
@@ -33,7 +35,7 @@ async function checkLayout(page: Page) {
 
 test('mobile sign-up keeps password controls inline and preserves the invitation destination', async ({ page }) => {
   await mockApi(page, false);
-  await page.goto('/login?intended=%2Finvite');
+  await page.goto('/login?intended=%2Finbox');
   await page.getByRole('link', { name: '创建账户', exact: true }).click();
   await expect(page).toHaveURL(/register.*intended/);
   await page.getByRole('heading', { name: '创建你的账户' }).waitFor();
@@ -53,9 +55,9 @@ test('no-household onboarding offers both routes and profile access', async ({ p
   await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
   await checkLayout(page);
   await page.screenshot({ path: 'test-results/account-setup-mobile.png', fullPage: true });
-  await page.getByRole('button', { name: '我有邀请链接' }).click();
-  await expect(page.getByLabel('邀请链接或邀请码')).toBeVisible();
-  await page.getByRole('link', { name: '返回设置家庭' }).click();
+  await page.getByRole('button', { name: '查看家庭邀请' }).click();
+  await expect(page.getByText('暂无消息')).toBeVisible();
+  await page.getByRole('button', { name: '返回', exact: true }).click();
   await page.getByRole('button', { name: '创建家庭', exact: true }).click();
   await expect(page.getByLabel('家庭名称', { exact: true })).toBeVisible();
   await checkLayout(page);

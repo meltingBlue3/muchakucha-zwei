@@ -17,18 +17,18 @@ function createApi(): HouseholdSettingsApi {
   return {
     getHousehold: jest.fn().mockResolvedValue({
       id: 'household-1', name: '家', ownerMembershipId: 'membership-1', createdAt: new Date().toISOString(),
-      members: [{ membershipId: 'membership-1', userId: 'owner', displayName: '家主', username: 'owner', email: '', role: 'OWNER', isCurrentUser: true }],
+      members: [{ membershipId: 'membership-1', userId: 'owner', displayName: '家主', username: 'owner', role: 'OWNER', isCurrentUser: true }],
     }),
     updateHousehold: jest.fn(),
     sendHouseholdInvitation: jest.fn().mockResolvedValue({
-      code: 'INVITATION_SENT', message: '邀请链接已生成，请发给家人。', invitationUrl: 'https://family.test/invite/first',
+      code: 'INVITATION_SENT', message: '邀请已发送到对方的收件箱。', invitationId: 'first',
     }),
     listInvitations: jest.fn().mockResolvedValue({ invitations: [{
-      id: 'invitation-1', emailCanonical: '', username: 'family-member', status: 'pending',
+      id: 'invitation-1', username: 'family-member', status: 'pending',
       role: 'MEMBER', createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString(),
     }] }),
     resendInvitation: jest.fn().mockResolvedValue({
-      code: 'INVITATION_RESENT', message: '邀请链接已更新，请发给家人。', invitationUrl: 'https://family.test/invite/replacement',
+      code: 'INVITATION_RESENT', message: '邀请已重新发送到对方的收件箱。', invitationId: 'replacement',
     }),
     revokeInvitation: jest.fn(),
   };
@@ -48,7 +48,7 @@ async function renderSettings(householdApi: HouseholdSettingsApi) {
 }
 
 describe('username invitation settings', () => {
-  test('accepts expanded username lookup and shows selectable links after send and resend', async () => {
+  test('accepts expanded username lookup and confirms inbox delivery after send and resend', async () => {
     const api = createApi();
     const view = await renderSettings(api);
     await fireEvent.press(await view.findByRole('button', { name: '邀请家人' }));
@@ -56,13 +56,12 @@ describe('username invitation settings', () => {
     await fireEvent.changeText(await view.findByLabelText('用户名'), ` ${canonicalUsername} `);
     await fireEvent.press(view.getByRole('button', { name: '发送邀请' }));
     await waitFor(() => expect(api.sendHouseholdInvitation).toHaveBeenCalledWith('access-token', 'household-1', { username: canonicalUsername }));
-    expect(await view.findByText('https://family.test/invite/first')).toBeTruthy();
-    expect(view.getByLabelText('邀请链接').props.selectable).toBe(true);
+    expect(await view.findByText('邀请已发送到对方的收件箱。')).toBeTruthy();
+    expect(view.queryByLabelText('邀请链接')).toBeNull();
 
     await fireEvent.press(view.getByLabelText('关闭邀请家人'));
     await fireEvent.press(view.getByLabelText('重新发送邀请给 family-member'));
-    expect(await view.findByText('https://family.test/invite/replacement')).toBeTruthy();
-    expect(view.queryByText('https://family.test/invite/first')).toBeNull();
+    expect(await view.findByText('邀请已重新发送到对方的收件箱。')).toBeTruthy();
   });
 
   test('shows an unknown username error and retains the input', async () => {

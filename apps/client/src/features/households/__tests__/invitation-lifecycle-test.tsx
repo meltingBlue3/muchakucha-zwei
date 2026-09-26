@@ -5,7 +5,7 @@ import { ConfirmationPage, InvitationRow, MemberRow } from '../../../ui/househol
 
 const pendingInvitation = {
   id: 'inv-1',
-  emailCanonical: 'pending@example.test',
+  username: 'pending',
   status: 'pending' as const,
   expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   role: 'MEMBER',
@@ -19,10 +19,10 @@ describe('InvitationRow and ConfirmationPage', () => {
       <MuchakuchaThemeProvider>
         <MemberRow member={{
           membershipId: 'member-1', userId: 'user-1', displayName: '家人',
-          username: 'family-member', email: '', role: 'MEMBER', isCurrentUser: false,
+          username: 'family-member', role: 'MEMBER', isCurrentUser: false,
         }} />
         <InvitationRow
-          invitation={{ ...pendingInvitation, emailCanonical: '', username: 'another-member' }}
+          invitation={{ ...pendingInvitation, username: 'another-member' }}
           canManage={true}
           onResend={onResend}
         />
@@ -51,20 +51,20 @@ describe('InvitationRow and ConfirmationPage', () => {
 
     // Status label and email render
     expect(view.getByText('待接受')).toBeTruthy();
-    expect(view.getByText('pending@example.test')).toBeTruthy();
+    expect(view.getByText('pending')).toBeTruthy();
 
     // Resend button
-    const resendButton = view.getByLabelText('重新发送邀请给 pending@example.test');
+    const resendButton = view.getByLabelText('重新发送邀请给 pending');
     expect(resendButton).toBeTruthy();
     await fireEvent.press(resendButton);
     expect(onResend).toHaveBeenCalledWith('inv-1');
 
     // Revoke button
-    const revokeButton = view.getByLabelText('撤销邀请 pending@example.test');
+    const revokeButton = view.getByLabelText('撤销邀请 pending');
     expect(revokeButton).toBeTruthy();
     await fireEvent.press(revokeButton);
     expect(onRevoke).toHaveBeenCalledWith('inv-1', expect.objectContaining({
-      props: expect.objectContaining({ accessibilityLabel: '撤销邀请 pending@example.test' }),
+      props: expect.objectContaining({ accessibilityLabel: '撤销邀请 pending' }),
     }));
   });
 

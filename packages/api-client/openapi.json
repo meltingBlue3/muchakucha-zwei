@@ -132,136 +132,6 @@
         ]
       }
     },
-    "/api/v1/auth/email-verifications/complete": {
-      "post": {
-        "operationId": "completeEmailVerification",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompleteEmailVerificationDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CompleteEmailVerificationResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Verification input or transport is invalid."
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/email-verifications/resend": {
-      "post": {
-        "operationId": "resendEmailVerification",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResendEmailVerificationDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResendEmailVerificationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/password-reset/request": {
-      "post": {
-        "operationId": "requestPasswordReset",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequestPasswordResetDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PasswordResetRequestAcceptedDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Password reset request input is invalid."
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/password-reset/complete": {
-      "post": {
-        "operationId": "completePasswordReset",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompletePasswordResetDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Password changed and all existing sessions revoked."
-          },
-          "400": {
-            "description": "Password or reset credential is invalid."
-          }
-        },
-        "summary": "",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
     "/api/v1/users/me": {
       "get": {
         "operationId": "getMe",
@@ -324,30 +194,63 @@
         ]
       }
     },
-    "/api/v1/households/invitations/preview": {
+    "/api/v1/households/invitations/inbox": {
       "get": {
-        "operationId": "previewInvitation",
-        "parameters": [
-          {
-            "name": "token",
-            "required": true,
-            "in": "query",
-            "description": "Raw invitation token from the URL.",
-            "schema": {}
-          }
-        ],
+        "operationId": "listInvitationInbox",
+        "parameters": [],
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InvitationPreviewResponseDto"
+                  "$ref": "#/components/schemas/InvitationInboxResponseDto"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
+    "/api/v1/households/invitations/decline": {
+      "post": {
+        "operationId": "declineInvitation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "Invitation not found for this recipient."
+          },
+          "409": {
+            "description": "Invitation is already handled, revoked, or expired."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "summary": "",
         "tags": [
           "households"
@@ -380,13 +283,13 @@
             }
           },
           "400": {
-            "description": "Invitation is invalid, expired, or already used."
+            "description": "Invitation ID is malformed."
           },
-          "403": {
-            "description": "The authenticated email does not match the invitation recipient."
+          "404": {
+            "description": "Invitation not found for this recipient."
           },
           "409": {
-            "description": "The invitation was already claimed by a concurrent request."
+            "description": "Invitation is already handled, revoked, or expired."
           }
         },
         "security": [
@@ -595,7 +498,7 @@
             }
           },
           "400": {
-            "description": "Email is invalid or the request is malformed."
+            "description": "Username is invalid or the request is malformed."
           },
           "403": {
             "description": "Actor is a member but not authorized to send invitations."
@@ -604,7 +507,7 @@
             "description": "Household not found or actor is not a member."
           },
           "409": {
-            "description": "The email already belongs to a current member of this household."
+            "description": "The account is already a current member of this household."
           }
         },
         "security": [
@@ -928,6 +831,41 @@
           },
           "409": {
             "description": "Stale ownership state or a concurrent transfer changed the owner pointer."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "households"
+        ]
+      }
+    },
+    "/api/v1/households/{id}/leave": {
+      "post": {
+        "operationId": "leaveHouseholdMembership",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Caller left; shared household content is retained."
+          },
+          "403": {
+            "description": "OWNER_TRANSFER_REQUIRED: transfer ownership before leaving."
+          },
+          "404": {
+            "description": "Household not found or caller is not a member."
           }
         },
         "security": [
@@ -1440,6 +1378,15 @@
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "expandRecurring",
+            "required": false,
+            "in": "query",
+            "description": "Generate recurring events for a bounded calendar range (at most 366 days).",
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -2227,12 +2174,6 @@
             "maxLength": 64,
             "description": "Allows Unicode lowercase expansion of a registered username."
           },
-          "email": {
-            "type": "string",
-            "example": "member@example.com",
-            "maxLength": 320,
-            "description": "Legacy email login; supply exactly one of username or email."
-          },
           "password": {
             "type": "string",
             "minLength": 1,
@@ -2248,6 +2189,7 @@
           }
         },
         "required": [
+          "username",
           "password",
           "platform"
         ]
@@ -2302,18 +2244,6 @@
             "maxLength": 32,
             "description": "Use username and confirmPassword for immediate registration."
           },
-          "email": {
-            "type": "string",
-            "example": "member@example.com",
-            "maxLength": 320,
-            "description": "Legacy email registration; cannot be combined with username."
-          },
-          "displayName": {
-            "type": "string",
-            "example": "Member",
-            "maxLength": 80,
-            "description": "Required only for legacy email registration."
-          },
           "password": {
             "type": "string",
             "minLength": 8,
@@ -2336,7 +2266,9 @@
           }
         },
         "required": [
+          "username",
           "password",
+          "confirmPassword",
           "platform"
         ]
       },
@@ -2349,10 +2281,6 @@
               "REGISTRATION_ACCEPTED"
             ]
           },
-          "pendingProof": {
-            "type": "string",
-            "description": "Native-only pending proof for encrypted device storage."
-          },
           "accessToken": {
             "type": "string",
             "description": "Access credential issued immediately for username registration."
@@ -2363,138 +2291,8 @@
           }
         },
         "required": [
-          "code"
-        ]
-      },
-      "CompleteEmailVerificationDto": {
-        "type": "object",
-        "properties": {
-          "token": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{43}$",
-            "writeOnly": true
-          },
-          "platform": {
-            "type": "string",
-            "enum": [
-              "native"
-            ]
-          },
-          "pendingProof": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{43}$",
-            "writeOnly": true
-          }
-        },
-        "required": [
-          "token"
-        ]
-      },
-      "CompleteEmailVerificationResponseDto": {
-        "type": "object",
-        "properties": {
-          "outcome": {
-            "type": "string",
-            "enum": [
-              "verified_auto_login",
-              "verified_login_required",
-              "expired",
-              "used",
-              "invalid",
-              "superseded"
-            ]
-          },
-          "accessToken": {
-            "type": "string",
-            "description": "Short-lived access credential issued only for same-device success."
-          },
-          "refreshToken": {
-            "type": "string",
-            "description": "Native-only refresh credential for encrypted device storage."
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "ResendEmailVerificationDto": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "example": "member@example.com",
-            "maxLength": 320
-          }
-        },
-        "required": [
-          "email"
-        ]
-      },
-      "ResendEmailVerificationResponseDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "enum": [
-              "RESEND_ACCEPTED"
-            ]
-          },
-          "retryAfterSeconds": {
-            "type": "number",
-            "example": 60,
-            "minimum": 1
-          }
-        },
-        "required": [
           "code",
-          "retryAfterSeconds"
-        ]
-      },
-      "RequestPasswordResetDto": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "example": "member@example.com",
-            "maxLength": 320
-          }
-        },
-        "required": [
-          "email"
-        ]
-      },
-      "PasswordResetRequestAcceptedDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "enum": [
-              "PASSWORD_RESET_REQUEST_ACCEPTED"
-            ]
-          }
-        },
-        "required": [
-          "code"
-        ]
-      },
-      "CompletePasswordResetDto": {
-        "type": "object",
-        "properties": {
-          "token": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9_-]{43}$",
-            "writeOnly": true
-          },
-          "password": {
-            "type": "string",
-            "minLength": 12,
-            "maxLength": 128,
-            "writeOnly": true
-          }
-        },
-        "required": [
-          "token",
-          "password"
+          "accessToken"
         ]
       },
       "CurrentUserDto": {
@@ -2504,10 +2302,6 @@
             "type": "string",
             "format": "uuid"
           },
-          "email": {
-            "type": "string",
-            "example": "member@example.com"
-          },
           "username": {
             "type": "string",
             "example": "family_member"
@@ -2516,9 +2310,6 @@
             "type": "string",
             "example": "Family member"
           },
-          "emailVerified": {
-            "type": "boolean"
-          },
           "hasHousehold": {
             "type": "boolean",
             "description": "Phase 1 handoff signal; household lookup begins in Phase 2."
@@ -2526,9 +2317,8 @@
         },
         "required": [
           "id",
-          "email",
+          "username",
           "displayName",
-          "emailVerified",
           "hasHousehold"
         ]
       },
@@ -2546,48 +2336,58 @@
           "displayName"
         ]
       },
-      "InvitationPreviewResponseDto": {
+      "InboxInvitationDto": {
         "type": "object",
         "properties": {
-          "kind": {
+          "id": {
             "type": "string",
-            "enum": [
-              "valid",
-              "invalid",
-              "expired",
-              "used"
-            ]
+            "format": "uuid"
           },
           "householdName": {
-            "type": "string",
-            "example": "温暖小家",
-            "description": "Only present when kind is \"valid\"."
+            "type": "string"
           },
           "inviterDisplayName": {
-            "type": "string",
-            "example": "家主",
-            "description": "Only present when kind is \"valid\"."
+            "type": "string"
           },
           "expiresAt": {
-            "type": "string",
-            "description": "ISO 8601 expiry. Only present when kind is \"valid\"."
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
           }
         },
         "required": [
-          "kind"
+          "id",
+          "householdName",
+          "inviterDisplayName",
+          "expiresAt",
+          "createdAt"
+        ]
+      },
+      "InvitationInboxResponseDto": {
+        "type": "object",
+        "properties": {
+          "invitations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InboxInvitationDto"
+            }
+          }
+        },
+        "required": [
+          "invitations"
         ]
       },
       "AcceptInvitationDto": {
         "type": "object",
         "properties": {
-          "token": {
+          "invitationId": {
             "type": "string",
-            "description": "The raw invitation token from the URL query parameter.",
-            "example": "abc123def456"
+            "format": "uuid"
           }
         },
         "required": [
-          "token"
+          "invitationId"
         ]
       },
       "GetHouseholdMemberDto": {
@@ -2604,11 +2404,6 @@
           "displayName": {
             "type": "string",
             "example": "家主"
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "example": "owner@example.test"
           },
           "username": {
             "type": "string",
@@ -2630,7 +2425,7 @@
           "membershipId",
           "userId",
           "displayName",
-          "email",
+          "username",
           "role",
           "isCurrentUser"
         ]
@@ -2797,18 +2592,15 @@
       "SendHouseholdInvitationDto": {
         "type": "object",
         "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "example": "friend@example.test",
-            "description": "Canonical invited email address. Role is server-fixed to MEMBER per D-05."
-          },
           "username": {
             "type": "string",
             "example": "family-member",
-            "description": "An existing username. Supply exactly one of username or email."
+            "description": "An existing username. Invitations are bound to this account."
           }
-        }
+        },
+        "required": [
+          "username"
+        ]
       },
       "SendHouseholdInvitationResponseDto": {
         "type": "object",
@@ -2821,14 +2613,15 @@
             "type": "string",
             "example": "邀请已发送。"
           },
-          "invitationUrl": {
+          "invitationId": {
             "type": "string",
-            "description": "Share this link with the invited username account."
+            "format": "uuid"
           }
         },
         "required": [
           "code",
-          "message"
+          "message",
+          "invitationId"
         ]
       },
       "InvitationListItemDto": {
@@ -2837,11 +2630,6 @@
           "id": {
             "type": "string",
             "format": "uuid"
-          },
-          "emailCanonical": {
-            "type": "string",
-            "format": "email",
-            "example": "pending@example.test"
           },
           "username": {
             "type": "string",
@@ -2853,7 +2641,8 @@
               "pending",
               "expired",
               "accepted",
-              "revoked"
+              "revoked",
+              "declined"
             ]
           },
           "expiresAt": {
@@ -2871,7 +2660,7 @@
         },
         "required": [
           "id",
-          "emailCanonical",
+          "username",
           "status",
           "expiresAt",
           "role",
@@ -2903,14 +2692,15 @@
             "type": "string",
             "example": "邀请已重新发送。"
           },
-          "invitationUrl": {
+          "invitationId": {
             "type": "string",
-            "description": "New link replacing the previous username invitation."
+            "format": "uuid"
           }
         },
         "required": [
           "code",
-          "message"
+          "message",
+          "invitationId"
         ]
       },
       "RevokeInvitationResponseDto": {
@@ -3035,6 +2825,12 @@
       "UpdateSeriesDto": {
         "type": "object",
         "properties": {
+          "expectedUpdatedAt": {
+            "type": "string"
+          },
+          "expectedRuleUpdatedAt": {
+            "type": "string"
+          },
           "title": {
             "type": "string",
             "minLength": 1,
@@ -3093,7 +2889,11 @@
           "recurrence": {
             "$ref": "#/components/schemas/RecurrenceDto"
           }
-        }
+        },
+        "required": [
+          "expectedUpdatedAt",
+          "expectedRuleUpdatedAt"
+        ]
       },
       "SeriesMutationResponseDto": {
         "type": "object",
@@ -3109,6 +2909,9 @@
       "RecurrenceRuleListItemDto": {
         "type": "object",
         "properties": {
+          "updatedAt": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -3169,6 +2972,7 @@
           }
         },
         "required": [
+          "updatedAt",
           "id",
           "kind",
           "title",
@@ -3205,11 +3009,15 @@
       "UpdateRecurrenceRuleDto": {
         "type": "object",
         "properties": {
+          "expectedUpdatedAt": {
+            "type": "string"
+          },
           "recurrence": {
             "$ref": "#/components/schemas/RecurrenceDto"
           }
         },
         "required": [
+          "expectedUpdatedAt",
           "recurrence"
         ]
       },
@@ -3262,6 +3070,9 @@
       "RecurrenceResponseDto": {
         "type": "object",
         "properties": {
+          "updatedAt": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -3311,6 +3122,7 @@
           }
         },
         "required": [
+          "updatedAt",
           "id",
           "freq",
           "interval",
@@ -3462,6 +3274,20 @@
       "UpdateEventDto": {
         "type": "object",
         "properties": {
+          "expectedUpdatedAt": {
+            "type": "string",
+            "description": "Required version read before editing; stale writes return 409 EDIT_CONFLICT."
+          },
+          "expectedRuleUpdatedAt": {
+            "type": "string",
+            "description": "Required when editing a recurring occurrence."
+          },
+          "labelIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "title": {
             "type": "string",
             "description": "Event title",
@@ -3497,7 +3323,10 @@
               }
             ]
           }
-        }
+        },
+        "required": [
+          "expectedUpdatedAt"
+        ]
       },
       "CreateTaskDto": {
         "type": "object",
@@ -3679,6 +3508,20 @@
       "UpdateTaskDto": {
         "type": "object",
         "properties": {
+          "expectedUpdatedAt": {
+            "type": "string",
+            "description": "Required version read before editing; stale writes return 409 EDIT_CONFLICT."
+          },
+          "expectedRuleUpdatedAt": {
+            "type": "string",
+            "description": "Required when editing a recurring occurrence."
+          },
+          "labelIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "title": {
             "type": "string",
             "description": "任务标题",
@@ -3728,7 +3571,10 @@
               }
             ]
           }
-        }
+        },
+        "required": [
+          "expectedUpdatedAt"
+        ]
       },
       "CreateNoteDto": {
         "type": "object",
@@ -3803,6 +3649,10 @@
       "UpdateNoteDto": {
         "type": "object",
         "properties": {
+          "expectedUpdatedAt": {
+            "type": "string",
+            "description": "Required version read before editing; stale writes return 409 EDIT_CONFLICT."
+          },
           "title": {
             "type": "string",
             "description": "Note title",
@@ -3813,7 +3663,10 @@
             "type": "string",
             "description": "Optional note body (Markdown)"
           }
-        }
+        },
+        "required": [
+          "expectedUpdatedAt"
+        ]
       },
       "CreateLabelDto": {
         "type": "object",

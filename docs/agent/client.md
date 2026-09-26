@@ -30,7 +30,9 @@ Failures reach the user as Chinese copy describing the next action, never a raw 
 
 ## Drafts
 
-`useWorkspaceState(draftKey, initial)` keeps unsaved form input for the login session. A form passing a `draftKey` keeps input across cancel and clears it on successful save; `NoteForm` is the reference implementation.
+`useWorkspaceState(draftKey, initial)` keeps drafts under `draft:<householdId>:<resource>:<id-or-new>:<field>`. `workspace-store.ts` persists dirty draft fields per authenticated account through `platform/drafts/`; Web uses localStorage and native uses files. Filters and view state remain in memory. Restoration is synchronous before protected forms mount; keep values JSON-compatible. A form keeps its draft across cancel and restart, clears its whole prefix after successful save, and uses `DraftNotice` for explicit discard and persistence failure feedback. `NoteForm` is the reference implementation.
+
+`session-runtime.ts` activates the account store and clears it on sign-out. `household-context.tsx` prunes drafts only after an authoritative membership response or known access loss; a failed/offline request does not justify deleting drafts. Preserve the partial-create record used by `useCreateWithLabels`, so a restart retries labels without creating duplicate content.
 
 Updates omit unchanged fields, so clearing an optional value requires sending it explicitly. `note-form.tsx` sends `body: ''` when editing an existing note and omits `body` when creating — the analogous case in any edit form needs the same explicit empty value plus a unit test on the submitted payload.
 

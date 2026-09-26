@@ -213,6 +213,7 @@ describe('task form recurrence integration', () => {
       recurrenceRuleId: 'rule-1',
       occurrenceDate: '2026-08-12',
       recurrence: {
+        updatedAt: '2026-01-01T00:00:00.000Z',
         id: 'rule-1',
         freq: 'weekly',
         interval: 1,
@@ -275,6 +276,7 @@ describe('task form recurrence integration', () => {
       recurrenceRuleId: 'rule-2',
       occurrenceDate: '2026-08-12',
       recurrence: {
+        updatedAt: '2026-01-01T00:00:00.000Z',
         id: 'rule-2',
         freq: 'weekly',
         interval: 1,
@@ -326,6 +328,7 @@ describe('task form recurrence integration', () => {
       recurrenceRuleId: 'rule-3',
       occurrenceDate: '2026-08-12',
       recurrence: {
+        updatedAt: '2026-01-01T00:00:00.000Z',
         id: 'rule-3',
         freq: 'daily',
         interval: 1,

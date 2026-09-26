@@ -1,5 +1,7 @@
+import { fixtureEditPayload } from '../../scripts/test-edit-version';
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -10,31 +12,31 @@ const password = 'correct horse battery staple 2026';
 
 // ---- Helpers ----
 
-async function prepareVerifiedAccount(
+async function prepareAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string; userId: string }> {
+): Promise<{ username: string; accessToken: string; userId: string }> {
   const database = new Client({ connectionString: DATABASE_URL });
   await database.connect();
   try {
-    const email = `cal-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
 
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, displayName, password, platform: 'web' }),
+      body: JSON.stringify({ username, confirmPassword: password, password, platform: 'web' }),
     });
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, displayName],
     );
 
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const body: any = await loginResponse.json();
@@ -45,7 +47,7 @@ async function prepareVerifiedAccount(
     });
     const me: any = await meResponse.json();
 
-    return { email, accessToken: body.accessToken, userId: me.id };
+    return { username, accessToken: body.accessToken, userId: me.id };
   } finally {
     await database.end();
   }
@@ -71,6 +73,10 @@ async function apiCall(
   path: string,
   body?: unknown,
 ): Promise<{ status: number; body: any }> {
+  body = await fixtureEditPayload(method, path, body, async (readPath) => {
+    const snapshot = await fetch(`${API_ORIGIN}${readPath}`, { headers: { authorization: `Bearer ${accessToken}` } });
+    return snapshot.json();
+  });
   const response = await fetch(`${API_ORIGIN}${path}`, {
     method,
     headers: {
@@ -89,7 +95,7 @@ async function apiCall(
 
 test.describe('Calendar Events API', () => {
   test('creates and retrieves an event', async () => {
-    const owner = await prepareVerifiedAccount('owner', '日历主人');
+    const owner = await prepareAccount('owner', '日历主人');
     const householdId = await createHousehold(owner.accessToken, '我的家');
 
     // Create event
@@ -116,7 +122,7 @@ test.describe('Calendar Events API', () => {
   });
 
   test('lists events with date range filtering', async () => {
-    const owner = await prepareVerifiedAccount('list', '列表测试');
+    const owner = await prepareAccount('list', '列表测试');
     const householdId = await createHousehold(owner.accessToken, '测试组');
 
     const now = new Date();
@@ -156,7 +162,7 @@ test.describe('Calendar Events API', () => {
   });
 
   test('updates an event', async () => {
-    const owner = await prepareVerifiedAccount('update', '更新测试');
+    const owner = await prepareAccount('update', '更新测试');
     const householdId = await createHousehold(owner.accessToken, '更新组');
 
     const createResult = await apiCall(owner.accessToken, 'POST', `/api/v1/households/${householdId}/events`, {
@@ -181,7 +187,7 @@ test.describe('Calendar Events API', () => {
   });
 
   test('deletes an event', async () => {
-    const owner = await prepareVerifiedAccount('delete', '删除测试');
+    const owner = await prepareAccount('delete', '删除测试');
     const householdId = await createHousehold(owner.accessToken, '删除组');
 
     const createResult = await apiCall(owner.accessToken, 'POST', `/api/v1/households/${householdId}/events`, {
@@ -201,8 +207,8 @@ test.describe('Calendar Events API', () => {
   });
 
   test('rejects non-member from accessing events', async () => {
-    const owner = await prepareVerifiedAccount('owner-sec', '安全主人');
-    const outsider = await prepareVerifiedAccount('outsider', '外人');
+    const owner = await prepareAccount('owner-sec', '安全主人');
+    const outsider = await prepareAccount('outsider', '外人');
     const householdId = await createHousehold(owner.accessToken, '私密组');
 
     // Create event as owner
@@ -231,7 +237,7 @@ test.describe('Calendar Events API', () => {
   });
 
   test('validates required fields on create', async () => {
-    const owner = await prepareVerifiedAccount('valid', '验证测试');
+    const owner = await prepareAccount('valid', '验证测试');
     const householdId = await createHousehold(owner.accessToken, '验证组');
 
     // Missing title
@@ -259,7 +265,7 @@ test.describe('Calendar Events API', () => {
   });
 
   test('creates all-day events', async () => {
-    const owner = await prepareVerifiedAccount('allday', '全天测试');
+    const owner = await prepareAccount('allday', '全天测试');
     const householdId = await createHousehold(owner.accessToken, '全天组');
 
     const createResult = await apiCall(owner.accessToken, 'POST', `/api/v1/households/${householdId}/events`, {
@@ -271,4 +277,35 @@ test.describe('Calendar Events API', () => {
     expect(createResult.status).toBe(201);
     expect(createResult.body.allDay).toBe(true);
   });
+});
+
+
+test('a household member edits a shared event in the browser', async ({ page }) => {
+  const owner = await prepareAccount('edit-owner', '日程主人');
+  const member = await prepareAccount('edit-member', '协作成员');
+  const householdId = await createHousehold(owner.accessToken, '共享日程之家');
+  const database = new Client({ connectionString: DATABASE_URL });
+  await database.connect();
+  try {
+    await database.query('INSERT INTO "memberships" ("user_id", "household_id", "role") VALUES ($1, $2, $3)', [member.userId, householdId, 'MEMBER']);
+  } finally {
+    await database.end();
+  }
+  const created = await apiCall(owner.accessToken, 'POST', `/api/v1/households/${householdId}/events`, {
+    title: '周末聚餐', startTime: new Date(Date.now() + 3600_000).toISOString(), endTime: new Date(Date.now() + 7200_000).toISOString(),
+  });
+  expect(created.status).toBe(201);
+  const eventId = created.body.id as string;
+  await loginUsernameFixture(page, member.username, password, `/households/${householdId}/events/${eventId}`);
+  await page.getByRole('button', { name: '编辑事件', exact: true }).click();
+  await page.getByLabel('事件标题').fill('家庭聚餐');
+  await page.getByLabel('地点', { exact: true }).fill('新餐厅');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('button', { name: '编辑事件', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '家庭聚餐', exact: true })).toBeVisible();
+  const deleted = await apiCall(member.accessToken, 'DELETE', `/api/v1/households/${householdId}/events/${eventId}`);
+  expect(deleted.status).toBe(403);
+  const saved = await apiCall(owner.accessToken, 'GET', `/api/v1/households/${householdId}/events/${eventId}`);
+  expect(saved.status).toBe(200);
+  expect(saved.body).toMatchObject({ title: '家庭聚餐', location: '新餐厅', createdBy: owner.userId });
 });

@@ -1,3 +1,6 @@
+import { DraftNotice } from '../../../../../../src/ui/draft-notice';
+import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
+import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -63,7 +66,7 @@ export default function RecurrenceRuleDetailRoute() {
   } = useHouseholdContext();
 
   const [rule, setRule] = useState<RecurrenceRuleListItemDto | null>(null);
-  const [recurrence, setRecurrence] = useState<RecurrenceInput | null>(null);
+  const [recurrence, setRecurrence] = useWorkspaceState<RecurrenceInput | null>(`draft:${id}:recurrence-rules:${ruleId}:form`, null);
   const [pickerValid, setPickerValid] = useState(true);
   const loadedOnce = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -80,6 +83,14 @@ export default function RecurrenceRuleDetailRoute() {
   const deviceTimeZone = resolveDeviceTimeZone();
   const busy = saving || ending;
 
+  const workspace = useWorkspaceStore();
+  const draftPrefix = `draft:${id}:recurrence-rules:${ruleId}:`;
+  const conflict = useEditConflict(draftPrefix, rule, async () => {
+    const token = await sessionTransport.getAccessToken();
+    if (!token) throw new Error('Session expired');
+    return sessionApiClient.getRecurrenceRule(token, householdId!, ruleId!);
+  }, setRule);
+
   const fetchRule = useCallback(async () => {
     if (householdId === undefined || householdId === '' || ruleId === undefined || ruleId === '') {
       return;
@@ -93,6 +104,7 @@ export default function RecurrenceRuleDetailRoute() {
         return;
       }
       const result = await sessionApiClient.getRecurrenceRule(token, householdId, ruleId);
+      captureEditBaseline(workspace, draftPrefix, result);
       setRule(result);
       // The picker is seeded once from the authoritative rule. A refetch after
       // a failed write must not silently discard edits the user still has on
@@ -106,7 +118,7 @@ export default function RecurrenceRuleDetailRoute() {
     } finally {
       setLoading(false);
     }
-  }, [householdId, ruleId]);
+  }, [householdId, ruleId, workspace, draftPrefix, setRecurrence]);
 
   useFocusEffect(
     useCallback(() => {
@@ -147,10 +159,12 @@ export default function RecurrenceRuleDetailRoute() {
         setWriteError(SAVE_ERROR);
         return;
       }
-      await sessionApiClient.updateRecurrenceRule(token, householdId, ruleId, { recurrence });
+      await sessionApiClient.updateRecurrenceRule(token, householdId, ruleId, { recurrence, expectedUpdatedAt: conflict.precondition.expectedUpdatedAt });
+      workspace.clear(draftPrefix);
       setSaveConfirmOpen(false);
       backToList();
     } catch (caught: unknown) {
+      if (conflict.handle(caught)) { setSaveConfirmOpen(false); return; }
       // Every picker edit is kept: a failed write changed nothing server-side,
       // so throwing away the user's input would be the only real loss.
       setWriteError(
@@ -159,7 +173,7 @@ export default function RecurrenceRuleDetailRoute() {
     } finally {
       setSaving(false);
     }
-  }, [householdId, ruleId, recurrence, backToList]);
+  }, [householdId, ruleId, recurrence, backToList, conflict, workspace, draftPrefix]);
 
   const handleConfirmEnd = useCallback(async () => {
     if (householdId === undefined || householdId === '' || ruleId === undefined || ruleId === '') {
@@ -292,6 +306,8 @@ export default function RecurrenceRuleDetailRoute() {
                   startsOn: the picker force-syncs `value.startsOn` to whatever
                   it is handed, so the original date here would rewrite the
                   user's selection on every render. */}
+              <DraftNotice draftKey={draftPrefix + 'form'} busy={busy} onDiscard={backToList} />
+              {conflict.panel}
               <RecurrencePicker
                 value={recurrence}
                 onChange={setRecurrence}

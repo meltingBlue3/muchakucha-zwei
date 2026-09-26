@@ -4,7 +4,7 @@ Read this playbook when changing an endpoint, DTO, error code, permission rule, 
 
 ## Request and response contracts
 
-`/api/v1` stays backward compatible. New behavior arrives as a new field, a new endpoint, or an optional parameter; existing clients keep working without a coordinated release.
+There are no legacy clients to support. Change `/api/v1` and the current client together when a product rule requires it; regenerate the contract and update callers instead of adding compatibility bypasses. Edit versions are mandatory for tasks, notes, events, and recurrence rules. Recurring occurrence edits also require the rule version.
 
 `apps/api/src/main.ts` fixes the shapes every module inherits:
 
@@ -18,7 +18,7 @@ Every DTO property carries a `class-validator` decorator, and array properties v
 
 ## Rate limits
 
-A global throttler allows 60 requests per minute per client. Authentication routes tighten this per route with `@Throttle`, down to 5 per hour for password reset and similar flows.
+A global throttler allows 60 requests per minute per client. Authentication routes tighten this per route with `@Throttle`, down to 5 per hour for registration.
 
 Counting is per client address, so a deployment behind a reverse proxy sets `TRUST_PROXY` to the proxy's own address — without it every caller shares one quota. The variable takes explicit IPs or CIDR ranges only; `true` and hostnames fail at startup, since trusting any upstream would let a caller forge `X-Forwarded-For` and mint a fresh quota.
 
@@ -38,7 +38,7 @@ Every household-scoped handler resolves the caller's membership first. A caller 
 - Preserve database constraints and transactions. A rule the database can enforce is enforced there as well as in the service.
 - Time points are `timestamptz` in UTC. Calendar dates and recurrence time zones are distinct concepts and stay distinct in the schema, the DTO, and the client.
 - Prisma models stay inside the API. Controllers return DTOs; `src/generated/prisma/` is generated output.
-- Refresh, verification, and reset credentials are stored as hashes only — `RefreshToken.tokenHash`, `EmailVerificationToken.tokenHash`, `PasswordResetToken.tokenHash`. A new credential follows the same rule: the plaintext leaves in the response and is never persisted or logged.
+- Refresh credentials are stored as hashes only (`RefreshToken.tokenHash`). Invitations are account-bound inbox records: every list/response checks the authenticated recipient; an invitation ID alone grants no access.
 
 ## Regenerating the contract
 

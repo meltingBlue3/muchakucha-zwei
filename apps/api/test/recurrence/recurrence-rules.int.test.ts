@@ -1,3 +1,4 @@
+import { fixtureEditPayload } from '../../../../scripts/test-edit-version.js';
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
@@ -22,14 +23,14 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   try { return await run(client); } finally { await client.end(); }
 }
 
-async function insertActor(email: string): Promise<ActorFixture> {
+async function insertActor(username: string): Promise<ActorFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, email.toLowerCase(), 'recurrence actor', passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, username.toLowerCase(), 'recurrence actor', passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at") VALUES ($1, $2, CURRENT_TIMESTAMP + INTERVAL '30 days')`,
@@ -81,6 +82,10 @@ async function taskItemApi(
   path: string,
   payload?: unknown,
 ): Promise<{ statusCode: number; json: () => any }> {
+  payload = await fixtureEditPayload(method, `/api/v1/households/${encodeURIComponent(householdId)}/tasks${path}`, payload, async (readUrl) => {
+    const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
+    return snapshot.json();
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
@@ -101,6 +106,10 @@ async function eventApi(
   path: string = '',
   payload?: unknown,
 ): Promise<{ statusCode: number; json: () => any }> {
+  payload = await fixtureEditPayload(method, `/api/v1/households/${encodeURIComponent(householdId)}/events${path}`, payload, async (readUrl) => {
+    const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
+    return snapshot.json();
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
@@ -126,7 +135,7 @@ beforeEach(async () => { await resetDatabase(); });
 
 describe('daily task recurrence tracer', () => {
   test('creates a recurrence rule and five real task occurrences', async () => {
-    const owner = await insertActor('recurrence-owner@example.test');
+    const owner = await insertActor('recurrence-owner');
     const householdId = await createHousehold(owner.accessToken);
     // D-11: daily's lookahead is 0, so only "today" materializes for a rule
     // starting today. Backdate startsOn so the count-5 walk (startsOn..today)
@@ -160,7 +169,7 @@ describe('daily task recurrence tracer', () => {
   });
 
   test('keeps ordinary tasks on the existing path', async () => {
-    const owner = await insertActor('ordinary-owner@example.test');
+    const owner = await insertActor('ordinary-owner');
     const householdId = await createHousehold(owner.accessToken);
     const response = await taskApi(owner.accessToken, householdId, 'POST', { title: 'One time task' });
     expect(response.statusCode).toBe(201);
@@ -168,7 +177,7 @@ describe('daily task recurrence tracer', () => {
   });
 
   test('rejects mutually exclusive endsOn and count at the API and database boundaries', async () => {
-    const owner = await insertActor('invalid-recurrence@example.test');
+    const owner = await insertActor('invalid-recurrence');
     const householdId = await createHousehold(owner.accessToken);
     const startsOn = new Date().toISOString().slice(0, 10);
     const response = await taskApi(owner.accessToken, householdId, 'POST', {
@@ -184,8 +193,8 @@ describe('daily task recurrence tracer', () => {
   });
 
   test('does not disclose household existence to a non-member', async () => {
-    const owner = await insertActor('member-recurrence@example.test');
-    const outsider = await insertActor('outsider-recurrence@example.test');
+    const owner = await insertActor('member-recurrence');
+    const outsider = await insertActor('outsider-recurrence');
     const householdId = await createHousehold(owner.accessToken);
     const response = await taskApi(outsider.accessToken, householdId, 'POST', {
       title: 'Forbidden recurrence',
@@ -217,8 +226,8 @@ describe('recurring events', () => {
   };
 
   test('materializes six wall-clock occurrences, filters cancellation from lists, and preserves deep links', async () => {
-    const owner = await insertActor('recurring-event-owner@example.test');
-    const member = await insertActor('recurring-event-member@example.test');
+    const owner = await insertActor('recurring-event-owner');
+    const member = await insertActor('recurring-event-member');
     const householdId = await createHousehold(owner.accessToken);
     await addMemberViaDb(householdId, member);
 
@@ -271,15 +280,25 @@ describe('recurring events', () => {
     expect(deepLink.statusCode).toBe(200);
     expect((deepLink.json() as { cancelledAt: string | null }).cancelledAt).not.toBeNull();
 
-    const forbidden = await eventApi(member.accessToken, householdId, 'PUT', `/${listBody.events[0]!.id}`, {
-      title: 'Unauthorized recurring event edit',
+    const editedId = listBody.events[0]!.id;
+    const edited = await eventApi(member.accessToken, householdId, 'PUT', `/${editedId}`, {
+      title: 'Shared recurring event edit',
     });
-    expect(forbidden.statusCode).toBe(403);
-    expect(forbidden.json().error.code).toBe('FORBIDDEN');
+    expect(edited.statusCode).toBe(200);
+    expect((await eventApi(owner.accessToken, householdId, 'GET', `/${editedId}`)).json().title).toBe('Shared recurring event edit');
+    for (const path of [`/${editedId}`, `/${editedId}/series?scope=this_only`, `/${editedId}/series?scope=this_and_following`]) {
+      expect((await eventApi(member.accessToken, householdId, 'DELETE', path)).statusCode).toBe(403);
+    }
+    expect((await eventApi(owner.accessToken, householdId, 'GET', `/${editedId}`)).json().cancelledAt).toBeNull();
+    const split = await eventApi(member.accessToken, householdId, 'PUT', `/${editedId}/series`, { title: 'Shared future events' });
+    expect(split.statusCode).toBe(200);
+    const successor = await withDatabase((client) => client.query('SELECT "template_title", "created_by" FROM "recurrence_rules" WHERE "id" = $1', [split.json().recurrenceRuleId]));
+    expect(successor.rows[0]).toMatchObject({ template_title: 'Shared future events', created_by: owner.userId });
+
   });
 
   test('returns a null household watermark when no recurrence rule exists', async () => {
-    const owner = await insertActor('event-watermark-empty@example.test');
+    const owner = await insertActor('event-watermark-empty');
     const householdId = await createHousehold(owner.accessToken);
     const response = await eventApi(owner.accessToken, householdId, 'GET');
     expect(response.statusCode).toBe(200);
@@ -287,7 +306,7 @@ describe('recurring events', () => {
   });
 
   test('rejects invalid recurrence bounds and timezones with stable validation errors', async () => {
-    const owner = await insertActor('invalid-event-recurrence@example.test');
+    const owner = await insertActor('invalid-event-recurrence');
     const householdId = await createHousehold(owner.accessToken);
 
     const mutuallyExclusive = await eventApi(owner.accessToken, householdId, 'POST', '', {
@@ -314,8 +333,8 @@ describe('recurring events', () => {
   });
 
   test('does not disclose a household to a non-member creating recurrence', async () => {
-    const owner = await insertActor('event-household-owner@example.test');
-    const outsider = await insertActor('event-household-outsider@example.test');
+    const owner = await insertActor('event-household-owner');
+    const outsider = await insertActor('event-household-outsider');
     const householdId = await createHousehold(owner.accessToken);
     const response = await eventApi(outsider.accessToken, householdId, 'POST', '', recurringEvent);
     expect(response.statusCode).toBe(404);
@@ -326,7 +345,7 @@ describe('recurring events', () => {
   // used to reach Prisma and violate recurrence_rules.duration_minutes'
   // <= 1440 DB CHECK, surfacing as an opaque 500 with the event unsaved.
   test('rejects a recurring event whose span exceeds 24 hours with a 400, not a 500', async () => {
-    const owner = await insertActor('long-span-owner@example.test');
+    const owner = await insertActor('long-span-owner');
     const householdId = await createHousehold(owner.accessToken);
 
     const tooLong = await eventApi(owner.accessToken, householdId, 'POST', '', {
@@ -351,7 +370,7 @@ describe('recurring events', () => {
 
 describe('series template isolation', () => {
   test('generates later occurrences from the rule template, never from an edited earlier instance', async () => {
-    const owner = await insertActor('template-isolation-owner@example.test');
+    const owner = await insertActor('template-isolation-owner');
     const householdId = await createHousehold(owner.accessToken);
     // D-11: daily's lookahead is 0, so backdate startsOn far enough that the
     // open-ended walk (startsOn..today) produces the >10 rows this test's
@@ -422,7 +441,7 @@ describe('series template isolation', () => {
 
 describe('deleting a single occurrence', () => {
   test('cancels a recurring task instead of hard-deleting it, so no run resurrects it', async () => {
-    const owner = await insertActor('occurrence-delete-owner@example.test');
+    const owner = await insertActor('occurrence-delete-owner');
     const householdId = await createHousehold(owner.accessToken);
     // D-11: backdate startsOn so at least the 4 rows this test indexes into
     // (ordered[3]) exist immediately at create time.
@@ -459,7 +478,7 @@ describe('deleting a single occurrence', () => {
   });
 
   test('cancels a recurring event instead of hard-deleting it, so no run resurrects it', async () => {
-    const owner = await insertActor('occurrence-delete-event-owner@example.test');
+    const owner = await insertActor('occurrence-delete-event-owner');
     const householdId = await createHousehold(owner.accessToken);
     // D-11: backdate startsOn so the full count-6 series materializes at
     // create time instead of stalling at the 6-day weekly lookahead.
@@ -501,7 +520,7 @@ describe('deleting a single occurrence', () => {
 
 describe('per-instance association edits', () => {
   test('does not re-apply the template assignees to instances a later run did not create', async () => {
-    const owner = await insertActor('assignee-fanout-owner@example.test');
+    const owner = await insertActor('assignee-fanout-owner');
     const householdId = await createHousehold(owner.accessToken);
     // D-11: backdate startsOn so the >10 rows this test's OFFSET 10 needs
     // exist immediately at create time.
@@ -588,7 +607,7 @@ describe('series scope operations', () => {
   }
 
   test('keeps this_only edits isolated and never regenerates a cancelled occurrence', async () => {
-    const owner = await insertActor('scope-once-owner@example.test');
+    const owner = await insertActor('scope-once-owner');
     const householdId = await createHousehold(owner.accessToken);
     const series = await createDailySeries(owner, householdId, 'Daily original');
     const edited = series.tasks[1]!;
@@ -623,10 +642,33 @@ describe('series scope operations', () => {
     ]);
   });
 
+  test('stale series edits preserve every occurrence and the rule', async () => {
+    const owner = await insertActor('conflict-series-owner');
+    const householdId = await createHousehold(owner.accessToken);
+    const series = await createDailySeries(owner, householdId, 'Shared series');
+    const first = (await taskItemApi(owner.accessToken, householdId, 'GET', `/${series.tasks[0]!.id}`)).json();
+    await app.get(RecurrenceMaterializerService).materializeRule(series.recurrenceRuleId);
+    expect((await taskItemApi(owner.accessToken, householdId, 'GET', `/${first.id}`)).json().recurrence.updatedAt).toBe(first.recurrence.updatedAt);
+    const changed = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${series.tasks[1]!.id}`, { title: 'Another occurrence changed' });
+    expect(changed.statusCode).toBe(200);
+    const stale = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${first.id}/series`, {
+      title: 'Must not overwrite', expectedUpdatedAt: first.updatedAt, expectedRuleUpdatedAt: first.recurrence.updatedAt,
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().error.code).toBe('EDIT_CONFLICT');
+    const latest = (await taskApi(owner.accessToken, householdId, 'GET')).json();
+    expect(latest.tasks).toHaveLength(series.tasks.length);
+    expect(latest.tasks.every((task: { recurrenceRuleId: string }) => task.recurrenceRuleId === series.recurrenceRuleId)).toBe(true);
+    expect(latest.tasks.find((task: { id: string }) => task.id === first.id).title).toBe('Shared series');
+    expect(latest.tasks.find((task: { id: string }) => task.id === series.tasks[1]!.id).title).toBe('Another occurrence changed');
+  });
+
   test('atomically splits this_and_following while preserving historical rows', async () => {
-    const owner = await insertActor('scope-split-owner@example.test');
+    const owner = await insertActor('scope-split-owner');
     const householdId = await createHousehold(owner.accessToken);
     const series = await createDailySeries(owner, householdId, 'Old series');
+    const member = await insertActor('scope-split-member');
+    await addMemberViaDb(householdId, member);
     const split = series.tasks[3]!;
     const historicalBefore = await withDatabase(async (client) => (
       await client.query(
@@ -636,7 +678,7 @@ describe('series scope operations', () => {
       )
     ).rows);
 
-    const response = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${split.id}/series`, {
+    const response = await taskItemApi(member.accessToken, householdId, 'PUT', `/${split.id}/series`, {
       title: 'New weekday series',
       recurrence: {
         freq: 'weekly',
@@ -680,7 +722,7 @@ describe('series scope operations', () => {
   });
 
   test('rolls back the old ends_on and future rows when successor creation fails', async () => {
-    const owner = await insertActor('scope-rollback-owner@example.test');
+    const owner = await insertActor('scope-rollback-owner');
     const householdId = await createHousehold(owner.accessToken);
     const series = await createDailySeries(owner, householdId, 'Rollback series');
     const split = series.tasks[3]!;
@@ -719,7 +761,7 @@ describe('series scope operations', () => {
   // OLD rule's value, so the edited occurrence showed the new time but every
   // later generated occurrence reverted to the old one.
   test('carries a submitted dueDate time onto the successor rule, not just the edited occurrence', async () => {
-    const owner = await insertActor('scope-time-owner@example.test');
+    const owner = await insertActor('scope-time-owner');
     const householdId = await createHousehold(owner.accessToken);
     const series = await createDailySeries(owner, householdId, 'Morning series');
     const split = series.tasks[2]!;
@@ -765,7 +807,7 @@ describe('series scope operations', () => {
   // ("2026-02-30" -> 2026-03-02) or 500ing ("2026-13-45") after the old
   // rule's endsOn/count were already mutated in the same transaction.
   test('rejects a calendar-invalid recurrence.endsOn on the split path with a 400, and rolls back cleanly', async () => {
-    const owner = await insertActor('scope-baddate-owner@example.test');
+    const owner = await insertActor('scope-baddate-owner');
     const householdId = await createHousehold(owner.accessToken);
     const series = await createDailySeries(owner, householdId, 'Bad date series');
     const split = series.tasks[3]!;
@@ -803,7 +845,7 @@ describe('series scope operations', () => {
   });
 
   test('applies labelIds to the successor series instead of copying the old labels', async () => {
-    const owner = await insertActor('scope-labels-owner@example.test');
+    const owner = await insertActor('scope-labels-owner');
     const householdId = await createHousehold(owner.accessToken);
     const createLabel = async (name: string): Promise<string> => {
       const response = await (app.getHttpAdapter().getInstance() as any).inject({
@@ -853,7 +895,7 @@ describe('series scope operations', () => {
   });
 
   test('rejects malformed path ids with 400 rather than a driver-level 500', async () => {
-    const owner = await insertActor('scope-param-validation@example.test');
+    const owner = await insertActor('scope-param-validation');
     const householdId = await createHousehold(owner.accessToken);
 
     const badHousehold = await taskItemApi(
@@ -874,7 +916,7 @@ describe('series scope operations', () => {
   });
 
   test('rejects /series for a one-time task', async () => {
-    const owner = await insertActor('scope-ordinary-owner@example.test');
+    const owner = await insertActor('scope-ordinary-owner');
     const householdId = await createHousehold(owner.accessToken);
     const created = await taskApi(owner.accessToken, householdId, 'POST', { title: 'One time only' });
     const taskId = (created.json() as { id: string }).id;
@@ -884,9 +926,9 @@ describe('series scope operations', () => {
   });
 
   test('returns 404 across households and 403 for a member editing another creator series', async () => {
-    const owner = await insertActor('scope-auth-owner@example.test');
-    const member = await insertActor('scope-auth-member@example.test');
-    const otherOwner = await insertActor('scope-auth-other@example.test');
+    const owner = await insertActor('scope-auth-owner');
+    const member = await insertActor('scope-auth-member');
+    const otherOwner = await insertActor('scope-auth-other');
     const householdId = await createHousehold(owner.accessToken);
     const otherHouseholdId = await createHousehold(otherOwner.accessToken);
     await addMemberViaDb(householdId, member);

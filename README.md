@@ -13,7 +13,6 @@
 | **ORM** | Prisma 7 + `@prisma/adapter-pg` |
 | **认证** | Argon2 密码哈希；HS256 Access Token（15 分钟，仅存内存）+ 轮换 Refresh Token（原生 SecureStore / Web HttpOnly Cookie） |
 | **API 契约** | 由 `generate-openapi.ts` 生成 `packages/api-client`（OpenAPI JSON + TypeScript 客户端） |
-| **邮件（可选）** | 仅旧邮箱 API 兼容流程使用；用户名注册、登录和家庭邀请不依赖 SMTP |
 | **测试** | Vitest（API 单元 / 集成）、Jest + Testing Library（客户端）、Playwright（Web E2E + 无障碍） |
 | **包管理** | pnpm 10 workspace monorepo（不要使用 npm 安装） |
 
@@ -25,14 +24,13 @@ muchakucha-zwei/
 │   ├── api/                       # NestJS + Fastify 后端
 │   │   ├── prisma/                # schema.prisma 与迁移
 │   │   ├── src/
-│   │   │   ├── infrastructure/    # Prisma、邮件适配器（SMTP / 控制台 / 禁用）
+│   │   │   ├── infrastructure/    # Prisma 数据库适配器
 │   │   │   ├── modules/           # auth、users、households、events、tasks、recurrence、notes、labels
 │   │   │   └── openapi/           # OpenAPI 契约与客户端生成器
 │   │   └── test/                  # 集成测试（会清空测试库）
 │   └── client/                    # Expo 跨平台客户端
 │       ├── app/                   # Expo Router 文件路由
 │       │   ├── (auth)/            # 登录、注册、离线页
-│       │   ├── invite/            # 邀请链接落地页
 │       │   └── (protected)/       # 需登录：家庭列表、个人中心、家庭内各页面
 │       └── src/
 │           ├── features/          # auth、households、events、tasks、recurrence、notes、labels、profile
@@ -43,7 +41,7 @@ muchakucha-zwei/
 ├── e2e/                           # Playwright 用例（auth、households、events、tasks、support）
 ├── docs/                          # 设计规范与调研、产品路线图、agent/ 操作手册、security/ ASVS 审计
 ├── scripts/                       # OpenAPI 漂移检查；PowerShell 测试门禁脚本
-├── compose.yaml                   # 测试用 PostgreSQL + Mailpit
+├── compose.yaml                   # 测试用 PostgreSQL
 ├── playwright.config.ts           # 完整 Web E2E（启动 API + Web）
 └── playwright.ui.config.ts        # 仅 UI 回归（拦截全部 API 请求，无需数据库）
 ```
@@ -51,10 +49,10 @@ muchakucha-zwei/
 ### 数据模型
 
 ```
-User → AuthSession, RefreshToken（旧邮箱 API 另有 EmailVerificationToken、PasswordResetToken）
+User → AuthSession, RefreshToken
 Household → Membership, Invitation, Event, Task, RecurrenceRule, Note, Label
 Membership → Role (OWNER / ADMIN / MEMBER)
-Invitation → 按已注册用户名发出（旧邮箱邀请仍兼容）
+Invitation → 按已注册用户名发出
 RecurrenceRule → 每天 / 每周 / 每月 / 每年，滚动生成 Event 与 Task
 Event → 全天 / 定时，可关联 RecurrenceRule 与多个 Label（EventLabel）
 Task → 状态、优先级、多个负责人（TaskAssignee），可关联 RecurrenceRule 与多个 Label（TaskLabel）
@@ -95,7 +93,6 @@ CREATE DATABASE muchakucha_dev OWNER muchakucha_dev;
 ```bash
 docker compose up -d
 # PostgreSQL 18.4：127.0.0.1:55432，库/用户 muchakucha_test，密码 muchakucha_test_only
-# Mailpit：SMTP 127.0.0.1:11025，Web UI http://127.0.0.1:18025
 ```
 
 Compose 中的库是测试库，运行集成测试或 E2E 时会被清空。
@@ -119,8 +116,6 @@ DATABASE_URL='postgresql://muchakucha_dev:muchakucha_dev_only@127.0.0.1:5432/muc
 | `LOG_LEVEL` | Fastify 日志级别 | `info`（`test` 下为 `silent`） |
 | `JWT_ACCESS_SECRET` | JWT 签名密钥，≥32 字节 | `development-only-access-secret-change-before-production` |
 | `WEB_ORIGIN` | 生产 CORS 允许的精确来源（逗号分隔）；第一个值也用于生成邀请分享链接 | 非生产环境 CORS 放行所有来源 |
-| `EMAIL_LINK_ORIGIN` | 旧邮箱流程链接的来源 | `http://127.0.0.1:8081` |
-| `SMTP_*` | 旧邮箱 API 的发信配置 | 未设置 `SMTP_HOST` 时邮件输出到控制台 |
 
 客户端通过 `EXPO_PUBLIC_API_ORIGIN` 指定 API 地址，默认 `http://localhost:3000`。在真机上调试时要改成电脑的局域网地址，并给 API 设置 `HOST=0.0.0.0`。
 
@@ -146,18 +141,20 @@ pnpm --filter client exec expo start --web --port 8081
 pnpm --filter client start
 ```
 
-`pnpm dev` 会并行运行 API 和 `expo start`。Web 请使用上面的 8081 命令：`client` 包的 `web` 脚本使用 18025 端口，与 Mailpit 冲突。
+`pnpm dev` 会并行运行 API 和 `expo start`。Web 请使用上面的 8081 命令：`client` 包的 `web` 脚本使用 18025 端口。
 
 API 的 OpenAPI 文档位于 `http://127.0.0.1:3000/api/v1/openapi.json`（未启用 Swagger UI）。
 
 ### 使用流程
 
 1. 注册只需用户名、密码和确认密码，成功后自动登录。用户名为 3–32 个字母、数字、点、下划线或连字符（支持中文），忽略首尾空白和大小写；密码 8–128 个字符。
-2. 创建家庭，或通过邀请链接加入。邀请按已注册用户名生成分享链接，无需邮箱。
+2. 创建家庭，或从收件箱接受家庭邀请。管理员按已注册用户名发送邀请，对方登录后可直接接受或拒绝，无需复制链接。收件箱入口位于个人信息图标左侧；消息以列表展示，点击可查看详情。进入页面或回到前台时自动更新，移动端支持下拉刷新。
 3. 进入家庭后默认打开「今日」。底部导航（宽屏为侧栏）有五个入口：**今日、日历、任务、笔记、家庭**。标签管理、周期规则和家庭设置（成员、邀请、角色、所有权）都在「家庭」页。
 4. 通过账户菜单进入个人中心，可修改昵称、查看我的家庭、退出当前设备。
 
-为保持 `/api/v1` 兼容，旧邮箱注册、验证、找回密码接口仍保留，但客户端只使用用户名流程。新账号的邮箱字段为空，旧响应中的 `email` 返回空字符串，并新增 `username`。
+账户只支持用户名注册和登录，家庭邀请只面向已注册用户名，通过分享链接接受。**暂不提供密码找回或人工重置功能。**
+
+邮箱注册、登录、验证、邀请和密码重置属于第一版开发遗留，没有实际用户依赖，现已删除。用户和邀请响应只提供 `username`，不再提供邮箱字段。历史迁移保留；清理迁移若发现邮箱账号或邮箱邀请会停止，需要先核实数据，不能直接删除账号绕过检查。
 
 ## 测试与检查
 
@@ -185,18 +182,26 @@ pnpm exec playwright test -c playwright.ui.config.ts
 ## 功能
 
 - **账户**：用户名注册与登录、会话恢复、昵称修改、设备级退出；API 全局限流（每个客户端每分钟 60 次）
-- **家庭协作**：创建 / 重命名 / 切换家庭；按用户名邀请，接受 / 重发 / 撤回邀请；OWNER / ADMIN / MEMBER 角色治理、移除成员、所有权转移、所有者离开
-- **今日**：当天日程、待办与逾期任务的概览，后续安排默认收起
-- **日历**：月视图、全天 / 定时事件，按标签和是否重复筛选；时间点使用 `timestamptz`
-- **任务**：待处理 → 进行中 → 已完成、优先级、多负责人，按状态、标签和是否重复筛选；筛选状态在切换页面后保留
+- **家庭协作**：创建 / 重命名 / 切换家庭；按用户名发送收件箱邀请，接受 / 拒绝 / 重发 / 撤回邀请；OWNER / ADMIN / MEMBER 角色治理、移除成员、所有权转移、所有者离开；只有所有者能任免或移除管理员，管理员可邀请、移除普通成员；普通成员和管理员可主动退出，所有者须先转让所有权。退出或被移除时，清除该成员在本家庭所有任务中的负责人关系（含已完成任务和重复实例），保留其他负责人；无人负责则为未分配，后续重复任务不再分配给他。共享日程、任务、笔记及作者信息留在家庭中
+- **今日**：当天日程、待办与逾期任务的概览，后续安排默认收起；临近截止与更远的后续任务按重复规则分组，只展示每组最近一次未完成、未取消的任务，当天和逾期实例仍逐条展示
+- **日历**：月视图、全天 / 定时事件；所有成员均可编辑任意日程及重复设置，删除、取消和结束重复限创建者、管理员和所有者；按标签和是否重复筛选；查看未来月份时按需补齐该月重复事件，可打开详情并按原有方式修改或取消；时间点使用 `timestamptz`
+- **任务**：待处理 → 进行中 → 已完成、优先级、多负责人；家庭所有成员均可修改任意任务的内容、状态、负责人及重复设置，删除仍限创建者、管理员和所有者；按状态、标签和是否重复筛选；筛选状态在切换页面后保留
 - **周期性重复**：事件与任务支持每天 / 每周（多选星期）/ 每月 / 每年，月末钳位并正确处理夏令时；可选择「仅此一次」或「此后所有」范围编辑 / 删除；周期规则列表与详情页支持编辑规则和结束重复
-- **笔记**：家庭共享笔记的增删改查；草稿在取消后保留，保存成功后清除
+- **笔记**：家庭共享笔记的增删改查；所有成员均可编辑任意笔记，删除限创建者、管理员和所有者
+- **草稿**：日程、任务和笔记草稿按账号及家庭保存在本机，重启后可恢复；保存成功、主动丢弃、退出登录或确认失去家庭访问权时清除，不跨设备同步
 - **标签**：OWNER / ADMIN 可创建、重命名、着色、删除；所有成员都可给事件和任务打标签
+
+成员主动退出使用 `POST /api/v1/households/{id}/leave`，无需指定其他成员。当前所有者会收到 `OWNER_TRANSFER_REQUIRED`，先完成转让后才能退出。`/ownership/leave` 接口在同一事务内先交接所有权、再退出；两种退出方式都保留共享内容。
+
+共同编辑采用乐观并发检查：当前客户端保存任务、笔记、日程和重复规则时提交开始编辑时的 `expectedUpdatedAt`，重复实例同时提交 `expectedRuleUpdatedAt`。服务端在事务内锁定并核对版本，过期返回 `409 EDIT_CONFLICT`，内容、负责人、标签均不写入。任务和日程编辑的 `labelIds` 与内容在同一事务中保存。没有旧客户端兼容要求；保存必须提交版本号，重复实例还必须提交规则版本。缺少或无效版本返回 `400 VALIDATION_FAILED`，不能绕过冲突检查。
+
+发生编辑冲突时保留本机草稿及其原始版本，包括重启后的草稿；用户查看最新内容并确认后，再手动整理和保存。仅刷新页面或重试不会自动接受新版本。重复安排同时检查规则版本，其他实例或规则的编辑也会要求重新查看；后台生成进度不算内容修改。
+
+日历查询通过可选的 `expandRecurring=true` 按需生成，必须提供起止日期，单次最多 366 天。只补齐查看的时间范围，不推进后台连续生成进度，也不会补出今天到远期月份之间的全部实例。重复事件的结束日期、次数上限和单次修改 / 取消仍然有效。未启用此参数的 API 查询保留原行为；后台仍按规则时区生成近期实例（每日到当天，其他频率提前 6 天）。
 
 ### 已知缺口
 
 - 备份只有本机每日 `pg_dump`（见生产部署）。整盘级别的冗余是**已评估后放弃**的，不是待办项：系统盘损坏或实例丢失会丢掉全部数据，这是明确接受的代价
-- 没有测试覆盖 `dist/` 的运行时资源：测试从 `src/` 读密码字典，`build` 若漏掉复制步骤，只有线上旧邮箱接口会抛 ENOENT
 - 家庭、日历、任务三块尚未完成 Android 真机验收
 
 ## 生产部署
@@ -313,7 +318,7 @@ Expo web 导出是单页应用，只有一个 `index.html`，所以需要 `try_f
 pnpm install --frozen-lockfile --filter api...
 pnpm --filter api prisma:generate
 pnpm --filter api exec prisma migrate deploy
-pnpm --filter api build          # tsc + 复制运行时资源
+pnpm --filter api build          # tsc
 
 systemctl restart muchakucha-api
 ```
@@ -373,7 +378,7 @@ sudo -u postgres dropdb muchakucha_restore_drill
 
 ### TRUST_PROXY
 
-限流按客户端 IP 计数。经过反向代理后，每个请求的来源地址都是代理自身，未配置 `TRUST_PROXY` 时全体用户会共用同一份配额——全局 60 次/分钟、注册与密码重置 5 次/小时都会变成全站共享，一个人用完其他人全被拒。
+限流按客户端 IP 计数。经过反向代理后，每个请求的来源地址都是代理自身，未配置 `TRUST_PROXY` 时全体用户会共用同一份配额——全局 60 次/分钟、注册 5 次/小时都会变成全站共享，一个人用完其他人全被拒。
 
 `TRUST_PROXY` 填写**代理自身**的地址，支持逗号分隔的 IP 或 CIDR。代理与 API 同机时填 `127.0.0.1`。该项只接受明确地址：`true`、`*` 和域名都会导致启动失败，因为无条件信任 `X-Forwarded-For` 会让任何调用方伪造来源、绕过限流。不经过代理直连时不要设置它。
 
@@ -387,22 +392,6 @@ pnpm dev
 ```
 
 `apps/client/eas.json` 的 preview profile 指向 `http://192.168.1.7:3000`，换成开发机实际的局域网地址即可。此阶段走明文 HTTP：`NODE_ENV` 非 production 时不强制 HTTPS 来源，Android 已开启 `usesCleartextTraffic`。**iOS 无 ATS 例外，连不上明文地址**，局域网联调只能用 Android 或 Web。
-
-### 邮件（可选）
-
-用户名注册和家庭邀请不需要邮件服务。只有需要旧邮箱 API 时才配置以下变量（生产环境设置了 `SMTP_HOST` 后，其余项均为必填）：
-
-```bash
-export EMAIL_LINK_ORIGIN='https://your-app.example.com'
-export SMTP_HOST='smtp.example.com'
-export SMTP_PORT=587
-export SMTP_SECURE=false
-export SMTP_USER='noreply@example.com'
-export SMTP_PASSWORD='<smtp-password>'
-export SMTP_FROM='noreply@example.com'
-```
-
-未配置 SMTP 时邮件功能不可用，用户名流程不受影响。
 
 ### 移动端
 

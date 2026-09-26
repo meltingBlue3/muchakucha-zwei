@@ -29,14 +29,14 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   try { return await run(client); } finally { await client.end(); }
 }
 
-async function insertActor(email: string): Promise<ActorFixture> {
+async function insertActor(username: string): Promise<ActorFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, email.toLowerCase(), 'lookahead actor', passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, username.toLowerCase(), 'lookahead actor', passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -129,7 +129,7 @@ beforeEach(async () => { await resetDatabase(); });
 
 describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
   test('a daily rule materializes through its own timezone\'s current calendar date, not the server UTC date', async () => {
-    const actor = await insertActor('kiritimati-lookahead@example.test');
+    const actor = await insertActor('kiritimati-lookahead');
     const householdId = await createHousehold(actor.accessToken);
 
     // Pacific/Kiritimati (UTC+14) and Pacific/Midway (UTC-11) straddle the
@@ -161,7 +161,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
   });
 
   test('a weekly rule outside its 6-day lookahead window creates only the seed row', async () => {
-    const actor = await insertActor('weekly-outside-window@example.test');
+    const actor = await insertActor('weekly-outside-window');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
     const todayWeekday = new Date(Date.UTC(today.year, today.month - 1, today.day)).getUTCDay();
@@ -179,7 +179,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
   });
 
   test('a weekly rule with an occurrence exactly 6 days out includes it — the boundary is inclusive', async () => {
-    const actor = await insertActor('weekly-boundary@example.test');
+    const actor = await insertActor('weekly-boundary');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
     const todayWeekday = new Date(Date.UTC(today.year, today.month - 1, today.day)).getUTCDay();
@@ -197,7 +197,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
   });
 
   test('a watermark ahead of the new horizon never regresses (D-13)', async () => {
-    const actor = await insertActor('watermark-monotonic@example.test');
+    const actor = await insertActor('watermark-monotonic');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
     const { ruleId } = await createRecurringTask(actor, householdId, {
@@ -222,7 +222,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
   });
 
   test('a rule whose endsOn has passed is never selected by materializeAllDue (IN-04)', async () => {
-    const actor = await insertActor('ended-rule-excluded@example.test');
+    const actor = await insertActor('ended-rule-excluded');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
     const { ruleId } = await createRecurringTask(actor, householdId, {
@@ -244,7 +244,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
   });
 
   test('the household watermark only reflects rules that can still advance', async () => {
-    const actor = await insertActor('household-watermark-active-only@example.test');
+    const actor = await insertActor('household-watermark-active-only');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
 
@@ -275,7 +275,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
   });
 
   test('a daily rule starting today materializes exactly 1 row, dated today — creation is a standard generation check (D-12)', async () => {
-    const actor = await insertActor('create-daily-today@example.test');
+    const actor = await insertActor('create-daily-today');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
 
@@ -290,7 +290,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
   });
 
   test('a weekly rule created outside its lookahead window keeps only the D-17 seed row, with the watermark trailing behind it', async () => {
-    const actor = await insertActor('create-weekly-outside@example.test');
+    const actor = await insertActor('create-weekly-outside');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
     const startsOn = addDays(today, 10);
@@ -315,7 +315,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
   });
 
   test('the create response contract still exposes a usable task id and recurrence id (D-17)', async () => {
-    const actor = await insertActor('create-response-contract@example.test');
+    const actor = await insertActor('create-response-contract');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
     const startsOn = addDays(today, 10);

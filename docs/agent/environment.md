@@ -4,14 +4,13 @@ Read this playbook before starting a server, a database, or mail capture, before
 
 ## Test services
 
-`compose.yaml` provides the two services tests depend on:
+`compose.yaml` provides the PostgreSQL service tests depend on:
 
 ```sh
-docker compose up -d --wait postgres mailpit
+docker compose up -d --wait postgres
 ```
 
 - PostgreSQL 18.4 on `127.0.0.1:55432`, database, user, and password all derived from `muchakucha_test`.
-- Mailpit on SMTP `127.0.0.1:11025` with its web UI on `http://127.0.0.1:18025`.
 
 `.env.test.example` lists the matching variables. The root `.env.test` is never loaded automatically — export the variables in the command that needs them.
 
@@ -28,7 +27,7 @@ pnpm dev                                                   # API and client toge
 pnpm --filter client exec expo start --web --port 8081     # Web only
 ```
 
-The API `dev` script compiles and then runs; it does not watch files, so a source change needs a restart. Use the explicit Expo command above rather than the client's `web` script, whose port collides with the Mailpit UI.
+The API `dev` script compiles and then runs; it does not watch files, so a source change needs a restart. Use the explicit Expo command above rather than the client's `web` script, which uses port 18025.
 
 ## Do not reclaim a running server
 
@@ -40,7 +39,6 @@ When the human already has `pnpm dev` on 3000 and 8081, run browser checks on fr
 PORT=3100 \
 API_ORIGIN=http://127.0.0.1:3100 \
 WEB_ORIGIN=http://127.0.0.1:8181 \
-EMAIL_LINK_ORIGIN=http://127.0.0.1:8181 \
 DATABASE_URL='postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test' \
 pnpm exec playwright test -c playwright.config.ts
 ```

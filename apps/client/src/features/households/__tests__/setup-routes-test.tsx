@@ -28,8 +28,8 @@ function renderPage(children: ReactNode) {
 test('only a confirmed empty household state shows setup choices', async () => {
   mockViewState = 'noHousehold';
   const view = await renderPage(<Handoff />);
-  await fireEvent.press(view.getByRole('button', { name: '我有邀请链接' }));
-  expect(mockRouter.push).toHaveBeenCalledWith('/invite');
+  await fireEvent.press(view.getByRole('button', { name: '查看家庭邀请' }));
+  expect(mockRouter.push).toHaveBeenCalledWith('/inbox');
   await view.unmount();
   mockViewState = 'offlineRetained';
   const offline = await renderPage(<Handoff />);

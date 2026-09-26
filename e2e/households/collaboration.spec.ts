@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -24,19 +24,19 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
 
 // ---- Account helpers ----
 
-async function prepareVerifiedAccount(
+async function prepareAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string; userId: string }> {
+): Promise<{ username: string; accessToken: string; userId: string }> {
   return withDatabase(async (database) => {
-    const email = `collab-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
 
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
       body: JSON.stringify({
-        email,
-        displayName,
+        username,
+        confirmPassword: password,
         password,
         platform: 'web',
       }),
@@ -44,13 +44,13 @@ async function prepareVerifiedAccount(
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, displayName],
     );
 
     const userResult = await database.query(
-      `SELECT "id" FROM "User" WHERE "email_canonical" = lower($1)`,
-      [email],
+      `SELECT "id" FROM "User" WHERE "username_canonical" = lower($1)`,
+      [username],
     );
     const userId = userResult.rows[0]?.id as string;
     expect(userId).toBeDefined();
@@ -58,22 +58,22 @@ async function prepareVerifiedAccount(
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody: unknown = await loginResponse.json();
     const accessToken = (loginBody as { accessToken?: string }).accessToken;
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken, userId };
+    return { username, accessToken, userId };
   });
 }
 
 async function loginFixture(
   page: import('@playwright/test').Page,
-  email: string,
+  username: string,
 ): Promise<void> {
-  await loginEmailFixture(page, email, password);
+  await loginUsernameFixture(page, username, password);
 }
 
 async function createHousehold(
@@ -143,10 +143,10 @@ test('completes the full household collaboration journey', async ({ page, reques
   // 1. CREATION: Two actors create independent households.
   // ============================================================================
 
-  const alice = await prepareVerifiedAccount('alice', '家主アリス');
-  const bob = await prepareVerifiedAccount('bob', 'ボブ');
-  const carol = await prepareVerifiedAccount('carol', 'キャロル');
-  const dave = await prepareVerifiedAccount('dave', 'デイブ');
+  const alice = await prepareAccount('alice', '家主アリス');
+  const bob = await prepareAccount('bob', 'ボブ');
+  const carol = await prepareAccount('carol', 'キャロル');
+  const dave = await prepareAccount('dave', 'デイブ');
 
   // Alice creates her primary household.
   const aliceHousehold = await createHousehold(alice.accessToken, 'アリス家');
@@ -432,7 +432,7 @@ test('completes the full household collaboration journey', async ({ page, reques
   // ============================================================================
 
   // Restore Alice's browser session and verify the household handoff page.
-  await loginFixture(page, alice.email);
+  await loginFixture(page, alice.username);
 
   // Navigate to /households — the selector should list Alice's memberships.
   await page.goto(`${WEB_ORIGIN}/households`);

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -10,21 +10,21 @@ const DATABASE_URL =
   'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
 const password = 'correct horse battery staple 2026';
 
-async function prepareVerifiedAccount(
+async function prepareAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string; userId: string }> {
+): Promise<{ username: string; accessToken: string; userId: string }> {
   const database = new Client({ connectionString: DATABASE_URL });
   await database.connect();
 
-  const email = `roster-slice-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+  const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
   try {
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
       body: JSON.stringify({
-        email,
-        displayName,
+        username,
+        confirmPassword: password,
         password,
         platform: 'web',
       }),
@@ -32,14 +32,14 @@ async function prepareVerifiedAccount(
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, displayName],
     );
 
     // Fetch the user ID.
     const userResult = await database.query(
-      `SELECT "id" FROM "User" WHERE "email_canonical" = lower($1)`,
-      [email],
+      `SELECT "id" FROM "User" WHERE "username_canonical" = lower($1)`,
+      [username],
     );
     const userId = userResult.rows[0]?.id as string;
     expect(userId).toBeDefined();
@@ -47,14 +47,14 @@ async function prepareVerifiedAccount(
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody: unknown = await loginResponse.json();
     const accessToken = (loginBody as { accessToken?: string }).accessToken;
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken, userId };
+    return { username, accessToken, userId };
   } finally {
     await database.end();
   }
@@ -104,10 +104,10 @@ test('shows the isolated totally ordered roster', async ({ page, request }) => {
   test.setTimeout(120_000);
 
   // --- Precondition: auth is healthy ---
-  const owner = await prepareVerifiedAccount('owner', '家主');
-  const adminActor = await prepareVerifiedAccount('admin', '管理员');
-  const memberActor = await prepareVerifiedAccount('member', '普通成员');
-  const outsider = await prepareVerifiedAccount('outsider', '无关人员');
+  const owner = await prepareAccount('owner', '家主');
+  const adminActor = await prepareAccount('admin', '管理员');
+  const memberActor = await prepareAccount('member', '普通成员');
+  const outsider = await prepareAccount('outsider', '无关人员');
 
   // --- Precondition: database and household creation work ---
   const household = await createHousehold(owner.accessToken, '温暖小家');
@@ -132,7 +132,7 @@ test('shows the isolated totally ordered roster', async ({ page, request }) => {
       membershipId: string;
       userId: string;
       displayName: string;
-      email: string;
+      username: string;
       role: 'OWNER' | 'ADMIN' | 'MEMBER';
       isCurrentUser: boolean;
     }>;
@@ -177,7 +177,7 @@ test('shows the isolated totally ordered roster', async ({ page, request }) => {
 
   expect(adminRoster.members[2].role).toBe('MEMBER');
 
-  await loginEmailFixture(page, owner.email, password);
+  await loginUsernameFixture(page, owner.username, password);
 
   // --- Verify: the /households selector route renders ---
   await page.goto('/households');

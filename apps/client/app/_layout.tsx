@@ -19,7 +19,6 @@ export default function RootLayout() {
       : pathname,
   );
   const isPublicContinuation = pathname === '/register';
-  const invitationPreview = pathname === '/invite' || pathname.startsWith('/invite/');
   const routeSession = useCallback(
     (destination: SessionDestination, intended?: SafeIntendedRoute) => {
       const reauthenticationRequired = sessionStateStore.get().kind === 'reauthRequired';
@@ -42,7 +41,7 @@ export default function RootLayout() {
         fontsReady
         intendedRoute={intendedRoute}
         onRoute={routeSession}
-        restorationRequired={!isPublicContinuation && !invitationPreview}
+        restorationRequired={!isPublicContinuation}
         sessionStateStore={sessionStateStore}
         sessionTransport={sessionTransport}
       >

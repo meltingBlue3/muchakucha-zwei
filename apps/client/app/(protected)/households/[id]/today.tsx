@@ -69,7 +69,25 @@ export function partitionTodayTasks(tasks: TaskResponseDto[], retainCompletedId:
     }
   }
 
-  return { overdueTasks, todayTasks, unscheduledTasks, approachingTasks, otherUpcomingTasks };
+  // Only future reminders collapse a series. Today's work and missed
+  // occurrences remain independently actionable. Select by due date, since
+  // the API orders by priority before date and individual instances can differ.
+  const nearestByRule = new Map<string, TaskResponseDto>();
+  for (const task of [...approachingTasks, ...otherUpcomingTasks]) {
+    if (task.recurrenceRuleId == null) continue;
+    const previous = nearestByRule.get(task.recurrenceRuleId);
+    if (previous === undefined || new Date(task.dueDate!).getTime() < new Date(previous.dueDate!).getTime()) {
+      nearestByRule.set(task.recurrenceRuleId, task);
+    }
+  }
+  const isNearest = (task: TaskResponseDto) =>
+    task.recurrenceRuleId == null || nearestByRule.get(task.recurrenceRuleId)?.id === task.id;
+
+  return {
+    overdueTasks, todayTasks, unscheduledTasks,
+    approachingTasks: approachingTasks.filter(isNearest),
+    otherUpcomingTasks: otherUpcomingTasks.filter(isNearest),
+  };
 }
 
 export default function TodayRoute() {

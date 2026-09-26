@@ -62,6 +62,7 @@ export class EventsController {
   @ApiQuery({ name: 'startDate', required: false, description: 'ISO date string (inclusive)' })
   @ApiQuery({ name: 'endDate', required: false, description: 'ISO date string (inclusive)' })
   @ApiQuery({ name: 'recurring', required: false })
+  @ApiQuery({ name: 'expandRecurring', required: false, type: Boolean, description: 'Generate recurring events for a bounded calendar range (at most 366 days).' })
   @ApiOkResponse({ type: EventListResponseDto })
   list(
     @Req() request: AuthenticatedRequest,
@@ -69,8 +70,9 @@ export class EventsController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('recurring') recurring?: string,
+    @Query('expandRecurring') expandRecurring?: string,
   ): Promise<EventListResponseDto> {
-    return this.eventsService.list(request.auth.sub, householdId, { startDate, endDate, recurring });
+    return this.eventsService.list(request.auth.sub, householdId, { startDate, endDate, recurring, expandRecurring });
   }
 
   @Get(':eventId')

@@ -11,13 +11,13 @@ describe('member removal policy', () => {
       expect(canRemove('OWNER', 'MEMBER', false, false)).toBe(true);
     });
 
-    // D-09: admin can remove any non-owner, including other admins.
+    // Admins can remove ordinary members only.
     test('admin can remove member', () => {
       expect(canRemove('ADMIN', 'MEMBER', false, false)).toBe(true);
     });
 
-    test('admin can remove another admin', () => {
-      expect(canRemove('ADMIN', 'ADMIN', false, false)).toBe(true);
+    test('admin cannot remove another admin', () => {
+      expect(canRemove('ADMIN', 'ADMIN', false, false)).toBe(false);
     });
 
     // D-09: owner is never a valid removal target.

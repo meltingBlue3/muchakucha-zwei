@@ -13,6 +13,7 @@ const TZ = 'Asia/Shanghai';
 // fixture below keeps that shape on purpose — it is the trap the module
 // exists to defuse.
 const baseRule: RecurrenceRuleListItemDto = {
+  updatedAt: '2026-01-01T00:00:00.000Z',
   id: 'rule-1',
   kind: 'task',
   title: '倒垃圾',

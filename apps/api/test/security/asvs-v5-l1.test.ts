@@ -5,15 +5,9 @@ import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
 
 const repoRoot = resolve(import.meta.dirname, '../../../..');
-const denylistPath = 'apps/api/src/modules/auth/data/common-passwords-top-3000.txt';
-const provenancePath = 'apps/api/src/modules/auth/data/common-passwords-SOURCE.md';
 const asvsMapPath = 'docs/security/asvs-v5.0.0-l1.md';
-const securityAssets = [denylistPath, provenancePath, asvsMapPath] as const;
+const securityAssets = [asvsMapPath] as const;
 
-const EXPECTED_SOURCE_URL =
-  'https://raw.githubusercontent.com/danielmiessler/SecLists/190c6f7bd58c847ceadfe57d9853592737f059e8/Passwords/Common-Credentials/xato-net-10-million-passwords-1000000.txt';
-const EXPECTED_SOURCE_SHA256 = '424a3e03a17df0a2bc2b3ca749d81b04e79d59cb7aeec8876a5a3f308d0caf51';
-const EXPECTED_DERIVED_SHA256 = 'e556819f94c009a90b38eab1051dae4c222ff7148330b4e2b395932465b214ea';
 const EXPECTED_ASVS_SOURCE_URL =
   'https://raw.githubusercontent.com/OWASP/ASVS/v5.0.0/5.0/docs_en/OWASP_Application_Security_Verification_Standard_5.0.0_en.csv';
 const EXPECTED_ASVS_SOURCE_SHA256 = '98c8fe911b9edb403af8ee05d3ce8201ecac2659e313b053890a62847cdcf680';
@@ -84,13 +78,6 @@ function readRepoFile(relativePath: string): string {
   return readFileSync(resolve(repoRoot, relativePath), 'utf8');
 }
 
-function metadataValue(markdown: string, label: string): string {
-  const prefix = `- **${label}:** `;
-  const line = markdown.split(/\r?\n/).find((candidate) => candidate.startsWith(prefix));
-  expect(line, `Missing provenance field: ${label}`).toBeDefined();
-  return line!.slice(prefix.length).replace(/^`|`$/g, '');
-}
-
 function parseAsvsRows(markdown: string): AsvsRow[] {
   return markdown
     .split(/\r?\n/)
@@ -126,27 +113,6 @@ describe('OWASP ASVS 5.0.0 L1 security evidence', () => {
     expect(missing, `IMPLEMENTATION_MISSING_SECURITY_CONTRACTS: ${missing.join(', ')}`).toEqual([]);
   });
 
-  test('runtime common-password data is the exact licensed deterministic top-3000 derivation', () => {
-    const denylist = readRepoFile(denylistPath);
-    const provenance = readRepoFile(provenancePath);
-    const entries = denylist.endsWith('\n') ? denylist.slice(0, -1).split('\n') : denylist.split('\n');
-
-    expect(denylist).not.toContain('\r');
-    expect(entries).toHaveLength(3000);
-    expect(new Set(entries).size).toBe(entries.length);
-    expect(entries.every((entry) => [...entry].length >= 12 && [...entry].length <= 128)).toBe(true);
-    expect(sha256(Buffer.from(denylist, 'utf8'))).toBe(EXPECTED_DERIVED_SHA256);
-
-    expect(metadataValue(provenance, 'Upstream URL')).toBe(EXPECTED_SOURCE_URL);
-    expect(metadataValue(provenance, 'Upstream SHA-256')).toBe(EXPECTED_SOURCE_SHA256);
-    expect(metadataValue(provenance, 'Derived SHA-256')).toBe(EXPECTED_DERIVED_SHA256);
-    expect(metadataValue(provenance, 'License')).toBe('MIT');
-    expect(metadataValue(provenance, 'Retrieved')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(provenance).toContain('preserve source order');
-    expect(provenance).toContain('12 through 128 Unicode code points');
-    expect(provenance).toContain('first 3000 unique entries');
-  });
-
   test('ASVS map contains every recognized applicable control exactly once with official text', () => {
     const markdown = readRepoFile(asvsMapPath);
     const rows = parseAsvsRows(markdown);
@@ -162,7 +128,7 @@ describe('OWASP ASVS 5.0.0 L1 security evidence', () => {
     // one L1 NOT SATISFIED row. Validate that every row has a valid level and
     // applicability value.
     const validLevels = new Set(['L1', 'L2']);
-    const validApplicability = new Set(['Applicable', 'Defense-in-depth', 'NOT SATISFIED']);
+    const validApplicability = new Set(['Applicable', 'Defense-in-depth', 'NOT SATISFIED', 'Not applicable']);
     for (const row of rows) {
       expect(validLevels.has(row.level), `${row.id}: level "${row.level}" is not L1 or L2`).toBe(true);
       expect(validApplicability.has(row.applicability), `${row.id}: applicability "${row.applicability}" is invalid`).toBe(true);

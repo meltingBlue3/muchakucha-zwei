@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -10,25 +10,25 @@ const DATABASE_URL =
   'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
 const password = 'correct horse battery staple 2026';
 
-async function prepareVerifiedAccount(
+async function prepareAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string; userId: string }> {
+): Promise<{ username: string; accessToken: string; userId: string }> {
   const database = new Client({ connectionString: DATABASE_URL });
   await database.connect();
   try {
-    const email = `note-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
 
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, displayName, password, platform: 'web' }),
+      body: JSON.stringify({ username, confirmPassword: password, password, platform: 'web' }),
     });
     expect(registerResponse.status).toBe(202);
 
     const userResult = await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1) RETURNING "id"`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1) RETURNING "id"`,
+      [username, displayName],
     );
     const userId = userResult.rows[0]?.id as string;
     expect(userId).toBeDefined();
@@ -36,13 +36,13 @@ async function prepareVerifiedAccount(
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const { accessToken } = (await loginResponse.json()) as { accessToken: string };
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken, userId };
+    return { username, accessToken, userId };
   } finally {
     await database.end();
   }
@@ -86,11 +86,11 @@ async function addMembershipViaDb(householdId: string, userId: string): Promise<
 }
 
 test('creates, reads, edits, and deletes a note in the browser', async ({ page }) => {
-  const owner = await prepareVerifiedAccount('owner', '笔记主人');
+  const owner = await prepareAccount('owner', '笔记主人');
   const householdId = await createHousehold(owner.accessToken, '笔记之家');
   const notesPath = `/households/${encodeURIComponent(householdId)}/notes`;
 
-  await loginEmailFixture(page, owner.email, password, notesPath);
+  await loginUsernameFixture(page, owner.username, password, notesPath);
   await expect(page.getByText(/还没有笔记。适合记采购清单、旅行计划、家电说明/)).toBeVisible();
 
   // --- Create: an empty title stays on the form with an inline error ---
@@ -150,8 +150,8 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
 });
 
 test('household members see shared notes, most recently updated first, and can search them', async ({ page }) => {
-  const owner = await prepareVerifiedAccount('shared-owner', '笔记主人');
-  const member = await prepareVerifiedAccount('shared-member', '笔记成员');
+  const owner = await prepareAccount('shared-owner', '笔记主人');
+  const member = await prepareAccount('shared-member', '笔记成员');
   const householdId = await createHousehold(owner.accessToken, '共享笔记之家');
   await addMembershipViaDb(householdId, member.userId);
 
@@ -160,7 +160,7 @@ test('household members see shared notes, most recently updated first, and can s
     expect(created.status).toBe(201);
   }
 
-  await loginEmailFixture(page, member.email, password, `/households/${encodeURIComponent(householdId)}/notes`);
+  await loginUsernameFixture(page, member.username, password, `/households/${encodeURIComponent(householdId)}/notes`);
 
   const cards = page.getByRole('button', { name: /^笔记：/ });
   await expect(cards).toHaveCount(2);
@@ -179,4 +179,32 @@ test('household members see shared notes, most recently updated first, and can s
   await expect(page.getByText(/没有标题匹配/)).toBeVisible();
   await page.getByRole('button', { name: '清除搜索' }).click();
   await expect(cards).toHaveCount(2);
+});
+
+
+test('a member edits another member’s shared note without gaining deletion rights', async ({ page }) => {
+  const owner = await prepareAccount('edit-owner', '笔记主人');
+  const creator = await prepareAccount('edit-author', '笔记作者');
+  const member = await prepareAccount('edit-member', '协作成员');
+  const householdId = await createHousehold(owner.accessToken, '协作笔记之家');
+  await addMembershipViaDb(householdId, creator.userId);
+  await addMembershipViaDb(householdId, member.userId);
+  const created = await apiCall(creator.accessToken, 'POST', `/households/${householdId}/notes`, {
+    title: '采购清单', body: '牛奶',
+  });
+  expect(created.status).toBe(201);
+  const noteId = created.body.id as string;
+  await loginUsernameFixture(page, member.username, password, `/households/${householdId}/notes`);
+  await page.getByRole('button', { name: '笔记：采购清单', exact: true }).click();
+  await page.getByRole('button', { name: '编辑笔记', exact: true }).click();
+  await page.getByLabel('笔记标题').fill('周末采购清单');
+  await page.getByLabel('笔记内容').fill('牛奶、面包');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '周末采购清单', exact: true })).toBeVisible();
+  await expect(page.getByText('牛奶、面包', { exact: true })).toBeVisible();
+  const deleted = await apiCall(member.accessToken, 'DELETE', `/households/${householdId}/notes/${noteId}`);
+  expect(deleted.status).toBe(403);
+  const saved = await apiCall(creator.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`);
+  expect(saved.status).toBe(200);
+  expect(saved.body).toMatchObject({ title: '周末采购清单', body: '牛奶、面包', createdBy: creator.userId });
 });

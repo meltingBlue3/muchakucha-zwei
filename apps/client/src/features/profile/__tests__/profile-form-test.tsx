@@ -10,8 +10,6 @@ import { ProfileForm, type ProfileApi } from '../profile-form';
 const currentUser: CurrentUserDto = {
   username: 'family_member',
   displayName: '家庭成员',
-  email: 'member@example.test',
-  emailVerified: true,
   hasHousehold: false,
   id: 'current-user',
 };
@@ -74,7 +72,6 @@ describe('profile nickname form contract', () => {
     expect(apiClient.getMe).toHaveBeenCalledWith('current-access-token', expect.any(AbortSignal));
     expect(view.getByLabelText('昵称').props.value).toBe('家庭成员');
     expect(view.getByText('family_member')).toBeTruthy();
-    expect(JSON.stringify(view.toJSON())).not.toContain(currentUser.email);
   });
 
   test('validates nickname after interaction and submits only the allowed field', async () => {

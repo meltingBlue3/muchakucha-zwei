@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -24,19 +24,19 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
 
 // ---- Account helpers ----
 
-async function prepareVerifiedAccount(
+async function prepareAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string; userId: string }> {
+): Promise<{ username: string; accessToken: string; userId: string }> {
   return withDatabase(async (database) => {
-    const email = `leave-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
 
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
       body: JSON.stringify({
-        email,
-        displayName,
+        username,
+        confirmPassword: password,
         password,
         platform: 'web',
       }),
@@ -44,13 +44,13 @@ async function prepareVerifiedAccount(
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, displayName],
     );
 
     const userResult = await database.query(
-      `SELECT "id" FROM "User" WHERE "email_canonical" = lower($1)`,
-      [email],
+      `SELECT "id" FROM "User" WHERE "username_canonical" = lower($1)`,
+      [username],
     );
     const userId = userResult.rows[0]?.id as string;
     expect(userId).toBeDefined();
@@ -58,14 +58,14 @@ async function prepareVerifiedAccount(
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody: unknown = await loginResponse.json();
     const accessToken = (loginBody as { accessToken?: string }).accessToken;
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken, userId };
+    return { username, accessToken, userId };
   });
 }
 
@@ -129,9 +129,9 @@ test('owner hands off and leaves', async ({ page, request }) => {
   // PRECONDITIONS: accounts, household, and member fixtures are healthy
   // ============================================================================
 
-  const owner = await prepareVerifiedAccount('owner', '家主');
-  const successor = await prepareVerifiedAccount('successor', '继任者');
-  const bystander = await prepareVerifiedAccount('bystander', '旁观者');
+  const owner = await prepareAccount('owner', '家主');
+  const successor = await prepareAccount('successor', '继任者');
+  const bystander = await prepareAccount('bystander', '旁观者');
 
   const household = await createHousehold(owner.accessToken, '所有权交接测试家庭');
 
@@ -171,7 +171,7 @@ test('owner hands off and leaves', async ({ page, request }) => {
   // PRECONDITION: settings page is reachable
   // ============================================================================
 
-  await loginEmailFixture(page, owner.email, password);
+  await loginUsernameFixture(page, owner.username, password);
 
   await page.goto(`${WEB_ORIGIN}/households/${encodeURIComponent(household.id)}/settings`);
   await page.waitForURL(`/households/${encodeURIComponent(household.id)}/settings`);

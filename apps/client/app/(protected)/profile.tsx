@@ -13,6 +13,10 @@ export default function ProfileRoute() {
       <Stack gap={6} style={{ width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center' }}>
         <AccountCard><ProfileForm apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} /></AccountCard>
         <AccountCard>
+          <Stack gap={2}><Text variant="label">收件箱</Text><Text variant="bodySm">查看和处理收到的家庭邀请。</Text></Stack>
+          <LinkText onPress={() => router.push('/inbox')}>打开收件箱</LinkText>
+        </AccountCard>
+        <AccountCard>
           <Stack gap={2}><Text variant="label">我的家庭</Text><Text variant="bodySm">查看家庭安排，或创建、加入一个家庭。</Text></Stack>
           <LinkText onPress={() => router.push('/household-handoff')}>前往我的家庭</LinkText>
         </AccountCard>

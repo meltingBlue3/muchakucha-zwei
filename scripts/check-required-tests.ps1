@@ -4,12 +4,9 @@ param([switch]$SelfTest)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $requiredTests = @(
-    'apps/api/test/auth/register.int.test.ts',
     'apps/api/test/auth/username-auth.int.test.ts',
-    'apps/api/test/auth/verify-email.int.test.ts',
     'apps/api/test/auth/login.int.test.ts',
     'apps/api/test/auth/refresh-rotation.int.test.ts',
-    'apps/api/test/auth/password-reset.int.test.ts',
     'apps/api/test/auth/logout.int.test.ts',
     'apps/api/test/users/me.int.test.ts',
     'apps/api/test/security/asvs-v5-l1.test.ts',

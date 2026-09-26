@@ -4,18 +4,14 @@ import type { CurrentUserDto } from './dto/update-me.dto.js';
 
 const publicUserSelection = {
   id: true,
-  email: true,
   username: true,
   displayName: true,
-  emailVerifiedAt: true,
 } as const;
 
 type PublicUserRecord = {
   id: string;
-  email: string | null;
-  username: string | null;
+  username: string;
   displayName: string;
-  emailVerifiedAt: Date | null;
 };
 
 @Injectable()
@@ -48,10 +44,8 @@ export class UsersService {
   private toCurrentUser(user: PublicUserRecord): CurrentUserDto {
     return {
       id: user.id,
-      email: user.email ?? '',
-      ...(user.username === null ? {} : { username: user.username }),
+      username: user.username,
       displayName: user.displayName,
-      emailVerified: user.emailVerifiedAt !== null,
       hasHousehold: false,
     };
   }

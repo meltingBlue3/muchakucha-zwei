@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -10,18 +10,18 @@ const DATABASE_URL =
   'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
 const password = 'correct horse battery staple 2026';
 
-async function prepareVerifiedAccount(): Promise<{ email: string; accessToken: string }> {
+async function prepareAccount(): Promise<{ username: string; accessToken: string }> {
   const database = new Client({ connectionString: DATABASE_URL });
   await database.connect();
 
-  const email = `create-slice-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+  const username = `fixture-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
   try {
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
       body: JSON.stringify({
-        email,
-        displayName: '新家主',
+        username,
+        confirmPassword: password,
         password,
         platform: 'web',
       }),
@@ -29,21 +29,21 @@ async function prepareVerifiedAccount(): Promise<{ email: string; accessToken: s
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, '新家主'],
     );
 
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody: unknown = await loginResponse.json();
     const accessToken = (loginBody as { accessToken?: string }).accessToken;
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken };
+    return { username, accessToken };
   } finally {
     await database.end();
   }
@@ -52,9 +52,9 @@ async function prepareVerifiedAccount(): Promise<{ email: string; accessToken: s
 test('creates and displays the authoritative household', async ({ page, request }) => {
   test.setTimeout(60_000);
 
-  const { email, accessToken } = await prepareVerifiedAccount();
+  const { username, accessToken } = await prepareAccount();
 
-  await loginEmailFixture(page, email, password);
+  await loginUsernameFixture(page, username, password);
 
   // Navigate to the no-household handoff and verify the heading is visible.
   await page.goto('/household-handoff');

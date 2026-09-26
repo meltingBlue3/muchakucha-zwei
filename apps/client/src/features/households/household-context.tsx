@@ -1,3 +1,4 @@
+import { draftWorkspace } from '../../ui/workspace-runtime';
 import type { ListMyHouseholdsItemDto } from '@muchakucha/api-client';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
@@ -22,7 +23,7 @@ export interface HouseholdContextValue {
   accessChangedHouseholdName: string | undefined;
   switchHousehold: (householdId: string) => Promise<boolean>;
   refreshHouseholds: (preferredHouseholdId?: string) => Promise<boolean>;
-  enterAccessChanged: (lostHouseholdName?: string) => void;
+  enterAccessChanged: (lostHouseholdName?: string, lostHouseholdId?: string) => void;
   resolve: () => Promise<void>;
 }
 
@@ -101,6 +102,7 @@ export function createHouseholdProvider(
         const items = result.items;
 
         if (!mountedRef.current) return;
+        draftWorkspace.retainHouseholds(items.map((item) => item.id));
 
         if (items.length === 0) {
           await store.clearAll();
@@ -167,6 +169,7 @@ export function createHouseholdProvider(
       try {
         const result = await fetchHouseholds(householdApi, accessToken);
         if (!mountedRef.current) return false;
+        draftWorkspace.retainHouseholds(result.items.map((item) => item.id));
 
         if (result.items.length === 0) {
           await store.clearAll();
@@ -223,6 +226,7 @@ export function createHouseholdProvider(
       try {
         const result = await fetchHouseholds(householdApi, accessToken);
         if (!mountedRef.current) return false;
+        draftWorkspace.retainHouseholds(result.items.map((item) => item.id));
 
         const confirmed = result.items.find((h) => h.id === householdId);
         if (confirmed === undefined) {
@@ -256,12 +260,14 @@ export function createHouseholdProvider(
       }
     }, [households, getAccessToken, householdApi, store]);
 
-    const enterAccessChanged = useCallback((lostHouseholdName?: string) => {
+    const enterAccessChanged = useCallback((lostHouseholdName?: string, lostHouseholdId?: string) => {
       setAccessChangedHouseholdName(lostHouseholdName);
       // Freeze actions by setting to accessChanged.
       // Clear lost household cache and persistence.
-      if (currentHouseholdId !== null) {
-        store.clearHouseholdData(currentHouseholdId).catch(() => undefined);
+      const removedId = lostHouseholdId ?? currentHouseholdId;
+      if (removedId !== null) {
+        draftWorkspace.clearHousehold(removedId);
+        store.clearHouseholdData(removedId).catch(() => undefined);
       }
       setCurrentHouseholdId(null);
       setViewState('accessChanged');

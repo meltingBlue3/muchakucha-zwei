@@ -36,11 +36,10 @@ async function setup(page: Page) {
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'mock-only' };
     else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '检查用户', hasHousehold: true };
     else if (path === '/api/v1/households') body = [household(a), household(b)];
-    else if (path.endsWith('/invitations/preview')) {
+    else if (path.endsWith('/invitations/inbox')) {
       invitationAttempts++;
-      const token = new URL(route.request().url()).searchParams.get('token');
-      if (token === 'retry' && invitationAttempts === 1) status = 503;
-      body = token === 'invalid' ? { kind: 'invalid' } : { kind: 'valid', householdName: '家庭 A', inviterDisplayName: '家人', expiresAt: '2099-01-01T00:00:00Z' };
+      if (invitationAttempts === 1) status = 503;
+      body = { invitations: [{ id: 'invite', householdName: '家庭 A', inviterDisplayName: '家人', expiresAt: '2099-01-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' }] };
     } else if (/\/(tasks|events)\/.+\/labels$/.test(path) && method === 'POST') {
       labelAttempts++;
       status = labelAttempts === 1 ? 503 : 200;
@@ -73,15 +72,15 @@ for (const width of [320, 390, 1440]) {
     await setup(page);
     await page.setViewportSize({ width, height: 900 });
     const members = [
-      { membershipId: 'member', userId: 'user', displayName: '小林', username: 'lin', email: '', role: 'OWNER', isCurrentUser: true },
-      { membershipId: 'second', userId: 'second', displayName: '名字比较长的家庭成员', username: 'family_member', email: '', role: 'MEMBER', isCurrentUser: false },
+      { membershipId: 'member', userId: 'user', displayName: '小林', username: 'lin', role: 'OWNER', isCurrentUser: true },
+      { membershipId: 'second', userId: 'second', displayName: '名字比较长的家庭成员', username: 'family_member', role: 'MEMBER', isCurrentUser: false },
     ];
     await page.route(`**/api/v1/households/${a}`, async (route) => {
       const name = route.request().method() === 'PATCH' ? route.request().postDataJSON().name : '家庭 A';
       await route.fulfill({ json: { ...household(a), name, members } });
     });
     await page.route(`**/api/v1/households/${a}/invitations`, async (route) => {
-      await route.fulfill({ json: { invitations: [{ id: 'invite', username: 'another_family_member', emailCanonical: '', role: 'MEMBER', status: 'pending', createdAt: '2026-09-15T00:00:00Z', expiresAt: '2099-09-20T00:00:00Z' }] } });
+      await route.fulfill({ json: { invitations: [{ id: 'invite', username: 'another_family_member', role: 'MEMBER', status: 'pending', createdAt: '2026-09-15T00:00:00Z', expiresAt: '2099-09-20T00:00:00Z' }] } });
     });
     await page.goto(`/households/${a}/settings`);
     await expect(page.getByRole('heading', { name: '基本信息', exact: true })).toBeVisible();
@@ -149,13 +148,13 @@ for (const width of [320, 390, 1440]) {
 }
 
 for (const width of [390, 1440]) {
-  test(`household settings only offer rename and leave to the owner at ${width}px`, async ({ page }) => {
+  test(`household settings allow members to leave and require owner transfer at ${width}px`, async ({ page }) => {
     await setup(page);
     await page.setViewportSize({ width, height: 900 });
     let ownerMembershipId = 'other';
     const members = [
-      { membershipId: 'member', userId: 'user', displayName: '小林', username: 'lin', email: '', role: 'MEMBER', isCurrentUser: true },
-      { membershipId: 'other', userId: 'other', displayName: '妈妈', username: 'mama', email: '', role: 'OWNER', isCurrentUser: false },
+      { membershipId: 'member', userId: 'user', displayName: '小林', username: 'lin', role: 'MEMBER', isCurrentUser: true },
+      { membershipId: 'other', userId: 'other', displayName: '妈妈', username: 'mama', role: 'OWNER', isCurrentUser: false },
     ];
     await page.route(`**/api/v1/households/${a}`, async (route) => {
       await route.fulfill({ json: { ...household(a), ownerMembershipId, members } });
@@ -166,12 +165,12 @@ for (const width of [390, 1440]) {
     await page.goto(`/households/${a}/settings`);
     await expect(page.getByRole('heading', { name: '基本信息', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '编辑家庭名称' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '离开家庭' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '离开家庭' })).toBeVisible();
 
     ownerMembershipId = 'member';
     members[0]!.role = 'OWNER';
     members[1] = { ...members[1]!, role: 'MEMBER' };
-    members.push({ membershipId: 'third', userId: 'third', displayName: '爸爸', username: 'papa', email: '', role: 'MEMBER', isCurrentUser: false });
+    members.push({ membershipId: 'third', userId: 'third', displayName: '爸爸', username: 'papa', role: 'MEMBER', isCurrentUser: false });
     await page.reload();
     await expect(page.getByRole('button', { name: '编辑家庭名称' })).toBeVisible();
     await expect(page.getByRole('button', { name: /^离开家庭/ })).toHaveCount(1);
@@ -183,7 +182,7 @@ for (const width of [390, 1440]) {
     await expect(dialog.getByRole('radio', { name: '爸爸' })).toHaveAttribute('aria-checked', 'true');
     await page.screenshot({ path: `test-results/settings-leave-dialog-${width}.png` });
     await dialog.getByRole('button', { name: '下一步' }).click();
-    await expect(page).toHaveURL(new RegExp(`/households/${a}/ownership/leave\\?successorMembershipId=third`));
+    await expect(page).toHaveURL(new RegExp(`/households/${a}/ownership/transfer\\?successorMembershipId=third`));
   });
 }
 
@@ -244,25 +243,12 @@ test('a note draft survives cancel and is cleared only after successful save', a
   await expect(page.getByLabel('笔记标题')).toHaveValue('');
 });
 
-test('invalid invitations can be replaced and temporary failures retried', async ({ page }) => {
+test('a failed inbox has a working retry action', async ({ page }) => {
   await setup(page);
-  await page.goto('/invite');
-  await page.getByLabel('邀请链接或邀请码').fill('invalid');
-  await page.getByRole('button', { name: '查看邀请' }).click();
-  await page.getByRole('button', { name: '重新输入邀请链接' }).click();
-  await expect(page.getByLabel('邀请链接或邀请码')).toHaveValue('');
-  await page.getByLabel('邀请链接或邀请码').fill('valid');
-  await page.getByRole('button', { name: '查看邀请' }).click();
-  await expect(page.getByRole('button', { name: '接受邀请', exact: true })).toBeVisible();
-});
-
-test('a failed invitation preview has a working retry action', async ({ page }) => {
-  await setup(page);
-  await page.goto('/invite');
-  await page.getByLabel('邀请链接或邀请码').fill('retry');
-  await page.getByRole('button', { name: '查看邀请' }).click();
-  await page.getByRole('button', { name: '重试加载邀请' }).click();
-  await expect(page.getByRole('button', { name: '接受邀请', exact: true })).toBeVisible();
+  await page.goto('/inbox');
+  await expect(page.getByText('暂时无法加载收件箱，请检查网络后重试。')).toBeVisible();
+  await page.getByRole('button', { name: '重试' }).click();
+  await expect(page.getByRole('button', { name: '接受「家庭 A」的邀请' })).toBeVisible();
 });
 
 for (const width of [320, 390, 1440]) {

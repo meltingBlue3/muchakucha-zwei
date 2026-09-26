@@ -1,3 +1,4 @@
+import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
@@ -183,7 +184,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
 
   return (
     <Stack gap={4}>
-      {draftKey ? <Text variant="caption">未保存内容会在本次登录期间暂存。保存成功后清除。</Text> : null}
+      {draftKey ? <DraftNotice draftKey={draftKey} busy={isSubmitting} onDiscard={onCancel} /> : null}
       {/* Title */}
       <Stack gap={1}>
         <Text variant="label">标题</Text>

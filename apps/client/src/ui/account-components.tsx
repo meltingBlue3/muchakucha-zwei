@@ -18,7 +18,7 @@ export function HouseholdSetup({ onCreate, onJoin }: { onCreate(): void; onJoin(
       </Stack>
       {[
         { title: '创建家庭', description: '由你开始，之后再邀请家人一起加入。', action: onCreate, icon: HousePlus, primary: true },
-        { title: '我有邀请链接', description: '家人已经创建了家庭？使用收到的链接加入。', action: onJoin, icon: Mail, primary: false },
+        { title: '查看家庭邀请', description: '家人已经邀请你？前往收件箱接受邀请。', action: onJoin, icon: Mail, primary: false },
       ].map(({ title, description, action, icon: Icon, primary }) => (
         <Pressable key={title} accessibilityRole="button" accessibilityLabel={title} accessibilityHint={description} onPress={action}
           style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], padding: theme.spacing[5], borderRadius: theme.borderRadii.xl, borderWidth: theme.borderWidths.default, borderColor: primary ? theme.colors.coral : theme.colors.border, backgroundColor: pressed ? theme.colors.surfaceMuted : primary ? theme.colors.coralSoft : theme.colors.surface })}>

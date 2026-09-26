@@ -1,5 +1,7 @@
+import { fixtureEditPayload } from '../../scripts/test-edit-version';
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -10,31 +12,31 @@ const password = 'correct horse battery staple 2026';
 
 // ---- Helpers ----
 
-async function prepareVerifiedAccount(
+async function prepareAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string; userId: string }> {
+): Promise<{ username: string; accessToken: string; userId: string }> {
   const database = new Client({ connectionString: DATABASE_URL });
   await database.connect();
   try {
-    const email = `task-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
 
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, displayName, password, platform: 'web' }),
+      body: JSON.stringify({ username, confirmPassword: password, password, platform: 'web' }),
     });
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, displayName],
     );
 
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const body: any = await loginResponse.json();
@@ -45,7 +47,7 @@ async function prepareVerifiedAccount(
     });
     const me: any = await meResponse.json();
 
-    return { email, accessToken: body.accessToken, userId: me.id };
+    return { username, accessToken: body.accessToken, userId: me.id };
   } finally {
     await database.end();
   }
@@ -71,6 +73,10 @@ async function apiCall(
   path: string,
   body?: unknown,
 ): Promise<{ status: number; body: any }> {
+  body = await fixtureEditPayload(method, path, body, async (readPath) => {
+    const snapshot = await fetch(`${API_ORIGIN}${readPath}`, { headers: { authorization: `Bearer ${accessToken}` } });
+    return snapshot.json();
+  });
   const response = await fetch(`${API_ORIGIN}${path}`, {
     method,
     headers: {
@@ -102,7 +108,7 @@ async function addMemberViaDb(householdId: string, userId: string, role: string 
 
 test.describe('Tasks API', () => {
   test('creates and retrieves a task', async () => {
-    const owner = await prepareVerifiedAccount('owner', '任务主人');
+    const owner = await prepareAccount('owner', '任务主人');
     const householdId = await createHousehold(owner.accessToken, '任务之家');
 
     // Create task
@@ -125,8 +131,8 @@ test.describe('Tasks API', () => {
   });
 
   test('lists tasks with filtering', async () => {
-    const owner = await prepareVerifiedAccount('list', '列表');
-    const member = await prepareVerifiedAccount('list-mem', '列表成员');
+    const owner = await prepareAccount('list', '列表');
+    const member = await prepareAccount('list-mem', '列表成员');
     const householdId = await createHousehold(owner.accessToken, '列表组');
     await addMemberViaDb(householdId, member.userId);
 
@@ -155,7 +161,7 @@ test.describe('Tasks API', () => {
   });
 
   test('updates and completes a task', async () => {
-    const owner = await prepareVerifiedAccount('update', '更新');
+    const owner = await prepareAccount('update', '更新');
     const householdId = await createHousehold(owner.accessToken, '更新组');
 
     const createResult = await apiCall(owner.accessToken, 'POST', `/api/v1/households/${householdId}/tasks`, {
@@ -181,7 +187,7 @@ test.describe('Tasks API', () => {
   });
 
   test('deletes a task', async () => {
-    const owner = await prepareVerifiedAccount('delete', '删除');
+    const owner = await prepareAccount('delete', '删除');
     const householdId = await createHousehold(owner.accessToken, '删除组');
 
     const createResult = await apiCall(owner.accessToken, 'POST', `/api/v1/households/${householdId}/tasks`, {
@@ -199,8 +205,8 @@ test.describe('Tasks API', () => {
   });
 
   test('rejects non-member from accessing tasks', async () => {
-    const owner = await prepareVerifiedAccount('owner-sec', '安全');
-    const outsider = await prepareVerifiedAccount('outsider', '外人');
+    const owner = await prepareAccount('owner-sec', '安全');
+    const outsider = await prepareAccount('outsider', '外人');
     const householdId = await createHousehold(owner.accessToken, '私密组');
 
     // Create task as owner
@@ -225,7 +231,7 @@ test.describe('Tasks API', () => {
   });
 
   test('validates required fields', async () => {
-    const owner = await prepareVerifiedAccount('valid', '验证');
+    const owner = await prepareAccount('valid', '验证');
     const householdId = await createHousehold(owner.accessToken, '验证组');
 
     // Title too long
@@ -249,10 +255,10 @@ test.describe('Tasks API', () => {
     expect(badPriority.status).toBe(400);
   });
 
-  test('enforces MEMBER can only edit own tasks', async () => {
-    const owner = await prepareVerifiedAccount('owner-perm', '权限主人');
-    const memberA = await prepareVerifiedAccount('mem-a', '成员A');
-    const memberB = await prepareVerifiedAccount('mem-b', '成员B');
+  test('allows every household member to edit shared tasks', async ({ page }) => {
+    const owner = await prepareAccount('owner-perm', '权限主人');
+    const memberA = await prepareAccount('mem-a', '成员A');
+    const memberB = await prepareAccount('mem-b', '成员B');
     const householdId = await createHousehold(owner.accessToken, '权限组');
     await addMemberViaDb(householdId, memberA.userId);
     await addMemberViaDb(householdId, memberB.userId);
@@ -263,11 +269,15 @@ test.describe('Tasks API', () => {
     });
     const taskId = createResult.body.id;
 
-    // Member B tries to edit — should be rejected
-    const editResult = await apiCall(memberB.accessToken, 'PUT', `/api/v1/households/${householdId}/tasks/${taskId}`, {
-      title: 'B试图改',
-    });
-    expect(editResult.status).toBe(403);
+    await loginUsernameFixture(page, memberB.username, password, `/households/${householdId}/tasks/${taskId}`);
+    await page.getByRole('button', { name: '编辑任务', exact: true }).click();
+    await page.getByLabel('任务标题', { exact: true }).fill('B共同修改');
+    await page.getByRole('button', { name: '保存修改', exact: true }).click();
+    await expect(page.getByRole('button', { name: '编辑任务', exact: true })).toBeVisible();
+    await expect(page.getByText('B共同修改', { exact: true })).toBeVisible();
+    const saved = await apiCall(memberA.accessToken, 'GET', `/api/v1/households/${householdId}/tasks/${taskId}`);
+    expect(saved.body.title).toBe('B共同修改');
+    expect(saved.body.createdBy).toBe(memberA.userId);
 
     // Owner can edit any task
     const ownerEdit = await apiCall(owner.accessToken, 'PUT', `/api/v1/households/${householdId}/tasks/${taskId}`, {

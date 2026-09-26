@@ -1,6 +1,6 @@
 import type { GetHouseholdResponseDto, InvitationListItemDto } from '@muchakucha/api-client';
 import { ApiClientError } from '@muchakucha/api-client';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 import { AppDialog } from '../../ui/app-dialog';
@@ -13,7 +13,6 @@ import { SettingsSection } from '../../ui/settings-section';
 
 import type { HouseholdApi } from './household-api';
 import {
-  canLeave,
   canRemove as canRemoveMember,
   canTransferOwnership,
   governanceAction,
@@ -86,6 +85,7 @@ export function HouseholdSettings({
   navShowBack = false,
   navShowProfile = false,
 }: HouseholdSettingsProps) {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const [activeForm, setActiveForm] = useState<'rename' | 'invite' | null>(null);
   const editTrigger = useRef<View>(null);
@@ -110,7 +110,6 @@ export function HouseholdSettings({
 
   // ---- Invitation form state ----
   const [inviteUsername, setInviteUsername] = useState('');
-  const [inviteLink, setInviteLink] = useState<string | undefined>(undefined);
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState<string | undefined>(undefined);
   const [inviteError, setInviteError] = useState<string | undefined>(undefined);
@@ -208,7 +207,6 @@ export function HouseholdSettings({
     setInviteSubmitting(true);
     setInviteSuccess(undefined);
     setInviteError(undefined);
-    setInviteLink(undefined);
 
     const accessToken = deps.getAccessToken();
     if (accessToken === null) {
@@ -228,7 +226,6 @@ export function HouseholdSettings({
 
       setInviteUsername('');
       setInviteSuccess(result.message);
-      setInviteLink(result.invitationUrl);
       try {
         const list = await deps.householdApi.listInvitations(accessToken, householdId);
         if (mountedRef.current) setInvitationList(list.invitations);
@@ -362,7 +359,6 @@ export function HouseholdSettings({
 
       if (!mountedRef.current) return;
       setActiveForm('invite');
-      setInviteLink(resent.invitationUrl);
       setInviteSuccess(resent.message);
 
       // Refetch the invitation list to get updated states.
@@ -466,7 +462,7 @@ export function HouseholdSettings({
   const pendingInvitationCount = invitationList.filter((inv) => inv.status === 'pending').length;
 
   const otherMembers = data.members.filter((m) => !m.isCurrentUser);
-  const leaveable = actorIsOwner && canLeave(actorRole, actorIsOwner, otherMembers.length) && governance.leave !== undefined;
+  const canTransferBeforeLeaving = actorIsOwner && otherMembers.length > 0 && governance.transfer !== undefined;
 
   const editButton = actorIsOwner ? (
     <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel="编辑家庭名称" onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
@@ -474,8 +470,11 @@ export function HouseholdSettings({
     </Pressable>
   ) : null;
 
-  const leaveEntry = leaveable ? (
-    <Pressable ref={leaveTrigger} accessibilityRole="button" accessibilityLabel="离开家庭" onPress={() => { setSuccessorId(null); setLeaveOpen(true); }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', gap: theme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.destructiveSoft : 'transparent' })}>
+  const leaveEntry = !actorIsOwner || canTransferBeforeLeaving ? (
+    <Pressable ref={leaveTrigger} accessibilityRole="button" accessibilityLabel="离开家庭" onPress={() => {
+      if (actorIsOwner) { setSuccessorId(null); setLeaveOpen(true); }
+      else router.push(`/households/${encodeURIComponent(householdId)}/leave?householdName=${encodeURIComponent(authoritativeName)}`);
+    }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', gap: theme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.destructiveSoft : 'transparent' })}>
       <LogOut size={theme.controlSizes.icon} color={theme.colors.destructive} strokeWidth={theme.controlSizes.iconStroke} />
       <Text variant="label" color="destructive">离开家庭</Text>
     </Pressable>
@@ -610,10 +609,10 @@ export function HouseholdSettings({
         </View>
     </Stack>
 
-      {leaveOpen && leaveable ? (
+      {leaveOpen && canTransferBeforeLeaving ? (
         <AppDialog title="离开家庭" busy={false} onClose={() => setLeaveOpen(false)} trigger={leaveTrigger}>
           <Stack gap={4}>
-            <Text>离开前需要把所有权转让给另一位成员。请选择新的所有者：</Text>
+            <Text>你是家庭所有者，需要先转让所有权。转让完成后，你仍是家庭成员，可以再选择离开。请选择新的所有者：</Text>
             <View accessibilityRole="radiogroup" accessibilityLabel="新的所有者" style={{ gap: theme.spacing[2] }}>
               {otherMembers.map((member) => {
                 const selected = successorId === member.membershipId;
@@ -629,7 +628,7 @@ export function HouseholdSettings({
                   >
                     <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
                       <Text numberOfLines={1}>{member.displayName}</Text>
-                      <Text variant="caption" numberOfLines={1}>{member.username ?? member.email}</Text>
+                      <Text variant="caption" numberOfLines={1}>{member.username}</Text>
                     </Stack>
                     {selected ? <Text variant="label" color="coral">已选择</Text> : null}
                   </Pressable>
@@ -645,7 +644,7 @@ export function HouseholdSettings({
                   const successor = otherMembers.find((m) => m.membershipId === successorId);
                   if (successor === undefined) return;
                   setLeaveOpen(false);
-                  governance.leave?.(successor.membershipId, successor.displayName);
+                  governance.transfer?.(successor.membershipId, successor.displayName);
                 }}
                 style={{ flex: 1 }}
               />
@@ -723,9 +722,6 @@ export function HouseholdSettings({
                 gap={1}
               >
                 <Text>{inviteSuccess}</Text>
-                {inviteLink !== undefined ? (
-                  <Text selectable accessibilityLabel="邀请链接" variant="bodySm">{inviteLink}</Text>
-                ) : null}
               </Stack>
             ) : null}
 
@@ -739,11 +735,10 @@ export function HouseholdSettings({
                   setInviteUsername(text);
                   setInviteError(undefined);
                   setInviteSuccess(undefined);
-                  setInviteLink(undefined);
                 }}
               />
               <Text variant="bodySm">
-                输入家人已注册的用户名，再将生成的邀请链接复制发给对方。
+                输入家人已注册的用户名，对方可在收件箱中接受邀请。
               </Text>
               <Button
                 disabled={

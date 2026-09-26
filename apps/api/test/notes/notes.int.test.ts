@@ -1,3 +1,4 @@
+import { fixtureEditPayload } from '../../../../scripts/test-edit-version.js';
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
@@ -34,14 +35,14 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function insertActor(email: string, displayName: string): Promise<ActorFixture> {
+async function insertActor(username: string, displayName: string): Promise<ActorFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, email.toLowerCase(), displayName, passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, username.toLowerCase(), displayName, passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -58,6 +59,10 @@ async function request(
   url: string,
   payload?: unknown,
 ): Promise<ApiResponse> {
+  payload = await fixtureEditPayload(method, `/api/v1${url}`, payload, async (readUrl) => {
+    const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
+    return snapshot.json();
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (app.getHttpAdapter().getInstance() as any).inject({
     method,
@@ -136,11 +141,11 @@ describe('notes API contract', () => {
 
   beforeEach(async () => {
     [owner, admin, member, otherMember, outsider] = await Promise.all([
-      insertActor('owner-notes@example.test', '笔记主人'),
-      insertActor('admin-notes@example.test', '笔记管理员'),
-      insertActor('member-notes@example.test', '笔记成员'),
-      insertActor('other-notes@example.test', '另一位成员'),
-      insertActor('outsider-notes@example.test', '无关人员'),
+      insertActor('owner-notes', '笔记主人'),
+      insertActor('admin-notes', '笔记管理员'),
+      insertActor('member-notes', '笔记成员'),
+      insertActor('other-notes', '另一位成员'),
+      insertActor('outsider-notes', '无关人员'),
     ]);
     householdId = await createHousehold(owner.accessToken, '笔记组');
     await addMemberViaDb(householdId, admin, 'ADMIN');
@@ -267,18 +272,103 @@ describe('notes API contract', () => {
     expect((await noteApi(member, householdId, 'GET')).json().total).toBe(0);
   });
 
-  describe('permissions', () => {
-    test('members cannot edit or delete notes created by someone else', async () => {
-      const noteId = await createNote(otherMember, householdId, { title: '别人的笔记' });
+  test.each(['notes', 'tasks', 'events'])('%s requires a valid explicit edit version', async (resource) => {
+    const raw = (method: 'POST' | 'PUT' | 'GET', path: string, payload?: Record<string, unknown>) => app.getHttpAdapter().getInstance().inject({
+      method, url: `/api/v1/households/${householdId}/${resource}${path}`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      ...(payload === undefined ? {} : { payload }),
+    });
+    const created = await raw('POST', '', { title: '不能无版本覆盖', ...(resource === 'events' ? { startTime: '2030-01-01T09:00:00Z', endTime: '2030-01-01T10:00:00Z' } : {}) });
+    expect(created.statusCode).toBe(201);
+    const base = created.json();
+    for (const version of [{}, { expectedUpdatedAt: null }, { expectedUpdatedAt: '' }, { expectedUpdatedAt: 'invalid' }]) {
+      const rejected = await raw('PUT', `/${base.id}`, { title: '不能写入', ...version });
+      expect(rejected.statusCode).toBe(400);
+      expect(rejected.json().error.code).toBe('VALIDATION_FAILED');
+      expect((await raw('GET', `/${base.id}`)).json()).toMatchObject({ title: base.title, updatedAt: base.updatedAt });
+    }
+  });
 
-      const update = await noteApi(member, householdId, 'PUT', `/${noteId}`, { title: '改掉' });
+  test.each(['tasks', 'events'])('%s requires both occurrence and rule versions for recurring edits', async (resource) => {
+    const raw = (method: 'POST' | 'PUT' | 'GET', path: string, payload?: Record<string, unknown>) => app.getHttpAdapter().getInstance().inject({
+      method, url: `/api/v1/households/${householdId}/${path}`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      ...(payload === undefined ? {} : { payload }),
+    });
+    const today = new Date().toISOString().slice(0, 10);
+    const recurrence = { freq: 'daily', startsOn: today, timezone: 'UTC' };
+    const created = await raw('POST', resource, { title: '重复安排', recurrence, ...(resource === 'events' ? { startTime: `${today}T09:00:00Z`, endTime: `${today}T10:00:00Z` } : {}) });
+    expect(created.statusCode).toBe(201);
+    const base = created.json();
+    for (const suffix of ['', '/series']) {
+      for (const version of [{ expectedUpdatedAt: base.updatedAt }, { expectedUpdatedAt: base.updatedAt, expectedRuleUpdatedAt: null }, { expectedRuleUpdatedAt: base.recurrence.updatedAt }]) {
+        const rejected = await raw('PUT', `${resource}/${base.id}${suffix}`, { title: '不能写入', ...version });
+        expect(rejected.statusCode).toBe(400);
+        expect(rejected.json().error.code).toBe('VALIDATION_FAILED');
+        expect((await raw('GET', `${resource}/${base.id}`)).json()).toMatchObject({ title: base.title, updatedAt: base.updatedAt, recurrence: { updatedAt: base.recurrence.updatedAt } });
+      }
+    }
+    const rulePath = `recurrence-rules/${base.recurrenceRuleId}`;
+    const rejectedRule = await raw('PUT', rulePath, { recurrence });
+    expect(rejectedRule.statusCode).toBe(400);
+    expect((await raw('GET', rulePath)).json().updatedAt).toBe(base.recurrence.updatedAt);
+    const accepted = await raw('PUT', `${resource}/${base.id}`, { title: '有版本的修改', expectedUpdatedAt: base.updatedAt, expectedRuleUpdatedAt: base.recurrence.updatedAt });
+    expect(accepted.statusCode).toBe(200);
+    expect((await raw('GET', `${resource}/${base.id}`)).json().title).toBe('有版本的修改');
+  });
+
+  test.each(['notes', 'tasks', 'events'])('%s rejects stale and racing saves without changing related data', async (resource) => {
+    const request = async (method: 'POST' | 'GET' | 'PUT', path: string, payload?: Record<string, unknown>) => app.getHttpAdapter().getInstance().inject({
+      method, url: `/api/v1/households/${householdId}/${resource}${path}`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      ...(payload === undefined ? {} : { payload }),
+    });
+    const initial = { title: '初始内容', ...(resource === 'events' ? { startTime: '2030-01-01T09:00:00Z', endTime: '2030-01-01T10:00:00Z' } : {}) };
+    const created = await request('POST', '', initial);
+    expect(created.statusCode).toBe(201);
+    const base = created.json();
+    let labelId: string | undefined;
+    if (resource !== 'notes') {
+      const label = await app.getHttpAdapter().getInstance().inject({ method: 'POST', url: `/api/v1/households/${householdId}/labels`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: `${resource}-label`, color: '#B94736' } });
+      expect(label.statusCode).toBe(201);
+      labelId = label.json().id;
+    }
+    const writes = await Promise.all(['甲的修改', '乙的修改'].map(title => request('PUT', `/${base.id}`, { title, expectedUpdatedAt: base.updatedAt, ...(labelId ? { labelIds: [labelId] } : {}) })));
+    expect(writes.map(result => result.statusCode).sort()).toEqual([200, 409]);
+    expect(writes.find(result => result.statusCode === 409)!.json().error.code).toBe('EDIT_CONFLICT');
+    const winner = writes.find(result => result.statusCode === 200)!.json();
+    const stale = await request('PUT', `/${base.id}`, { title: '旧稿覆盖', expectedUpdatedAt: base.updatedAt, ...(resource === 'tasks' ? { assigneeIds: [owner.userId] } : {}), ...(labelId ? { labelIds: [] } : {}) });
+    expect(stale.statusCode).toBe(409);
+    const saved = (await request('GET', `/${base.id}`)).json();
+    expect(saved.title).toBe(winner.title);
+    expect(saved.updatedAt).toBe(winner.updatedAt);
+    if (resource === 'tasks') expect(saved.assigneeIds).toEqual([]);
+    if (labelId) {
+      expect(saved.labels.map((label: { id: string }) => label.id)).toEqual([labelId]);
+      const invalid = await request('PUT', `/${base.id}`, { title: 'Must roll back', expectedUpdatedAt: saved.updatedAt, labelIds: [randomUUID()], ...(resource === 'tasks' ? { assigneeIds: [owner.userId] } : {}) });
+      expect(invalid.statusCode).toBe(400);
+      expect((await request('GET', `/${base.id}`)).json()).toMatchObject({ title: saved.title, updatedAt: saved.updatedAt, ...(resource === 'tasks' ? { assigneeIds: [] } : {}) });
+    }
+    const reviewed = await request('PUT', `/${base.id}`, { title: '对照后整理', expectedUpdatedAt: saved.updatedAt });
+    expect(reviewed.statusCode).toBe(200);
+    expect((await request('GET', `/${base.id}`)).json().title).toBe('对照后整理');
+  });
+
+  describe('permissions', () => {
+    test.each([
+      ['member', () => otherMember],
+      ['admin', () => admin],
+      ['owner', () => owner],
+    ])('members can edit but cannot delete notes created by another %s', async (_role, creator) => {
+      const noteId = await createNote(creator(), householdId, { title: '别人的笔记' });
+
+      const update = await noteApi(member, householdId, 'PUT', `/${noteId}`, { title: '共同编辑', body: '补充内容' });
       const remove = await noteApi(member, householdId, 'DELETE', `/${noteId}`);
 
-      expect(update.statusCode).toBe(403);
-      expect(update.json().error.code).toBe('FORBIDDEN');
+      expect(update.statusCode).toBe(200);
       expect(remove.statusCode).toBe(403);
       expect(remove.json().error.code).toBe('FORBIDDEN');
-      expect((await noteApi(member, householdId, 'GET', `/${noteId}`)).json().title).toBe('别人的笔记');
+      expect((await noteApi(member, householdId, 'GET', `/${noteId}`)).json()).toMatchObject({ title: '共同编辑', body: '补充内容', createdBy: creator().userId });
     });
 
     test.each([
@@ -310,6 +400,7 @@ describe('notes API contract', () => {
         expect(response.statusCode).toBe(404);
         expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
       }
+      expect((await noteApi(owner, householdId, 'GET', `/${noteId}`)).json().title).toBe('私密笔记');
     });
 
     test('a note cannot be reached through another household', async () => {

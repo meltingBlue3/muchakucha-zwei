@@ -1,3 +1,4 @@
+import { fixtureEditPayload } from '../../../../scripts/test-edit-version.js';
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
@@ -16,7 +17,7 @@ let passwordHash: string;
 interface ActorFixture {
   accessToken: string;
   userId: string;
-  email: string;
+  username: string;
   displayName: string;
 }
 
@@ -30,15 +31,15 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function insertActor(email: string, displayName: string): Promise<ActorFixture> {
+async function insertActor(username: string, displayName: string): Promise<ActorFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
-  const canonical = email.trim().normalize('NFC').toLowerCase();
+  const canonical = username.trim().normalize('NFC').toLowerCase();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, canonical, displayName, passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, canonical, displayName, passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -48,7 +49,7 @@ async function insertActor(email: string, displayName: string): Promise<ActorFix
   });
   return {
     userId,
-    email,
+    username,
     displayName,
     accessToken: await jwt.signAsync({ sub: userId, sid: sessionId }),
   };
@@ -86,6 +87,10 @@ async function eventApi(
   path: string,
   payload?: unknown,
 ): Promise<{ statusCode: number; json: () => any }> {
+  payload = await fixtureEditPayload(method, `/api/v1/households/${encodeURIComponent(householdId)}/events${path}`, payload, async (readUrl) => {
+    const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
+    return snapshot.json();
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
@@ -132,12 +137,72 @@ describe('events CRUD API contract', () => {
 
   beforeEach(async () => {
     [owner, member, outsider] = await Promise.all([
-      insertActor('owner-events@example.test', '事件主人'),
-      insertActor('member-events@example.test', '事件成员'),
-      insertActor('outsider-events@example.test', '无关人员'),
+      insertActor('owner-events', '事件主人'),
+      insertActor('member-events', '事件成员'),
+      insertActor('outsider-events', '无关人员'),
     ]);
     householdId = await createHousehold(owner.accessToken, '事件组');
     await addMemberViaDb(householdId, member, 'MEMBER');
+  });
+
+  test('calendar expansion generates a distant month without filling the gap or advancing the scheduler', async () => {
+    const created = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      title: '每日远期安排', startTime: '2030-01-01T09:00:00Z', endTime: '2030-01-01T10:00:00Z',
+      recurrence: { freq: 'daily', interval: 1, startsOn: '2030-01-01', timezone: 'UTC' },
+    });
+    expect(created.statusCode).toBe(201);
+    const ruleId = created.json().recurrenceRuleId as string;
+    const range = '?startDate=2032-03-01&endDate=2032-03-31&expandRecurring=true';
+    const before = await eventApi(owner.accessToken, householdId, 'GET', '?startDate=2032-03-01&endDate=2032-03-31');
+    expect(before.json().events).toHaveLength(0);
+    const expanded = await eventApi(member.accessToken, householdId, 'GET', range);
+    expect(expanded.statusCode).toBe(200);
+    const march = expanded.json().events.filter((event: { occurrenceDate: string }) => event.occurrenceDate.startsWith('2032-03'));
+    expect(march).toHaveLength(31);
+    expect(expanded.json().materializedThrough).toBe(before.json().materializedThrough);
+    const repeat = await eventApi(owner.accessToken, householdId, 'GET', range);
+    expect(repeat.json().events.map((event: { id: string }) => event.id)).toEqual(expanded.json().events.map((event: { id: string }) => event.id));
+    await withDatabase(async (db) => {
+      const gap = await db.query('SELECT count(*)::int AS count FROM events WHERE recurrence_rule_id = $1 AND occurrence_date BETWEEN $2::date AND $3::date', [ruleId, '2030-02-01', '2032-01-31']);
+      expect(gap.rows[0].count).toBe(0);
+      // Individual exceptions survive refreshing the calendar.
+      await db.query('UPDATE events SET cancelled_at = now() WHERE id = $1', [march[0].id]);
+      await db.query('UPDATE events SET title = $2 WHERE id = $1', [march[1].id, '只改这次']);
+    });
+    const refreshed = await eventApi(owner.accessToken, householdId, 'GET', range);
+    expect(refreshed.json().events.some((event: { id: string }) => event.id === march[0].id)).toBe(false);
+    expect(refreshed.json().events.find((event: { id: string }) => event.id === march[1].id).title).toBe('只改这次');
+  });
+
+  test('calendar expansion respects count, end dates and spanning events', async () => {
+    for (const limit of [{ count: 2 }, { endsOn: '2030-01-02' }]) {
+      const created = await eventApi(owner.accessToken, householdId, 'POST', '', {
+        title: '跨日安排', startTime: '2030-01-01T23:00:00Z', endTime: '2030-01-02T01:00:00Z',
+        recurrence: { freq: 'daily', interval: 1, startsOn: '2030-01-01', timezone: 'UTC', ...limit },
+      });
+      expect(created.statusCode).toBe(201);
+    }
+    const result = await eventApi(owner.accessToken, householdId, 'GET', '?startDate=2030-01-03&endDate=2030-01-03&expandRecurring=true');
+    expect(result.statusCode).toBe(200);
+    expect(result.json().events).toHaveLength(4);
+    expect(result.json().events.every((event: { occurrenceDate: string }) => ['2030-01-01', '2030-01-02'].includes(event.occurrenceDate))).toBe(true);
+  });
+
+  test('calendar expansion authorizes before writing and validates bounded calendar dates', async () => {
+    const created = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      title: '私有安排', startTime: '2030-01-01T09:00:00Z', endTime: '2030-01-01T10:00:00Z',
+      recurrence: { freq: 'daily', startsOn: '2030-01-01', timezone: 'UTC' },
+    });
+    expect(created.statusCode).toBe(201);
+    for (const query of [
+      'startDate=2030-01-01', 'startDate=2030-02-30&endDate=2030-03-01',
+      'startDate=2030-01-02&endDate=2030-01-01', 'startDate=2030-01-01&endDate=2032-01-01',
+    ]) {
+      expect((await eventApi(owner.accessToken, householdId, 'GET', `?${query}&expandRecurring=true`)).statusCode).toBe(400);
+    }
+    expect((await eventApi(outsider.accessToken, householdId, 'GET', '?startDate=2030-03-01&endDate=2030-03-31&expandRecurring=true')).statusCode).toBe(404);
+    const all = await eventApi(owner.accessToken, householdId, 'GET', '');
+    expect(all.json().events).toHaveLength(1);
   });
 
   test('creates a timed event', async () => {
@@ -225,7 +290,7 @@ describe('events CRUD API contract', () => {
     expect(filteredResult.json().events[0].title).toBe('八月活动');
   });
 
-  test('updates an event', async () => {
+  test('members can edit others events but cannot delete them', async () => {
     const created = await eventApi(owner.accessToken, householdId, 'POST', '', {
       title: '原始标题',
       startTime: new Date(Date.now() + 3600_000).toISOString(),
@@ -233,7 +298,7 @@ describe('events CRUD API contract', () => {
     });
     const eventId = (created.json() as { id: string }).id;
 
-    const response = await eventApi(owner.accessToken, householdId, 'PUT', `/${encodeURIComponent(eventId)}`, {
+    const response = await eventApi(member.accessToken, householdId, 'PUT', `/${encodeURIComponent(eventId)}`, {
       title: '已更新标题',
       location: '新地点',
     });
@@ -241,9 +306,12 @@ describe('events CRUD API contract', () => {
     expect(response.json().title).toBe('已更新标题');
     expect(response.json().location).toBe('新地点');
 
+    expect((await eventApi(member.accessToken, householdId, 'DELETE', `/${eventId}`)).statusCode).toBe(403);
+    expect((await eventApi(outsider.accessToken, householdId, 'PUT', `/${eventId}`, { title: '入侵' })).statusCode).toBe(404);
+
     // Verify
     const getResult = await eventApi(owner.accessToken, householdId, 'GET', `/${encodeURIComponent(eventId)}`);
-    expect(getResult.json().title).toBe('已更新标题');
+    expect(getResult.json()).toMatchObject({ title: '已更新标题', location: '新地点', createdBy: owner.userId });
   });
 
   test('deletes an event', async () => {

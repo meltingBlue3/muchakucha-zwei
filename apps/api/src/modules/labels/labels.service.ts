@@ -1,3 +1,4 @@
+import { lockContent } from '../shared/edit-version.js';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type { CreateLabelDto, LabelResponseDto, LabelListResponseDto, TagEntitiesDto } from './dto/create-label.dto.js';
@@ -206,23 +207,27 @@ export class LabelsService {
       });
     }
 
-    await this.prisma.$transaction([
-      // Remove labels that are no longer selected
-      this.prisma.eventLabel.deleteMany({
-        where: {
-          eventId,
-          labelId: { notIn: input.labelIds },
-        },
-      }),
-      // Upsert the currently selected labels
-      ...input.labelIds.map((labelId) =>
-        this.prisma.eventLabel.upsert({
-          where: { eventId_labelId: { eventId, labelId } },
-          create: { eventId, labelId },
-          update: {},
+    await this.prisma.$transaction(async (tx) => {
+      const updatedAt = await lockContent(tx, 'event', householdId, eventId);
+      await Promise.all([
+        // Remove labels that are no longer selected
+        tx.eventLabel.deleteMany({
+          where: {
+            eventId,
+            labelId: { notIn: input.labelIds },
+          },
         }),
-      ),
-    ]);
+        // Upsert the currently selected labels
+        ...input.labelIds.map((labelId) =>
+          tx.eventLabel.upsert({
+            where: { eventId_labelId: { eventId, labelId } },
+            create: { eventId, labelId },
+            update: {},
+          }),
+        ),
+      ]);
+      await tx.event.update({ where: { id: eventId }, data: { updatedAt } });
+    });
   }
 
   async untagEvent(
@@ -239,13 +244,11 @@ export class LabelsService {
       throw new NotFoundException({ code: 'EVENT_NOT_FOUND', message: 'Event not found.' });
     }
 
-    try {
-      await this.prisma.eventLabel.delete({
-        where: { eventId_labelId: { eventId, labelId } },
-      });
-    } catch {
-      // Already untagged or doesn't exist — no-op.
-    }
+    await this.prisma.$transaction(async (tx) => {
+      const updatedAt = await lockContent(tx, 'event', householdId, eventId);
+      await tx.eventLabel.deleteMany({ where: { eventId, labelId } });
+      await tx.event.update({ where: { id: eventId }, data: { updatedAt } });
+    });
   }
 
   async tagTask(
@@ -273,23 +276,27 @@ export class LabelsService {
       });
     }
 
-    await this.prisma.$transaction([
-      // Remove labels that are no longer selected
-      this.prisma.taskLabel.deleteMany({
-        where: {
-          taskId,
-          labelId: { notIn: input.labelIds },
-        },
-      }),
-      // Upsert the currently selected labels
-      ...input.labelIds.map((labelId) =>
-        this.prisma.taskLabel.upsert({
-          where: { taskId_labelId: { taskId, labelId } },
-          create: { taskId, labelId },
-          update: {},
+    await this.prisma.$transaction(async (tx) => {
+      const updatedAt = await lockContent(tx, 'task', householdId, taskId);
+      await Promise.all([
+        // Remove labels that are no longer selected
+        tx.taskLabel.deleteMany({
+          where: {
+            taskId,
+            labelId: { notIn: input.labelIds },
+          },
         }),
-      ),
-    ]);
+        // Upsert the currently selected labels
+        ...input.labelIds.map((labelId) =>
+          tx.taskLabel.upsert({
+            where: { taskId_labelId: { taskId, labelId } },
+            create: { taskId, labelId },
+            update: {},
+          }),
+        ),
+      ]);
+      await tx.task.update({ where: { id: taskId }, data: { updatedAt } });
+    });
   }
 
   async untagTask(
@@ -306,13 +313,11 @@ export class LabelsService {
       throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found.' });
     }
 
-    try {
-      await this.prisma.taskLabel.delete({
-        where: { taskId_labelId: { taskId, labelId } },
-      });
-    } catch {
-      // Already untagged — no-op.
-    }
+    await this.prisma.$transaction(async (tx) => {
+      const updatedAt = await lockContent(tx, 'task', householdId, taskId);
+      await tx.taskLabel.deleteMany({ where: { taskId, labelId } });
+      await tx.task.update({ where: { id: taskId }, data: { updatedAt } });
+    });
   }
 
   private toResponse(row: LabelRow): LabelResponseDto {

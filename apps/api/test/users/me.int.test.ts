@@ -25,14 +25,14 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function insertMember(email: string, displayName: string): Promise<MemberFixture> {
+async function insertMember(username: string, displayName: string): Promise<MemberFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, email.trim().normalize('NFC').toLowerCase(), displayName, passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, username.trim().normalize('NFC').toLowerCase(), displayName, passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -92,9 +92,9 @@ afterAll(async () => {
 beforeEach(async () => {
   await resetDatabase();
   [member, memberA, memberB] = await Promise.all([
-    insertMember('member@example.test', 'Member'),
-    insertMember('member-a@example.test', 'Member A'),
-    insertMember('member-b@example.test', 'Member B'),
+    insertMember('member', 'Member'),
+    insertMember('member-a', 'Member A'),
+    insertMember('member-b', 'Member B'),
   ]);
 });
 
@@ -117,9 +117,8 @@ describe('current-user API contract', () => {
     const response = await me(member.accessToken);
     expect(response.json()).toEqual({
       id: member.id,
-      email: 'member@example.test',
+      username: 'member',
       displayName: 'Member',
-      emailVerified: true,
       hasHousehold: false,
     });
   });
@@ -152,7 +151,7 @@ describe('current-user API contract', () => {
     const tooLong = await me(member.accessToken, 'PATCH', { displayName: 'x'.repeat(81) });
     const massAssignment = await me(member.accessToken, 'PATCH', {
       displayName: 'Updated',
-      email: 'takeover@example.test',
+      username: 'takeover',
       role: 'admin',
     });
     expect([blank.statusCode, tooLong.statusCode, massAssignment.statusCode]).toEqual([400, 400, 400]);

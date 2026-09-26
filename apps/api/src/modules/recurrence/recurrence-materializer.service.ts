@@ -1,3 +1,4 @@
+import { lockTaskAssignments } from '../shared/task-assignment.js';
 import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
@@ -14,7 +15,8 @@ import {
 } from './recurrence-date.js';
 
 export { RECURRENCE_MAX_INSTANCES_PER_RUN } from './recurrence-date.js';
-export const RECURRENCE_LOCK_NAMESPACE = 1_907_070_1;
+import { RECURRENCE_LOCK_NAMESPACE } from './recurrence-lock.js';
+export { RECURRENCE_LOCK_NAMESPACE } from './recurrence-lock.js';
 
 // D-11: the lookahead window is per-frequency, not a single fixed number of
 // days. daily=0 means "today" only appears after the rule's own local
@@ -119,8 +121,48 @@ export class RecurrenceMaterializerService {
     return created;
   }
 
+  /** Calendar browsing fills only the requested window, never the gap from
+   * today to that window. It must not advance the scheduler's contiguous
+   * watermark, or visiting a future month would skip intervening occurrences.
+   * The caller has already authorized household membership and bounded dates.
+   */
+  async materializeEventRange(householdId: string, from: CalendarDate, through: CalendarDate): Promise<void> {
+    const horizon = addDays(through, 1); // Client and rule time zones may differ.
+    const rules = await this.prisma.recurrenceRule.findMany({
+      where: { householdId, startsOn: { lte: databaseDate(horizon) }, events: { some: {} } },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    for (const { id } of rules) {
+      await this.prisma.$transaction(async (tx) => {
+        // Wait for concurrent creation/editing rather than returning an empty
+        // calendar while another writer owns the series. All writers use this lock.
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${RECURRENCE_LOCK_NAMESPACE}, hashtext(${id}))::text`;
+        const rule = await tx.recurrenceRule.findUnique({ where: { id } });
+        if (rule === null) return;
+        const template = await tx.event.findFirst({ where: { recurrenceRuleId: id }, orderBy: { occurrenceDate: 'asc' } });
+        if (template === null) return;
+        // Include occurrences starting before the window but still spanning it.
+        let cursor = addDays(from, -Math.ceil((rule.durationMinutes ?? 0) / 1440) - 1);
+        while (compareDates(cursor, horizon) <= 0) {
+          const occurrences = walkOccurrences({
+            freq: rule.freq, interval: rule.interval, byWeekday: rule.byWeekday,
+            startsOn: calendarDate(rule.startsOn),
+            endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn), count: rule.count,
+          }, { from: cursor, horizon });
+          await this.materializeEventOccurrences(tx, rule, template, occurrences);
+          if (occurrences.length < RECURRENCE_MAX_INSTANCES_PER_RUN) break;
+          cursor = addDays(occurrences[occurrences.length - 1]!, 1);
+        }
+      });
+    }
+  }
+
   async materializeRule(ruleId: string): Promise<MaterializationResult> {
     return this.prisma.$transaction(async (tx) => {
+      const scope = await tx.recurrenceRule.findUnique({ where: { id: ruleId }, select: { householdId: true } });
+      if (scope === null) return { skipped: false, created: 0 };
+      await lockTaskAssignments(tx, scope.householdId);
       const lock = await tx.$queryRaw<Array<{ locked: boolean }>>`
         SELECT pg_try_advisory_xact_lock(${RECURRENCE_LOCK_NAMESPACE}, hashtext(${ruleId})) AS locked
       `;
@@ -183,7 +225,7 @@ export class RecurrenceMaterializerService {
         : runWatermark;
       await tx.recurrenceRule.update({
         where: { id: ruleId },
-        data: { materializedThrough: databaseDate(nextWatermark) },
+        data: { materializedThrough: databaseDate(nextWatermark), updatedAt: rule.updatedAt },
       });
       return { skipped: false, created };
     });

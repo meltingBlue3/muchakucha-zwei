@@ -14,8 +14,8 @@ const productionOrigin = 'https://app.example.test';
 const accessSecret = 'test-only-access-secret-that-is-longer-than-thirty-two-bytes';
 const password = 'correct horse battery staple';
 
-function canonicalizeEmail(email: string): string {
-  return email.trim().normalize('NFC').toLowerCase();
+function canonicalizeUsername(username: string): string {
+  return username.trim().normalize('NFC').toLowerCase();
 }
 
 async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> {
@@ -28,7 +28,7 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function insertUser(email: string, verified: boolean): Promise<string> {
+async function insertUser(username: string): Promise<string> {
   const passwordHash = await argon2.hash(password, {
     type: argon2.argon2id,
     memoryCost: 19_456,
@@ -37,10 +37,10 @@ async function insertUser(email: string, verified: boolean): Promise<string> {
   });
   return withDatabase(async (client) => {
     const result = await client.query<{ id: string }>(
-      `INSERT INTO "User" ("email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, 'Member', $3, CASE WHEN $4 THEN CURRENT_TIMESTAMP ELSE NULL END)
+      `INSERT INTO "User" ("username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, 'Member', $3)
        RETURNING "id"`,
-      [email, canonicalizeEmail(email), passwordHash, verified],
+      [username, canonicalizeUsername(username), passwordHash],
     );
     return result.rows[0]!.id;
   });
@@ -100,10 +100,10 @@ beforeEach(async () => {
 });
 
 describe('login API contract', () => {
-  test('logs in a verified account and creates an independent device session', async () => {
-    const userId = await insertUser('verified@example.test', true);
-    const first = await login({ email: 'VERIFIED@example.test', password, platform: 'native' });
-    const second = await login({ email: 'verified@example.test', password, platform: 'native' });
+  test('logs in a username account and creates an independent device session', async () => {
+    const userId = await insertUser('verified');
+    const first = await login({ username: 'VERIFIED', password, platform: 'native' });
+    const second = await login({ username: 'verified', password, platform: 'native' });
     expect([first.statusCode, second.statusCode]).toEqual([200, 200]);
     expect(first.json()).toMatchObject({ accessToken: expect.any(String), refreshToken: expect.any(String) });
     expect(second.json()).toMatchObject({ accessToken: expect.any(String), refreshToken: expect.any(String) });
@@ -126,29 +126,18 @@ describe('login API contract', () => {
     });
   });
 
-  test('denies an unverified account without creating a session', async () => {
-    const userId = await insertUser('pending@example.test', false);
-    const response = await login({ email: 'pending@example.test', password, platform: 'native' });
-    expect(response.statusCode).toBe(403);
-    expect(response.json().error.code).toBe('EMAIL_NOT_VERIFIED');
-    await withDatabase(async (client) => {
-      const result = await client.query(`SELECT 1 FROM "AuthSession" WHERE "user_id" = $1`, [userId]);
-      expect(result.rows).toHaveLength(0);
-    });
-  });
-
-  test('uses the same generic invalid-credentials response for unknown email and wrong password', async () => {
-    await insertUser('verified@example.test', true);
-    const unknown = await login({ email: 'unknown@example.test', password: 'wrong password', platform: 'native' });
-    const wrong = await login({ email: 'verified@example.test', password: 'wrong password', platform: 'native' });
+  test('uses the same generic invalid-credentials response for unknown username and wrong password', async () => {
+    await insertUser('verified');
+    const unknown = await login({ username: 'unknown', password: 'wrong password', platform: 'native' });
+    const wrong = await login({ username: 'verified', password: 'wrong password', platform: 'native' });
     expect([unknown.statusCode, wrong.statusCode]).toEqual([401, 401]);
     expect(wrong.json().error).toEqual(unknown.json().error);
     expect(wrong.json().error.code).toBe('INVALID_CREDENTIALS');
   });
 
   test('issues a short-lived access JWT with only verified sub, sid, signature, algorithm, key, and expiry claims', async () => {
-    const userId = await insertUser('verified@example.test', true);
-    const response = await login({ email: 'verified@example.test', password, platform: 'native' });
+    const userId = await insertUser('verified');
+    const response = await login({ username: 'verified', password, platform: 'native' });
     const { accessToken } = response.json() as { accessToken: string };
     const jwt = new JwtService({ secret: accessSecret, signOptions: { algorithm: 'HS256' } });
     const header = JSON.parse(Buffer.from(accessToken.split('.')[0]!, 'base64url').toString('utf8')) as Record<string, unknown>;
@@ -166,8 +155,8 @@ describe('login API contract', () => {
   });
 
   test('access guard accepts an active signed session and rejects it after targeted revocation', async () => {
-    await insertUser('guarded@example.test', true);
-    const response = await login({ email: 'guarded@example.test', password, platform: 'native' });
+    await insertUser('guarded');
+    const response = await login({ username: 'guarded', password, platform: 'native' });
     const { accessToken } = response.json() as { accessToken: string };
     const request: { headers: { authorization: string }; auth?: { sub: string; sid: string } } = {
       headers: { authorization: `Bearer ${accessToken}` },
@@ -189,9 +178,9 @@ describe('login API contract', () => {
   });
 
   test('issues Web refresh only in an HttpOnly cookie and never in JSON', async () => {
-    await insertUser('verified@example.test', true);
+    await insertUser('verified');
     const response = await login(
-      { email: 'verified@example.test', password, platform: 'web' },
+      { username: 'verified', password, platform: 'web' },
       { origin: allowedOrigin },
     );
     expect(response.statusCode).toBe(200);
@@ -202,9 +191,9 @@ describe('login API contract', () => {
   });
 
   test('uses a Secure-prefixed production cookie with bounded Path, SameSite, Secure, and Max-Age attributes', async () => {
-    await insertUser('verified@example.test', true);
+    await insertUser('verified');
     const response = await login(
-      { email: 'verified@example.test', password, platform: 'web' },
+      { username: 'verified', password, platform: 'web' },
       { origin: productionOrigin, production: true },
     );
     const cookie = response.headers['set-cookie']!;
@@ -218,13 +207,13 @@ describe('login API contract', () => {
   });
 
   test('allows all credentialed CORS origins in non-production environments', async () => {
-    await insertUser('verified@example.test', true);
+    await insertUser('verified');
     const accepted = await login(
-      { email: 'verified@example.test', password, platform: 'web' },
+      { username: 'verified', password, platform: 'web' },
       { origin: allowedOrigin },
     );
     const crossOrigin = await login(
-      { email: 'verified@example.test', password, platform: 'web' },
+      { username: 'verified', password, platform: 'web' },
       { origin: 'https://evil.example' },
     );
     expect(accepted.headers['access-control-allow-origin']).toBe(allowedOrigin);
@@ -235,21 +224,21 @@ describe('login API contract', () => {
   });
 
   test('rejects caller metadata that crosses native and Web credential transports', async () => {
-    await insertUser('verified@example.test', true);
+    await insertUser('verified');
     const nativeWithOrigin = await login(
-      { email: 'verified@example.test', password, platform: 'native' },
+      { username: 'verified', password, platform: 'native' },
       { origin: allowedOrigin },
     );
-    const webWithoutOrigin = await login({ email: 'verified@example.test', password, platform: 'web' });
+    const webWithoutOrigin = await login({ username: 'verified', password, platform: 'web' });
     expect([nativeWithOrigin.statusCode, webWithoutOrigin.statusCode]).toEqual([400, 400]);
   });
 
   test('throttles repeated login attempts without revealing account existence', async () => {
-    await insertUser('throttle@example.test', true);
+    await insertUser('throttle');
     const statuses: number[] = [];
     for (let attempt = 0; attempt < 11; attempt += 1) {
       const response = await login(
-        { email: 'throttle@example.test', password: 'wrong password', platform: 'native' },
+        { username: 'throttle', password: 'wrong password', platform: 'native' },
         { remoteAddress: '127.40.0.1' },
       );
       statuses.push(response.statusCode);

@@ -11,18 +11,13 @@ datasource db {
 
 model User {
   id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email               String?                  @db.VarChar(320)
-  emailCanonical      String?                  @unique(map: "User_email_canonical_key") @map("email_canonical") @db.VarChar(320)
-  username            String?                  @db.VarChar(32)
-  usernameCanonical   String?                  @unique(map: "User_username_canonical_key") @map("username_canonical") @db.VarChar(64)
+  username            String                   @db.VarChar(32)
+  usernameCanonical   String                   @unique(map: "User_username_canonical_key") @map("username_canonical") @db.VarChar(64)
   displayName         String                   @map("display_name") @db.VarChar(80)
   passwordHash        String                   @map("password_hash") @db.Text
-  emailVerifiedAt     DateTime?                @map("email_verified_at") @db.Timestamptz(3)
   createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   sessions            AuthSession[]
-  verificationTokens  EmailVerificationToken[]
-  passwordResetTokens PasswordResetToken[]
   memberships         Membership[]
   sentInvitations     Invitation[] @relation("InvitationSender")
   receivedInvitations Invitation[] @relation("InvitationRecipient")
@@ -74,23 +69,22 @@ model Invitation {
   inviterUserId       String     @map("inviter_user_id") @db.Uuid
   inviterMembershipId String     @map("inviter_membership_id") @db.Uuid
   householdId         String     @map("household_id") @db.Uuid
-  emailCanonical      String     @map("email_canonical") @db.VarChar(320)
-  recipientUserId     String?    @map("recipient_user_id") @db.Uuid
-  username            String?    @db.VarChar(32)
-  hash                String     @unique @db.Char(64)
+  recipientUserId     String     @map("recipient_user_id") @db.Uuid
+  username            String     @db.VarChar(32)
   role                String     @default("MEMBER") @db.VarChar(10)
   expiresAt           DateTime   @map("expires_at") @db.Timestamptz(3)
   invalidatedAt       DateTime?  @map("invalidated_at") @db.Timestamptz(3)
   consumedAt          DateTime?  @map("consumed_at") @db.Timestamptz(3)
+  declinedAt          DateTime?  @map("declined_at") @db.Timestamptz(3)
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
 
   inviterUser         User       @relation("InvitationSender", fields: [inviterUserId], references: [id], onDelete: Cascade)
-  recipientUser       User?      @relation("InvitationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  recipientUser       User       @relation("InvitationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
   inviterMembership   Membership @relation(fields: [inviterMembershipId], references: [id], onDelete: Cascade)
   household           Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
-  @@index([householdId, emailCanonical, invalidatedAt, consumedAt], map: "Invitation_household_email_state_idx")
   @@index([householdId, recipientUserId, invalidatedAt, consumedAt], map: "Invitation_household_recipient_state_idx")
+  @@index([recipientUserId, createdAt], map: "Invitation_recipient_created_idx")
   @@map("invitations")
 }
 
@@ -121,20 +115,6 @@ model RefreshToken {
   child      RefreshToken? @relation("RefreshChain")
 
   @@index([sessionId, consumedAt], map: "RefreshToken_session_id_consumed_at_idx")
-}
-
-model EmailVerificationToken {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  tokenHash        String    @unique(map: "EmailVerificationToken_token_hash_key") @map("token_hash") @db.Char(64)
-  pendingProofHash String?   @unique(map: "EmailVerificationToken_pending_proof_hash_key") @map("pending_proof_hash") @db.Char(64)
-  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(3)
-  consumedAt       DateTime? @map("consumed_at") @db.Timestamptz(3)
-  invalidatedAt    DateTime? @map("invalidated_at") @db.Timestamptz(3)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, consumedAt, invalidatedAt], map: "EmailVerificationToken_user_state_idx")
 }
 
 model Event {
@@ -223,19 +203,6 @@ model RecurrenceRule {
   @@index([householdId], map: "RecurrenceRule_household_idx")
   @@index([materializedThrough], map: "RecurrenceRule_materialized_through_idx")
   @@map("recurrence_rules")
-}
-
-model PasswordResetToken {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId        String    @map("user_id") @db.Uuid
-  tokenHash     String    @unique(map: "PasswordResetToken_token_hash_key") @map("token_hash") @db.Char(64)
-  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(3)
-  consumedAt    DateTime? @map("consumed_at") @db.Timestamptz(3)
-  invalidatedAt DateTime? @map("invalidated_at") @db.Timestamptz(3)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, consumedAt, invalidatedAt], map: "PasswordResetToken_user_state_idx")
 }
 
 model Note {

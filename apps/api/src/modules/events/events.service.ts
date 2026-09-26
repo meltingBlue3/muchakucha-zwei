@@ -1,3 +1,4 @@
+import { lockContent, replaceLabels } from '../shared/edit-version.js';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
@@ -63,6 +64,7 @@ interface EventRow {
     count: number | null;
     timezone: string;
     materializedThrough: Date | null;
+    updatedAt: Date;
     startTimeLocal: string | null;
     durationMinutes: number | null;
   } | null;
@@ -79,6 +81,7 @@ interface EventRow {
 }
 
 interface ListFilters {
+  expandRecurring?: string | undefined;
   startDate?: string | undefined;
   endDate?: string | undefined;
   /** Only 'true' or 'false' are honored; any other value is treated as unset (D-15). */
@@ -322,6 +325,19 @@ export class EventsService {
         });
       }
     }
+    const expandRecurring = filters.expandRecurring === 'true';
+    if (expandRecurring) {
+      if (startDate === undefined || endDate === undefined) {
+        throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Calendar expansion requires startDate and endDate.' });
+      }
+      const from = parseRequestDate(startDate, 'startDate');
+      const through = parseRequestDate(endDate, 'endDate');
+      const days = (Date.parse(endDate) - Date.parse(startDate)) / 86_400_000;
+      if (days < 0 || days >= 366) {
+        throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Calendar range must contain 1 to 366 days.' });
+      }
+      if (recurring !== 'false') await this.materializer.materializeEventRange(householdId, from, through);
+    }
     const where: Prisma.EventWhereInput = { householdId, cancelledAt: null };
     if (startDate || endDate) {
       const startTime: Prisma.DateTimeFilter = {};
@@ -334,7 +350,8 @@ export class EventsService {
         // day before). Subtract one UTC day so those events are captured.
         const startUtc = new Date(startDate);
         startUtc.setUTCDate(startUtc.getUTCDate() - 1);
-        startTime.gte = startUtc;
+        if (expandRecurring) where.endTime = { gte: startUtc };
+        else startTime.gte = startUtc;
       }
       if (endDate) {
         // endDate is inclusive (the last day to include). Advance by one
@@ -405,10 +422,6 @@ export class EventsService {
       throw new NotFoundException({ code: 'EVENT_NOT_FOUND', message: 'Event not found.' });
     }
 
-    if (!this.canMutate(role, event.createdBy, actorId)) {
-      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the event creator, admin, or owner can edit this event.' });
-    }
-
     const data: Record<string, unknown> = {};
     if (input.title !== undefined) {
       const trimmed = input.title.trim();
@@ -427,10 +440,13 @@ export class EventsService {
     if (input.allDay !== undefined) data.allDay = input.allDay;
     if (input.location !== undefined) data.location = input.location?.trim() || null;
 
-    const updated = await this.prisma.event.update({
-      where: { id: eventId },
-      data,
-      include: { labels: { include: { label: true } }, recurrenceRule: true },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const updatedAt = await lockContent(tx, 'event', householdId, eventId, input);
+      await replaceLabels(tx, 'event', householdId, eventId, input.labelIds);
+      return tx.event.update({
+        where: { id: eventId }, data: { ...data, updatedAt },
+        include: { labels: { include: { label: true } }, recurrenceRule: true },
+      });
     });
 
     return this.toResponse(updated);
@@ -456,15 +472,14 @@ export class EventsService {
     // A generated occurrence must be cancelled, not removed: the generator
     // dedupes on the row itself, so a missing row reads as "not yet
     // generated" and the occurrence would come back on the next tick (D-07).
-    if (event.recurrenceRuleId !== null) {
-      await this.prisma.event.update({
-        where: { id: eventId },
-        data: { cancelledAt: new Date() },
-      });
-      return;
-    }
-
-    await this.prisma.event.delete({ where: { id: eventId } });
+    await this.prisma.$transaction(async (tx) => {
+      const updatedAt = await lockContent(tx, 'event', householdId, eventId);
+      if (event.recurrenceRuleId !== null) {
+        await tx.event.update({ where: { id: eventId }, data: { cancelledAt: new Date(), updatedAt } });
+      } else {
+        await tx.event.delete({ where: { id: eventId } });
+      }
+    });
   }
 
   // ---- Mapping ----
@@ -491,6 +506,7 @@ export class EventsService {
         endsOn: row.recurrenceRule.endsOn?.toISOString().slice(0, 10) ?? null,
         count: row.recurrenceRule.count,
         timezone: row.recurrenceRule.timezone,
+        updatedAt: row.recurrenceRule.updatedAt.toISOString(),
         materializedThrough: row.recurrenceRule.materializedThrough?.toISOString().slice(0, 10) ?? null,
         startTimeLocal: row.recurrenceRule.startTimeLocal,
         durationMinutes: row.recurrenceRule.durationMinutes,

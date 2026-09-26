@@ -2,8 +2,6 @@
 import type {
   RegisterDto,
   RegistrationAcceptedDto,
-  CompleteEmailVerificationDto,
-  CompleteEmailVerificationResponseDto,
   CreateHouseholdDto,
   CreateHouseholdResponseDto,
   GetHouseholdResponseDto,
@@ -14,15 +12,10 @@ import type {
   RefreshResponseDto,
   UpdateMeDto,
   CurrentUserDto,
-  ResendEmailVerificationDto,
-  ResendEmailVerificationResponseDto,
-  RequestPasswordResetDto,
-  PasswordResetRequestAcceptedDto,
-  CompletePasswordResetDto,
   UpdateHouseholdDto,
   SendHouseholdInvitationDto,
   SendHouseholdInvitationResponseDto,
-  InvitationPreviewResponseDto,
+  InvitationInboxResponseDto,
   AcceptInvitationDto,
   ListInvitationsResponseDto,
   ResendInvitationResponseDto,
@@ -104,44 +97,6 @@ export class ApiClient {
     return this.authenticated<CurrentUserDto>('PATCH', '/api/v1/users/me', accessToken, body, signal);
   }
 
-  async completeEmailVerification(
-    body: CompleteEmailVerificationDto,
-    signal?: AbortSignal,
-  ): Promise<CompleteEmailVerificationResponseDto> {
-    return this.post('/api/v1/auth/email-verifications/complete', body, signal);
-  }
-
-  async resendEmailVerification(
-    body: ResendEmailVerificationDto,
-    signal?: AbortSignal,
-  ): Promise<ResendEmailVerificationResponseDto> {
-    return this.post('/api/v1/auth/email-verifications/resend', body, signal);
-  }
-
-  async requestPasswordReset(
-    body: RequestPasswordResetDto,
-    signal?: AbortSignal,
-  ): Promise<PasswordResetRequestAcceptedDto> {
-    return this.post('/api/v1/auth/password-reset/request', body, signal);
-  }
-
-  async completePasswordReset(body: CompletePasswordResetDto, signal?: AbortSignal): Promise<void> {
-    const response = await fetch(
-      `${this.baseUrl}/api/v1/auth/password-reset/complete`,
-      {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
-    if (!response.ok) {
-      const text = await response.text();
-      throw new ApiClientError(response.status, text === '' ? undefined : JSON.parse(text));
-    }
-  }
-
   async createHousehold(
     accessToken: string,
     body: CreateHouseholdDto,
@@ -213,20 +168,12 @@ export class ApiClient {
     );
   }
 
-  async previewInvitation(token: string, signal?: AbortSignal): Promise<InvitationPreviewResponseDto> {
-    const response = await fetch(
-      `${this.baseUrl}/api/v1/households/invitations/preview?token=${encodeURIComponent(token)}`,
-      {
-        method: 'GET',
-        credentials: 'include',
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
-    const payload: unknown = await response.json();
-    if (!response.ok) {
-      throw new ApiClientError(response.status, payload);
-    }
-    return payload as InvitationPreviewResponseDto;
+  async listInvitationInbox(accessToken: string, signal?: AbortSignal): Promise<InvitationInboxResponseDto> {
+    return this.authenticated<InvitationInboxResponseDto>('GET', '/api/v1/households/invitations/inbox', accessToken, undefined, signal);
+  }
+
+  async declineInvitation(accessToken: string, body: AcceptInvitationDto, signal?: AbortSignal): Promise<void> {
+    return this.authenticated<void>('POST', '/api/v1/households/invitations/decline', accessToken, body, signal);
   }
 
   async acceptInvitation(
@@ -333,6 +280,20 @@ export class ApiClient {
     );
   }
 
+  async leaveHouseholdMembership(
+    accessToken: string,
+    householdId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'POST',
+      `/api/v1/households/${encodeURIComponent(householdId)}/leave`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   async leaveHousehold(
     accessToken: string,
     householdId: string,
@@ -370,11 +331,13 @@ export class ApiClient {
     endDate?: string,
     recurring?: boolean,
     signal?: AbortSignal,
+    expandRecurring?: boolean,
   ): Promise<EventListResponseDto> {
     const params = new URLSearchParams();
     if (startDate) params.set('startDate', startDate);
     if (endDate) params.set('endDate', endDate);
     if (recurring !== undefined) params.set('recurring', recurring ? 'true' : 'false');
+    if (expandRecurring !== undefined) params.set('expandRecurring', String(expandRecurring));
     const qs = params.toString();
     return this.authenticated<EventListResponseDto>(
       'GET',

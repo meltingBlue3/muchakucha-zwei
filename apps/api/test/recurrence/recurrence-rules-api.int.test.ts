@@ -1,3 +1,4 @@
+import { fixtureEditPayload } from '../../../../scripts/test-edit-version.js';
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
@@ -29,14 +30,14 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   try { return await run(client); } finally { await client.end(); }
 }
 
-async function insertActor(email: string): Promise<ActorFixture> {
+async function insertActor(username: string): Promise<ActorFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, email.toLowerCase(), 'recurrence rules api actor', passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, username.toLowerCase(), 'recurrence rules api actor', passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -77,6 +78,10 @@ async function taskApi(
   path: string = '',
   payload?: unknown,
 ): Promise<InjectResponse> {
+  payload = await fixtureEditPayload(method, `/api/v1/households/${encodeURIComponent(householdId)}/tasks${path}`, payload, async (readUrl) => {
+    const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
+    return snapshot.json();
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
@@ -117,6 +122,10 @@ async function recurrenceRulesApi(
   path: string = '',
   payload?: unknown,
 ): Promise<InjectResponse> {
+  payload = await fixtureEditPayload(method, `/api/v1/households/${encodeURIComponent(householdId)}/recurrence-rules${path}`, payload, async (readUrl) => {
+    const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
+    return snapshot.json();
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
@@ -264,7 +273,7 @@ beforeEach(async () => { await resetDatabase(); });
 
 describe('GET /households/:householdId/recurrence-rules', () => {
   test('returns the correct nextOccurrenceDate for a healthy weekly rule with zero future instance rows', async () => {
-    const owner = await insertActor('rules-window-owner@example.test');
+    const owner = await insertActor('rules-window-owner');
     const householdId = await createHousehold(owner.accessToken);
 
     // D-16's core regression: biweekly (interval=2) means the gap between
@@ -305,7 +314,7 @@ describe('GET /households/:householdId/recurrence-rules', () => {
   });
 
   test('merges a task rule and an event rule into one list with correctly derived kinds', async () => {
-    const owner = await insertActor('rules-kind-owner@example.test');
+    const owner = await insertActor('rules-kind-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = formatIsoDate(currentCalendarDateIn('UTC'));
 
@@ -336,7 +345,7 @@ describe('GET /households/:householdId/recurrence-rules', () => {
   });
 
   test('reports the template title, not a renamed instance title', async () => {
-    const owner = await insertActor('rules-title-owner@example.test');
+    const owner = await insertActor('rules-title-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const startsOn = formatIsoDate(addDays(today, -2));
@@ -361,7 +370,7 @@ describe('GET /households/:householdId/recurrence-rules', () => {
   });
 
   test('returns null nextOccurrenceDate for an exhausted rule and sorts it after unended rules', async () => {
-    const owner = await insertActor('rules-sort-owner@example.test');
+    const owner = await insertActor('rules-sort-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
 
@@ -396,7 +405,7 @@ describe('GET /households/:householdId/recurrence-rules', () => {
   });
 
   test('never includes createdBy or householdId in list items', async () => {
-    const owner = await insertActor('rules-shape-owner@example.test');
+    const owner = await insertActor('rules-shape-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = formatIsoDate(currentCalendarDateIn('UTC'));
     const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
@@ -414,8 +423,8 @@ describe('GET /households/:householdId/recurrence-rules', () => {
   });
 
   test('does not disclose household existence to a non-member', async () => {
-    const owner = await insertActor('rules-list-owner@example.test');
-    const outsider = await insertActor('rules-list-outsider@example.test');
+    const owner = await insertActor('rules-list-owner');
+    const outsider = await insertActor('rules-list-outsider');
     const householdId = await createHousehold(owner.accessToken);
 
     const response = await recurrenceRulesApi(outsider.accessToken, householdId, 'GET');
@@ -429,7 +438,7 @@ describe('GET /households/:householdId/recurrence-rules', () => {
   // so one bad row used to 500 the entire household's list — including
   // the screen you would use to fix or end that rule.
   test('degrades a rule with an unresolvable timezone instead of 500ing the whole list', async () => {
-    const owner = await insertActor('rules-badtz-owner@example.test');
+    const owner = await insertActor('rules-badtz-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = formatIsoDate(currentCalendarDateIn('UTC'));
 
@@ -469,8 +478,8 @@ describe('GET /households/:householdId/recurrence-rules', () => {
 
 describe('GET /households/:householdId/recurrence-rules/:ruleId', () => {
   test('returns 404 RECURRENCE_RULE_NOT_FOUND for a ruleId from another household', async () => {
-    const owner = await insertActor('rules-detail-owner@example.test');
-    const otherOwner = await insertActor('rules-detail-other@example.test');
+    const owner = await insertActor('rules-detail-owner');
+    const otherOwner = await insertActor('rules-detail-other');
     const householdId = await createHousehold(owner.accessToken);
     const otherHouseholdId = await createHousehold(otherOwner.accessToken);
     const today = formatIsoDate(currentCalendarDateIn('UTC'));
@@ -488,8 +497,8 @@ describe('GET /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('returns 404 HOUSEHOLD_NOT_FOUND for a non-member before any rule lookup', async () => {
-    const owner = await insertActor('rules-detail-member-owner@example.test');
-    const outsider = await insertActor('rules-detail-member-outsider@example.test');
+    const owner = await insertActor('rules-detail-member-owner');
+    const outsider = await insertActor('rules-detail-member-outsider');
     const householdId = await createHousehold(owner.accessToken);
     const today = formatIsoDate(currentCalendarDateIn('UTC'));
 
@@ -506,7 +515,7 @@ describe('GET /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('rejects a malformed ruleId with 400 rather than a driver-level 500', async () => {
-    const owner = await insertActor('rules-detail-malformed-owner@example.test');
+    const owner = await insertActor('rules-detail-malformed-owner');
     const householdId = await createHousehold(owner.accessToken);
 
     const response = await recurrenceRulesApi(owner.accessToken, householdId, 'GET', '/not-a-uuid');
@@ -530,7 +539,7 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
   }
 
   test("keeps today's occurrence, removes tomorrow's, and ends the rule on today", async () => {
-    const owner = await insertActor('end-anchor-owner@example.test');
+    const owner = await insertActor('end-anchor-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
@@ -555,7 +564,7 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
   });
 
   test('preserves every historical occurrence row that existed before the end', async () => {
-    const owner = await insertActor('end-history-owner@example.test');
+    const owner = await insertActor('end-history-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
 
@@ -580,7 +589,7 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
   });
 
   test('clears a count bound to NULL and replaces it with an endsOn date', async () => {
-    const owner = await insertActor('end-count-owner@example.test');
+    const owner = await insertActor('end-count-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
 
@@ -603,8 +612,10 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
   });
 
   test('applies identically to an event rule', async () => {
-    const owner = await insertActor('end-event-owner@example.test');
+    const owner = await insertActor('end-event-owner');
     const householdId = await createHousehold(owner.accessToken);
+    const member = await insertActor('rule-event-editor');
+    await addMemberViaDb(householdId, member);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
     const todayIso = formatIsoDate(today);
@@ -627,8 +638,8 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
   });
 
   test('returns 404 RECURRENCE_RULE_NOT_FOUND for a ruleId belonging to another household', async () => {
-    const owner = await insertActor('end-cross-owner@example.test');
-    const otherOwner = await insertActor('end-cross-other@example.test');
+    const owner = await insertActor('end-cross-owner');
+    const otherOwner = await insertActor('end-cross-other');
     const householdId = await createHousehold(owner.accessToken);
     const otherHouseholdId = await createHousehold(otherOwner.accessToken);
     const today = currentCalendarDateIn('UTC');
@@ -648,8 +659,8 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
   });
 
   test('returns 404 HOUSEHOLD_NOT_FOUND for a non-member before any rule lookup', async () => {
-    const owner = await insertActor('end-outsider-owner@example.test');
-    const outsider = await insertActor('end-outsider@example.test');
+    const owner = await insertActor('end-outsider-owner');
+    const outsider = await insertActor('end-outsider');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
 
@@ -667,8 +678,8 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
   });
 
   test("rejects a member ending another member's rule with 403 FORBIDDEN", async () => {
-    const owner = await insertActor('end-member-owner@example.test');
-    const member = await insertActor('end-member-other@example.test');
+    const owner = await insertActor('end-member-owner');
+    const member = await insertActor('end-member-other');
     const householdId = await createHousehold(owner.accessToken);
     await addMemberViaDb(householdId, member);
     const today = currentCalendarDateIn('UTC');
@@ -689,8 +700,8 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
   });
 
   test('lets a member end a rule they created themselves', async () => {
-    const owner = await insertActor('end-own-owner@example.test');
-    const member = await insertActor('end-own-member@example.test');
+    const owner = await insertActor('end-own-owner');
+    const member = await insertActor('end-own-member');
     const householdId = await createHousehold(owner.accessToken);
     await addMemberViaDb(householdId, member);
     const today = currentCalendarDateIn('UTC');
@@ -708,7 +719,7 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
   });
 
   test('keeps an ended rule in the list with a null nextOccurrenceDate', async () => {
-    const owner = await insertActor('end-still-listed-owner@example.test');
+    const owner = await insertActor('end-still-listed-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
@@ -747,7 +758,7 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
   });
 
   test('is idempotent: ending an already ended rule changes nothing', async () => {
-    const owner = await insertActor('end-idempotent-owner@example.test');
+    const owner = await insertActor('end-idempotent-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
 
@@ -827,7 +838,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   }
 
   test('splits at tomorrow: history survives, the future moves to the successor', async () => {
-    const owner = await insertActor('rule-edit-anchor-owner@example.test');
+    const owner = await insertActor('rule-edit-anchor-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const yesterday = addDays(today, -1);
@@ -869,7 +880,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('takes the successor template from the RULE, never from a renamed instance', async () => {
-    const owner = await insertActor('rule-edit-template-owner@example.test');
+    const owner = await insertActor('rule-edit-template-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
@@ -911,7 +922,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('writes a seed instance row at the successor\'s first occurrence from the anchor', async () => {
-    const owner = await insertActor('rule-edit-seed-owner@example.test');
+    const owner = await insertActor('rule-edit-seed-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
@@ -938,8 +949,8 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('inherits assignees and labels from the earliest instance at or after the anchor', async () => {
-    const owner = await insertActor('rule-edit-inherit-owner@example.test');
-    const member = await insertActor('rule-edit-inherit-member@example.test');
+    const owner = await insertActor('rule-edit-inherit-owner');
+    const member = await insertActor('rule-edit-inherit-member');
     const householdId = await createHousehold(owner.accessToken);
     await addMemberViaDb(householdId, member);
     const today = currentCalendarDateIn('UTC');
@@ -978,7 +989,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('falls back to the latest instance before the anchor when none is at or after it', async () => {
-    const owner = await insertActor('rule-edit-fallback-owner@example.test');
+    const owner = await insertActor('rule-edit-fallback-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
@@ -1015,7 +1026,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('inherits the remaining count and clears the old rule\'s count atomically', async () => {
-    const owner = await insertActor('rule-edit-count-owner@example.test');
+    const owner = await insertActor('rule-edit-count-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
@@ -1048,7 +1059,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('rejects endsOn and count together with 400 on recurrence.endsOn', async () => {
-    const owner = await insertActor('rule-edit-xor-owner@example.test');
+    const owner = await insertActor('rule-edit-xor-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
@@ -1074,7 +1085,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('rejects a successor that can never occur and leaves the old rule byte-identical', async () => {
-    const owner = await insertActor('rule-edit-empty-owner@example.test');
+    const owner = await insertActor('rule-edit-empty-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
@@ -1108,7 +1119,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('rolls the whole split back when its last write fails mid-transaction', async () => {
-    const owner = await insertActor('rule-edit-rollback-owner@example.test');
+    const owner = await insertActor('rule-edit-rollback-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
@@ -1161,8 +1172,8 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('returns 404 RECURRENCE_RULE_NOT_FOUND for a ruleId belonging to another household', async () => {
-    const owner = await insertActor('rule-edit-cross-owner@example.test');
-    const otherOwner = await insertActor('rule-edit-cross-other@example.test');
+    const owner = await insertActor('rule-edit-cross-owner');
+    const otherOwner = await insertActor('rule-edit-cross-other');
     const householdId = await createHousehold(owner.accessToken);
     const otherHouseholdId = await createHousehold(otherOwner.accessToken);
     const today = currentCalendarDateIn('UTC');
@@ -1185,8 +1196,8 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('returns 404 HOUSEHOLD_NOT_FOUND for a non-member before any rule lookup', async () => {
-    const owner = await insertActor('rule-edit-outsider-owner@example.test');
-    const outsider = await insertActor('rule-edit-outsider@example.test');
+    const owner = await insertActor('rule-edit-outsider-owner');
+    const outsider = await insertActor('rule-edit-outsider');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
@@ -1207,9 +1218,9 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     expect((await ruleBounds(oldRuleId)).endsOn).toBeNull();
   });
 
-  test('rejects a member editing another member\'s rule with 403, but allows their own', async () => {
-    const owner = await insertActor('rule-edit-member-owner@example.test');
-    const member = await insertActor('rule-edit-member-other@example.test');
+  test('allows a member to edit task rules created by any household member', async () => {
+    const owner = await insertActor('rule-edit-member-owner');
+    const member = await insertActor('rule-edit-member-other');
     const householdId = await createHousehold(owner.accessToken);
     await addMemberViaDb(householdId, member);
     const today = currentCalendarDateIn('UTC');
@@ -1222,15 +1233,15 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     expect(ownersRule.statusCode).toBe(201);
     const ownersRuleId = (ownersRule.json() as { recurrenceRuleId: string }).recurrenceRuleId;
 
-    const forbidden = await recurrenceRulesApi(
+    const edited = await recurrenceRulesApi(
       member.accessToken, householdId, 'PUT', `/${ownersRuleId}`,
       { recurrence: dailyFrom(tomorrow) },
     );
-    // 403, not 404: the member can legitimately SEE this rule through the list
-    // endpoint, so hiding its existence here would contradict that.
-    expect(forbidden.statusCode).toBe(403);
-    expect(forbidden.json().error.code).toBe('FORBIDDEN');
-    expect((await ruleBounds(ownersRuleId)).endsOn).toBeNull();
+    expect(edited.statusCode).toBe(200);
+    const successorId = edited.json().recurrenceRuleId;
+    expect(successorId).not.toBe(ownersRuleId);
+    expect((await ruleBounds(ownersRuleId)).endsOn).not.toBeNull();
+    expect((await ruleRow(successorId)).freq).toBe('daily');
 
     const ownRule = await taskApi(member.accessToken, householdId, 'POST', '', {
       title: "Member's own rule",
@@ -1249,7 +1260,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('applies identically to an event rule and seeds it with the successor duration', async () => {
-    const owner = await insertActor('rule-edit-event-owner@example.test');
+    const owner = await insertActor('rule-edit-event-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const yesterday = addDays(today, -1);
@@ -1293,7 +1304,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   });
 
   test('lists the successor before the superseded rule after an edit', async () => {
-    const owner = await insertActor('rule-edit-list-owner@example.test');
+    const owner = await insertActor('rule-edit-list-owner');
     const householdId = await createHousehold(owner.accessToken);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);

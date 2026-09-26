@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 // Same three constants, same defaults, and the same test-only database as
 // `e2e/events/recurrence.spec.ts`. Introducing a second source for the
@@ -34,7 +34,7 @@ const ENDED_ROW_LINE = '这个重复已经结束';
 const ENDED_DETAIL_NOTE = '这个重复已经结束了。';
 
 type ApiResult<T = any> = { status: number; body: T };
-type TestAccount = { email: string; accessToken: string; userId: string };
+type TestAccount = { username: string; accessToken: string; userId: string };
 type RuleListItem = {
   id: string;
   kind: 'task' | 'event' | null;
@@ -74,25 +74,25 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function prepareVerifiedAccount(seed: string): Promise<TestAccount> {
+async function prepareAccount(seed: string): Promise<TestAccount> {
   return withDatabase(async (database) => {
-    const email = `recurrence-rules-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, displayName: '周期规则测试', password, platform: 'web' }),
+      body: JSON.stringify({ username, confirmPassword: password, password, platform: 'web' }),
     });
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, '周期规则测试'],
     );
 
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody = (await loginResponse.json()) as { accessToken: string };
@@ -101,7 +101,7 @@ async function prepareVerifiedAccount(seed: string): Promise<TestAccount> {
     });
     expect(meResponse.status).toBe(200);
     const me = (await meResponse.json()) as { id: string };
-    return { email, accessToken: loginBody.accessToken, userId: me.id };
+    return { username, accessToken: loginBody.accessToken, userId: me.id };
   });
 }
 
@@ -207,8 +207,8 @@ async function createWeeklyEventRule(
   return result.body.recurrenceRuleId;
 }
 
-async function loginFixture(page: Page, email: string): Promise<void> {
-  await loginEmailFixture(page, email, password);
+async function loginFixture(page: Page, username: string): Promise<void> {
+  await loginUsernameFixture(page, username, password);
 }
 
 async function openTaskList(page: Page, householdId: string): Promise<void> {
@@ -253,7 +253,7 @@ async function activeFilterCount(page: Page): Promise<number> {
 
 test.describe('recurrence rule addendum journeys', () => {
   test('materializes only today for a daily rule and never states a fixed day count', async ({ page }) => {
-    const account = await prepareVerifiedAccount('lookahead');
+    const account = await prepareAccount('lookahead');
     const householdId = await createHousehold(account.accessToken, '生成时机之家');
     const today = localIsoDate(0);
     const title = `每日打卡-${Date.now()}`;
@@ -269,7 +269,7 @@ test.describe('recurrence rule addendum journeys', () => {
     expect(materialized).toHaveLength(1);
     expect(materialized[0].occurrenceDate).toBe(today);
 
-    await loginFixture(page, account.email);
+    await loginFixture(page, account.username);
     await openTaskList(page, householdId);
 
     // The user-visible half of the same fact: one row, not a batch.
@@ -281,7 +281,7 @@ test.describe('recurrence rule addendum journeys', () => {
   });
 
   test('filters the task list down to recurring instances and counts the filter', async ({ page }) => {
-    const account = await prepareVerifiedAccount('filter');
+    const account = await prepareAccount('filter');
     const householdId = await createHousehold(account.accessToken, '周期筛选之家');
     const recurringTitle = `周期任务-${Date.now()}`;
     const plainTitle = `一次性任务-${Date.now()}`;
@@ -293,7 +293,7 @@ test.describe('recurrence rule addendum journeys', () => {
     });
     expect(plain.status).toBe(201);
 
-    await loginFixture(page, account.email);
+    await loginFixture(page, account.username);
     await openTaskList(page, householdId);
     await expect(page.getByLabel(`任务：${recurringTitle}，重复`)).toBeVisible();
     await expect(page.getByLabel(`任务：${plainTitle}`)).toBeVisible();
@@ -321,7 +321,7 @@ test.describe('recurrence rule addendum journeys', () => {
   });
 
   test('manages merged rules and ends one without touching today', async ({ page }) => {
-    const account = await prepareVerifiedAccount('manage');
+    const account = await prepareAccount('manage');
     const householdId = await createHousehold(account.accessToken, '周期规则之家');
     const today = localIsoDate(0);
     const tomorrow = localIsoDate(1);
@@ -334,7 +334,7 @@ test.describe('recurrence rule addendum journeys', () => {
     const taskSummary = '每天重复，永不结束';
     const eventSummary = `${weeklySummary(localWeekday(1))}，永不结束`;
 
-    await loginFixture(page, account.email);
+    await loginFixture(page, account.username);
     await openRuleList(page, householdId);
 
     const list = ruleListScreen(page);
@@ -404,7 +404,7 @@ test.describe('recurrence rule addendum journeys', () => {
   });
 
   test('keeps both new screens accessible by axe, keyboard, and words', async ({ page }) => {
-    const account = await prepareVerifiedAccount('a11y');
+    const account = await prepareAccount('a11y');
     const householdId = await createHousehold(account.accessToken, '周期规则无障碍之家');
     const activeTitle = `无障碍每日规则-${Date.now()}`;
     const endedTitle = `无障碍已结束规则-${Date.now()}`;
@@ -418,7 +418,7 @@ test.describe('recurrence rule addendum journeys', () => {
     );
     expect(ended.status).toBe(204);
 
-    await loginFixture(page, account.email);
+    await loginFixture(page, account.username);
     await openRuleList(page, householdId);
     const list = ruleListScreen(page);
     const detail = ruleDetailScreen(page);

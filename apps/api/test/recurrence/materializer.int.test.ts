@@ -32,14 +32,14 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   try { return await run(client); } finally { await client.end(); }
 }
 
-async function insertActor(email: string): Promise<ActorFixture> {
+async function insertActor(username: string): Promise<ActorFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, email.toLowerCase(), 'materializer actor', passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, username.toLowerCase(), 'materializer actor', passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -112,7 +112,7 @@ beforeEach(async () => { await resetDatabase(); });
 
 describe('rolling recurrence materializer', () => {
   test('advances a rewound watermark without duplicating weekly occurrences', async () => {
-    const actor = await insertActor('weekly-materializer@example.test');
+    const actor = await insertActor('weekly-materializer');
     const householdId = await createHousehold(actor.accessToken);
     const today = parseIsoDate(new Date().toISOString().slice(0, 10));
     const todayWeekday = new Date(Date.UTC(today.year, today.month - 1, today.day)).getUTCDay();
@@ -158,7 +158,7 @@ describe('rolling recurrence materializer', () => {
   });
 
   test('a long-backlogged daily rule catches up to its lookahead horizon across truncated runs', async () => {
-    const actor = await insertActor('bounded-materializer@example.test');
+    const actor = await insertActor('bounded-materializer');
     const householdId = await createHousehold(actor.accessToken);
     const today = parseIsoDate(new Date().toISOString().slice(0, 10));
     const ruleId = await createRecurringTask(actor, householdId, {
@@ -230,7 +230,7 @@ describe('rolling recurrence materializer', () => {
   });
 
   test('persists exactly one clamped February occurrence for a monthly 31st rule', async () => {
-    const actor = await insertActor('monthly-materializer@example.test');
+    const actor = await insertActor('monthly-materializer');
     const householdId = await createHousehold(actor.accessToken);
     const year = new Date().getUTCFullYear();
     const ruleId = await createRecurringTask(actor, householdId, {

@@ -63,7 +63,7 @@ export function isPromotion(oldRole: 'OWNER' | 'ADMIN' | 'MEMBER', newRole: 'ADM
 }
 
 /**
- * D-09: returns whether the current actor can govern the given member.
+ * Only the owner can appoint or demote admins.
  */
 export function canGovern(
   actorRole: 'OWNER' | 'ADMIN' | 'MEMBER',
@@ -79,13 +79,12 @@ export function canGovern(
   if (actorRole === 'MEMBER') return false;
   // Cannot govern yourself.
   if (targetIsSelf) return false;
-  // Both OWNER and ADMIN can govern any non-owner.
-  return actorRole === 'OWNER' || actorRole === 'ADMIN';
+  return actorRole === 'OWNER';
 }
 
 /**
  * D-09: returns whether the current actor can remove the given member.
- * Owner/admin can remove any non-owner (including other admins).
+ * The owner can remove admins; admins can remove ordinary members only.
  * Owner is never a valid removal target. Cannot remove yourself.
  */
 export function canRemove(
@@ -97,7 +96,7 @@ export function canRemove(
   if (targetIsOwner || targetRole === 'OWNER') return false;
   if (targetIsSelf) return false;
   if (actorRole === 'MEMBER') return false;
-  return actorRole === 'OWNER' || actorRole === 'ADMIN';
+  return actorRole === 'OWNER' || (actorRole === 'ADMIN' && targetRole === 'MEMBER');
 }
 
 export type GovernanceAction = 'none' | 'promote' | 'demote';
@@ -292,8 +291,8 @@ export function useMemberGovernance(
   const isOwner = actorRole === 'OWNER';
 
   return {
-    promote: isMember ? undefined : promote,
-    demote: isMember ? undefined : demote,
+    promote: isOwner ? promote : undefined,
+    demote: isOwner ? demote : undefined,
     remove: isMember ? undefined : remove,
     transfer: isOwner ? transfer : undefined,
     leave: isOwner ? leave : undefined,

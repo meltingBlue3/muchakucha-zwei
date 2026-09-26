@@ -28,9 +28,9 @@ async function insertSession(
 ): Promise<{ sessionId: string; tokenId: string }> {
   return withDatabase(async (client) => {
     const user = await client.query<{ id: string }>(
-      `INSERT INTO "User" ("email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $1, 'Member', '$argon2id$fixture', CURRENT_TIMESTAMP) RETURNING "id"`,
-      [`${token}@example.test`],
+      `INSERT INTO "User" ("username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $1, 'Member', '$argon2id$fixture') RETURNING "id"`,
+      [`${token}`],
     );
     const createdAt = input.absoluteExpired ? new Date(Date.now() - 100_000) : new Date();
     const absoluteEndsAt = input.absoluteExpired ? new Date(Date.now() - 50_000) : new Date(Date.now() + 90 * 86_400_000);

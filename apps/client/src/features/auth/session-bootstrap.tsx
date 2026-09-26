@@ -5,8 +5,8 @@ import type { SessionStateStore } from './session-state';
 import type { RestoreOutcome, SessionTransport } from '../../platform/session/session-transport';
 import { AuthShell, Button, Spinner, Stack, StatusPanel } from '../../ui/primitives';
 
-export const SAFE_INTENDED_ROUTES = ['/household-handoff', '/profile', '/invite', '/households', '/households/new'] as const;
-export type SafeIntendedRoute = (typeof SAFE_INTENDED_ROUTES)[number] | `/invite/${string}` | `/households/${string}`;
+export const SAFE_INTENDED_ROUTES = ['/household-handoff', '/profile', '/inbox', '/households', '/households/new'] as const;
+export type SafeIntendedRoute = (typeof SAFE_INTENDED_ROUTES)[number] | `/households/${string}`;
 export type SessionDestination = SafeIntendedRoute | '/login' | '/offline';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,7 +36,6 @@ export function sanitizeIntendedRoute(value: string | undefined): SafeIntendedRo
   const exact = SAFE_INTENDED_ROUTES.find((route) => route === value);
   if (exact !== undefined) return exact;
   if (value === undefined || /[?#\\]/.test(value) || value.includes('..')) return undefined;
-  if (/^\/invite\/[A-Za-z0-9_-]+$/.test(value)) return value as `/invite/${string}`;
   if (isHouseholdPage(value)) {
     return value as `/households/${string}`;
   }

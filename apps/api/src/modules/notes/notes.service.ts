@@ -1,3 +1,4 @@
+import { lockContent } from '../shared/edit-version.js';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type { CreateNoteDto, NoteResponseDto, NoteListResponseDto } from './dto/create-note.dto.js';
@@ -119,13 +120,6 @@ export class NotesService {
       throw new NotFoundException({ code: 'NOTE_NOT_FOUND', message: 'Note not found.' });
     }
 
-    if (!this.canMutate(role, note.createdBy, actorId)) {
-      throw new ForbiddenException({
-        code: 'FORBIDDEN',
-        message: 'Only the note creator, admin, or owner can edit this note.',
-      });
-    }
-
     const data: Record<string, unknown> = {};
     if (input.title !== undefined) {
       const trimmed = input.title.trim();
@@ -142,9 +136,11 @@ export class NotesService {
       data.body = input.body?.trim() || null;
     }
 
-    const updated = await this.prisma.note.update({
-      where: { id: noteId },
-      data,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const updatedAt = await lockContent(tx, 'note', householdId, noteId, input);
+      return tx.note.update({
+        where: { id: noteId }, data: { ...data, updatedAt },
+      });
     });
 
     return this.toResponse(updated);

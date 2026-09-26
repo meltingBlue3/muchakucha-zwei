@@ -1,3 +1,4 @@
+import { DraftNotice } from '../../../../../src/ui/draft-notice';
 import { useCreateWithLabels } from '../../../../../src/features/households/use-create-with-labels';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -41,7 +42,7 @@ export default function CreateEventRoute() {
               {error}
             </Text>
           )}
-          {created !== null ? <Stack gap={4}><Text>日程已创建</Text><Button label="重试保存标签" loading={isSubmitting} onPress={() => void retry()} /></Stack> : <EventForm
+          {created !== null ? <Stack gap={4}><DraftNotice draftKey={draftPrefix + 'created'} busy={isSubmitting} onDiscard={() => router.back()} /><Text>日程已创建</Text><Button label="重试保存标签" loading={isSubmitting} onPress={() => void retry()} /></Stack> : <EventForm
             draftKey={draftPrefix + 'form'}
             onSubmit={handleSubmit}
             onCancel={() => router.back()}

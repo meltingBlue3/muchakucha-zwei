@@ -229,9 +229,8 @@ describe('platform session transport contract', () => {
         );
         return apiResponse(200, {
           id: 'user-1',
-          email: 'member@example.test',
+          username: 'member',
           displayName: 'Member',
-          emailVerified: true,
           hasHousehold: false,
         }) as never;
       });
@@ -265,9 +264,8 @@ describe('platform session transport contract', () => {
       .mockResolvedValueOnce(
         apiResponse(200, {
           id: 'user-1',
-          email: 'member@example.test',
+          username: 'member',
           displayName: 'Member',
-          emailVerified: true,
           hasHousehold: false,
         }) as never,
       );
@@ -303,9 +301,8 @@ describe('platform session transport contract', () => {
       .mockResolvedValueOnce(
         apiResponse(200, {
           id: 'user-1',
-          email: 'member@example.test',
+          username: 'member',
           displayName: 'Member',
-          emailVerified: true,
           hasHousehold: false,
         }) as never,
       );
@@ -346,9 +343,8 @@ describe('platform session transport contract', () => {
       .mockResolvedValueOnce(
         apiResponse(200, {
           id: 'user-1',
-          email: 'member@example.test',
+          username: 'member',
           displayName: 'Member',
-          emailVerified: true,
           hasHousehold: false,
         }) as never,
       );

@@ -1,3 +1,5 @@
+import { lockTaskAssignments } from '../shared/task-assignment.js';
+import { assertEditVersion, lockContent, lockRule, nextEditTime } from '../shared/edit-version.js';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
@@ -141,6 +143,7 @@ export class RecurrenceService {
     }
     return {
       id: rule.id,
+      updatedAt: rule.updatedAt.toISOString(),
       kind,
       title: rule.templateTitle,
       freq: rule.freq,
@@ -236,14 +239,16 @@ export class RecurrenceService {
       throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
     }
     await this.prisma.$transaction(async (tx) => {
+      await lockTaskAssignments(tx, householdId);
+      const updatedAt = await lockContent(tx, kind, householdId, occurrenceId);
       const occurrence = await this.resolveRuleForOccurrence(tx, kind, householdId, occurrenceId);
       if (!this.canMutate(role, occurrence.createdBy, actorId)) {
         throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can cancel this occurrence.' });
       }
       if (kind === 'task') {
-        await tx.task.update({ where: { id: occurrenceId }, data: { status: 'cancelled' } });
+        await tx.task.update({ where: { id: occurrenceId }, data: { status: 'cancelled', updatedAt } });
       } else {
-        await tx.event.update({ where: { id: occurrenceId }, data: { cancelledAt: new Date() } });
+        await tx.event.update({ where: { id: occurrenceId }, data: { cancelledAt: new Date(), updatedAt } });
       }
     });
   }
@@ -261,16 +266,16 @@ export class RecurrenceService {
     }
 
     const newRuleId = await this.prisma.$transaction(async (tx) => {
+      await lockTaskAssignments(tx, householdId);
+      await lockContent(tx, kind, householdId, occurrenceId, input);
       const occurrence = await this.resolveRuleForOccurrence(tx, kind, householdId, occurrenceId);
-      if (!this.canMutate(role, occurrence.createdBy, actorId)) {
-        throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can update this series.' });
-      }
 
       const splitDate = occurrence.occurrenceDate;
       const splitCalendarDate = parseIsoDate(splitDate.toISOString().slice(0, 10));
       await tx.recurrenceRule.update({
         where: { id: occurrence.rule.id },
         data: {
+          updatedAt: nextEditTime(occurrence.rule.updatedAt),
           endsOn: new Date(`${formatIsoDate(addDays(splitCalendarDate, -1))}T00:00:00.000Z`),
           count: null,
         },
@@ -514,17 +519,18 @@ export class RecurrenceService {
     }
 
     const newRuleId = await this.prisma.$transaction(async (tx) => {
+      await lockTaskAssignments(tx, householdId);
+      const previousTime = await lockRule(tx, householdId, ruleId);
+      assertEditVersion(previousTime, input.expectedUpdatedAt);
       const rule = await tx.recurrenceRule.findUnique({ where: { id: ruleId } });
-      // Ownership is checked BEFORE the role (SAFE-01 / T-07-39): a
+      // Check household scope (SAFE-01 / T-07-39): a
       // client-supplied ruleId has no resolved occurrence to cross-check
       // against, so another household's rule must be indistinguishable from
       // one that does not exist.
       if (rule === null || rule.householdId !== householdId) {
         throw new NotFoundException({ code: 'RECURRENCE_RULE_NOT_FOUND', message: 'Recurrence rule not found.' });
       }
-      if (!this.canMutate(role, rule.createdBy, actorId)) {
-        throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can update this series.' });
-      }
+      const taskCount = await tx.task.count({ where: { recurrenceRuleId: ruleId } });
 
       // Tomorrow in the RULE's own timezone — same anchor as endRule. Today's
       // occurrence may already be completed; anchoring on today would delete
@@ -536,7 +542,6 @@ export class RecurrenceService {
       // as toListItem derives it. With rows on neither relation the rule
       // cannot prove which kind of successor to build, and a guess writes to
       // the wrong table.
-      const taskCount = await tx.task.count({ where: { recurrenceRuleId: ruleId } });
       const eventCount = taskCount > 0
         ? 0
         : await tx.event.count({ where: { recurrenceRuleId: ruleId } });
@@ -603,6 +608,7 @@ export class RecurrenceService {
           // "此后所有" is defined by the anchor; letting the request move the
           // start would let a rule-level edit reach backwards into history.
           startsOn: anchor,
+          updatedAt: nextEditTime(previousTime),
           endsOn: successorEndsOn === null ? null : databaseDate(successorEndsOn),
           count: successorCount,
           timezone: recurrence.timezone,
@@ -724,9 +730,11 @@ export class RecurrenceService {
   // no-op on whichever relation the rule doesn't have — this keeps the
   // shared body from needing to know the rule's kind at all.
   private async endSeriesAt(tx: TransactionClient, ruleId: string, anchor: Date): Promise<void> {
+    const rule = await tx.recurrenceRule.findUniqueOrThrow({ where: { id: ruleId } });
     await tx.recurrenceRule.update({
       where: { id: ruleId },
       data: {
+        updatedAt: nextEditTime(rule.updatedAt),
         // The series ends the day BEFORE the anchor: the anchor itself is the
         // first occurrence that no longer belongs to the series.
         endsOn: databaseDate(addDays(calendarDate(anchor), -1)),
@@ -760,6 +768,8 @@ export class RecurrenceService {
       throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
     }
     await this.prisma.$transaction(async (tx) => {
+      await lockTaskAssignments(tx, householdId);
+      await lockContent(tx, kind, householdId, occurrenceId);
       const occurrence = await this.resolveRuleForOccurrence(tx, kind, householdId, occurrenceId);
       if (!this.canMutate(role, occurrence.createdBy, actorId)) {
         throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can delete this series.' });
@@ -778,6 +788,8 @@ export class RecurrenceService {
       throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
     }
     await this.prisma.$transaction(async (tx) => {
+      await lockTaskAssignments(tx, householdId);
+      await lockRule(tx, householdId, ruleId);
       const rule = await tx.recurrenceRule.findUnique({ where: { id: ruleId } });
       if (rule === null || rule.householdId !== householdId) {
         throw new NotFoundException({ code: 'RECURRENCE_RULE_NOT_FOUND', message: 'Recurrence rule not found.' });

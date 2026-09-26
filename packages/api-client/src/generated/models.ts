@@ -1,29 +1,24 @@
 // Generated from openapi.json. Do not edit.
-export type RegisterDto = {
+export interface RegisterDto {
+  username: string;
   password: string;
+  confirmPassword: string;
   platform: 'native' | 'web';
-} & (
-  | { username: string; confirmPassword: string; email?: never; displayName?: never }
-  | { email: string; displayName: string; username?: never; confirmPassword?: never }
-);
+}
 
 export interface RegistrationAcceptedDto {
   code: 'REGISTRATION_ACCEPTED';
   /** Username registration signs in immediately. */
-  accessToken?: string;
+  accessToken: string;
   /** Native-only refresh credential for username registration. */
   refreshToken?: string;
-  /** Native-only pending proof. Web responses omit this property. */
-  pendingProof?: string;
 }
 
-export type LoginDto = {
+export interface LoginDto {
+  username: string;
   password: string;
   platform: 'native' | 'web';
-} & (
-  | { username: string; email?: never }
-  | { email: string; username?: never }
-);
+}
 
 export interface LoginResponseDto {
   accessToken: string;
@@ -48,54 +43,9 @@ export interface UpdateMeDto {
 
 export interface CurrentUserDto {
   id: string;
-  username?: string;
-  email: string;
+  username: string;
   displayName: string;
-  emailVerified: boolean;
   hasHousehold: false;
-}
-
-export interface CompleteEmailVerificationDto {
-  token: string;
-  platform?: 'native';
-  pendingProof?: string;
-}
-
-export type VerificationOutcome =
-  | 'verified_auto_login'
-  | 'verified_login_required'
-  | 'expired'
-  | 'used'
-  | 'invalid'
-  | 'superseded';
-
-export interface CompleteEmailVerificationResponseDto {
-  outcome: VerificationOutcome;
-  accessToken?: string;
-  /** Native-only refresh credential. Web responses omit this property. */
-  refreshToken?: string;
-}
-
-export interface ResendEmailVerificationDto {
-  email: string;
-}
-
-export interface ResendEmailVerificationResponseDto {
-  code: 'RESEND_ACCEPTED';
-  retryAfterSeconds: number;
-}
-
-export interface RequestPasswordResetDto {
-  email: string;
-}
-
-export interface PasswordResetRequestAcceptedDto {
-  code: 'PASSWORD_RESET_REQUEST_ACCEPTED';
-}
-
-export interface CompletePasswordResetDto {
-  token: string;
-  password: string;
 }
 
 export interface CreateHouseholdDto {
@@ -135,8 +85,7 @@ export interface GetHouseholdMemberDto {
   membershipId: string;
   userId: string;
   displayName: string;
-  email: string;
-  username?: string;
+  username: string;
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
   isCurrentUser: boolean;
 }
@@ -149,33 +98,37 @@ export interface GetHouseholdResponseDto {
   members: GetHouseholdMemberDto[];
 }
 
-/** Invite a registered username, or use the legacy email delivery flow. */
-export type SendHouseholdInvitationDto =
-  | { username: string; email?: never }
-  | { email: string; username?: never };
+/** Invite a registered username. */
+export interface SendHouseholdInvitationDto {
+  username: string;
+}
 
 export interface SendHouseholdInvitationResponseDto {
   code: 'INVITATION_SENT';
   message: string;
-  invitationUrl?: string;
+  invitationId: string;
 }
 
-export interface InvitationPreviewResponseDto {
-  kind: 'valid' | 'invalid' | 'expired' | 'used';
-  householdName?: string;
-  inviterDisplayName?: string;
-  expiresAt?: string;
+export interface InboxInvitationDto {
+  id: string;
+  householdName: string;
+  inviterDisplayName: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface InvitationInboxResponseDto {
+  invitations: InboxInvitationDto[];
 }
 
 export interface AcceptInvitationDto {
-  token: string;
+  invitationId: string;
 }
 
 export interface InvitationListItemDto {
   id: string;
-  emailCanonical: string;
-  username?: string;
-  status: 'pending' | 'expired' | 'accepted' | 'revoked';
+  username: string;
+  status: 'pending' | 'expired' | 'accepted' | 'revoked' | 'declined';
   expiresAt: string;
   role: string;
   createdAt: string;
@@ -188,7 +141,7 @@ export interface ListInvitationsResponseDto {
 export interface ResendInvitationResponseDto {
   code: 'INVITATION_RESENT';
   message: string;
-  invitationUrl?: string;
+  invitationId: string;
 }
 
 export interface RevokeInvitationResponseDto {
@@ -221,6 +174,10 @@ export interface CreateEventDto {
 }
 
 export interface UpdateEventDto {
+  expectedUpdatedAt: string;
+  expectedRuleUpdatedAt?: string;
+  labelIds?: string[];
+
   title?: string;
   description?: string;
   startTime?: string;
@@ -243,6 +200,7 @@ export interface RecurrenceDto {
 }
 
 export interface RecurrenceResponseDto {
+  updatedAt: string;
   id: string;
   freq: string;
   interval: number;
@@ -259,6 +217,9 @@ export interface RecurrenceResponseDto {
 export type SeriesScope = 'this_only' | 'this_and_following';
 
 export interface UpdateSeriesDto {
+  expectedUpdatedAt: string;
+  expectedRuleUpdatedAt: string;
+
   title?: string;
   description?: string;
   status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
@@ -279,6 +240,8 @@ export interface UpdateSeriesDto {
  * instance-level intent (title, status, assignees).
  */
 export interface UpdateRecurrenceRuleDto {
+  expectedUpdatedAt: string;
+
   recurrence: RecurrenceDto;
 }
 
@@ -287,6 +250,7 @@ export interface SeriesMutationResponseDto {
 }
 
 export interface RecurrenceRuleListItemDto {
+  updatedAt: string;
   id: string;
   kind: 'task' | 'event' | null;
   title: string;
@@ -343,6 +307,10 @@ export interface CreateTaskDto {
 }
 
 export interface UpdateTaskDto {
+  expectedUpdatedAt: string;
+  expectedRuleUpdatedAt?: string;
+  labelIds?: string[];
+
   title?: string;
   description?: string;
   status?: string;
@@ -382,6 +350,8 @@ export interface CreateNoteDto {
 }
 
 export interface UpdateNoteDto {
+  expectedUpdatedAt: string;
+
   title?: string;
   body?: string;
 }

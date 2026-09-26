@@ -1,3 +1,4 @@
+import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -35,7 +36,7 @@ type PendingSeriesAction =
 const SERIES_FAILURE = '没有完成。这个重复安排没有发生任何改变，请重试。';
 const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后可以看到最新的安排。';
 
-function taskSeriesUpdate(data: CreateTaskDto, labelIds: string[]): UpdateSeriesDto {
+function taskSeriesUpdate(data: CreateTaskDto, labelIds: string[]): Omit<UpdateSeriesDto, 'expectedUpdatedAt' | 'expectedRuleUpdatedAt'> {
   const status = data.status;
   const priority = data.priority;
   return {
@@ -90,6 +91,13 @@ export default function EditTaskRoute() {
     [members],
   );
 
+  const conflict = useEditConflict(draftPrefix, task, async () => {
+    const token = await sessionTransport.getAccessToken();
+    if (token === null) throw new Error('Session expired');
+    const [latest, household] = await Promise.all([sessionApiClient.getTask(token, id!, taskId!), sessionApiClient.getHousehold(token, id!)]);
+    return { ...latest, assigneeNames: latest.assigneeIds.map(userId => household.members.find(member => member.userId === userId)?.displayName ?? '已退出的成员') };
+  }, setTask);
+
   const fetchTask = useCallback(async (showLoading = true) => {
     if (householdId === undefined || householdId === '' || taskId === undefined || taskId === '') return;
     if (showLoading) setLoading(true);
@@ -100,6 +108,7 @@ export default function EditTaskRoute() {
         sessionApiClient.getTask(token, householdId, taskId),
         sessionApiClient.getHousehold(token, householdId),
       ]);
+      captureEditBaseline(workspace, draftPrefix, taskResult);
       setTask(taskResult);
       setMembers(householdResult.members);
       workspace.seed(draftPrefix + 'labels', (taskResult.labels ?? []).map((l) => l.id));
@@ -134,13 +143,13 @@ export default function EditTaskRoute() {
         setSubmitting(false);
         return;
       }
-      await sessionApiClient.updateTask(token, householdId, taskId, data);
-      // Sync labels: tag with all selected labels (replaces current)
-      await sessionApiClient.tagTask(token, householdId, taskId, { labelIds: selectedLabelIds });
+      await sessionApiClient.updateTask(token, householdId, taskId, { ...data, ...conflict.precondition, labelIds: selectedLabelIds });
       workspace.clear(draftPrefix);
-      router.back();
+      router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`);
     } catch (error: unknown) {
-      if (error instanceof ApiClientError) {
+      if (conflict.handle(error)) {
+        setSubmitError(null);
+      } else if (error instanceof ApiClientError) {
         const details = (error.body as { error?: { details?: Array<{ field?: string }> } } | undefined)?.error?.details;
         if (details?.some((d) => d.field === 'assigneeIds')) {
           setSubmitError('存在负责人已不再是该家庭成员，请重新选择负责人。');
@@ -156,7 +165,7 @@ export default function EditTaskRoute() {
       }
       setSubmitting(false);
     }
-  }, [householdId, task, taskId, router, selectedLabelIds, workspace, draftPrefix]);
+  }, [householdId, task, taskId, router, selectedLabelIds, workspace, draftPrefix, conflict]);
 
   const handleDelete = useCallback(async () => {
     if (householdId === undefined || householdId === '' || taskId === undefined || taskId === '') return;
@@ -207,20 +216,28 @@ export default function EditTaskRoute() {
       }
 
       if (scope === 'this_only') {
-        await sessionApiClient.updateTask(token, householdId, taskId, pendingSeriesAction.data);
-        await sessionApiClient.tagTask(token, householdId, taskId, { labelIds: selectedLabelIds });
+        await sessionApiClient.updateTask(token, householdId, taskId, { ...pendingSeriesAction.data, ...conflict.precondition, labelIds: selectedLabelIds });
       } else {
         await sessionApiClient.updateTaskSeries(
           token,
           householdId,
           taskId,
-          taskSeriesUpdate(pendingSeriesAction.data, selectedLabelIds),
+          { ...taskSeriesUpdate(pendingSeriesAction.data, selectedLabelIds), ...conflict.seriesPrecondition },
         );
       }
       setPendingSeriesAction(null);
       workspace.clear(draftPrefix);
-      router.back();
+      if (scope === 'this_only') {
+        router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`);
+      } else {
+        router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks`);
+      }
     } catch (caught: unknown) {
+      if (conflict.handle(caught)) {
+        setPendingSeriesAction(null);
+        setSeriesError(null);
+        return;
+      }
       setSeriesError(
         caught instanceof ApiClientError && caught.status === 404
           ? SERIES_MISSING
@@ -230,7 +247,7 @@ export default function EditTaskRoute() {
     } finally {
       setSeriesSubmitting(null);
     }
-  }, [fetchTask, householdId, pendingSeriesAction, router, selectedLabelIds, taskId, workspace, draftPrefix]);
+  }, [fetchTask, householdId, pendingSeriesAction, router, selectedLabelIds, taskId, workspace, draftPrefix, conflict]);
 
   if (viewState === 'accessChanged') {
     return (
@@ -265,6 +282,7 @@ export default function EditTaskRoute() {
                 <Text variant="bodySm" color="destructive">{submitError}</Text>
               </View>
             )}
+            {conflict.panel}
             <TaskForm
             draftKey={draftPrefix + 'form'}
               initial={task}

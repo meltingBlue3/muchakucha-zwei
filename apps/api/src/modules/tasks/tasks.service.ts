@@ -1,3 +1,5 @@
+import { lockTaskAssignments } from '../shared/task-assignment.js';
+import { lockContent, replaceLabels } from '../shared/edit-version.js';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
@@ -61,7 +63,7 @@ interface TaskRow {
   occurrenceDate: Date | null;
   recurrenceRule: {
     id: string; freq: string; interval: number; byWeekday: number[]; startsOn: Date; endsOn: Date | null;
-    count: number | null; timezone: string; materializedThrough: Date | null; startTimeLocal: string | null;
+    count: number | null; timezone: string; materializedThrough: Date | null; updatedAt: Date; startTimeLocal: string | null;
     durationMinutes: number | null;
   } | null;
   labels: Array<{
@@ -114,9 +116,9 @@ export class TasksService {
     return true; // OWNER or ADMIN
   }
 
-  private async validateAssigneeIds(householdId: string, assigneeIds: string[]): Promise<void> {
+  private async validateAssigneeIds(tx: Prisma.TransactionClient, householdId: string, assigneeIds: string[]): Promise<void> {
     if (assigneeIds.length === 0) return;
-    const memberships = await this.prisma.membership.findMany({
+    const memberships = await tx.membership.findMany({
       where: { householdId, userId: { in: assigneeIds } },
     });
     if (memberships.length !== new Set(assigneeIds).size) {
@@ -147,9 +149,8 @@ export class TasksService {
       });
     }
 
-    // Validate assignees are household members
+    // Membership validation runs inside the assignment transaction below.
     const assigneeIds = [...new Set(input.assigneeIds ?? [])];
-    await this.validateAssigneeIds(householdId, assigneeIds);
 
     // Validate dueDate
     let dueDate: Date | null = null;
@@ -214,6 +215,8 @@ export class TasksService {
       const hour = startTime === null ? 0 : Number(startTime.slice(0, 2));
       const minute = startTime === null ? 0 : Number(startTime.slice(3, 5));
       const created = await this.prisma.$transaction(async (tx) => {
+        await lockTaskAssignments(tx, householdId);
+        await this.validateAssigneeIds(tx, householdId, assigneeIds);
         const rule = await tx.recurrenceRule.create({
           data: {
             householdId,
@@ -269,14 +272,18 @@ export class TasksService {
       }
       const task = await this.prisma.task.findUniqueOrThrow({
         where: { id: created.taskId },
-        include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+          include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
       });
       return this.toResponse(task);
     }
 
-    const task = await this.prisma.task.create({
-      data: { householdId, title: trimmedTitle, description: input.description?.trim() || null, status: input.status ?? 'pending', priority: input.priority ?? 'medium', dueDate, createdBy: actorId, assignees: { create: assigneeIds.map((userId) => ({ userId })) } },
-      include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+    const task = await this.prisma.$transaction(async (tx) => {
+      await lockTaskAssignments(tx, householdId);
+      await this.validateAssigneeIds(tx, householdId, assigneeIds);
+      return tx.task.create({
+        data: { householdId, title: trimmedTitle, description: input.description?.trim() || null, status: input.status ?? 'pending', priority: input.priority ?? 'medium', dueDate, createdBy: actorId, assignees: { create: assigneeIds.map((userId) => ({ userId })) } },
+        include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+      });
     });
 
     return this.toResponse(task);
@@ -353,13 +360,6 @@ export class TasksService {
       throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found.' });
     }
 
-    if (!this.canMutate(role, task.createdBy, actorId)) {
-      throw new ForbiddenException({
-        code: 'FORBIDDEN',
-        message: 'Only the task creator, admin, or owner can edit this task.',
-      });
-    }
-
     const data: Record<string, unknown> = {};
 
     if (input.title !== undefined) {
@@ -403,7 +403,6 @@ export class TasksService {
     let nextAssigneeIds: string[] | null = null;
     if (input.assigneeIds !== undefined) {
       nextAssigneeIds = [...new Set(input.assigneeIds)];
-      await this.validateAssigneeIds(householdId, nextAssigneeIds);
     }
 
     if (input.dueDate !== undefined) {
@@ -422,28 +421,19 @@ export class TasksService {
       }
     }
 
-    if (nextAssigneeIds !== null) {
-      const assigneeIds = nextAssigneeIds;
-      await this.prisma.$transaction([
-        // Remove assignees that are no longer selected
-        this.prisma.taskAssignee.deleteMany({
-          where: { taskId, userId: { notIn: assigneeIds } },
-        }),
-        // Upsert the currently selected assignees
-        ...assigneeIds.map((userId) =>
-          this.prisma.taskAssignee.upsert({
-            where: { taskId_userId: { taskId, userId } },
-            create: { taskId, userId },
-            update: {},
-          }),
-        ),
-      ]);
-    }
-
-    const updated = await this.prisma.task.update({
-      where: { id: taskId },
-      data,
-      include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await lockTaskAssignments(tx, householdId);
+      const updatedAt = await lockContent(tx, 'task', householdId, taskId, input);
+      if (nextAssigneeIds !== null) {
+        await this.validateAssigneeIds(tx, householdId, nextAssigneeIds);
+        await tx.taskAssignee.deleteMany({ where: { taskId } });
+        await tx.taskAssignee.createMany({ data: nextAssigneeIds.map(userId => ({ taskId, userId })) });
+      }
+      await replaceLabels(tx, 'task', householdId, taskId, input.labelIds);
+      return tx.task.update({
+        where: { id: taskId }, data: { ...data, updatedAt },
+          include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+      });
     });
 
     return this.toResponse(updated);
@@ -472,15 +462,15 @@ export class TasksService {
     // A generated occurrence must be cancelled, not removed: the generator
     // dedupes on the row itself, so a missing row reads as "not yet
     // generated" and the occurrence would come back on the next tick (D-07).
-    if (task.recurrenceRuleId !== null) {
-      await this.prisma.task.update({
-        where: { id: taskId },
-        data: { status: 'cancelled' },
-      });
-      return;
-    }
-
-    await this.prisma.task.delete({ where: { id: taskId } });
+    await this.prisma.$transaction(async (tx) => {
+      await lockTaskAssignments(tx, householdId);
+      const updatedAt = await lockContent(tx, 'task', householdId, taskId);
+      if (task.recurrenceRuleId !== null) {
+        await tx.task.update({ where: { id: taskId }, data: { status: 'cancelled', updatedAt } });
+      } else {
+        await tx.task.delete({ where: { id: taskId } });
+      }
+    });
   }
 
   // ---- Mapping ----
@@ -506,6 +496,7 @@ export class TasksService {
         endsOn: row.recurrenceRule.endsOn?.toISOString().slice(0, 10) ?? null,
         count: row.recurrenceRule.count,
         timezone: row.recurrenceRule.timezone,
+        updatedAt: row.recurrenceRule.updatedAt.toISOString(),
         materializedThrough: row.recurrenceRule.materializedThrough?.toISOString().slice(0, 10) ?? null,
         startTimeLocal: row.recurrenceRule.startTimeLocal,
         durationMinutes: row.recurrenceRule.durationMinutes,

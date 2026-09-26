@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -23,28 +23,28 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function prepareVerifiedAccount(
+async function prepareAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string; userId: string }> {
+): Promise<{ username: string; accessToken: string; userId: string }> {
   return withDatabase(async (database) => {
-    const email = `a11y-task-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
 
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, displayName, password, platform: 'web' }),
+      body: JSON.stringify({ username, confirmPassword: password, password, platform: 'web' }),
     });
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, displayName],
     );
 
     const userResult = await database.query(
-      `SELECT "id" FROM "User" WHERE "email_canonical" = lower($1)`,
-      [email],
+      `SELECT "id" FROM "User" WHERE "username_canonical" = lower($1)`,
+      [username],
     );
     const userId = userResult.rows[0]?.id as string;
     expect(userId).toBeDefined();
@@ -52,14 +52,14 @@ async function prepareVerifiedAccount(
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody: unknown = await loginResponse.json();
     const accessToken = (loginBody as { accessToken?: string }).accessToken;
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken, userId };
+    return { username, accessToken, userId };
   });
 }
 
@@ -81,20 +81,20 @@ async function createHousehold(
   return { id: household.id, name: household.name, ownerMembershipId: household.ownerMembershipId };
 }
 
-async function loginFixture(page: Page, email: string): Promise<void> {
-  await loginEmailFixture(page, email, password);
+async function loginFixture(page: Page, username: string): Promise<void> {
+  await loginUsernameFixture(page, username, password);
 }
 
 test.describe('tasks and today view accessibility', () => {
-  let ownerEmail: string;
+  let ownerUsername: string;
   let ownerId: string;
   let ownerToken: string;
   let householdId: string;
   let ownerMembershipId: string;
 
   test.beforeAll(async () => {
-    const owner = await prepareVerifiedAccount('owner', '无障碍主人');
-    ownerEmail = owner.email;
+    const owner = await prepareAccount('owner', '无障碍主人');
+    ownerUsername = owner.username;
     ownerId = owner.userId;
     ownerToken = owner.accessToken;
     const household = await createHousehold(ownerToken, '无障碍任务组');
@@ -127,7 +127,7 @@ test.describe('tasks and today view accessibility', () => {
             membershipId: ownerMembershipId,
             userId: ownerId,
             displayName: '无障碍主人',
-            email: ownerEmail,
+            username: ownerUsername,
             role: 'OWNER',
             isCurrentUser: true,
           }],
@@ -157,9 +157,8 @@ test.describe('tasks and today view accessibility', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           id: ownerId,
-          email: ownerEmail,
+          username: ownerUsername,
           displayName: '无障碍主人',
-          emailVerified: true,
           hasHousehold: true,
         }),
       }),
@@ -192,7 +191,7 @@ test.describe('tasks and today view accessibility', () => {
     test(`tasks list has no axe violations at ${width}px`, async ({ context, page }) => {
       await setupTaskRoutes(context);
       await page.setViewportSize({ width, height: 900 });
-      await loginFixture(page, ownerEmail);
+      await loginFixture(page, ownerUsername);
       await page.goto(`/households/${encodeURIComponent(householdId)}/tasks`);
       await page.waitForTimeout(2000);
 
@@ -204,7 +203,7 @@ test.describe('tasks and today view accessibility', () => {
     test(`today view has no axe violations at ${width}px`, async ({ context, page }) => {
       await setupTaskRoutes(context);
       await page.setViewportSize({ width, height: 900 });
-      await loginFixture(page, ownerEmail);
+      await loginFixture(page, ownerUsername);
       await page.goto(`/households/${encodeURIComponent(householdId)}/today`);
       await page.waitForTimeout(2000);
 
@@ -226,7 +225,7 @@ test.describe('tasks and today view accessibility', () => {
     const page = await context.newPage();
     await setupTaskRoutes(context);
 
-    await loginFixture(page, ownerEmail);
+    await loginFixture(page, ownerUsername);
     await page.goto(`/households/${encodeURIComponent(householdId)}/today`);
     await page.waitForTimeout(2000);
 
@@ -248,7 +247,7 @@ test.describe('tasks and today view accessibility', () => {
     const page = await context.newPage();
     await setupTaskRoutes(context);
 
-    await loginFixture(page, ownerEmail);
+    await loginFixture(page, ownerUsername);
     await page.goto(`/households/${encodeURIComponent(householdId)}/tasks`);
     await page.waitForTimeout(2000);
 

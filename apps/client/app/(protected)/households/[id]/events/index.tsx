@@ -14,10 +14,6 @@ import { EventCard } from '../../../../../src/features/events/event-card';
 import { toDateIso, toDateRangeIso } from '../../../../../src/features/events/calendar-utils';
 import {
   applyRecurringFilter,
-  classifyGenerationWindow,
-  GENERATION_AHEAD_NOTE,
-  GENERATION_BEHIND_BODY,
-  GENERATION_BEHIND_HEADING,
   RECURRING_EMPTY_EVENTS,
   RECURRING_FILTERS,
   recurringFilterAccessibilityLabel,
@@ -29,7 +25,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../../src/ui/household-components';
-import { Stack, StatusPanel, Text, Button } from '../../../../../src/ui/primitives';
+import { Stack, Text, Button } from '../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../src/ui/theme';
 
 export default function CalendarRoute() {
@@ -51,7 +47,6 @@ export default function CalendarRoute() {
   const [selectedDateIso, setSelectedDateIso] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, toDateIso(today));
   const [events, setEvents] = useState<EventResponseDto[]>([]);
   const [eventsByDate, setEventsByDate] = useState<Map<string, number>>(new Map());
-  const [materializedThrough, setMaterializedThrough] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -87,9 +82,8 @@ export default function CalendarRoute() {
         return;
       }
       const { start, end } = toDateRangeIso(year, month);
-      const result = await sessionApiClient.listEvents(token, householdId, start, end);
+      const result = await sessionApiClient.listEvents(token, householdId, start, end, undefined, undefined, true);
       setEvents(result.events);
-      setMaterializedThrough(result.materializedThrough ?? null);
 
       // Build events-by-date map
       const byDate = new Map<string, number>();
@@ -157,18 +151,6 @@ export default function CalendarRoute() {
     result = applyRecurringFilter(result, recurringFilter);
     return result;
   }, [events, selectedDateIso, labelFilter, recurringFilter]);
-
-  const todayIso = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  }, []);
-
-  const generationWindow = classifyGenerationWindow({
-    materializedThrough,
-    todayIso,
-    viewedDateIso: selectedDateIso,
-    filtersActive: labelFilter !== 'all' || recurringFilter !== 'all',
-  });
 
   const handlePrevMonth = useCallback(() => {
     if (month === 0) {
@@ -383,29 +365,13 @@ export default function CalendarRoute() {
           )}
 
           {!loading && error === null && selectedDateEvents.length === 0 && (
-            generationWindow === 'behind' ? (
-              <StatusPanel
-                action={null}
-                body={GENERATION_BEHIND_BODY}
-                heading={GENERATION_BEHIND_HEADING}
-                kind="offline"
-              />
-            ) : (
-              <Stack gap={1}>
-                <Text variant="bodySm" color="inkMuted">
-                  {recurringFilter === 'recurring'
-                    ? RECURRING_EMPTY_EVENTS
-                    : labelFilter !== 'all'
-                      ? '没有符合筛选条件的事件。'
-                      : '还没有事件。'}
-                </Text>
-                {generationWindow === 'ahead' && (
-                  <Text variant="caption" color="inkMuted">
-                    {GENERATION_AHEAD_NOTE}
-                  </Text>
-                )}
-              </Stack>
-            )
+            <Text variant="bodySm" color="inkMuted">
+              {recurringFilter === 'recurring'
+                ? RECURRING_EMPTY_EVENTS
+                : labelFilter !== 'all'
+                  ? '没有符合筛选条件的事件。'
+                  : '还没有事件。'}
+            </Text>
           )}
 
           {selectedDateEvents.map((event) => (

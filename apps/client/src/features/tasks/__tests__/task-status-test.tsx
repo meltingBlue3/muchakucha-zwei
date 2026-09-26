@@ -148,3 +148,38 @@ describe('unscheduled tasks are separated from today', () => {
     expect(partitions.overdueTasks).toHaveLength(0);
   });
 });
+
+
+describe('upcoming recurring reminders', () => {
+  test('keeps the nearest open occurrence per rule regardless of API order, across future sections', () => {
+    const today = task({ id: 'today' });
+    const overdue = task({ id: 'overdue', dueDate: dateAtOffset(-1) });
+    const nearest = task({ id: 'nearest', dueDate: dateAtOffset(2), priority: 'low' });
+    const otherRule = task({ id: 'other-rule', recurrenceRuleId: 'rule-2', dueDate: dateAtOffset(3) });
+    const once = task({ id: 'once', recurrenceRuleId: null, dueDate: dateAtOffset(4) });
+    const alsoOnce = task({ id: 'also-once', recurrenceRuleId: null, dueDate: dateAtOffset(4) });
+    const result = partitionTodayTasks([
+      task({ id: 'later', dueDate: dateAtOffset(5), priority: 'high' }),
+      task({ id: 'far', dueDate: dateAtOffset(20) }),
+      task({ id: 'done', status: 'completed', dueDate: dateAtOffset(1) }),
+      task({ id: 'cancelled', status: 'cancelled', dueDate: dateAtOffset(1) }),
+      nearest, otherRule, once, alsoOnce, today, overdue,
+    ]);
+    expect(result.approachingTasks).toEqual([nearest, otherRule, once, alsoOnce]);
+    expect(result.otherUpcomingTasks).toEqual([]);
+    expect(result.todayTasks).toEqual([today]);
+    expect(result.overdueTasks).toEqual([overdue]);
+  });
+
+  test('advances to the next occurrence after completion, retaining the completed card while undo is available', () => {
+    const completed = task({ id: 'completed', status: 'completed', dueDate: dateAtOffset(1) });
+    const next = task({ id: 'next', dueDate: dateAtOffset(2) });
+    expect(partitionTodayTasks([next, completed], completed.id).approachingTasks).toEqual([completed]);
+    expect(partitionTodayTasks([next, completed]).approachingTasks).toEqual([next]);
+  });
+
+  test('also collapses a series whose next occurrence is more than seven days away', () => {
+    const nearest = task({ id: 'near', dueDate: dateAtOffset(10) });
+    expect(partitionTodayTasks([task({ id: 'far', dueDate: dateAtOffset(30) }), nearest]).otherUpcomingTasks).toEqual([nearest]);
+  });
+});

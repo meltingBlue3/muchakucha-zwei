@@ -1,3 +1,4 @@
+import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -33,7 +34,7 @@ const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后�
  * would turn every 此后所有 edit into a runtime 400 with no compile-time
  * signal.
  */
-function eventSeriesUpdate(data: CreateEventDto, labelIds: string[]): UpdateSeriesDto {
+function eventSeriesUpdate(data: CreateEventDto, labelIds: string[]): Omit<UpdateSeriesDto, 'expectedUpdatedAt' | 'expectedRuleUpdatedAt'> {
   return {
     title: data.title,
     // Without this the server copies the labels off the pre-edit occurrence
@@ -65,6 +66,12 @@ export default function EditEventRoute() {
   const [seriesSubmitting, setSeriesSubmitting] = useState<SeriesScope | null>(null);
   const [seriesError, setSeriesError] = useState<string | null>(null);
 
+  const conflict = useEditConflict(draftPrefix, event, async () => {
+    const token = await sessionTransport.getAccessToken();
+    if (token === null) throw new Error('Session expired');
+    return sessionApiClient.getEvent(token, id!, eventId!);
+  }, setEvent);
+
   const fetchEvent = useCallback(async (showLoading = true) => {
     if (id === undefined || eventId === undefined) return;
     if (showLoading) setLoading(true);
@@ -75,6 +82,7 @@ export default function EditEventRoute() {
         return;
       }
       const result = await sessionApiClient.getEvent(token, id, eventId);
+      captureEditBaseline(workspace, draftPrefix, result);
       setEvent(result);
       workspace.seed(draftPrefix + 'labels', (result.labels ?? []).map((l) => l.id));
     } catch {
@@ -107,19 +115,16 @@ export default function EditEventRoute() {
           setError('登录已过期。');
           return;
         }
-        await sessionApiClient.updateEvent(token, id!, eventId!, data);
-        // Sync labels: tag with all selected labels (replaces current)
-        await sessionApiClient.tagEvent(token, id!, eventId!, { labelIds: selectedLabelIds });
+        await sessionApiClient.updateEvent(token, id!, eventId!, { ...data, ...conflict.precondition, labelIds: selectedLabelIds });
         workspace.clear(draftPrefix);
-        router.back();
+        router.dismissTo(`/households/${encodeURIComponent(id!)}/events/${encodeURIComponent(eventId!)}`);
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : '保存失败，请重试。';
-        setError(message);
+        if (!conflict.handle(err)) setError('保存失败，请重试。');
       } finally {
         setIsSubmitting(false);
       }
     },
-    [event, id, eventId, router, selectedLabelIds, workspace, draftPrefix],
+    [event, id, eventId, router, selectedLabelIds, workspace, draftPrefix, conflict],
   );
 
   const handleDelete = useCallback(async () => {
@@ -171,20 +176,28 @@ export default function EditEventRoute() {
       }
 
       if (scope === 'this_only') {
-        await sessionApiClient.updateEvent(token, id, eventId, pendingSeriesAction.data);
-        await sessionApiClient.tagEvent(token, id, eventId, { labelIds: selectedLabelIds });
+        await sessionApiClient.updateEvent(token, id, eventId, { ...pendingSeriesAction.data, ...conflict.precondition, labelIds: selectedLabelIds });
       } else {
         await sessionApiClient.updateEventSeries(
           token,
           id,
           eventId,
-          eventSeriesUpdate(pendingSeriesAction.data, selectedLabelIds),
+          { ...eventSeriesUpdate(pendingSeriesAction.data, selectedLabelIds), ...conflict.seriesPrecondition },
         );
       }
       setPendingSeriesAction(null);
       workspace.clear(draftPrefix);
-      router.back();
+      if (scope === 'this_only') {
+        router.dismissTo(`/households/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}`);
+      } else {
+        router.dismissTo(`/households/${encodeURIComponent(id)}/events`);
+      }
     } catch (caught: unknown) {
+      if (conflict.handle(caught)) {
+        setPendingSeriesAction(null);
+        setSeriesError(null);
+        return;
+      }
       setSeriesError(
         caught instanceof ApiClientError && caught.status === 404
           ? SERIES_MISSING
@@ -194,7 +207,7 @@ export default function EditEventRoute() {
     } finally {
       setSeriesSubmitting(null);
     }
-  }, [eventId, fetchEvent, id, pendingSeriesAction, router, selectedLabelIds, workspace, draftPrefix]);
+  }, [eventId, fetchEvent, id, pendingSeriesAction, router, selectedLabelIds, workspace, draftPrefix, conflict]);
 
   const handleCancel = useCallback(() => {
     router.back();
@@ -210,7 +223,7 @@ export default function EditEventRoute() {
     );
   }
 
-  if (event === null || error !== null) {
+  if (event === null) {
     return (
       <AppShell accessibilityLabel="事件加载失败" title="编辑事件" showBack showProfile>
         <Stack gap={4}>
@@ -235,7 +248,8 @@ export default function EditEventRoute() {
               {error}
             </Text>
           )}
-          <EventForm
+          {conflict.panel}
+            <EventForm
             draftKey={draftPrefix + 'form'}
             initial={event}
             onSubmit={handleSubmit}

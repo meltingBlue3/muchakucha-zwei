@@ -94,6 +94,9 @@ export class RecurrenceDto {
 }
 
 export class RecurrenceResponseDto {
+  @ApiProperty()
+  updatedAt!: string;
+
   @ApiProperty() id!: string;
   @ApiProperty({ enum: RECURRENCE_FREQUENCIES }) freq!: string;
   @ApiProperty() interval!: number;
@@ -108,6 +111,14 @@ export class RecurrenceResponseDto {
 }
 
 export class UpdateSeriesDto {
+  @ApiProperty()
+  @IsDateString()
+  expectedUpdatedAt!: string;
+
+  @ApiProperty()
+  @IsDateString()
+  expectedRuleUpdatedAt!: string;
+
   @ApiPropertyOptional({ minLength: 1, maxLength: 200 })
   @IsOptional() @IsString() @Length(1, 200)
   title?: string;
@@ -159,7 +170,7 @@ export class UpdateSeriesDto {
 }
 
 /**
- * Rule-level edit body. Deliberately carries ONE field.
+ * Rule-level edit body: recurrence settings and the required version precondition.
  *
  * A rule-level edit has no "the occurrence you selected", so it must not be
  * able to express instance-level intent: title/status/assigneeIds and friends
@@ -168,6 +179,10 @@ export class UpdateSeriesDto {
  * extra property outright (T-07-41).
  */
 export class UpdateRecurrenceRuleDto {
+  @ApiProperty()
+  @IsDateString()
+  expectedUpdatedAt!: string;
+
   // @IsDefined() is not redundant with @ValidateNested(): a body that omits
   // `recurrence` entirely must fail as a 400 here, never reach the service and
   // dereference undefined into a 500.
@@ -188,6 +203,9 @@ export class SeriesMutationResponseDto {
 }
 
 export class RecurrenceRuleListItemDto {
+  @ApiProperty()
+  updatedAt!: string;
+
   @ApiProperty() id!: string;
   // `kind` has no backing column. It is derived from which instance relation
   // (tasks vs events) the rule owns. Ending a series or splitting it via

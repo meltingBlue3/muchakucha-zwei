@@ -1,3 +1,4 @@
+import { isEditConflict } from '../../../../../../src/ui/edit-conflict';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -83,17 +84,18 @@ export default function TaskDetailRoute() {
         return;
       }
       await sessionApiClient.updateTask(token, id, taskId, {
-        title: task.title,
         status: next,
-        priority: task.priority,
+        expectedUpdatedAt: task.updatedAt,
+        ...(task.recurrence ? { expectedRuleUpdatedAt: task.recurrence.updatedAt } : {}),
       });
       await fetchTask();
     } catch (caught: unknown) {
       setStatusError(
-        caught instanceof ApiClientError && caught.status === 403
+        isEditConflict(caught) ? '内容已更新，请查看最新状态后再操作。' : caught instanceof ApiClientError && caught.status === 403
           ? '你没有权限修改这个任务。'
           : '状态没有更新成功，请重试。',
       );
+      if (isEditConflict(caught)) await fetchTask();
     } finally {
       setStatusBusy(false);
     }

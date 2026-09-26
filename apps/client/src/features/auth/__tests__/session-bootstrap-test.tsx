@@ -11,8 +11,7 @@ import { createSessionStateStore } from '../session-state';
 
 const currentUser = {
   displayName: '家庭成员',
-  email: 'member@example.test',
-  emailVerified: true,
+  username: 'member',
   hasHousehold: false as const,
   id: 'user-1',
 };
@@ -238,7 +237,8 @@ describe('session bootstrap contract', () => {
     expect(sanitizeIntendedRoute('/households')).toBe('/households');
     expect(sanitizeIntendedRoute('/households/123e4567-e89b-12d3-a456-426614174000/settings'))
       .toBe('/households/123e4567-e89b-12d3-a456-426614174000/settings');
-    expect(sanitizeIntendedRoute('/invite/opaque_token-123')).toBe('/invite/opaque_token-123');
+    expect(sanitizeIntendedRoute('/inbox')).toBe('/inbox');
+    expect(sanitizeIntendedRoute('/invite/opaque_token-123')).toBeUndefined();
     expect(sanitizeIntendedRoute('https://attacker.test')).toBeUndefined();
     expect(sanitizeIntendedRoute('javascript:alert(1)')).toBeUndefined();
     expect(sanitizeIntendedRoute('//attacker.test')).toBeUndefined();

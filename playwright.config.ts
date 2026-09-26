@@ -3,7 +3,6 @@ import { defineConfig } from '@playwright/test';
 const LOCAL_ORIGINS = {
   WEB_ORIGIN: 'http://127.0.0.1:8081',
   API_ORIGIN: 'http://127.0.0.1:3000',
-  EMAIL_LINK_ORIGIN: 'http://127.0.0.1:8081',
 } as const;
 
 type OriginName = keyof typeof LOCAL_ORIGINS;
@@ -35,7 +34,6 @@ function requireOrigin(name: OriginName): string {
 
 const webOrigin = requireOrigin('WEB_ORIGIN');
 const apiOrigin = requireOrigin('API_ORIGIN');
-const emailLinkOrigin = requireOrigin('EMAIL_LINK_ORIGIN');
 const databaseUrl =
   process.env.DATABASE_URL ??
   'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
@@ -64,7 +62,6 @@ export default defineConfig({
         NODE_ENV: 'test',
         WEB_ORIGIN: webOrigin,
         API_ORIGIN: apiOrigin,
-        EMAIL_LINK_ORIGIN: emailLinkOrigin,
       },
     },
     {
@@ -78,7 +75,6 @@ export default defineConfig({
         NODE_ENV: 'development',
         WEB_ORIGIN: webOrigin,
         API_ORIGIN: apiOrigin,
-        EMAIL_LINK_ORIGIN: emailLinkOrigin,
         EXPO_PUBLIC_API_ORIGIN: apiOrigin,
       },
     },

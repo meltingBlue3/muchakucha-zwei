@@ -1,9 +1,8 @@
-import { createHash, randomBytes } from 'node:crypto';
 
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -13,10 +12,6 @@ const DATABASE_URL =
 const password = 'correct horse battery staple 2026';
 
 // ---- Database helpers ----
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token, 'utf8').digest('hex');
-}
 
 async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({ connectionString: DATABASE_URL });
@@ -30,19 +25,19 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
 
 // ---- Account helpers ----
 
-async function prepareVerifiedAccount(
+async function prepareAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string; userId: string }> {
+): Promise<{ username: string; accessToken: string; userId: string }> {
   return withDatabase(async (database) => {
-    const email = `lifecycle-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
 
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
       body: JSON.stringify({
-        email,
-        displayName,
+        username,
+        confirmPassword: password,
         password,
         platform: 'web',
       }),
@@ -50,13 +45,13 @@ async function prepareVerifiedAccount(
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, displayName],
     );
 
     const userResult = await database.query(
-      `SELECT "id" FROM "User" WHERE "email_canonical" = lower($1)`,
-      [email],
+      `SELECT "id" FROM "User" WHERE "username_canonical" = lower($1)`,
+      [username],
     );
     const userId = userResult.rows[0]?.id as string;
     expect(userId).toBeDefined();
@@ -64,14 +59,14 @@ async function prepareVerifiedAccount(
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody: unknown = await loginResponse.json();
     const accessToken = (loginBody as { accessToken?: string }).accessToken;
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken, userId };
+    return { username, accessToken, userId };
   });
 }
 
@@ -97,27 +92,29 @@ async function seedInvitation(
   inviterUserId: string,
   inviterMembershipId: string,
   householdId: string,
-  recipientEmail: string,
+  recipientUsername: string,
   db: Client,
   overrides?: { expiresAt?: Date; consumedAt?: Date; invalidatedAt?: Date },
-): Promise<{ rawToken: string; tokenHash: string }> {
-  const rawToken = randomBytes(32).toString('base64url');
-  const tokenHash = hashToken(rawToken);
-  const emailCanonical = recipientEmail.trim().normalize('NFC').toLowerCase();
+): Promise<void> {
+  const username = recipientUsername.trim().normalize('NFC').toLowerCase();
   const expiresAt = overrides?.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const createdAt = expiresAt.getTime() <= Date.now()
     ? new Date(expiresAt.getTime() - 7 * 24 * 60 * 60 * 1000)
     : new Date();
 
   await db.query(
-    `INSERT INTO "invitations" ("inviter_user_id", "inviter_membership_id", "household_id", "email_canonical", "hash", "role", "expires_at", "consumed_at", "invalidated_at", "created_at")
-     VALUES ($1, $2, $3, $4, $5, 'MEMBER', $6, $7, $8, $9)`,
+    `INSERT INTO "User" (username, username_canonical, display_name, password_hash)
+     VALUES ($1::text, lower($1::text), $1::text, '$argon2id$fixture') ON CONFLICT (username_canonical) DO NOTHING`,
+    [username],
+  );
+  await db.query(
+    `INSERT INTO "invitations" ("inviter_user_id", "inviter_membership_id", "household_id", "username", "recipient_user_id", "role", "expires_at", "consumed_at", "invalidated_at", "created_at")
+     VALUES ($1, $2, $3, $4::text, (SELECT id FROM "User" WHERE username_canonical = lower($4)), 'MEMBER', $5, $6, $7, $8)`,
     [
       inviterUserId,
       inviterMembershipId,
       householdId,
-      emailCanonical,
-      tokenHash,
+      username,
       expiresAt.toISOString(),
       overrides?.consumedAt?.toISOString() ?? null,
       overrides?.invalidatedAt?.toISOString() ?? null,
@@ -125,7 +122,6 @@ async function seedInvitation(
     ],
   );
 
-  return { rawToken, tokenHash };
 }
 
 async function addMembershipViaDb(
@@ -157,10 +153,10 @@ test('manages invitation lifecycle', async ({ page, request }) => {
   // PRECONDITIONS: accounts, household, and invitation fixtures are healthy
   // ============================================================================
 
-  const owner = await prepareVerifiedAccount('owner', '家主');
-  const admin = await prepareVerifiedAccount('admin', '管理员');
-  const member = await prepareVerifiedAccount('member', '普通成员');
-  const outsider = await prepareVerifiedAccount('outsider', '无关人员');
+  const owner = await prepareAccount('owner', '家主');
+  const admin = await prepareAccount('admin', '管理员');
+  const member = await prepareAccount('member', '普通成员');
+  const outsider = await prepareAccount('outsider', '无关人员');
 
   const household = await createHousehold(owner.accessToken, '温暖小家');
 
@@ -170,25 +166,25 @@ test('manages invitation lifecycle', async ({ page, request }) => {
 
   // Seed invitations with different states.
   await withDatabase(async (db) => {
-    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'pending@example.test', db);
-    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'expired@example.test', db, {
+    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'pending', db);
+    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'expired', db, {
       expiresAt: new Date(Date.now() - 1000),
     });
-    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'consumed@example.test', db, {
+    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'consumed', db, {
       consumedAt: new Date(),
     });
-    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'revoked@example.test', db, {
+    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'revoked', db, {
       invalidatedAt: new Date(),
     });
-    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'resend@example.test', db);
-    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'revoke-test@example.test', db);
+    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'resend', db);
+    await seedInvitation(owner.userId, household.ownerMembershipId, household.id, 'revoke-test', db);
   });
 
   // ============================================================================
   // PRECONDITIONS: settings page is reachable
   // ============================================================================
 
-  await loginEmailFixture(page, owner.email, password);
+  await loginUsernameFixture(page, owner.username, password);
 
   // Navigate to the household settings
   await page.goto(`${WEB_ORIGIN}/households/${encodeURIComponent(household.id)}/settings`);
@@ -208,30 +204,27 @@ test('manages invitation lifecycle', async ({ page, request }) => {
   await expect(page.getByText('已接受')).toBeVisible({ timeout: 5000 });
   await expect(page.getByText('已撤销')).toBeVisible({ timeout: 5000 });
 
-  // Verify invitation emails are shown (not account state)
-  await expect(page.getByText('pending@example.test')).toBeVisible({ timeout: 3000 });
+  // Verify invitation usernames are shown (not account state)
+  await expect(page.getByText('pending')).toBeVisible({ timeout: 3000 });
 
   // ============================================================================
-  // RESEND: rotates token and creates new invitation
+  // RESEND: replaces the pending inbox item
   // ============================================================================
 
-  // Find the resend button for the pending invitation at resend@example.test
-  await page.getByRole('button', { name: '重新发送邀请给 resend@example.test' }).click();
+  // Find the resend button for the pending invitation at resend
+  await page.getByRole('button', { name: '重新发送邀请给 resend' }).click();
 
-  // Resending opens the invite dialog with the result. Seeded email invitations
-  // are delivered by the legacy email flow, so no share link is shown.
+  // Resending returns a replacement link that the owner can share with the recipient.
   const inviteDialog = page.getByRole('dialog', { name: '邀请家人' }).last();
-  await expect(inviteDialog.getByRole('status')).toHaveText('邀请已重新发送。');
-  await expect(inviteDialog.getByLabel('邀请链接', { exact: true })).toHaveCount(0);
-
+  await expect(inviteDialog.getByText('邀请已重新发送到对方的收件箱。')).toBeVisible();
   // Verify via API that the resend produced a pending invitation.
   const listResponse = await request.get(
     `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
     { headers: { authorization: `Bearer ${owner.accessToken}` } },
   );
   expect(listResponse.status()).toBe(200);
-  const listBody = (await listResponse.json()) as { invitations: Array<{ emailCanonical: string; status: string }> };
-  const resendInvs = listBody.invitations.filter((i) => i.emailCanonical === 'resend@example.test');
+  const listBody = (await listResponse.json()) as { invitations: Array<{ username: string; status: string }> };
+  const resendInvs = listBody.invitations.filter((i) => i.username === 'resend');
   expect(resendInvs.length).toBeGreaterThanOrEqual(1);
   expect(resendInvs.some((i) => i.status === 'pending')).toBe(true);
 
@@ -242,7 +235,7 @@ test('manages invitation lifecycle', async ({ page, request }) => {
   // REVOKE: confirmation dialog keeps or revokes the invitation
   // ============================================================================
 
-  const revokeButton = page.getByRole('button', { name: '撤销邀请 revoke-test@example.test' });
+  const revokeButton = page.getByRole('button', { name: '撤销邀请 revoke-test' });
   const revokeDialog = page.getByRole('dialog', { name: '撤销邀请？' }).last();
 
   // The safe action closes the dialog without revoking.
@@ -263,9 +256,9 @@ test('manages invitation lifecycle', async ({ page, request }) => {
       `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/invitations`,
       { headers: { authorization: `Bearer ${owner.accessToken}` } },
     );
-    const postRevokeBody = (await postRevokeList.json()) as { invitations: Array<{ emailCanonical: string; status: string }> };
+    const postRevokeBody = (await postRevokeList.json()) as { invitations: Array<{ username: string; status: string }> };
     return postRevokeBody.invitations
-      .filter((i) => i.emailCanonical === 'revoke-test@example.test')
+      .filter((i) => i.username === 'revoke-test')
       .map((i) => i.status);
   }).toEqual(['revoked']);
 

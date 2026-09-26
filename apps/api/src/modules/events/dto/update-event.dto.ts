@@ -1,9 +1,22 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsDateString as IsEditDate, IsArray as IsEditArray, IsUUID as IsEditUuid } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsBoolean, IsDateString, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { RecurrenceDto } from '../../recurrence/dto/recurrence.dto.js';
 
 export class UpdateEventDto {
+  @ApiProperty({ description: 'Required version read before editing; stale writes return 409 EDIT_CONFLICT.' })
+  @IsEditDate()
+  expectedUpdatedAt!: string;
+
+  @ApiPropertyOptional({ description: 'Required when editing a recurring occurrence.' })
+  @IsOptional() @IsEditDate()
+  expectedRuleUpdatedAt?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional() @IsEditArray() @IsEditUuid('4', { each: true })
+  labelIds?: string[];
+
   @ApiPropertyOptional({ description: 'Event title', minLength: 1, maxLength: 200 })
   @IsOptional()
   @IsString()

@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -41,19 +41,19 @@ async function tabSequence(page: Page, count: number): Promise<string[]> {
 
 // ---- Account helpers ----
 
-async function prepareVerifiedAccount(
+async function prepareAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string; userId: string }> {
+): Promise<{ username: string; accessToken: string; userId: string }> {
   return withDatabase(async (database) => {
-    const email = `a11y-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
 
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
       body: JSON.stringify({
-        email,
-        displayName,
+        username,
+        confirmPassword: password,
         password,
         platform: 'web',
       }),
@@ -61,13 +61,13 @@ async function prepareVerifiedAccount(
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, displayName],
     );
 
     const userResult = await database.query(
-      `SELECT "id" FROM "User" WHERE "email_canonical" = lower($1)`,
-      [email],
+      `SELECT "id" FROM "User" WHERE "username_canonical" = lower($1)`,
+      [username],
     );
     const userId = userResult.rows[0]?.id as string;
     expect(userId).toBeDefined();
@@ -75,14 +75,14 @@ async function prepareVerifiedAccount(
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody: unknown = await loginResponse.json();
     const accessToken = (loginBody as { accessToken?: string }).accessToken;
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken, userId };
+    return { username, accessToken, userId };
   });
 }
 
@@ -104,15 +104,15 @@ async function createHousehold(
   return { id: household.id, name: household.name, ownerMembershipId: household.ownerMembershipId };
 }
 
-async function loginFixture(page: Page, email: string): Promise<void> {
-  await loginEmailFixture(page, email, password);
+async function loginFixture(page: Page, username: string): Promise<void> {
+  await loginUsernameFixture(page, username, password);
 }
 
 test.describe('household accessibility matrix', () => {
-  let noHouseholdEmail: string;
+  let noHouseholdUsername: string;
 
   test.beforeAll(async () => {
-    noHouseholdEmail = (await prepareVerifiedAccount('no-household', '无障碍测试用户')).email;
+    noHouseholdUsername = (await prepareAccount('no-household', '无障碍测试用户')).username;
   });
 
   // ============================================================================
@@ -122,7 +122,7 @@ test.describe('household accessibility matrix', () => {
   for (const width of widths) {
     test(`has no axe violations at ${width}px on the household handoff page`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
-      await loginFixture(page, noHouseholdEmail);
+      await loginFixture(page, noHouseholdUsername);
       await page.goto('/household-handoff');
       await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
       const results = await new AxeBuilder({ page }).analyze();
@@ -132,7 +132,7 @@ test.describe('household accessibility matrix', () => {
 
     test(`has no axe violations at ${width}px on the create household page`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
-      await loginFixture(page, noHouseholdEmail);
+      await loginFixture(page, noHouseholdUsername);
       await page.goto('/households/new');
       await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
       const results = await new AxeBuilder({ page }).analyze();
@@ -148,7 +148,7 @@ test.describe('household accessibility matrix', () => {
   test('has no axe violations on household roster and settings pages', async ({ context, page }) => {
     test.setTimeout(60_000);
 
-    const owner = await prepareVerifiedAccount('owner', '家主');
+    const owner = await prepareAccount('owner', '家主');
 
     // Mock auth refresh and user endpoints to simulate an authenticated session.
     await context.route('**/api/v1/auth/refresh', (route) =>
@@ -176,7 +176,7 @@ test.describe('household accessibility matrix', () => {
               membershipId: household.ownerMembershipId,
               userId: owner.userId,
               displayName: '家主',
-              email: owner.email,
+              username: owner.username,
               role: 'OWNER',
               isCurrentUser: true,
             },
@@ -207,9 +207,8 @@ test.describe('household accessibility matrix', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           id: owner.userId,
-          email: owner.email,
+          username: owner.username,
           displayName: '家主',
-          emailVerified: true,
           hasHousehold: true,
         }),
       }),
@@ -251,23 +250,23 @@ test.describe('household accessibility matrix', () => {
 
   test('keyboard tab order is logical on the no-household handoff page', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
-    await loginFixture(page, noHouseholdEmail);
+    await loginFixture(page, noHouseholdUsername);
     await page.goto('/household-handoff');
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
     // The header account action comes first, then both primary actions in visual order.
-    expect(await tabSequence(page, 3)).toEqual(['个人中心', '创建家庭', '我有邀请链接']);
+    expect(await tabSequence(page, 4)).toEqual(['收件箱', '个人中心', '创建家庭', '查看家庭邀请']);
   });
 
   test('keyboard tab order includes household form and actions', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
-    await loginFixture(page, noHouseholdEmail);
+    await loginFixture(page, noHouseholdUsername);
     await page.goto('/households/new');
     await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
 
     // Header actions come first; the household name field precedes the submit button.
     // Tabbing past the empty field shows its error without pulling focus back.
-    expect(await tabSequence(page, 4)).toEqual(['返回', '个人中心', '家庭名称', '创建家庭']);
+    expect(await tabSequence(page, 5)).toEqual(['返回', '收件箱', '个人中心', '家庭名称', '创建家庭']);
     await expect(page.getByLabel('家庭名称', { exact: true })).toHaveAttribute('aria-invalid', 'true');
 
     // Submitting still moves focus to the first invalid field.
@@ -282,7 +281,7 @@ test.describe('household accessibility matrix', () => {
   for (const width of [320, 768] as const) {
     test(`household handoff remains usable at 200% zoom (${width}px viewport)`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
-      await loginFixture(page, noHouseholdEmail);
+      await loginFixture(page, noHouseholdUsername);
       await page.goto('/household-handoff');
       await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
@@ -313,7 +312,7 @@ test.describe('household accessibility matrix', () => {
     });
     const page = await context.newPage();
 
-    await loginFixture(page, noHouseholdEmail);
+    await loginFixture(page, noHouseholdUsername);
     await page.goto('/household-handoff');
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
@@ -341,13 +340,13 @@ test.describe('household accessibility matrix', () => {
     });
     const page = await context.newPage();
 
-    await loginFixture(page, noHouseholdEmail);
+    await loginFixture(page, noHouseholdUsername);
     await page.goto('/household-handoff');
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
     // Primary action buttons should remain distinguishable.
     await expect(page.getByRole('button', { name: '创建家庭' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '我有邀请链接' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '查看家庭邀请' })).toBeVisible();
 
     // No horizontal overflow.
     await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
@@ -361,7 +360,7 @@ test.describe('household accessibility matrix', () => {
 
   test('has accessible live region containers on household pages', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
-    await loginFixture(page, noHouseholdEmail);
+    await loginFixture(page, noHouseholdUsername);
 
     // Create household page should have live region support for status feedback.
     await page.goto('/households/new');
@@ -381,7 +380,7 @@ test.describe('household accessibility matrix', () => {
 
   test('household settings page has no axe violations at web breakpoint', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await loginFixture(page, noHouseholdEmail);
+    await loginFixture(page, noHouseholdUsername);
     await page.goto('/household-handoff');
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
@@ -393,18 +392,17 @@ test.describe('household accessibility matrix', () => {
   });
 
   // ============================================================================
-  // 9. INVITATION ROUTES: Public invitation preview is accessible
+  // 9. INVITATION ROUTES: Invitation inbox is accessible
   // ============================================================================
 
-  test('invitation preview route has no axe violations', async ({ page }) => {
+  test('invitation inbox has no axe violations', async ({ page }) => {
     test.setTimeout(30_000);
     await page.setViewportSize({ width: 390, height: 900 });
-    // Navigate to an invalid token to verify the error page is accessible.
-    await page.goto('/invite/invalid-token-for-a11y');
-    await page.waitForTimeout(1500);
+    await loginUsernameFixture(page, noHouseholdUsername, password, '/inbox');
+    await expect(page.getByText('暂无消息')).toBeVisible();
 
     const results = await new AxeBuilder({ page }).analyze();
-    expect(results.violations, 'invite invalid token').toEqual([]);
+    expect(results.violations, 'invitation inbox').toEqual([]);
 
     await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
   });

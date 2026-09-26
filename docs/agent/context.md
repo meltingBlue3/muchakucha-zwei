@@ -26,13 +26,12 @@ Read this index only when the owning module or entry point of a request is uncle
 
 | Responsibility | Files |
 | --- | --- |
-| Registration, login, refresh rotation, password reset, token guard | `src/modules/auth/` |
+| Registration, login, refresh rotation, token guard | `src/modules/auth/` |
 | Current user and profile | `src/modules/users/` |
 | Households, invitations, roles, ownership | `src/modules/households/`; pure governance decisions in `household-policy.ts` |
 | Events, tasks, notes, labels | `src/modules/events/`, `tasks/`, `notes/`, `labels/` |
 | Recurrence rules, materialization, scheduling | `src/modules/recurrence/` |
 | Prisma client lifecycle | `src/infrastructure/prisma/` |
-| Outbound mail, with console and disabled adapters | `src/infrastructure/mail/` |
 
 ## Tests
 

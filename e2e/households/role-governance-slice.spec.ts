@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -24,19 +24,19 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
 
 // ---- Account helpers ----
 
-async function prepareVerifiedAccount(
+async function prepareAccount(
   seed: string,
   displayName: string,
-): Promise<{ email: string; accessToken: string; userId: string }> {
+): Promise<{ username: string; accessToken: string; userId: string }> {
   return withDatabase(async (database) => {
-    const email = `role-gov-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
 
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
       body: JSON.stringify({
-        email,
-        displayName,
+        username,
+        confirmPassword: password,
         password,
         platform: 'web',
       }),
@@ -44,13 +44,13 @@ async function prepareVerifiedAccount(
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, displayName],
     );
 
     const userResult = await database.query(
-      `SELECT "id" FROM "User" WHERE "email_canonical" = lower($1)`,
-      [email],
+      `SELECT "id" FROM "User" WHERE "username_canonical" = lower($1)`,
+      [username],
     );
     const userId = userResult.rows[0]?.id as string;
     expect(userId).toBeDefined();
@@ -58,14 +58,14 @@ async function prepareVerifiedAccount(
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody: unknown = await loginResponse.json();
     const accessToken = (loginBody as { accessToken?: string }).accessToken;
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken, userId };
+    return { username, accessToken, userId };
   });
 }
 
@@ -129,11 +129,11 @@ test('changes a non-owner role', async ({ page, request }) => {
   // PRECONDITIONS: accounts, household, and member fixtures are healthy
   // ============================================================================
 
-  const owner = await prepareVerifiedAccount('owner', '家主');
-  const admin = await prepareVerifiedAccount('admin', '管理员');
-  const memberA = await prepareVerifiedAccount('memberA', '成员甲');
-  const memberB = await prepareVerifiedAccount('memberB', '成员乙');
-  const outsider = await prepareVerifiedAccount('outsider', '无关人员');
+  const owner = await prepareAccount('owner', '家主');
+  const admin = await prepareAccount('admin', '管理员');
+  const memberA = await prepareAccount('memberA', '成员甲');
+  const memberB = await prepareAccount('memberB', '成员乙');
+  const outsider = await prepareAccount('outsider', '无关人员');
 
   const household = await createHousehold(owner.accessToken, '角色治理测试家庭');
 
@@ -150,7 +150,7 @@ test('changes a non-owner role', async ({ page, request }) => {
   // PRECONDITIONS: settings page is reachable
   // ============================================================================
 
-  await loginEmailFixture(page, owner.email, password);
+  await loginUsernameFixture(page, owner.username, password);
 
   // Navigate to the household settings to reach member list and governance actions.
   await page.goto(`${WEB_ORIGIN}/households/${encodeURIComponent(household.id)}/settings`);
@@ -206,7 +206,7 @@ test('changes a non-owner role', async ({ page, request }) => {
   const demotedMember = demoteBody.members.find((m) => m.membershipId === memberAMembership!.membershipId);
   expect(demotedMember!.role).toBe('MEMBER');
 
-  // ---- Admin promotes MEMBER to ADMIN ----
+  // ---- Admin cannot appoint an admin ----
   const adminPromoteResponse = await request.patch(
     `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(memberBMembership!.membershipId)}/role`,
     {
@@ -214,14 +214,21 @@ test('changes a non-owner role', async ({ page, request }) => {
       data: { role: 'ADMIN' },
     },
   );
-  expect(adminPromoteResponse.status()).toBe(200);
+  expect(adminPromoteResponse.status()).toBe(403);
 
-  // Verify memberB is now ADMIN.
+  // The denied operation leaves memberB unchanged.
   const postAdminPromoteRoster = await getHouseholdMemberships(owner.accessToken, household.id);
   const promotedMemberB = getMember(postAdminPromoteRoster, memberB.userId);
-  expect(promotedMemberB!.role).toBe('ADMIN');
+  expect(promotedMemberB!.role).toBe('MEMBER');
 
-  // ---- Admin demotes another admin (D-09: admin can target other admins) ----
+  // Only the owner can appoint memberB as another admin.
+  const ownerPromotesB = await request.patch(
+    `${API_ORIGIN}/api/v1/households/${household.id}/members/${memberBMembership!.membershipId}/role`,
+    { headers: { authorization: `Bearer ${owner.accessToken}` }, data: { role: 'ADMIN' } },
+  );
+  expect(ownerPromotesB.status()).toBe(200);
+
+  // ---- Admin cannot demote or remove another admin ----
   const adminDemotesAdminResponse = await request.patch(
     `${API_ORIGIN}/api/v1/households/${encodeURIComponent(household.id)}/members/${encodeURIComponent(promotedMemberB!.membershipId)}/role`,
     {
@@ -229,7 +236,28 @@ test('changes a non-owner role', async ({ page, request }) => {
       data: { role: 'MEMBER' },
     },
   );
-  expect(adminDemotesAdminResponse.status()).toBe(200);
+  expect(adminDemotesAdminResponse.status()).toBe(403);
+  const adminRemovesAdmin = await request.delete(
+    `${API_ORIGIN}/api/v1/households/${household.id}/members/${memberBMembership!.membershipId}`,
+    { headers: { authorization: `Bearer ${admin.accessToken}` } },
+  );
+  expect(adminRemovesAdmin.status()).toBe(403);
+  const protectedRoster = await getHouseholdMemberships(owner.accessToken, household.id);
+  expect(getMember(protectedRoster, memberB.userId)!.role).toBe('ADMIN');
+
+  // A fresh admin browser session sees only ordinary-member removal actions.
+  const adminContext = await page.context().browser()!.newContext();
+  try {
+    const adminPage = await adminContext.newPage();
+    await loginUsernameFixture(adminPage, admin.username, password);
+    await adminPage.goto(`${WEB_ORIGIN}/households/${household.id}/settings`);
+    await expect(adminPage.getByRole('button', { name: '移除 成员甲', exact: true })).toBeVisible();
+    await expect(adminPage.getByRole('button', { name: /^(提升|降级) / })).toHaveCount(0);
+    await expect(adminPage.getByRole('button', { name: '移除 成员乙', exact: true })).toHaveCount(0);
+    await expect(adminPage.getByRole('button', { name: '移除 家主', exact: true })).toHaveCount(0);
+  } finally {
+    await adminContext.close();
+  }
 
   // ============================================================================
   // D-09: FORBIDDEN — admin cannot target owner.

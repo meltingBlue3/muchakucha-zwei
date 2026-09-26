@@ -1,3 +1,4 @@
+import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -25,6 +26,12 @@ export default function EditNoteRoute() {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const conflict = useEditConflict(draftPrefix, note, async () => {
+    const token = await sessionTransport.getAccessToken();
+    if (token === null) throw new Error('Session expired');
+    return sessionApiClient.getNote(token, id!, noteId!);
+  }, setNote);
+
   const fetchNote = useCallback(async () => {
     if (id === undefined || noteId === undefined) return;
     setLoading(true);
@@ -35,13 +42,14 @@ export default function EditNoteRoute() {
         return;
       }
       const result = await sessionApiClient.getNote(token, id, noteId);
+      captureEditBaseline(workspace, draftPrefix, result);
       setNote(result);
     } catch {
       setError('无法加载笔记。');
     } finally {
       setLoading(false);
     }
-  }, [id, noteId]);
+  }, [id, noteId, workspace, draftPrefix]);
 
   useEffect(() => {
     void fetchNote();
@@ -57,16 +65,16 @@ export default function EditNoteRoute() {
           setError('登录已过期。');
           return;
         }
-        await sessionApiClient.updateNote(token, id!, noteId!, data as any);
+        await sessionApiClient.updateNote(token, id!, noteId!, { ...data, expectedUpdatedAt: conflict.precondition.expectedUpdatedAt });
         workspace.clear(draftPrefix);
-        router.back();
-      } catch {
-        setError('保存失败，请重试。');
+        router.dismissTo(`/households/${encodeURIComponent(id!)}/notes/${encodeURIComponent(noteId!)}`);
+      } catch (caught: unknown) {
+        if (!conflict.handle(caught)) setError('保存失败，请重试。');
       } finally {
         setIsSubmitting(false);
       }
     },
-    [id, noteId, router, workspace, draftPrefix],
+    [id, noteId, router, workspace, draftPrefix, conflict],
   );
 
   const handleDelete = useCallback(async () => {
@@ -99,7 +107,7 @@ export default function EditNoteRoute() {
     );
   }
 
-  if (note === null || error !== null) {
+  if (note === null) {
     return (
       <AppShell accessibilityLabel="笔记加载失败" title="编辑笔记" showBack showProfile>
         <Stack gap={4}>
@@ -124,6 +132,7 @@ export default function EditNoteRoute() {
             {error}
           </Text>
         )}
+        {conflict.panel}
         <NoteForm
           draftKey={draftPrefix + 'form'}
           initial={note}

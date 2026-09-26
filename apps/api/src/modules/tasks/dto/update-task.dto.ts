@@ -1,10 +1,23 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsDateString as IsEditDate, IsArray as IsEditArray, IsUUID as IsEditUuid } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsArray, IsIn, IsOptional, IsString, IsUUID, Length, MaxLength, ValidateNested } from 'class-validator';
 import { RecurrenceDto } from '../../recurrence/dto/recurrence.dto.js';
 import { TASK_PRIORITIES, TASK_STATUSES } from './create-task.dto.js';
 
 export class UpdateTaskDto {
+  @ApiProperty({ description: 'Required version read before editing; stale writes return 409 EDIT_CONFLICT.' })
+  @IsEditDate()
+  expectedUpdatedAt!: string;
+
+  @ApiPropertyOptional({ description: 'Required when editing a recurring occurrence.' })
+  @IsOptional() @IsEditDate()
+  expectedRuleUpdatedAt?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional() @IsEditArray() @IsEditUuid('4', { each: true })
+  labelIds?: string[];
+
   @ApiPropertyOptional({ description: '任务标题', minLength: 1, maxLength: 200 })
   @IsOptional()
   @IsString()

@@ -7,31 +7,26 @@ const packageRoot = resolve(repositoryRoot, 'packages/api-client');
 const generatedRoot = resolve(packageRoot, 'src/generated');
 
 const modelsSource = `// Generated from openapi.json. Do not edit.
-export type RegisterDto = {
+export interface RegisterDto {
+  username: string;
   password: string;
+  confirmPassword: string;
   platform: 'native' | 'web';
-} & (
-  | { username: string; confirmPassword: string; email?: never; displayName?: never }
-  | { email: string; displayName: string; username?: never; confirmPassword?: never }
-);
+}
 
 export interface RegistrationAcceptedDto {
   code: 'REGISTRATION_ACCEPTED';
   /** Username registration signs in immediately. */
-  accessToken?: string;
+  accessToken: string;
   /** Native-only refresh credential for username registration. */
   refreshToken?: string;
-  /** Native-only pending proof. Web responses omit this property. */
-  pendingProof?: string;
 }
 
-export type LoginDto = {
+export interface LoginDto {
+  username: string;
   password: string;
   platform: 'native' | 'web';
-} & (
-  | { username: string; email?: never }
-  | { email: string; username?: never }
-);
+}
 
 export interface LoginResponseDto {
   accessToken: string;
@@ -56,54 +51,9 @@ export interface UpdateMeDto {
 
 export interface CurrentUserDto {
   id: string;
-  username?: string;
-  email: string;
+  username: string;
   displayName: string;
-  emailVerified: boolean;
   hasHousehold: false;
-}
-
-export interface CompleteEmailVerificationDto {
-  token: string;
-  platform?: 'native';
-  pendingProof?: string;
-}
-
-export type VerificationOutcome =
-  | 'verified_auto_login'
-  | 'verified_login_required'
-  | 'expired'
-  | 'used'
-  | 'invalid'
-  | 'superseded';
-
-export interface CompleteEmailVerificationResponseDto {
-  outcome: VerificationOutcome;
-  accessToken?: string;
-  /** Native-only refresh credential. Web responses omit this property. */
-  refreshToken?: string;
-}
-
-export interface ResendEmailVerificationDto {
-  email: string;
-}
-
-export interface ResendEmailVerificationResponseDto {
-  code: 'RESEND_ACCEPTED';
-  retryAfterSeconds: number;
-}
-
-export interface RequestPasswordResetDto {
-  email: string;
-}
-
-export interface PasswordResetRequestAcceptedDto {
-  code: 'PASSWORD_RESET_REQUEST_ACCEPTED';
-}
-
-export interface CompletePasswordResetDto {
-  token: string;
-  password: string;
 }
 
 export interface CreateHouseholdDto {
@@ -143,8 +93,7 @@ export interface GetHouseholdMemberDto {
   membershipId: string;
   userId: string;
   displayName: string;
-  email: string;
-  username?: string;
+  username: string;
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
   isCurrentUser: boolean;
 }
@@ -157,33 +106,37 @@ export interface GetHouseholdResponseDto {
   members: GetHouseholdMemberDto[];
 }
 
-/** Invite a registered username, or use the legacy email delivery flow. */
-export type SendHouseholdInvitationDto =
-  | { username: string; email?: never }
-  | { email: string; username?: never };
+/** Invite a registered username. */
+export interface SendHouseholdInvitationDto {
+  username: string;
+}
 
 export interface SendHouseholdInvitationResponseDto {
   code: 'INVITATION_SENT';
   message: string;
-  invitationUrl?: string;
+  invitationId: string;
 }
 
-export interface InvitationPreviewResponseDto {
-  kind: 'valid' | 'invalid' | 'expired' | 'used';
-  householdName?: string;
-  inviterDisplayName?: string;
-  expiresAt?: string;
+export interface InboxInvitationDto {
+  id: string;
+  householdName: string;
+  inviterDisplayName: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface InvitationInboxResponseDto {
+  invitations: InboxInvitationDto[];
 }
 
 export interface AcceptInvitationDto {
-  token: string;
+  invitationId: string;
 }
 
 export interface InvitationListItemDto {
   id: string;
-  emailCanonical: string;
-  username?: string;
-  status: 'pending' | 'expired' | 'accepted' | 'revoked';
+  username: string;
+  status: 'pending' | 'expired' | 'accepted' | 'revoked' | 'declined';
   expiresAt: string;
   role: string;
   createdAt: string;
@@ -196,7 +149,7 @@ export interface ListInvitationsResponseDto {
 export interface ResendInvitationResponseDto {
   code: 'INVITATION_RESENT';
   message: string;
-  invitationUrl?: string;
+  invitationId: string;
 }
 
 export interface RevokeInvitationResponseDto {
@@ -229,6 +182,10 @@ export interface CreateEventDto {
 }
 
 export interface UpdateEventDto {
+  expectedUpdatedAt: string;
+  expectedRuleUpdatedAt?: string;
+  labelIds?: string[];
+
   title?: string;
   description?: string;
   startTime?: string;
@@ -251,6 +208,7 @@ export interface RecurrenceDto {
 }
 
 export interface RecurrenceResponseDto {
+  updatedAt: string;
   id: string;
   freq: string;
   interval: number;
@@ -267,6 +225,9 @@ export interface RecurrenceResponseDto {
 export type SeriesScope = 'this_only' | 'this_and_following';
 
 export interface UpdateSeriesDto {
+  expectedUpdatedAt: string;
+  expectedRuleUpdatedAt: string;
+
   title?: string;
   description?: string;
   status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
@@ -287,6 +248,8 @@ export interface UpdateSeriesDto {
  * instance-level intent (title, status, assignees).
  */
 export interface UpdateRecurrenceRuleDto {
+  expectedUpdatedAt: string;
+
   recurrence: RecurrenceDto;
 }
 
@@ -295,6 +258,7 @@ export interface SeriesMutationResponseDto {
 }
 
 export interface RecurrenceRuleListItemDto {
+  updatedAt: string;
   id: string;
   kind: 'task' | 'event' | null;
   title: string;
@@ -351,6 +315,10 @@ export interface CreateTaskDto {
 }
 
 export interface UpdateTaskDto {
+  expectedUpdatedAt: string;
+  expectedRuleUpdatedAt?: string;
+  labelIds?: string[];
+
   title?: string;
   description?: string;
   status?: string;
@@ -390,6 +358,8 @@ export interface CreateNoteDto {
 }
 
 export interface UpdateNoteDto {
+  expectedUpdatedAt: string;
+
   title?: string;
   body?: string;
 }
@@ -442,8 +412,6 @@ const clientSource = `// Generated from openapi.json. Do not edit.
 import type {
   RegisterDto,
   RegistrationAcceptedDto,
-  CompleteEmailVerificationDto,
-  CompleteEmailVerificationResponseDto,
   CreateHouseholdDto,
   CreateHouseholdResponseDto,
   GetHouseholdResponseDto,
@@ -454,15 +422,10 @@ import type {
   RefreshResponseDto,
   UpdateMeDto,
   CurrentUserDto,
-  ResendEmailVerificationDto,
-  ResendEmailVerificationResponseDto,
-  RequestPasswordResetDto,
-  PasswordResetRequestAcceptedDto,
-  CompletePasswordResetDto,
   UpdateHouseholdDto,
   SendHouseholdInvitationDto,
   SendHouseholdInvitationResponseDto,
-  InvitationPreviewResponseDto,
+  InvitationInboxResponseDto,
   AcceptInvitationDto,
   ListInvitationsResponseDto,
   ResendInvitationResponseDto,
@@ -544,44 +507,6 @@ export class ApiClient {
     return this.authenticated<CurrentUserDto>('PATCH', '/api/v1/users/me', accessToken, body, signal);
   }
 
-  async completeEmailVerification(
-    body: CompleteEmailVerificationDto,
-    signal?: AbortSignal,
-  ): Promise<CompleteEmailVerificationResponseDto> {
-    return this.post('/api/v1/auth/email-verifications/complete', body, signal);
-  }
-
-  async resendEmailVerification(
-    body: ResendEmailVerificationDto,
-    signal?: AbortSignal,
-  ): Promise<ResendEmailVerificationResponseDto> {
-    return this.post('/api/v1/auth/email-verifications/resend', body, signal);
-  }
-
-  async requestPasswordReset(
-    body: RequestPasswordResetDto,
-    signal?: AbortSignal,
-  ): Promise<PasswordResetRequestAcceptedDto> {
-    return this.post('/api/v1/auth/password-reset/request', body, signal);
-  }
-
-  async completePasswordReset(body: CompletePasswordResetDto, signal?: AbortSignal): Promise<void> {
-    const response = await fetch(
-      \`\${this.baseUrl}/api/v1/auth/password-reset/complete\`,
-      {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
-    if (!response.ok) {
-      const text = await response.text();
-      throw new ApiClientError(response.status, text === '' ? undefined : JSON.parse(text));
-    }
-  }
-
   async createHousehold(
     accessToken: string,
     body: CreateHouseholdDto,
@@ -653,20 +578,12 @@ export class ApiClient {
     );
   }
 
-  async previewInvitation(token: string, signal?: AbortSignal): Promise<InvitationPreviewResponseDto> {
-    const response = await fetch(
-      \`\${this.baseUrl}/api/v1/households/invitations/preview?token=\${encodeURIComponent(token)}\`,
-      {
-        method: 'GET',
-        credentials: 'include',
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
-    const payload: unknown = await response.json();
-    if (!response.ok) {
-      throw new ApiClientError(response.status, payload);
-    }
-    return payload as InvitationPreviewResponseDto;
+  async listInvitationInbox(accessToken: string, signal?: AbortSignal): Promise<InvitationInboxResponseDto> {
+    return this.authenticated<InvitationInboxResponseDto>('GET', '/api/v1/households/invitations/inbox', accessToken, undefined, signal);
+  }
+
+  async declineInvitation(accessToken: string, body: AcceptInvitationDto, signal?: AbortSignal): Promise<void> {
+    return this.authenticated<void>('POST', '/api/v1/households/invitations/decline', accessToken, body, signal);
   }
 
   async acceptInvitation(
@@ -773,6 +690,20 @@ export class ApiClient {
     );
   }
 
+  async leaveHouseholdMembership(
+    accessToken: string,
+    householdId: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.authenticated<void>(
+      'POST',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/leave\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
   async leaveHousehold(
     accessToken: string,
     householdId: string,
@@ -810,11 +741,13 @@ export class ApiClient {
     endDate?: string,
     recurring?: boolean,
     signal?: AbortSignal,
+    expandRecurring?: boolean,
   ): Promise<EventListResponseDto> {
     const params = new URLSearchParams();
     if (startDate) params.set('startDate', startDate);
     if (endDate) params.set('endDate', endDate);
     if (recurring !== undefined) params.set('recurring', recurring ? 'true' : 'false');
+    if (expandRecurring !== undefined) params.set('expandRecurring', String(expandRecurring));
     const qs = params.toString();
     return this.authenticated<EventListResponseDto>(
       'GET',
@@ -1347,14 +1280,7 @@ async function generate(): Promise<void> {
       throw new Error('OpenAPI registration operation is missing or has an unstable operationId.');
     }
     if (document.components?.schemas?.RegisterDto === undefined
-      || document.components.schemas.RegistrationAcceptedDto === undefined
-      || document.components.schemas.CompleteEmailVerificationDto === undefined
-      || document.components.schemas.CompleteEmailVerificationResponseDto === undefined
-      || document.components.schemas.ResendEmailVerificationDto === undefined
-      || document.components.schemas.ResendEmailVerificationResponseDto === undefined
-      || document.components.schemas.RequestPasswordResetDto === undefined
-      || document.components.schemas.PasswordResetRequestAcceptedDto === undefined
-      || document.components.schemas.CompletePasswordResetDto === undefined) {
+      || document.components.schemas.RegistrationAcceptedDto === undefined) {
       throw new Error('OpenAPI authentication schemas are missing.');
     }
     if (document.components?.schemas?.LoginDto === undefined
@@ -1365,14 +1291,6 @@ async function generate(): Promise<void> {
       || document.paths['/api/v1/auth/refresh']?.post?.operationId !== 'refresh'
       || document.paths['/api/v1/auth/logout']?.post?.operationId !== 'logout') {
       throw new Error('OpenAPI login, refresh, or logout operations are missing or unstable.');
-    }
-    if (document.paths['/api/v1/auth/email-verifications/complete']?.post?.operationId !== 'completeEmailVerification'
-      || document.paths['/api/v1/auth/email-verifications/resend']?.post?.operationId !== 'resendEmailVerification') {
-      throw new Error('OpenAPI email verification operations are missing or unstable.');
-    }
-    if (document.paths['/api/v1/auth/password-reset/request']?.post?.operationId !== 'requestPasswordReset'
-      || document.paths['/api/v1/auth/password-reset/complete']?.post?.operationId !== 'completePasswordReset') {
-      throw new Error('OpenAPI password reset operations are missing or unstable.');
     }
     if (document.paths['/api/v1/users/me']?.get?.operationId !== 'getMe'
       || document.paths['/api/v1/users/me']?.patch?.operationId !== 'updateMe'
@@ -1412,10 +1330,10 @@ async function generate(): Promise<void> {
       throw new Error('OpenAPI household invitation operation or schemas are missing or unstable.');
     }
 
-    const previewInvitationPath = document.paths['/api/v1/households/invitations/preview']?.get;
-    if (previewInvitationPath?.operationId !== 'previewInvitation'
-      || document.components?.schemas?.InvitationPreviewResponseDto === undefined) {
-      throw new Error('OpenAPI invitation preview operation or schemas are missing or unstable.');
+    const inboxPath = document.paths['/api/v1/households/invitations/inbox']?.get;
+    if (inboxPath?.operationId !== 'listInvitationInbox' || inboxPath.security === undefined
+      || document.components?.schemas?.InvitationInboxResponseDto === undefined) {
+      throw new Error('OpenAPI invitation inbox operation or schemas are missing.');
     }
 
     const acceptInvitationPath = document.paths['/api/v1/households/invitations/accept']?.post;

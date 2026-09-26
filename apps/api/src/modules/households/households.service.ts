@@ -1,7 +1,6 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { isEmail } from 'class-validator';
-import { MAIL_PORT, type MailPort } from '../../infrastructure/mail/mail.port.js';
+import type { Prisma } from '../../generated/prisma/client.js';
+import { removeMemberAssignments } from '../shared/task-assignment.js';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type {
   CreateHouseholdResponseDto,
@@ -15,9 +14,8 @@ interface HouseholdMemberRow {
   membershipId: string;
   userId: string;
   displayName: string;
-  email: string;
-  emailCanonical: string;
-  username: string | null;
+  usernameCanonical: string;
+  username: string;
   dbRole: string;
   isOwner: boolean;
 }
@@ -26,59 +24,12 @@ const ROLE_ORDER: Record<string, number> = Object.freeze({ OWNER: 0, ADMIN: 1, M
 
 const NAME_MIN_CODE_POINTS = 1;
 const NAME_MAX_CODE_POINTS = 40;
-const INVITE_TOKEN_BYTES = 32;
 const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1_000;
-
-function validationError(field: string, code: string): BadRequestException {
-  return new BadRequestException({
-    code: 'VALIDATION_FAILED',
-    message: 'Request validation failed.',
-    details: [{ field, codes: [code] }],
-  });
-}
-
-function opaqueToken(): string {
-  return randomBytes(INVITE_TOKEN_BYTES).toString('base64url');
-}
-
-function hashOpaqueToken(token: string): string {
-  return createHash('sha256').update(token, 'utf8').digest('hex');
-}
-
-function invitationUrl(token: string, environment: NodeJS.ProcessEnv = process.env): string {
-  const configuredOrigin = environment.EMAIL_LINK_ORIGIN;
-  if (environment.NODE_ENV === 'production' && !configuredOrigin) {
-    throw new Error('EMAIL_LINK_ORIGIN is required in production.');
-  }
-  const origin = configuredOrigin ?? 'http://127.0.0.1:8081';
-  const parsed = new URL(origin);
-  if (
-    !['http:', 'https:'].includes(parsed.protocol)
-    || parsed.origin !== origin
-    || parsed.pathname !== '/'
-    || parsed.search !== ''
-    || parsed.hash !== ''
-    || parsed.username !== ''
-    || parsed.password !== ''
-  ) {
-    throw new Error('EMAIL_LINK_ORIGIN must be an exact HTTP(S) origin.');
-  }
-  // Use path-segment token per D-07 /invite/[token] route convention.
-  // The route at apps/client/app/invite/[token].tsx extracts the token from the path.
-  const link = new URL(`/invite/${encodeURIComponent(token)}`, parsed);
-  return link.href;
-}
-
-function shareInvitationUrl(token: string, environment: NodeJS.ProcessEnv = process.env): string {
-  const origin = environment.WEB_ORIGIN?.split(',').map((value) => value.trim()).find(Boolean);
-  return invitationUrl(token, { ...environment, EMAIL_LINK_ORIGIN: origin });
-}
 
 @Injectable()
 export class HouseholdsService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(MAIL_PORT) private readonly mailPort: MailPort,
   ) {}
 
   async createHousehold(
@@ -183,8 +134,7 @@ export class HouseholdsService {
       membershipId: m.id,
       userId: m.userId,
       displayName: m.user.displayName,
-      email: m.user.email ?? '',
-      emailCanonical: m.user.usernameCanonical ?? m.user.emailCanonical ?? '',
+      usernameCanonical: m.user.usernameCanonical,
       username: m.user.username,
       dbRole: m.role,
       isOwner: m.id === household.ownerMembershipId,
@@ -194,8 +144,8 @@ export class HouseholdsService {
     // 1. Role: OWNER (0) < ADMIN (1) < MEMBER (2)
     // 2. Within same role: current actor first
     // 3. Within same role (after current actor): NFC-normalized displayName locale ascending
-    // 4. Same displayName: canonical email ascending
-    // 5. Same email: membershipId code-point ascending
+    // 4. Same displayName: canonical username ascending
+    // 5. Same username: membershipId code-point ascending
     // 6. Same membershipId: userId code-point ascending
     rows.sort((a, b) => {
       const aRole = a.isOwner ? 'OWNER' : a.dbRole;
@@ -215,9 +165,9 @@ export class HouseholdsService {
         .localeCompare(b.displayName.normalize('NFC'), 'zh-CN-u-co-phonebk', { sensitivity: 'base' });
       if (displayNameCompare !== 0) return displayNameCompare;
 
-      // Canonical email ascending.
-      const emailCompare = a.emailCanonical.localeCompare(b.emailCanonical);
-      if (emailCompare !== 0) return emailCompare;
+      // Canonical username ascending.
+      const usernameCompare = a.usernameCanonical.localeCompare(b.usernameCanonical);
+      if (usernameCompare !== 0) return usernameCompare;
 
       // Membership ID code-point ascending.
       const membershipCompare = a.membershipId.localeCompare(b.membershipId);
@@ -231,8 +181,7 @@ export class HouseholdsService {
       membershipId: r.membershipId,
       userId: r.userId,
       displayName: r.displayName,
-      email: r.email,
-      ...(r.username !== null ? { username: r.username } : {}),
+      username: r.username,
       role: (r.isOwner ? 'OWNER' : r.dbRole) as 'OWNER' | 'ADMIN' | 'MEMBER',
       isCurrentUser: r.userId === actorId,
     }));
@@ -293,538 +242,119 @@ export class HouseholdsService {
     return this.getHousehold(actorId, householdId);
   }
 
-  async sendHouseholdInvitation(
-    actorId: string,
-    householdId: string,
-    input: { email?: string; username?: string },
-  ): Promise<{ code: 'INVITATION_SENT'; message: string; invitationUrl?: string }> {
-    if ((input.email === undefined) === (input.username === undefined)) {
-      throw validationError('username', 'exactlyOneRecipient');
+  private async invitationManager(tx: Prisma.TransactionClient, actorId: string, householdId: string) {
+    // Invitations and membership changes use the same household lock.
+    await tx.$queryRaw`SELECT id FROM households WHERE id = ${householdId}::uuid FOR UPDATE`;
+    const household = await tx.household.findUnique({ where: { id: householdId }, include: { memberships: true } });
+    const member = household?.memberships.find(m => m.userId === actorId);
+    if (!household || !member) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
+    if (household.ownerMembershipId !== member.id && member.role !== 'ADMIN') {
+      throw new ForbiddenException({ code: 'INSUFFICIENT_ROLE', message: '只有所有者和管理员可以管理邀请。' });
     }
-    const emailCanonical = input.email?.trim().normalize('NFC').toLowerCase() ?? '';
-    if (input.email !== undefined && !isEmail(emailCanonical)) {
-      throw validationError('email', 'isEmail');
-    }
-
-    const household = await this.prisma.household.findUnique({
-      where: { id: householdId },
-      include: {
-        memberships: {
-          include: { user: true },
-        },
-      },
-    });
-
-    if (household === null) {
-      throw new NotFoundException({
-        code: 'HOUSEHOLD_NOT_FOUND',
-        message: 'Household not found or access denied.',
-      });
-    }
-
-    if (household.ownerMembershipId === null) {
-      throw new NotFoundException({
-        code: 'HOUSEHOLD_NOT_FOUND',
-        message: 'Household not found or access denied.',
-      });
-    }
-
-    // Verify actor is a member.
-    const actorMembership = household.memberships.find((m) => m.userId === actorId);
-    if (actorMembership === undefined) {
-      throw new NotFoundException({
-        code: 'HOUSEHOLD_NOT_FOUND',
-        message: 'Household not found or access denied.',
-      });
-    }
-
-    // Only owner and admin can invite.
-    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
-    const actorRole = actorIsOwner ? 'OWNER' : actorMembership.role;
-    if (actorRole !== 'OWNER' && actorRole !== 'ADMIN') {
-      throw new ForbiddenException({
-        code: 'INSUFFICIENT_ROLE',
-        message: '只有所有者和管理员可以发送邀请。',
-      });
-    }
-
-    const recipient = input.username === undefined ? null : await this.prisma.user.findUnique({
-      where: { usernameCanonical: input.username.trim().normalize('NFC').toLowerCase() },
-      select: { id: true, username: true },
-    });
-    if (input.username !== undefined && recipient === null) {
-      throw new BadRequestException({
-        code: 'INVITATION_USER_NOT_FOUND',
-        message: '未找到这个用户名，请让家人先注册账户。',
-      });
-    }
-
-    // A username invitation is bound to the registered account, never an empty email.
-    const existingMember = household.memberships.find(
-      (m) => recipient !== null ? m.userId === recipient.id : m.user.emailCanonical === emailCanonical,
-    );
-    if (existingMember !== undefined) {
-      throw new ConflictException({
-        code: 'ALREADY_MEMBER',
-        message: '这个账户已经是该家庭的成员。',
-      });
-    }
-
-    // Generate opaque token and hash.
-    const rawToken = opaqueToken();
-    const tokenHash = hashOpaqueToken(rawToken);
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + INVITE_LIFETIME_MS);
-
-    // Transactionally rotate predecessor and create new invitation.
-    const inviterDisplayName = actorMembership.user.displayName;
-    const householdName = household.name;
-    const link = recipient !== null ? shareInvitationUrl(rawToken) : invitationUrl(rawToken);
-
-    await this.prisma.$transaction(async (transaction) => {
-      // Invalidate any pending active invitation for this household+email.
-      await transaction.invitation.updateMany({
-        where: {
-          householdId,
-          ...(recipient !== null ? { recipientUserId: recipient.id } : { emailCanonical, recipientUserId: null }),
-          invalidatedAt: null,
-          consumedAt: null,
-        },
-        data: { invalidatedAt: now },
-      });
-
-      // Create the new invitation.
-      await transaction.invitation.create({
-        data: {
-          inviterUserId: actorId,
-          inviterMembershipId: actorMembership.id,
-          householdId,
-          emailCanonical,
-          recipientUserId: recipient?.id ?? null,
-          username: recipient?.username ?? null,
-          hash: tokenHash,
-          role: 'MEMBER',
-          expiresAt,
-        },
-      });
-    }, { isolationLevel: 'Serializable' });
-
-    if (recipient !== null) {
-      return { code: 'INVITATION_SENT', message: '邀请链接已生成，请发给家人。', invitationUrl: link };
-    }
-    await this.mailPort.sendHouseholdInvitation({
-      to: input.email!.trim().normalize('NFC'),
-      invitationUrl: link,
-      inviterDisplayName,
-      householdDisplayName: householdName,
-      expiresAt,
-    });
-
-    // Identical response for registered, absent, and repeated non-members (D-06).
-    return { code: 'INVITATION_SENT', message: '邀请已发送。' };
+    return { household, member };
   }
 
-  async previewInvitation(
-    token: string,
-  ): Promise<
-    | { kind: 'valid'; householdName: string; inviterDisplayName: string; expiresAt: string }
-    | { kind: 'invalid' }
-    | { kind: 'expired' }
-    | { kind: 'used' }
-  > {
-    const tokenHash = hashOpaqueToken(token);
-    const invitation = await this.prisma.invitation.findUnique({
-      where: { hash: tokenHash },
-      include: {
-        household: true,
-        inviterUser: true,
-      },
-    });
-
-    // Terminal: not found or invalidated -> generic "invalid"
-    if (invitation === null) return { kind: 'invalid' };
-
-    // Terminal: already consumed
-    if (invitation.consumedAt !== null) return { kind: 'used' };
-
-    // Terminal: explicitly invalidated (replaced by rotation)
-    if (invitation.invalidatedAt !== null) return { kind: 'invalid' };
-
-    // Terminal: expired
-    if (invitation.expiresAt <= new Date()) return { kind: 'expired' };
-
-    // Valid: return the D-07 public-preview fields
-    return {
-      kind: 'valid',
-      householdName: invitation.household.name,
-      inviterDisplayName: invitation.inviterUser.displayName,
-      expiresAt: invitation.expiresAt.toISOString(),
-    };
+  private async deliverInvitation(tx: Prisma.TransactionClient, actorId: string, householdId: string, recipientId: string, username: string, membershipId: string) {
+    const existing = await tx.membership.findUnique({ where: { userId_householdId: { userId: recipientId, householdId } } });
+    if (existing) throw new ConflictException({ code: 'ALREADY_MEMBER', message: '这个账户已经是该家庭的成员。' });
+    const now = new Date();
+    // One actionable invitation per recipient and household, even after resends.
+    await tx.invitation.updateMany({ where: { householdId, recipientUserId: recipientId, consumedAt: null, declinedAt: null, invalidatedAt: null }, data: { invalidatedAt: now } });
+    return tx.invitation.create({ data: {
+      inviterUserId: actorId, inviterMembershipId: membershipId, householdId,
+      recipientUserId: recipientId, username, role: 'MEMBER',
+      expiresAt: new Date(now.getTime() + INVITE_LIFETIME_MS),
+    } });
   }
 
-  async acceptInvitation(
-    actorId: string,
-    token: string,
-  ): Promise<GetHouseholdResponseDto> {
-    const tokenHash = hashOpaqueToken(token);
-
-    // Load the invitation with related data outside the transaction.
-    // We need the inviter user, household, and the actor user info.
-    const invitation = await this.prisma.invitation.findUnique({
-      where: { hash: tokenHash },
-      include: {
-        household: true,
-        inviterUser: true,
-      },
+  async sendHouseholdInvitation(actorId: string, householdId: string, input: { username: string }) {
+    const invitation = await this.prisma.$transaction(async tx => {
+      const { member } = await this.invitationManager(tx, actorId, householdId);
+      const recipient = await tx.user.findUnique({ where: { usernameCanonical: input.username.trim().normalize('NFC').toLowerCase() } });
+      if (!recipient) throw new BadRequestException({ code: 'INVITATION_USER_NOT_FOUND', message: '未找到这个用户名，请让家人先注册账户。' });
+      return this.deliverInvitation(tx, actorId, householdId, recipient.id, recipient.username, member.id);
     });
-
-    // D-08: Generic "invalid or expired" for unknown/handled tokens.
-    // Do not disclose whether the token exists or what household it targets.
-    const GENERIC_INVALID = {
-      code: 'INVALID_INVITATION',
-      message: '这个邀请无效或已失效。',
-    } as const;
-
-    if (invitation === null) {
-      throw new BadRequestException(GENERIC_INVALID);
-    }
-    if (invitation.consumedAt !== null) {
-      // D-08: "已经接受过，不能再次使用" — but still generic about household
-      throw new BadRequestException({
-        code: 'INVITATION_ALREADY_USED',
-        message: '这个邀请已经接受过，不能再次使用。',
-      });
-    }
-    if (invitation.invalidatedAt !== null || invitation.expiresAt <= new Date()) {
-      throw new BadRequestException(GENERIC_INVALID);
-    }
-
-    // Load actor's canonical email from the trusted server state (D-08, T-02-15).
-    const actor = await this.prisma.user.findUnique({
-      where: { id: actorId },
-      select: { emailCanonical: true, displayName: true },
-    });
-
-    if (actor === null) {
-      throw new BadRequestException(GENERIC_INVALID);
-    }
-
-    const recipientMatches = invitation.recipientUserId !== null
-      ? actorId === invitation.recipientUserId
-      : actor.emailCanonical !== null && actor.emailCanonical === invitation.emailCanonical;
-    if (!recipientMatches) {
-      throw new ForbiddenException({
-        code: 'INVITATION_EMAIL_MISMATCH',
-        message: '此邀请发给了另一个账户。请切换到受邀账户。',
-      });
-    }
-
-    // D-08 / T-02-16: Atomic claim + membership creation in one Serializable transaction.
-    const now = new Date();
-
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        const outcome = await this.prisma.$transaction(async (transaction) => {
-          // Conditional claim: only claim if invitation is still valid.
-          const claimed = await transaction.invitation.updateMany({
-            where: {
-              id: invitation.id,
-              consumedAt: null,
-              invalidatedAt: null,
-              expiresAt: { gt: now },
-            },
-            data: { consumedAt: now },
-          });
-
-          if (claimed.count !== 1) {
-            return { kind: 'conflict' } as const;
-          }
-
-          // Create MEMBER membership atomically (D-05, D-08).
-          await transaction.membership.create({
-            data: {
-              userId: actorId,
-              householdId: invitation.householdId,
-              role: 'MEMBER',
-            },
-          });
-
-          return { kind: 'completed' } as const;
-        }, { isolationLevel: 'Serializable' });
-
-        if (outcome.kind === 'conflict') {
-          throw new ConflictException({
-            code: 'INVITATION_ALREADY_CLAIMED',
-            message: '这个邀请已经接受过，不能再次使用。',
-          });
-        }
-
-        // Success — return the authoritative household projection.
-        return (await this.getHousehold(actorId, invitation.householdId))!;
-      } catch (error) {
-        if (this.isSerializationConflict(error) && attempt < 2) continue;
-        throw error;
-      }
-    }
-
-    // Should never reach here, but satisfy TypeScript.
-    throw new Error('Unreachable: invitation accept retry loop exhausted.');
+    return { code: 'INVITATION_SENT' as const, message: '邀请已发送到对方的收件箱。', invitationId: invitation.id };
   }
 
-  // ---- Invitation lifecycle: list, resend, revoke ----
-
-  async listInvitations(
-    actorId: string,
-    householdId: string,
-  ): Promise<{
-    invitations: Array<{
-      id: string;
-      emailCanonical: string;
-      username?: string;
-      status: 'pending' | 'expired' | 'accepted' | 'revoked';
-      expiresAt: string;
-      role: string;
-      createdAt: string;
-    }>;
-  }> {
-    const household = await this.prisma.household.findUnique({
-      where: { id: householdId },
-      include: { memberships: true },
-    });
-
-    if (household === null || household.ownerMembershipId === null) {
-      throw new NotFoundException({
-        code: 'HOUSEHOLD_NOT_FOUND',
-        message: 'Household not found or access denied.',
-      });
-    }
-
-    const actorMembership = household.memberships.find((m) => m.userId === actorId);
-    if (actorMembership === undefined) {
-      throw new NotFoundException({
-        code: 'HOUSEHOLD_NOT_FOUND',
-        message: 'Household not found or access denied.',
-      });
-    }
-
-    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
-    const actorRole = actorIsOwner ? 'OWNER' : actorMembership.role;
-    if (actorRole !== 'OWNER' && actorRole !== 'ADMIN') {
-      throw new ForbiddenException({
-        code: 'INSUFFICIENT_ROLE',
-        message: '只有所有者和管理员可以查看邀请列表。',
-      });
-    }
-
-    const now = new Date();
+  async listInvitationInbox(actorId: string) {
     const invitations = await this.prisma.invitation.findMany({
-      where: { householdId },
-      orderBy: { createdAt: 'desc' },
+      where: { recipientUserId: actorId, consumedAt: null, declinedAt: null, invalidatedAt: null, expiresAt: { gt: new Date() } },
+      include: { household: true, inviterUser: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-
-    return {
-      invitations: invitations.map((inv) => ({
-        id: inv.id,
-        emailCanonical: inv.emailCanonical,
-        ...(inv.username !== null ? { username: inv.username } : {}),
-        status: inv.consumedAt !== null
-          ? 'accepted' as const
-          : inv.invalidatedAt !== null
-            ? 'revoked' as const
-            : inv.expiresAt <= now
-              ? 'expired' as const
-              : 'pending' as const,
-        expiresAt: inv.expiresAt.toISOString(),
-        role: inv.role,
-        createdAt: inv.createdAt.toISOString(),
-      })),
-    };
+    return { invitations: invitations.map(inv => ({
+      id: inv.id, householdName: inv.household.name, inviterDisplayName: inv.inviterUser.displayName,
+      expiresAt: inv.expiresAt.toISOString(), createdAt: inv.createdAt.toISOString(),
+    })) };
   }
 
-  async resendInvitation(
-    actorId: string,
-    householdId: string,
-    invitationId: string,
-  ): Promise<{ code: 'INVITATION_RESENT'; message: string; invitationUrl?: string }> {
-    const household = await this.prisma.household.findUnique({
-      where: { id: householdId },
-      include: {
-        memberships: {
-          include: { user: true },
-        },
-      },
+  private async respondToInvitation(actorId: string, invitationId: string, accept: boolean) {
+    // Scope before returning any invitation details: another account sees 404.
+    const scope = await this.prisma.invitation.findFirst({ where: { id: invitationId, recipientUserId: actorId } });
+    if (!scope) throw new NotFoundException({ code: 'INVITATION_NOT_FOUND', message: 'Invitation not found.' });
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM households WHERE id = ${scope.householdId}::uuid FOR UPDATE`;
+      const now = new Date();
+      const claimed = await tx.invitation.updateMany({
+        where: { id: invitationId, recipientUserId: actorId, consumedAt: null, declinedAt: null, invalidatedAt: null, expiresAt: { gt: now } },
+        data: accept ? { consumedAt: now } : { declinedAt: now },
+      });
+      if (claimed.count !== 1) throw new ConflictException({ code: 'INVITATION_UNAVAILABLE', message: '邀请已处理、撤销或过期，请刷新收件箱。' });
+      if (accept) {
+        // Idempotent membership creation also handles a separately accepted invite.
+        await tx.membership.upsert({ where: { userId_householdId: { userId: actorId, householdId: scope.householdId } },
+          create: { userId: actorId, householdId: scope.householdId, role: 'MEMBER' }, update: {} });
+      }
+      return scope.householdId;
     });
-
-    if (household === null || household.ownerMembershipId === null) {
-      throw new NotFoundException({
-        code: 'HOUSEHOLD_NOT_FOUND',
-        message: 'Household not found or access denied.',
-      });
-    }
-
-    const actorMembership = household.memberships.find((m) => m.userId === actorId);
-    if (actorMembership === undefined) {
-      throw new NotFoundException({
-        code: 'HOUSEHOLD_NOT_FOUND',
-        message: 'Household not found or access denied.',
-      });
-    }
-
-    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
-    const actorRole = actorIsOwner ? 'OWNER' : actorMembership.role;
-    if (actorRole !== 'OWNER' && actorRole !== 'ADMIN') {
-      throw new ForbiddenException({
-        code: 'INSUFFICIENT_ROLE',
-        message: '只有所有者和管理员可以重新发送邀请。',
-      });
-    }
-
-    const invitation = await this.prisma.invitation.findFirst({
-      where: { id: invitationId, householdId },
-      include: { household: true, inviterUser: true },
-    });
-
-    if (invitation === null) {
-      throw new NotFoundException({
-        code: 'INVITATION_NOT_FOUND',
-        message: 'Invitation not found in this household.',
-      });
-    }
-
-    // Check if invitation is already in a terminal state
-    if (invitation.consumedAt !== null) {
-      throw new BadRequestException({
-        code: 'INVITATION_ALREADY_ACCEPTED',
-        message: '这个邀请已经接受过，不能重新发送。',
-      });
-    }
-
-    // For resend eligibility: pending or expired are both valid
-    if (invitation.invalidatedAt !== null) {
-      throw new BadRequestException({
-        code: 'INVITATION_ALREADY_REVOKED',
-        message: '这个邀请已经撤销，不能重新发送。',
-      });
-    }
-
-    // Generate new token, invalidate old, create new
-    const rawToken = opaqueToken();
-    const tokenHash = hashOpaqueToken(rawToken);
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + INVITE_LIFETIME_MS);
-
-    const householdName = invitation.household.name;
-    const inviterDisplayName = invitation.inviterUser.displayName;
-    const deliveryEmail = invitation.emailCanonical;
-    const link = invitation.recipientUserId !== null ? shareInvitationUrl(rawToken) : invitationUrl(rawToken);
-
-    await this.prisma.$transaction(async (transaction) => {
-      // Invalidate the current invitation.
-      await transaction.invitation.updateMany({
-        where: {
-          id: invitationId,
-          invalidatedAt: null,
-          consumedAt: null,
-        },
-        data: { invalidatedAt: now },
-      });
-
-      // Create a new invitation with rotated token and refreshed expiry.
-      await transaction.invitation.create({
-        data: {
-          inviterUserId: actorId,
-          inviterMembershipId: actorMembership.id,
-          householdId,
-          emailCanonical: invitation.emailCanonical,
-          recipientUserId: invitation.recipientUserId,
-          username: invitation.username,
-          hash: tokenHash,
-          role: 'MEMBER',
-          expiresAt,
-        },
-      });
-    }, { isolationLevel: 'Serializable' });
-
-    if (invitation.recipientUserId !== null) {
-      return { code: 'INVITATION_RESENT', message: '邀请链接已更新，请发给家人。', invitationUrl: link };
-    }
-    await this.mailPort.sendHouseholdInvitation({
-      to: deliveryEmail,
-      invitationUrl: link,
-      inviterDisplayName,
-      householdDisplayName: householdName,
-      expiresAt,
-    });
-
-    return { code: 'INVITATION_RESENT', message: '邀请已重新发送。' };
   }
 
-  async revokeInvitation(
-    actorId: string,
-    householdId: string,
-    invitationId: string,
-  ): Promise<{ code: 'INVITATION_REVOKED'; message: string }> {
-    const household = await this.prisma.household.findUnique({
-      where: { id: householdId },
-      include: { memberships: true },
+  async acceptInvitation(actorId: string, invitationId: string): Promise<GetHouseholdResponseDto> {
+    const householdId = await this.respondToInvitation(actorId, invitationId, true);
+    return (await this.getHousehold(actorId, householdId))!;
+  }
+
+  async declineInvitation(actorId: string, invitationId: string): Promise<void> {
+    await this.respondToInvitation(actorId, invitationId, false);
+  }
+
+  async listInvitations(actorId: string, householdId: string) {
+    return this.prisma.$transaction(async tx => {
+      await this.invitationManager(tx, actorId, householdId);
+      const now = new Date();
+      const invitations = await tx.invitation.findMany({ where: { householdId }, orderBy: { createdAt: 'desc' } });
+      return { invitations: invitations.map(inv => ({
+        id: inv.id, username: inv.username,
+        status: inv.consumedAt !== null ? 'accepted' as const
+          : inv.declinedAt !== null ? 'declined' as const
+          : inv.invalidatedAt !== null ? 'revoked' as const
+          : inv.expiresAt <= now ? 'expired' as const : 'pending' as const,
+        expiresAt: inv.expiresAt.toISOString(), role: inv.role, createdAt: inv.createdAt.toISOString(),
+      })) };
     });
+  }
 
-    if (household === null || household.ownerMembershipId === null) {
-      throw new NotFoundException({
-        code: 'HOUSEHOLD_NOT_FOUND',
-        message: 'Household not found or access denied.',
-      });
-    }
-
-    const actorMembership = household.memberships.find((m) => m.userId === actorId);
-    if (actorMembership === undefined) {
-      throw new NotFoundException({
-        code: 'HOUSEHOLD_NOT_FOUND',
-        message: 'Household not found or access denied.',
-      });
-    }
-
-    const actorIsOwner = actorMembership.id === household.ownerMembershipId;
-    const actorRole = actorIsOwner ? 'OWNER' : actorMembership.role;
-    if (actorRole !== 'OWNER' && actorRole !== 'ADMIN') {
-      throw new ForbiddenException({
-        code: 'INSUFFICIENT_ROLE',
-        message: '只有所有者和管理员可以撤销邀请。',
-      });
-    }
-
-    const invitation = await this.prisma.invitation.findFirst({
-      where: { id: invitationId, householdId },
+  async resendInvitation(actorId: string, householdId: string, invitationId: string) {
+    const invitation = await this.prisma.$transaction(async tx => {
+      const { member } = await this.invitationManager(tx, actorId, householdId);
+      const previous = await tx.invitation.findFirst({ where: { id: invitationId, householdId } });
+      if (!previous) throw new NotFoundException({ code: 'INVITATION_NOT_FOUND', message: 'Invitation not found.' });
+      if (previous.consumedAt !== null) throw new BadRequestException({ code: 'INVITATION_ALREADY_ACCEPTED', message: '邀请已经接受。' });
+      if (previous.declinedAt !== null) throw new BadRequestException({ code: 'INVITATION_ALREADY_DECLINED', message: '邀请已被拒绝，请重新邀请。' });
+      if (previous.invalidatedAt !== null) throw new BadRequestException({ code: 'INVITATION_ALREADY_REVOKED', message: '邀请已经撤销。' });
+      return this.deliverInvitation(tx, actorId, householdId, previous.recipientUserId, previous.username, member.id);
     });
+    return { code: 'INVITATION_RESENT' as const, message: '邀请已重新发送到对方的收件箱。', invitationId: invitation.id };
+  }
 
-    if (invitation === null) {
-      throw new NotFoundException({
-        code: 'INVITATION_NOT_FOUND',
-        message: 'Invitation not found in this household.',
-      });
-    }
-
-    // Safe revoke: only pending invitations can be revoked.
-    // Already terminal (consumed, expired, or previously revoked) succeed silently
-    // to satisfy the "safe action has no effect" contract.
-    if (invitation.consumedAt !== null || invitation.invalidatedAt !== null) {
-      return { code: 'INVITATION_REVOKED', message: '邀请已撤销。' };
-    }
-
-    const now = new Date();
-
-    // Conditional revoke: only revoke if still pending.
-    await this.prisma.invitation.updateMany({
-      where: {
-        id: invitationId,
-        consumedAt: null,
-        invalidatedAt: null,
-      },
-      data: { invalidatedAt: now },
+  async revokeInvitation(actorId: string, householdId: string, invitationId: string) {
+    await this.prisma.$transaction(async tx => {
+      await this.invitationManager(tx, actorId, householdId);
+      const invitation = await tx.invitation.findFirst({ where: { id: invitationId, householdId } });
+      if (!invitation) throw new NotFoundException({ code: 'INVITATION_NOT_FOUND', message: 'Invitation not found.' });
+      await tx.invitation.updateMany({ where: { id: invitationId, consumedAt: null, declinedAt: null, invalidatedAt: null }, data: { invalidatedAt: new Date() } });
     });
-
-    // If no rows updated (race condition), still return success.
-    return { code: 'INVITATION_REVOKED', message: '邀请已撤销。' };
+    return { code: 'INVITATION_REVOKED' as const, message: '邀请已撤销。' };
   }
 
   // ---- Role governance (D-09, D-10) ----
@@ -875,7 +405,7 @@ export class HouseholdsService {
     if (policyFailure === 'INSUFFICIENT_ROLE') {
       throw new ForbiddenException({
         code: 'INSUFFICIENT_ROLE',
-        message: '只有所有者和管理员可以变更成员角色。',
+        message: '只有所有者可以任免管理员。',
       });
     }
     if (policyFailure === 'SAME_ROLE') {
@@ -942,7 +472,7 @@ export class HouseholdsService {
             throw new ForbiddenException({ code: 'OWNER_UNTOUCHABLE', message: '所有者的角色不能变更。' });
           }
           if (currentFailure === 'INSUFFICIENT_ROLE') {
-            throw new ForbiddenException({ code: 'INSUFFICIENT_ROLE', message: '只有所有者和管理员可以变更成员角色。' });
+            throw new ForbiddenException({ code: 'INSUFFICIENT_ROLE', message: '只有所有者可以任免管理员。' });
           }
           if (currentFailure === 'SAME_ROLE') {
             throw new BadRequestException({ code: 'ROLE_UNCHANGED', message: '目标成员已经是该角色。' });
@@ -1013,7 +543,7 @@ export class HouseholdsService {
     const targetIsActor = targetMembership.userId === actorId;
 
     // Pure policy check (no DB access).
-    const policyFailure = removalFailure(targetIsOwner, actorRole, targetIsActor);
+    const policyFailure = removalFailure(targetIsOwner, actorRole, targetIsActor, targetMembership.role as Role);
     if (policyFailure === 'TARGET_IS_OWNER') {
       throw new ForbiddenException({
         code: 'OWNER_UNTOUCHABLE',
@@ -1023,7 +553,7 @@ export class HouseholdsService {
     if (policyFailure === 'INSUFFICIENT_ROLE') {
       throw new ForbiddenException({
         code: 'INSUFFICIENT_ROLE',
-        message: '只有所有者和管理员可以移除成员。',
+        message: '只有所有者可以移除管理员；管理员只能移除普通成员。',
       });
     }
     if (policyFailure === 'TARGET_IS_SELF') {
@@ -1079,16 +609,19 @@ export class HouseholdsService {
             currentTarget.id === locked.ownerMembershipId,
             currentActorRole,
             currentTarget.userId === actorId,
+            currentTarget.role as Role,
           );
           if (currentFailure === 'TARGET_IS_OWNER') {
             throw new ForbiddenException({ code: 'OWNER_UNTOUCHABLE', message: '所有者的成员关系不能移除。' });
           }
           if (currentFailure === 'INSUFFICIENT_ROLE') {
-            throw new ForbiddenException({ code: 'INSUFFICIENT_ROLE', message: '只有所有者和管理员可以移除成员。' });
+            throw new ForbiddenException({ code: 'INSUFFICIENT_ROLE', message: '只有所有者可以移除管理员；管理员只能移除普通成员。' });
           }
           if (currentFailure === 'TARGET_IS_SELF') {
             throw new BadRequestException({ code: 'CANNOT_REMOVE_SELF', message: '不能移除自己的成员关系，请使用离开家庭流程。' });
           }
+
+          await removeMemberAssignments(transaction, householdId, currentTarget.userId);
 
           // Conditional delete: only remove if the target membership still
           // has the role we loaded (stale detection) and is NOT the owner.
@@ -1259,6 +792,36 @@ export class HouseholdsService {
     throw new Error('Unreachable: transferOwnership retry loop exhausted.');
   }
 
+  /** Remove the caller's membership and task assignments. Content belongs to the household,
+   * not the membership, so events, tasks, notes and their authors remain intact.
+   */
+  async leaveMembership(actorId: string, householdId: string): Promise<void> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          // Use the same household lock as ownership transfer and member removal.
+          await tx.$queryRaw`SELECT "id" FROM "households" WHERE "id" = ${householdId}::uuid FOR UPDATE`;
+          const household = await tx.household.findUnique({
+            where: { id: householdId }, include: { memberships: { where: { userId: actorId } } },
+          });
+          const membership = household?.memberships[0];
+          if (household === null || membership === undefined) {
+            throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found or access denied.' });
+          }
+          if (household.ownerMembershipId === membership.id) {
+            throw new ForbiddenException({ code: 'OWNER_TRANSFER_REQUIRED', message: '请先转让家庭所有权，再离开家庭。' });
+          }
+          await removeMemberAssignments(tx, householdId, actorId);
+          await tx.membership.delete({ where: { id: membership.id } });
+        }, { isolationLevel: 'Serializable' });
+        return;
+      } catch (error) {
+        if (this.isSerializationConflict(error) && attempt < 2) continue;
+        throw error;
+      }
+    }
+  }
+
   // ---- Owner leave (D-11, D-12) ----
 
   /**
@@ -1396,6 +959,8 @@ export class HouseholdsService {
             });
           }
 
+          await removeMemberAssignments(transaction, householdId, actorId);
+
           // Delete the former owner's membership.
           // The deferred composite FK and non-null pointer validate at commit.
           await transaction.membership.delete({
@@ -1415,12 +980,17 @@ export class HouseholdsService {
   }
 
   private isSerializationConflict(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      (error as { code: string }).code === 'P2034'
-    );
+    if (typeof error !== 'object' || error === null || !('code' in error)) return false;
+    if (error.code === 'P2034') return true;
+    // Raw row-lock queries surface PostgreSQL 40001 through the pg adapter,
+    // rather than Prisma's model-query P2034 code. Retry the whole transaction.
+    if (error.code !== 'P2010' || !('meta' in error)) return false;
+    const meta = error.meta;
+    if (typeof meta !== 'object' || meta === null || !('driverAdapterError' in meta)) return false;
+    const adapter = meta.driverAdapterError;
+    if (typeof adapter !== 'object' || adapter === null || !('cause' in adapter)) return false;
+    const cause = adapter.cause;
+    return typeof cause === 'object' && cause !== null && 'kind' in cause && cause.kind === 'TransactionWriteConflict';
   }
 
   private toMembershipResponse(membership: {

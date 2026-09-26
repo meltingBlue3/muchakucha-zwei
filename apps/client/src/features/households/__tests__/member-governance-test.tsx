@@ -32,11 +32,9 @@ describe('member governance policy', () => {
       expect(canGovern('OWNER', true, 'ADMIN', false, true)).toBe(false);
     });
 
-    test('admin can govern non-owner members', () => {
-      // Admin can govern another admin (D-09)
-      expect(canGovern('ADMIN', false, 'ADMIN', false, false)).toBe(true);
-      // Admin can govern member
-      expect(canGovern('ADMIN', false, 'MEMBER', false, false)).toBe(true);
+    test('admin cannot appoint or demote admins', () => {
+      expect(canGovern('ADMIN', false, 'ADMIN', false, false)).toBe(false);
+      expect(canGovern('ADMIN', false, 'MEMBER', false, false)).toBe(false);
     });
 
     test('admin cannot govern owner', () => {
@@ -57,12 +55,12 @@ describe('member governance policy', () => {
   describe('governanceAction', () => {
     test('returns promote for MEMBER target', () => {
       expect(governanceAction('OWNER', true, 'MEMBER', false, false)).toBe('promote');
-      expect(governanceAction('ADMIN', false, 'MEMBER', false, false)).toBe('promote');
+      expect(governanceAction('ADMIN', false, 'MEMBER', false, false)).toBe('none');
     });
 
     test('returns demote for ADMIN target', () => {
       expect(governanceAction('OWNER', true, 'ADMIN', false, false)).toBe('demote');
-      expect(governanceAction('ADMIN', false, 'ADMIN', false, false)).toBe('demote');
+      expect(governanceAction('ADMIN', false, 'ADMIN', false, false)).toBe('none');
     });
 
     test('returns none for OWNER target', () => {

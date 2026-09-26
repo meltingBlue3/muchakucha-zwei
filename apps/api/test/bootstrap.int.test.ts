@@ -1,8 +1,8 @@
+import { Test } from '@nestjs/testing';
+import { AuthModule } from '../src/modules/auth/auth.module.js';
+import { PrismaModule } from '../src/infrastructure/prisma/prisma.module.js';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { MAIL_PORT } from '../src/infrastructure/mail/mail.port.js';
-import { ConsoleMailAdapter } from '../src/infrastructure/mail/console-mail.adapter.js';
-import { DisabledMailAdapter } from '../src/infrastructure/mail/disabled-mail.adapter.js';
 import { createApplication, parseRuntimeConfig } from '../src/main.js';
 
 const allowedOrigin = 'http://127.0.0.1:8081';
@@ -35,7 +35,6 @@ describe('versioned Fastify application boundary', () => {
     try {
       await productionApp.init();
       await productionApp.getHttpAdapter().getInstance().ready();
-      expect(productionApp.get(MAIL_PORT)).toBeInstanceOf(DisabledMailAdapter);
       const response = await productionApp.getHttpAdapter().getInstance().inject({
         method: 'GET', url: '/api/v1/openapi.json',
       });
@@ -45,10 +44,20 @@ describe('versioned Fastify application boundary', () => {
     }
   });
 
+  test('rejects missing or short production signing secrets', async () => {
+    for (const secret of [undefined, 'too-short']) {
+      await expect(Test.createTestingModule({
+        imports: [PrismaModule, AuthModule.register({
+          NODE_ENV: 'production',
+          ...(secret === undefined ? {} : { JWT_ACCESS_SECRET: secret }),
+        })],
+      }).compile()).rejects.toThrow('JWT_ACCESS_SECRET must contain at least 32 bytes.');
+    }
+  });
+
   test('boots Prisma, AuthModule, cookie parsing, throttling, and OpenAPI under /api/v1', async () => {
     const fastify = app.getHttpAdapter().getInstance();
     expect(fastify.hasRequestDecorator('cookies')).toBe(true);
-    expect(app.get(MAIL_PORT)).toBeInstanceOf(ConsoleMailAdapter);
 
     const openApi = await fastify.inject({ method: 'GET', url: '/api/v1/openapi.json' });
     expect(openApi.statusCode).toBe(200);

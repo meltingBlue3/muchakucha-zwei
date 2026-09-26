@@ -156,10 +156,10 @@ describe('typed design-token and composition contract', () => {
   });
 
   test('rejects raw visual literals across household route files', () => {
-    // Household route files in app/(protected)/ and app/invite/ must be thin shells.
+    // Household route files in app/(protected)/ and inbox must be thin shells.
     const routeFiles = [
       ...sourceFilesUnder('app/(protected)/households'),
-      ...sourceFilesUnder('app/invite'),
+      'app/(protected)/inbox.tsx',
     ];
     const rawStylePattern = /#[0-9A-Fa-f]{3,8}\b|(?:fontSize|borderRadius):\s*\d/;
     for (const path of routeFiles) {

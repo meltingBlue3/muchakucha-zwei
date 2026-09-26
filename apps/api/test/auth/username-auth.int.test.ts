@@ -2,8 +2,7 @@ import { createHash } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import * as argon2 from 'argon2';
 import { Client } from 'pg';
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
-import { MAIL_PORT, type MailPort } from '../../src/infrastructure/mail/mail.port.js';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { createApplication } from '../../src/main.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
@@ -11,7 +10,6 @@ const origin = 'http://127.0.0.1:8081';
 const password = 'password';
 const registration = { username: 'Family_member', password, confirmPassword: password, platform: 'native' };
 let app: NestFastifyApplication;
-let mail: MailPort;
 let requestAddress = 1;
 
 async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> {
@@ -43,8 +41,6 @@ beforeAll(async () => {
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
-  mail = app.get<MailPort>(MAIL_PORT);
-  vi.spyOn(mail, 'sendEmailVerification').mockResolvedValue(undefined);
 });
 
 afterAll(async () => {
@@ -53,7 +49,6 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetDatabase();
-  vi.mocked(mail.sendEmailVerification).mockClear();
 });
 
 describe('username registration and login', () => {
@@ -65,27 +60,23 @@ describe('username registration and login', () => {
       code: 'REGISTRATION_ACCEPTED', accessToken: expect.any(String), refreshToken: expect.any(String),
     });
     expect(response.headers['set-cookie']).toBeUndefined();
-    expect(mail.sendEmailVerification).not.toHaveBeenCalled();
 
     const me = await app.getHttpAdapter().getInstance().inject({
       method: 'GET', url: '/api/v1/users/me', headers: { authorization: `Bearer ${credentials.accessToken}` },
     });
     expect(me.statusCode).toBe(200);
-    expect(me.json()).toMatchObject({ username: 'Family_member', displayName: 'Family_member', email: '', emailVerified: false });
+    expect(me.json()).toMatchObject({ username: 'Family_member', displayName: 'Family_member' });
 
     await withDatabase(async (client) => {
-      const result = await client.query<{ email: null; email_canonical: null; password_hash: string; email_verified_at: null }>(
-        `SELECT "email", "email_canonical", "password_hash", "email_verified_at"
+      const result = await client.query<{ password_hash: string }>(
+        `SELECT "password_hash"
          FROM "User" WHERE "username_canonical" = 'family_member'`,
       );
       expect(result.rows).toHaveLength(1);
-      expect(result.rows[0]).toMatchObject({ email: null, email_canonical: null, email_verified_at: null });
       expect(result.rows[0]!.password_hash).toMatch(/^\$argon2id\$/);
       expect(await argon2.verify(result.rows[0]!.password_hash, password)).toBe(true);
       const tokens = await client.query<{ token_hash: string }>('SELECT "token_hash" FROM "RefreshToken"');
       expect(tokens.rows).toEqual([{ token_hash: createHash('sha256').update(credentials.refreshToken).digest('hex') }]);
-      const verification = await client.query('SELECT 1 FROM "EmailVerificationToken"');
-      expect(verification.rows).toHaveLength(0);
     });
 
     const refreshed = await post('refresh', { refreshToken: credentials.refreshToken });
@@ -155,7 +146,6 @@ describe('username registration and login', () => {
     const response = await post('login', { username: ' MÉMBER ', password, platform: 'native' });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ accessToken: expect.any(String), refreshToken: expect.any(String) });
-    expect(mail.sendEmailVerification).not.toHaveBeenCalled();
   });
 
   test('returns generic invalid credentials for missing accounts and incorrect passwords', async () => {
@@ -205,20 +195,66 @@ describe('username registration and login', () => {
     expect((await post('register', { ...registration, platform: 'web' })).statusCode).toBe(400);
   });
 
-  test('database requires exactly one complete account identity', async () => {
+  test('database requires a complete username identity', async () => {
     await withDatabase(async (client) => {
       const invalidIdentityColumns = [
         { columns: '', values: [] },
         { columns: ', "username"', values: ['family'] },
-        { columns: ', "email", "email_canonical", "username", "username_canonical"', values: ['a@example.test', 'a@example.test', 'family', 'family'] },
       ];
       for (const identity of invalidIdentityColumns) {
         const placeholders = identity.values.map((_, index) => `, $${index + 1}`).join('');
         await expect(client.query(
           `INSERT INTO "User" ("display_name", "password_hash"${identity.columns}) VALUES ('Member', '$argon2id$fixture'${placeholders})`,
           identity.values,
-        )).rejects.toMatchObject({ code: '23514' });
+        )).rejects.toMatchObject({ code: '23502' });
       }
     });
   });
+
+  test('preserves password whitespace, case, and Unicode without truncation', async () => {
+    const exactPassword = '  Aa密码👪 e\u0301  ';
+    expect((await post('register', {
+      ...registration, password: exactPassword, confirmPassword: exactPassword,
+    })).statusCode).toBe(202);
+    expect((await post('login', {
+      username: registration.username, password: exactPassword, platform: 'native',
+    })).statusCode).toBe(200);
+    for (const modified of [exactPassword.trim(), exactPassword.toLowerCase(), exactPassword.normalize('NFC')]) {
+      expect((await post('login', {
+        username: registration.username, password: modified, platform: 'native',
+      })).statusCode).toBe(401);
+    }
+  });
+
+  test('exposes no email verification, password recovery, or generated activation credentials', async () => {
+    const openApi = await app.getHttpAdapter().getInstance().inject({
+      method: 'GET', url: '/api/v1/openapi.json',
+    });
+    const paths = openApi.json<{ paths: Record<string, unknown> }>().paths;
+    for (const path of ['email-verifications/complete', 'email-verifications/resend', 'password-reset/request', 'password-reset/complete']) {
+      expect(paths).not.toHaveProperty(`/api/v1/auth/${path}`);
+      expect((await post(path, {})).statusCode).toBe(404);
+    }
+    const response = await post('register', registration);
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).not.toHaveProperty('pendingProof');
+    await withDatabase(async (client) => {
+      const removedTables = await client.query(`SELECT tablename FROM pg_tables
+        WHERE schemaname = 'public' AND tablename IN ('EmailVerificationToken', 'PasswordResetToken')`);
+      expect(removedTables.rows).toHaveLength(0);
+    });
+  });
+
+  test('rejects email-only registration and login without creating accounts or sessions', async () => {
+    const registered = await post('register', {
+      email: 'legacy@example.test', displayName: 'Legacy', password, platform: 'native',
+    });
+    const loggedIn = await post('login', { email: 'legacy@example.test', password, platform: 'native' });
+    expect([registered.statusCode, loggedIn.statusCode]).toEqual([400, 400]);
+    await withDatabase(async (client) => {
+      expect((await client.query('SELECT 1 FROM "User"')).rows).toHaveLength(0);
+      expect((await client.query('SELECT 1 FROM "AuthSession"')).rows).toHaveLength(0);
+    });
+  });
+
 });

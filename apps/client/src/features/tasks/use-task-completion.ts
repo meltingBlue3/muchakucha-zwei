@@ -1,3 +1,4 @@
+import { isEditConflict } from '../../ui/edit-conflict';
 import { useCallback, useState } from 'react';
 import { ApiClientError, type TaskResponseDto } from '@muchakucha/api-client';
 
@@ -15,7 +16,7 @@ export interface TaskCardCompletionProps {
   onToggleComplete: (task: TaskResponseDto) => void;
   statusChanging: boolean;
   statusError: string | null;
-  onRetryStatus: () => void;
+  onRetryStatus?: () => void;
   canUndoComplete: boolean;
   onUndoComplete: () => void;
 }
@@ -50,19 +51,20 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
         setFailure({ taskId: attempt.task.id, message: '登录已过期，请重新登录。' });
         return;
       }
-      await sessionApiClient.updateTask(token, householdId, attempt.task.id, {
-        title: attempt.task.title,
+      const saved = await sessionApiClient.updateTask(token, householdId, attempt.task.id, {
         status: attempt.target,
-        priority: attempt.task.priority,
+        expectedUpdatedAt: attempt.task.updatedAt,
+        ...(attempt.task.recurrence ? { expectedRuleUpdatedAt: attempt.task.recurrence.updatedAt } : {}),
       });
       // Only a completion is undoable, and only until the next write.
       setUndoable(
         attempt.target === 'completed'
-          ? { task: attempt.task, previousStatus: attempt.previousStatus }
+          ? { task: saved ?? attempt.task, previousStatus: attempt.previousStatus }
           : null,
       );
       refresh();
     } catch (caught: unknown) {
+      if (isEditConflict(caught)) { setLastAttempt(null); setUndoable(null); }
       // WR-14: a 403 (another member's task), a 404 (the occurrence was
       // cancelled or split away by someone else), and an offline device all
       // looked identical — the spinner stopped and the card re-rendered
@@ -71,7 +73,7 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
       setFailure({
         taskId: attempt.task.id,
         message:
-          caught instanceof ApiClientError && caught.status === 403
+          isEditConflict(caught) ? '内容已更新，请查看最新状态后再操作。' : caught instanceof ApiClientError && caught.status === 403
             ? '你没有权限修改这个任务。'
             : '状态没有更新成功，请重试。',
       });
@@ -102,10 +104,10 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
     onToggleComplete: toggleCompletion,
     statusChanging: changingTaskId === task.id,
     statusError: failure !== null && failure.taskId === task.id ? failure.message : null,
-    onRetryStatus: retryStatus,
+    ...(lastAttempt === null ? {} : { onRetryStatus: retryStatus }),
     canUndoComplete: undoable !== null && undoable.task.id === task.id,
     onUndoComplete: undoCompletion,
-  }), [toggleCompletion, changingTaskId, failure, retryStatus, undoable, undoCompletion]);
+  }), [toggleCompletion, changingTaskId, failure, retryStatus, undoable, undoCompletion, lastAttempt]);
 
   return {
     cardProps,

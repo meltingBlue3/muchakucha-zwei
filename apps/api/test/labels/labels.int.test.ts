@@ -1,3 +1,4 @@
+import { fixtureEditPayload } from '../../../../scripts/test-edit-version.js';
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
@@ -34,14 +35,14 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function insertActor(email: string, displayName: string): Promise<ActorFixture> {
+async function insertActor(username: string, displayName: string): Promise<ActorFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, email.toLowerCase(), displayName, passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, username.toLowerCase(), displayName, passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -58,6 +59,10 @@ async function request(
   url: string,
   payload?: unknown,
 ): Promise<ApiResponse> {
+  payload = await fixtureEditPayload(method, `/api/v1${url}`, payload, async (readUrl) => {
+    const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
+    return snapshot.json();
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (app.getHttpAdapter().getInstance() as any).inject({
     method,
@@ -161,10 +166,10 @@ describe('labels API contract', () => {
 
   beforeEach(async () => {
     [owner, admin, member, outsider] = await Promise.all([
-      insertActor('owner-labels@example.test', '标签主人'),
-      insertActor('admin-labels@example.test', '标签管理员'),
-      insertActor('member-labels@example.test', '标签成员'),
-      insertActor('outsider-labels@example.test', '无关人员'),
+      insertActor('owner-labels', '标签主人'),
+      insertActor('admin-labels', '标签管理员'),
+      insertActor('member-labels', '标签成员'),
+      insertActor('outsider-labels', '无关人员'),
     ]);
     householdId = await createHousehold(owner.accessToken, '标签组');
     await addMemberViaDb(householdId, admin, 'ADMIN');

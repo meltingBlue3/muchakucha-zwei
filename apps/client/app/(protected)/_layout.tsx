@@ -1,3 +1,4 @@
+import { draftWorkspace } from '../../src/ui/workspace-runtime';
 import { WorkspaceStateProvider } from '../../src/ui/workspace-state';
 import { Stack } from 'expo-router';
 import React, { useMemo } from 'react';
@@ -77,7 +78,7 @@ export default function ProtectedLayout() {
     React.createElement(
       ResolvingGate,
       null,
-      React.createElement(WorkspaceStateProvider, null, React.createElement(Stack, { screenOptions: { headerShown: false } })),
+      React.createElement(WorkspaceStateProvider, { store: draftWorkspace }, React.createElement(Stack, { screenOptions: { headerShown: false } })),
     ),
   );
 }

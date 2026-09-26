@@ -19,7 +19,7 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function insertVerifiedUser(): Promise<string> {
+async function insertUser(): Promise<string> {
   const passwordHash = await argon2.hash(password, {
     type: argon2.argon2id,
     memoryCost: 19_456,
@@ -28,8 +28,8 @@ async function insertVerifiedUser(): Promise<string> {
   });
   return withDatabase(async (client) => {
     const result = await client.query<{ id: string }>(
-      `INSERT INTO "User" ("email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ('logout@example.test', 'logout@example.test', 'Member', $1, CURRENT_TIMESTAMP)
+      `INSERT INTO "User" ("username", "username_canonical", "display_name", "password_hash")
+       VALUES ('logout', 'logout', 'Member', $1)
        RETURNING "id"`,
       [passwordHash],
     );
@@ -48,7 +48,7 @@ async function login(platform: 'native' | 'web', origin = allowedOrigin) {
       'content-type': 'application/json',
       ...(platform === 'web' ? { origin } : {}),
     },
-    payload: { email: 'logout@example.test', password, platform },
+    payload: { username: 'logout', password, platform },
     remoteAddress: `127.60.${Math.floor(requestAddress / 250)}.${(requestAddress++ % 250) + 1}`,
   });
 }
@@ -108,7 +108,7 @@ beforeEach(async () => {
 
 describe('current-device logout API contract', () => {
   test('revokes exactly the session sid from the verified access token', async () => {
-    await insertVerifiedUser();
+    await insertUser();
     const deviceA = await login('native');
     const { accessToken } = deviceA.json() as { accessToken: string };
     expect((await logout(accessToken)).statusCode).toBe(204);
@@ -123,7 +123,7 @@ describe('current-device logout API contract', () => {
   });
 
   test('rejects attempts to target a user or session through the request body', async () => {
-    await insertVerifiedUser();
+    await insertUser();
     const deviceA = await login('native');
     const { accessToken } = deviceA.json() as { accessToken: string };
     const response = await logout(accessToken, { sessionId: 'device-b', userId: 'another-user' });
@@ -131,7 +131,7 @@ describe('current-device logout API contract', () => {
   });
 
   test('is idempotent for repeated current-device logout', async () => {
-    await insertVerifiedUser();
+    await insertUser();
     const deviceA = await login('native');
     const { accessToken } = deviceA.json() as { accessToken: string };
     const first = await logout(accessToken);
@@ -144,7 +144,7 @@ describe('current-device logout API contract', () => {
     process.env.NODE_ENV = 'production';
     process.env.WEB_ORIGIN = productionOrigin;
     try {
-      await insertVerifiedUser();
+      await insertUser();
       const deviceA = await login('web', productionOrigin);
       const { accessToken } = deviceA.json() as { accessToken: string };
       const issuedCookie = deviceA.headers['set-cookie'] as string;
@@ -166,7 +166,7 @@ describe('current-device logout API contract', () => {
   });
 
   test('prevents the logged-out device refresh token from being used again', async () => {
-    const userId = await insertVerifiedUser();
+    const userId = await insertUser();
     const deviceA = await login('native');
     const deviceB = await login('native');
     const credentialsA = deviceA.json() as { accessToken: string; refreshToken: string };

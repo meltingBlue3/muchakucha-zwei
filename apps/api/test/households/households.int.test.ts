@@ -16,7 +16,7 @@ let passwordHash: string;
 interface ActorFixture {
   accessToken: string;
   userId: string;
-  email: string;
+  username: string;
   displayName: string;
 }
 
@@ -31,18 +31,18 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
 }
 
 async function insertActor(
-  email: string,
+  username: string,
   displayName: string,
-  emailCanonical?: string,
+  usernameCanonical?: string,
 ): Promise<ActorFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
-  const canonical = emailCanonical ?? email.trim().normalize('NFC').toLowerCase();
+  const canonical = usernameCanonical ?? username.trim().normalize('NFC').toLowerCase();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, canonical, displayName, passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, canonical, displayName, passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -52,7 +52,7 @@ async function insertActor(
   });
   return {
     userId,
-    email,
+    username,
     displayName,
     accessToken: await jwt.signAsync({ sub: userId, sid: sessionId }),
   };
@@ -136,10 +136,10 @@ describe('household roster API contract', () => {
 
   beforeEach(async () => {
     [owner, admin, member, outsider] = await Promise.all([
-      insertActor('owner@example.test', '家主'),
-      insertActor('admin@example.test', '管理员'),
-      insertActor('member@example.test', '普通成员'),
-      insertActor('outsider@example.test', '无关人员'),
+      insertActor('owner', '家主'),
+      insertActor('admin', '管理员'),
+      insertActor('member', '普通成员'),
+      insertActor('outsider', '无关人员'),
     ]);
     householdId = await createHouseholdViaApi(owner.accessToken, '温暖小家');
 
@@ -240,24 +240,24 @@ describe('household roster API contract', () => {
     expect(response.statusCode).toBe(404);
   });
 
-  test('tie-breaks displayName with canonical email ascending', async () => {
-    // Add two members with the same display name but different emails.
-    const tieA = await insertActor('aaa@example.test', '相同昵称', 'aaa@example.test');
-    const tieB = await insertActor('bbb@example.test', '相同昵称', 'bbb@example.test');
+  test('tie-breaks displayName with canonical username ascending', async () => {
+    // Add two members with the same display name but different usernames.
+    const tieA = await insertActor('aaa', '相同昵称', 'aaa');
+    const tieB = await insertActor('bbb', '相同昵称', 'bbb');
     await addMemberViaDb(householdId, tieA, 'MEMBER');
     await addMemberViaDb(householdId, tieB, 'MEMBER');
 
     const response = await getHousehold(owner.accessToken, householdId);
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    const members: Array<{ displayName: string; email: string }> = body.members;
+    const members: Array<{ displayName: string; username: string }> = body.members;
 
     // Find the two tied members.
     const tiedMembers = members.filter((m) => m.displayName === '相同昵称');
     expect(tiedMembers).toHaveLength(2);
-    // Lower canonical email ('aaa@example.test') should come first.
-    expect(tiedMembers[0]!.email).toBe('aaa@example.test');
-    expect(tiedMembers[1]!.email).toBe('bbb@example.test');
+    // Lower canonical username ('aaa') should come first.
+    expect(tiedMembers[0]!.username).toBe('aaa');
+    expect(tiedMembers[1]!.username).toBe('bbb');
   });
 
   test('requires a valid active access-token session', async () => {
@@ -285,10 +285,10 @@ describe('household rename API contract', () => {
 
   beforeEach(async () => {
     [owner, admin, member, outsider] = await Promise.all([
-      insertActor('owner-rename@example.test', '家主'),
-      insertActor('admin-rename@example.test', '管理员'),
-      insertActor('member-rename@example.test', '普通成员'),
-      insertActor('outsider-rename@example.test', '无关人员'),
+      insertActor('owner-rename', '家主'),
+      insertActor('admin-rename', '管理员'),
+      insertActor('member-rename', '普通成员'),
+      insertActor('outsider-rename', '无关人员'),
     ]);
     householdId = await createHouseholdViaApi(owner.accessToken, '温暖小家');
 

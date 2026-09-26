@@ -1,4 +1,5 @@
 import { BlurTargetView } from 'expo-blur';
+import Inbox from 'lucide-react-native/icons/inbox';
 import { AccountMenu } from './account-menu';
 import { DialogBackground } from './dialog-background';
 import type { GetHouseholdMemberDto, ListMyHouseholdsItemDto } from '@muchakucha/api-client';
@@ -34,6 +35,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
   Button,
+  IconButton,
   Heading,
   Inline,
   Spinner,
@@ -109,7 +111,7 @@ export const AppShell = ({
           }}
         >
           {/* Left: back button */}
-          {headerContent === undefined || showBack ? <View style={{ width: 44, alignItems: 'flex-start' }}>
+          {headerContent === undefined || showBack ? <View style={{ width: showProfile && headerContent === undefined ? theme.controlSizes.touchTarget * 2 : theme.controlSizes.touchTarget, alignItems: 'flex-start' }}>
             {showBack ? (
               <Pressable
                 accessibilityLabel="返回"
@@ -140,9 +142,9 @@ export const AppShell = ({
             {title ?? ''}
           </Text> : <View style={{ flex: 1, minWidth: 0, paddingRight: theme.spacing[4] }}>{headerContent}</View>}
 
-          {/* Right: profile */}
-          <View style={{ width: 44, alignItems: 'flex-end' }}>
-            {showProfile ? <AccountMenu /> : null}
+          {/* Global destinations: inbox directly precedes the account menu. */}
+          <View style={{ minWidth: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center' }}>
+            {showProfile ? <><IconButton label="收件箱" icon={<Inbox color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} /><AccountMenu /></> : null}
           </View>
         </View>
       ) : null}
@@ -670,7 +672,7 @@ export const MemberRow = ({
           </Text>
         </View>
 
-        {/* Name, email, role */}
+        {/* Name, username, role */}
         <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>
           <Inline gap={2} style={{ alignItems: 'center' }}>
             <Text
@@ -693,7 +695,7 @@ export const MemberRow = ({
             numberOfLines={1}
             variant="caption"
           >
-            {member.username ?? member.email}
+            {member.username}
           </Text>
         </Stack>
 
@@ -752,14 +754,14 @@ const INVITATION_STATUS_LABELS: Record<string, string> = Object.freeze({
   expired: '已过期',
   accepted: '已接受',
   revoked: '已撤销',
+  declined: '已拒绝',
 });
 
 export interface InvitationRowProps {
   invitation: {
     id: string;
-    emailCanonical: string;
-    username?: string;
-    status: 'pending' | 'expired' | 'accepted' | 'revoked';
+    username: string;
+    status: 'pending' | 'expired' | 'accepted' | 'revoked' | 'declined';
     expiresAt: string;
     role: string;
     createdAt: string;
@@ -784,7 +786,7 @@ export const InvitationRow = ({
   labeledActions = false,
 }: InvitationRowProps) => {
   const revokeTrigger = useRef<View>(null);
-  const recipient = invitation.username ?? invitation.emailCanonical;
+  const recipient = invitation.username;
   const statusLabel = INVITATION_STATUS_LABELS[invitation.status] ?? invitation.status;
   const isPending = invitation.status === 'pending';
   const isExpired = invitation.status === 'expired';
@@ -814,7 +816,7 @@ export const InvitationRow = ({
         paddingVertical: theme.spacing[2],
       }}
     >
-      {/* Email icon placeholder */}
+      {/* Recipient icon */}
       <View
         accessibilityLabel={`${recipient}的邀请`}
         accessibilityRole="image"
@@ -830,7 +832,7 @@ export const InvitationRow = ({
         <Mail color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
       </View>
 
-      {/* Email, status, expiry */}
+      {/* Username, status, expiry */}
       <Stack gap={1} style={{ flex: 1, minWidth: 0, flexBasis: theme.controlSizes.primary * 2 }}>
         <Text
           numberOfLines={1}

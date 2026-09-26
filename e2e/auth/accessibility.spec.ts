@@ -49,9 +49,7 @@ test.describe('Web authentication accessibility matrix', () => {
         body: JSON.stringify({
           id: 'accessibility-user',
           username: 'family-member',
-          email: '',
           displayName: '家庭成员',
-          emailVerified: false,
           hasHousehold: false,
         }),
       }),

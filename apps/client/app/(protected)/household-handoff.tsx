@@ -21,7 +21,7 @@ export default function HouseholdHandoffRoute() {
     <AppShell title="设置家庭" accessibilityLabel="设置家庭" showProfile>
       <Stack gap={6} style={{ width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center' }}>
         {viewState === 'noHousehold' ? (
-          <HouseholdSetup onCreate={() => router.push('/households/new')} onJoin={() => router.push('/invite')} />
+          <HouseholdSetup onCreate={() => router.push('/households/new')} onJoin={() => router.push('/inbox')} />
         ) : viewState === 'accessChanged' ? (
           <AccessChangedPanel hasOtherHouseholds={households.length > 0}
             {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}

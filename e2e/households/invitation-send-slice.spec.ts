@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { Client } from 'pg';
@@ -26,7 +25,7 @@ async function createAccount(request: APIRequestContext, seed: string) {
 }
 
 // Keep one test in this dedicated feature slice for the required-tests gate.
-test('shares a username invitation from settings [RED:INVITATION_SEND]', async ({ browser, page, request }) => {
+test('delivers a username invitation to the inbox from settings [RED:INVITATION_SEND]', async ({ browser, page, request }) => {
   test.setTimeout(120_000);
   const owner = await createAccount(request, 'owner');
   const member = await createAccount(request, 'member');
@@ -61,44 +60,36 @@ test('shares a username invitation from settings [RED:INVITATION_SEND]', async (
     const inviteUsername = dialog.getByLabel('用户名', { exact: true });
     await inviteUsername.fill(outsider.username);
     await dialog.getByRole('button', { name: '发送邀请', exact: true }).click();
-    await expect(dialog.getByText('邀请链接已生成，请发给家人。')).toBeVisible();
+    await expect(dialog.getByText('邀请已发送到对方的收件箱。')).toBeVisible();
     await expect(inviteUsername).toHaveValue('');
-    const shareLink = dialog.getByLabel('邀请链接', { exact: true });
-    await expect(shareLink).toBeVisible();
-    const firstUrl = (await shareLink.textContent())!;
-    const rawToken = decodeURIComponent(new URL(firstUrl).pathname.split('/').at(-1)!);
-    expect(firstUrl).toContain('/invite/');
-
+    await expect(dialog.getByLabel('邀请链接', { exact: true })).toHaveCount(0);
     const stored = await database.query<{
       id: string;
-      hash: string;
       recipient_user_id: string;
       role: string;
       consumed_at: Date | null;
       invalidated_at: Date | null;
     }>(
-      `SELECT "id", "hash", "recipient_user_id", "role", "consumed_at", "invalidated_at"
+      `SELECT "id", "recipient_user_id", "role", "consumed_at", "invalidated_at"
        FROM "invitations" WHERE "household_id" = $1 ORDER BY "created_at" DESC`,
       [household.id],
     );
     expect(stored.rows).toHaveLength(1);
     const invitation = stored.rows[0]!;
     expect(invitation).toMatchObject({
-      hash: createHash('sha256').update(rawToken).digest('hex'),
       recipient_user_id: outsider.userId,
       role: 'MEMBER',
       consumed_at: null,
       invalidated_at: null,
     });
-    expect(JSON.stringify(stored.rows)).not.toContain(rawToken);
 
-    // Resending from the pending list reopens the dialog with a rotated link.
+
+    // Resending from the pending list reopens the dialog with delivery confirmation.
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await page.getByRole('button', { name: `重新发送邀请给 ${outsider.username}`, exact: true }).click();
-    await expect(dialog.getByText('邀请链接已更新，请发给家人。')).toBeVisible();
-    await expect(shareLink).toBeVisible();
-    await expect(shareLink).not.toHaveText(firstUrl);
+    await expect(dialog.getByText('邀请已重新发送到对方的收件箱。')).toBeVisible();
+
     const rotated = await database.query<{ invalidated_at: Date | null }>(
       `SELECT "invalidated_at" FROM "invitations" WHERE "id" = $1`,
       [invitation.id],
@@ -129,25 +120,24 @@ test('shares a username invitation from settings [RED:INVITATION_SEND]', async (
       data: { username: outsider.username },
     });
     expect(adminSend.status()).toBe(201);
-    const acceptedInvitation = await adminSend.json() as { code: string; invitationUrl: string };
+    const acceptedInvitation = await adminSend.json() as { code: string; invitationId: string };
     expect(acceptedInvitation.code).toBe('INVITATION_SENT');
 
     const recipientContext = await browser.newContext();
     try {
       const recipientPage = await recipientContext.newPage();
-      await recipientPage.goto(acceptedInvitation.invitationUrl);
-      await recipientPage.getByRole('button', { name: '登录并继续' }).click();
+      await recipientPage.goto('/login?intended=%2Finbox');
       await recipientPage.getByLabel('用户名', { exact: true }).fill(outsider.username);
       await recipientPage.getByLabel('密码', { exact: true }).fill(password);
       await recipientPage.getByRole('button', { name: '登录' }).click();
-      await expect(recipientPage).toHaveURL(/\/invite$/);
-      await expect(recipientPage.getByRole('button', { name: '接受邀请', exact: true })).toBeVisible();
+      await expect(recipientPage).toHaveURL(/\/inbox$/);
+      await expect(recipientPage.getByRole('button', { name: '接受「温暖小家」的邀请', exact: true })).toBeVisible();
       const beforeAccept = await request.get(`${API_ORIGIN}/api/v1/households`, {
         headers: { authorization: `Bearer ${outsider.accessToken}` },
       });
       expect(await beforeAccept.json()).toEqual([]);
-      await recipientPage.getByRole('button', { name: '接受邀请', exact: true }).click();
-      await expect(recipientPage.getByRole('heading', { name: '邀请已接受' })).toBeVisible();
+      await recipientPage.getByRole('button', { name: '接受「温暖小家」的邀请', exact: true }).click();
+      await expect(recipientPage).toHaveURL(new RegExp(`/households/${household.id}`));
       const afterAccept = await request.get(`${API_ORIGIN}/api/v1/households`, {
         headers: { authorization: `Bearer ${outsider.accessToken}` },
       });

@@ -101,7 +101,7 @@ export default function HouseholdsIndexRoute() {
     return (
       <AppShell accessibilityLabel="还没有家庭" title="设置家庭" showProfile>
         <Stack style={{ width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center' }}>
-          <HouseholdSetup onCreate={() => router.push('/households/new')} onJoin={() => router.push('/invite')} />
+          <HouseholdSetup onCreate={() => router.push('/households/new')} onJoin={() => router.push('/inbox')} />
         </Stack>
       </AppShell>
     );

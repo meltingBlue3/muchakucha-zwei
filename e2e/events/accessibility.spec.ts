@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -10,22 +10,22 @@ const DATABASE_URL = process.env.DATABASE_URL ??
   'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
 const password = 'correct horse battery staple 2026';
 
-type Fixture = { accessToken: string; email: string; eventId: string; householdId: string; title: string };
+type Fixture = { accessToken: string; username: string; eventId: string; householdId: string; title: string };
 
 async function prepareFixture(): Promise<Fixture> {
-  const email = `event-a11y-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+  const username = `fixture-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
   const database = new Client({ connectionString: DATABASE_URL });
   await database.connect();
   try {
     const registered = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, displayName: '事件无障碍用户', password, platform: 'web' }),
+      body: JSON.stringify({ username, confirmPassword: password, password, platform: 'web' }),
     });
     expect(registered.status).toBe(202);
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, '事件无障碍用户'],
     );
   } finally {
     await database.end();
@@ -34,7 +34,7 @@ async function prepareFixture(): Promise<Fixture> {
   const loggedIn = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-    body: JSON.stringify({ email, password, platform: 'web' }),
+    body: JSON.stringify({ username, password, platform: 'web' }),
   });
   expect(loggedIn.status).toBe(200);
   const { accessToken } = await loggedIn.json() as { accessToken: string };
@@ -59,11 +59,11 @@ async function prepareFixture(): Promise<Fixture> {
   });
   expect(event.status).toBe(201);
   const { id: eventId } = await event.json() as { id: string };
-  return { accessToken, email, eventId, householdId, title };
+  return { accessToken, username, eventId, householdId, title };
 }
 
-async function loginFixture(page: Page, email: string) {
-  await loginEmailFixture(page, email, password);
+async function loginFixture(page: Page, username: string) {
+  await loginUsernameFixture(page, username, password);
 }
 
 async function openCalendar(page: Page) {
@@ -103,7 +103,7 @@ test.describe('event recurrence accessibility', () => {
   test.beforeAll(async () => { fixture = await prepareFixture(); });
 
   test('has no serious axe violations on list, create, detail, and edit routes', async ({ page }) => {
-    await loginFixture(page, fixture.email);
+    await loginFixture(page, fixture.username);
     await openCalendar(page);
     await expectNoSeriousAxeViolations(page);
     await page.getByLabel('创建事件').click();
@@ -118,7 +118,7 @@ test.describe('event recurrence accessibility', () => {
   });
 
   test('supports keyboard traversal and directional radio selection', async ({ page }) => {
-    await loginFixture(page, fixture.email);
+    await loginFixture(page, fixture.username);
     await openNewEvent(page);
     await page.getByLabel('事件标题').focus();
     await page.keyboard.press('Tab');
@@ -133,7 +133,7 @@ test.describe('event recurrence accessibility', () => {
   });
 
   test('keeps the last weekday selected and announces the constraint', async ({ page }) => {
-    await loginFixture(page, fixture.email);
+    await loginFixture(page, fixture.username);
     await openNewEvent(page);
     await page.getByLabel('每周', { exact: true }).click();
     const selectedLabel = await page.getByRole('checkbox').evaluateAll((nodes) =>
@@ -146,7 +146,7 @@ test.describe('event recurrence accessibility', () => {
   });
 
   test('traps focus in SeriesScopeSheet, closes on Escape, and returns focus', async ({ page }) => {
-    await loginFixture(page, fixture.email);
+    await loginFixture(page, fixture.username);
     await openEventEdit(page, fixture);
     const deleteTrigger = page.getByLabel('删除事件');
     await deleteTrigger.click();
@@ -162,7 +162,7 @@ test.describe('event recurrence accessibility', () => {
 
   test('remains usable at 200% zoom without horizontal overflow or inert weekday chips', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
-    await loginFixture(page, fixture.email);
+    await loginFixture(page, fixture.username);
     await openNewEvent(page);
     await page.getByLabel('每周', { exact: true }).click();
     await page.evaluate(() => { document.documentElement.style.zoom = '2'; });

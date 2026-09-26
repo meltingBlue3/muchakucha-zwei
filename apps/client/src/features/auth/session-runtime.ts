@@ -1,3 +1,4 @@
+import { draftWorkspace } from '../../ui/workspace-runtime';
 import { ApiClient } from '@muchakucha/api-client';
 import { Platform } from 'react-native';
 
@@ -13,3 +14,13 @@ export const sessionTransport =
   Platform.OS === 'web'
     ? createWebSessionTransport(sessionApiClient)
     : createNativeSessionTransport(sessionApiClient);
+
+// Session changes are synchronous: account drafts are loaded before protected
+// forms mount, and sign-out clears them even when navigating outside that tree.
+sessionStateStore.subscribe((state) => {
+  if (state.kind === 'authenticated' && state.session.currentUser !== undefined) {
+    draftWorkspace.activateAccount(state.session.currentUser.id);
+  } else if (state.kind === 'unauthenticated' || state.kind === 'reauthRequired') {
+    draftWorkspace.endSession();
+  }
+});

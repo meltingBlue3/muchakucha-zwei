@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -10,18 +10,18 @@ const DATABASE_URL =
   'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
 const password = 'correct horse battery staple 2026';
 
-async function prepareVerifiedAccount(seed: string): Promise<{ email: string; accessToken: string }> {
+async function prepareAccount(seed: string): Promise<{ username: string; accessToken: string }> {
   const database = new Client({ connectionString: DATABASE_URL });
   await database.connect();
 
-  const email = `context-slice-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+  const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
   try {
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
       body: JSON.stringify({
-        email,
-        displayName: '家主',
+        username,
+        confirmPassword: password,
         password,
         platform: 'web',
       }),
@@ -29,21 +29,21 @@ async function prepareVerifiedAccount(seed: string): Promise<{ email: string; ac
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, '家主'],
     );
 
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody: unknown = await loginResponse.json();
     const accessToken = (loginBody as { accessToken?: string }).accessToken;
     expect(accessToken).toBeDefined();
 
-    return { email, accessToken };
+    return { username, accessToken };
   } finally {
     await database.end();
   }
@@ -71,7 +71,7 @@ test('lists restores switches and explains access loss', async ({ page, request 
   test.setTimeout(120_000);
 
   // --- Arrange: create the primary actor with two households ---
-  const primary = await prepareVerifiedAccount('primary');
+  const primary = await prepareAccount('primary');
   const householdA = await createHousehold(primary.accessToken, '主家');
   const householdB = await createHousehold(primary.accessToken, '别墅');
 
@@ -97,7 +97,7 @@ test('lists restores switches and explains access loss', async ({ page, request 
   }
 
   // --- Verify: a different actor cannot list the primary's households ---
-  const secondary = await prepareVerifiedAccount('secondary');
+  const secondary = await prepareAccount('secondary');
   const secondaryList = await request.get(`${API_ORIGIN}/api/v1/households`, {
     headers: { authorization: `Bearer ${secondary.accessToken}` },
   });
@@ -117,7 +117,7 @@ test('lists restores switches and explains access loss', async ({ page, request 
   }
 
   // --- UI: navigate to the no-household handoff for a fresh actor ---
-  await loginEmailFixture(page, secondary.email, password);
+  await loginUsernameFixture(page, secondary.username, password);
   await page.goto('/household-handoff');
   await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
 
@@ -125,7 +125,7 @@ test('lists restores switches and explains access loss', async ({ page, request 
   // This path exercises the household-context provider, session-bootstrap extension,
   // and /households route rendering.
   await page.context().clearCookies();
-  await loginEmailFixture(page, primary.email, password);
+  await loginUsernameFixture(page, primary.username, password);
   await page.goto('/households');
   await expect(page).toHaveURL(/\/households/);
 

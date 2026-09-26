@@ -62,9 +62,6 @@ importers:
       lucide-react-native:
         specifier: 1.28.0
         version: 1.28.0(react-native-svg@15.15.5(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
-      nodemailer:
-        specifier: 9.0.3
-        version: 9.0.3
       pg:
         specifier: 8.22.0
         version: 8.22.0
@@ -96,9 +93,6 @@ importers:
       '@types/jest':
         specifier: 30.0.0
         version: 30.0.0
-      '@types/nodemailer':
-        specifier: 8.0.1
-        version: 8.0.1
       '@types/pg':
         specifier: 8.20.0
         version: 8.20.0
@@ -165,16 +159,10 @@ importers:
       class-validator:
         specifier: 0.15.1
         version: 0.15.1
-      nodemailer:
-        specifier: 9.0.3
-        version: 9.0.3
       pg:
         specifier: 8.22.0
         version: 8.22.0
     devDependencies:
-      '@types/nodemailer':
-        specifier: 8.0.1
-        version: 8.0.1
       '@types/pg':
         specifier: 8.20.0
         version: 8.20.0
@@ -211,6 +199,9 @@ importers:
       expo-build-properties:
         specifier: ~57.0.9
         version: 57.0.9(expo@57.0.9)
+      expo-file-system:
+        specifier: 57.0.1
+        version: 57.0.1(expo@57.0.9)(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))
       expo-router:
         specifier: 57.0.9
         version: 57.0.9(b0f30a24c130a3f9409060e3795cc08f)
@@ -2253,9 +2244,6 @@ packages:
 
   '@types/node@26.1.2':
     resolution: {integrity: sha512-Vu4a5UFA9rIIFJ7rB/Vaafh9lrCQszopTCx6KjFboXTGQbPNasehVR5TEiithSDGyd1DEiUByggTZsg8jukeIg==}
-
-  '@types/nodemailer@8.0.1':
-    resolution: {integrity: sha512-PxpaInm8V1JQDd4j0ds5HfvWQk8JupS1C0Picb96QJsrrRDjBH+DlK7L4ZdNSqNULhiZRQHc40nLVShaGxXAMw==}
 
   '@types/pg@8.20.0':
     resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
@@ -4997,10 +4985,6 @@ packages:
   node-stream-zip@1.15.0:
     resolution: {integrity: sha512-LN4fydt9TqhZhThkZIVQnF9cwjU3qmUH9h78Mx/K7d3VvfRqqwthLwJEUOEL0QPZ0XQmNN7be5Ggit5+4dq3Bw==}
     engines: {node: '>=0.12.0'}
-
-  nodemailer@9.0.3:
-    resolution: {integrity: sha512-n+YP+NKwR5zRWa60k3GiQ6Q3B4KXCoAw40dAKeCtYn020iNN74aWK2liXIC3ZEATeGql7we3tE3t8QwhY0eskw==}
-    engines: {node: '>=6.0.0'}
 
   normalize-path@3.0.0:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}
@@ -9155,9 +9139,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -9474,10 +9456,6 @@ snapshots:
   '@types/node@26.1.2':
     dependencies:
       undici-types: 8.3.0
-
-  '@types/nodemailer@8.0.1':
-    dependencies:
-      '@types/node': 26.1.2
 
   '@types/pg@8.20.0':
     dependencies:
@@ -12790,8 +12768,6 @@ snapshots:
       asn1: 0.2.6
 
   node-stream-zip@1.15.0: {}
-
-  nodemailer@9.0.3: {}
 
   normalize-path@3.0.0: {}
 

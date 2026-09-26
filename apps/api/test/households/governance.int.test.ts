@@ -1,9 +1,11 @@
+import { RecurrenceMaterializerService } from '../../src/modules/recurrence/recurrence-materializer.service.js';
+import { PrismaService } from '../../src/infrastructure/prisma/prisma.service.js';
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { Client } from 'pg';
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createApplication } from '../../src/main.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
@@ -25,7 +27,7 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function insertVerifiedUser(email: string, displayName: string): Promise<MemberFixture> {
+async function insertUser(username: string, displayName: string): Promise<MemberFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
   const passwordHash = await argon2.hash('test-password-for-e2e-only', {
@@ -36,9 +38,9 @@ async function insertVerifiedUser(email: string, displayName: string): Promise<M
   });
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, email.trim().normalize('NFC').toLowerCase(), displayName, passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, username.trim().normalize('NFC').toLowerCase(), displayName, passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -129,8 +131,8 @@ describe('changes roles', () => {
 
   describe('D-09: role change matrix', () => {
     test('owner promotes member to admin', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const member = await insertVerifiedUser('member@example.test', '成员');
+      const owner = await insertUser('owner', '家主');
+      const member = await insertUser('member', '成员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, member.id, 'MEMBER');
@@ -150,8 +152,8 @@ describe('changes roles', () => {
     });
 
     test('owner demotes admin to member', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+      const owner = await insertUser('owner', '家主');
+      const admin = await insertUser('admin', '管理员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -169,10 +171,10 @@ describe('changes roles', () => {
       expect(updatedTarget.role).toBe('MEMBER');
     });
 
-    test('admin promotes member to admin', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin = await insertVerifiedUser('admin@example.test', '管理员');
-      const member = await insertVerifiedUser('member@example.test', '成员');
+    test('admin cannot promote members to admin', async () => {
+      const owner = await insertUser('owner', '家主');
+      const admin = await insertUser('admin', '管理员');
+      const member = await insertUser('member', '成员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -183,17 +185,18 @@ describe('changes roles', () => {
       expect(target.role).toBe('MEMBER');
 
       const response = await changeMemberRole(admin.accessToken, household.id, target.membershipId, 'ADMIN');
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe('INSUFFICIENT_ROLE');
 
-      const body = response.json();
+      const body = (await getHousehold(owner.accessToken, household.id)).json();
       const updatedTarget = body.members.find((m: { membershipId: string }) => m.membershipId === target.membershipId);
-      expect(updatedTarget.role).toBe('ADMIN');
+      expect(updatedTarget.role).toBe('MEMBER');
     });
 
-    test('admin demotes another admin to member', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin1 = await insertVerifiedUser('admin1@example.test', '管理员甲');
-      const admin2 = await insertVerifiedUser('admin2@example.test', '管理员乙');
+    test('admin cannot demote another admin', async () => {
+      const owner = await insertUser('owner', '家主');
+      const admin1 = await insertUser('admin1', '管理员甲');
+      const admin2 = await insertUser('admin2', '管理员乙');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin1.id, 'ADMIN');
@@ -205,16 +208,17 @@ describe('changes roles', () => {
       expect(target.role).toBe('ADMIN');
 
       const response = await changeMemberRole(admin1.accessToken, household.id, target.membershipId, 'MEMBER');
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe('INSUFFICIENT_ROLE');
 
-      const body = response.json();
+      const body = (await getHousehold(owner.accessToken, household.id)).json();
       const updatedTarget = body.members.find((m: { membershipId: string }) => m.membershipId === target.membershipId);
-      expect(updatedTarget.role).toBe('MEMBER');
+      expect(updatedTarget.role).toBe('ADMIN');
     });
 
     test('admin cannot target owner', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+      const owner = await insertUser('owner', '家主');
+      const admin = await insertUser('admin', '管理员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -230,9 +234,9 @@ describe('changes roles', () => {
     });
 
     test('member cannot promote or demote', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const member = await insertVerifiedUser('member@example.test', '成员');
-      const other = await insertVerifiedUser('other@example.test', '其他');
+      const owner = await insertUser('owner', '家主');
+      const member = await insertUser('member', '成员');
+      const other = await insertUser('other', '其他');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, member.id, 'MEMBER');
@@ -247,8 +251,8 @@ describe('changes roles', () => {
     });
 
     test('rejects changing to same role', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+      const owner = await insertUser('owner', '家主');
+      const admin = await insertUser('admin', '管理员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -264,9 +268,9 @@ describe('changes roles', () => {
 
   describe('D-10: stalled and cross-household rejection', () => {
     test('cross-household target membership returns 404', async () => {
-      const ownerA = await insertVerifiedUser('ownera@example.test', '家主A');
-      const ownerB = await insertVerifiedUser('ownerb@example.test', '家主B');
-      const memberB = await insertVerifiedUser('memberb@example.test', '成员B');
+      const ownerA = await insertUser('ownera', '家主A');
+      const ownerB = await insertUser('ownerb', '家主B');
+      const memberB = await insertUser('memberb', '成员B');
 
       const h1 = await createHouseholdWithRole(app, ownerA.id, ownerA.accessToken, '家庭A');
       const h2 = await createHouseholdWithRole(app, ownerB.id, ownerB.accessToken, '家庭B');
@@ -282,8 +286,8 @@ describe('changes roles', () => {
     });
 
     test('outsider returns 404 on unknown household', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const outsider = await insertVerifiedUser('outsider@example.test', '外人');
+      const owner = await insertUser('owner', '家主');
+      const outsider = await insertUser('outsider', '外人');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
 
@@ -292,8 +296,8 @@ describe('changes roles', () => {
     });
 
     test('stale membership rollback with role mismatch', async () => {
-      const owner = await insertVerifiedUser('owner2@example.test', '家主');
-      const admin = await insertVerifiedUser('admin2@example.test', '管理员');
+      const owner = await insertUser('owner2', '家主');
+      const admin = await insertUser('admin2', '管理员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭2');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -339,8 +343,8 @@ describe('changes roles', () => {
 
   describe('removes a member', () => {
     test('owner removes a member', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const member = await insertVerifiedUser('member@example.test', '成员');
+      const owner = await insertUser('owner', '家主');
+      const member = await insertUser('member', '成员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, member.id, 'MEMBER');
@@ -362,8 +366,8 @@ describe('changes roles', () => {
     });
 
     test('owner removes another admin', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+      const owner = await insertUser('owner', '家主');
+      const admin = await insertUser('admin', '管理员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -383,9 +387,9 @@ describe('changes roles', () => {
     });
 
     test('admin removes a member', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin = await insertVerifiedUser('admin@example.test', '管理员');
-      const member = await insertVerifiedUser('member@example.test', '成员');
+      const owner = await insertUser('owner', '家主');
+      const admin = await insertUser('admin', '管理员');
+      const member = await insertUser('member', '成员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -405,10 +409,33 @@ describe('changes roles', () => {
       expect(removedMember).toBeUndefined();
     });
 
-    test('admin removes another admin', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin1 = await insertVerifiedUser('admin1@example.test', '管理员甲');
-      const admin2 = await insertVerifiedUser('admin2@example.test', '管理员乙');
+    test('removal rechecks a member promoted to admin after the initial roster read', async () => {
+      const owner = await insertUser('owner', '家主');
+      const admin = await insertUser('admin', '管理员');
+      const member = await insertUser('member', '成员');
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
+      await addMemberViaDb(household.id, admin.id, 'ADMIN');
+      await addMemberViaDb(household.id, member.id, 'MEMBER');
+      const prisma = app.get(PrismaService);
+      const snapshot = await prisma.household.findUnique({ where: { id: household.id }, include: { memberships: true } });
+      const target = snapshot!.memberships.find((m) => m.userId === member.id)!;
+      await prisma.membership.update({ where: { id: target.id }, data: { role: 'ADMIN' } });
+      // Reproduce a request whose first read preceded the owner's promotion.
+      const staleRead = vi.spyOn(prisma.household, 'findUnique').mockResolvedValueOnce(snapshot);
+      try {
+        const response = await removeMember(admin.accessToken, household.id, target.id);
+        expect(response.statusCode).toBe(403);
+        expect(response.json().error.code).toBe('INSUFFICIENT_ROLE');
+        expect((await prisma.membership.findUnique({ where: { id: target.id } }))?.role).toBe('ADMIN');
+      } finally {
+        staleRead.mockRestore();
+      }
+    });
+
+    test('admin cannot remove another admin', async () => {
+      const owner = await insertUser('owner', '家主');
+      const admin1 = await insertUser('admin1', '管理员甲');
+      const admin2 = await insertUser('admin2', '管理员乙');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin1.id, 'ADMIN');
@@ -419,18 +446,19 @@ describe('changes roles', () => {
       expect(target.role).toBe('ADMIN');
 
       const response = await removeMember(admin1.accessToken, household.id, target.membershipId);
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe('INSUFFICIENT_ROLE');
 
       const updatedRoster = await getHousehold(admin1.accessToken, household.id);
       const removedAdmin = updatedRoster.json().members.find(
         (m: { userId: string }) => m.userId === admin2.id,
       );
-      expect(removedAdmin).toBeUndefined();
+      expect(removedAdmin.role).toBe('ADMIN');
     });
 
     test('admin cannot remove owner', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+      const owner = await insertUser('owner', '家主');
+      const admin = await insertUser('admin', '管理员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -445,9 +473,9 @@ describe('changes roles', () => {
     });
 
     test('member cannot remove anyone', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const member = await insertVerifiedUser('member@example.test', '成员');
-      const other = await insertVerifiedUser('other@example.test', '其他');
+      const owner = await insertUser('owner', '家主');
+      const member = await insertUser('member', '成员');
+      const other = await insertUser('other', '其他');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, member.id, 'MEMBER');
@@ -462,7 +490,7 @@ describe('changes roles', () => {
     });
 
     test('cannot remove own membership', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const owner = await insertUser('owner', '家主');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
 
@@ -476,9 +504,9 @@ describe('changes roles', () => {
     });
 
     test('cross-household target membership returns 404', async () => {
-      const ownerA = await insertVerifiedUser('ownera@example.test', '家主A');
-      const ownerB = await insertVerifiedUser('ownerb@example.test', '家主B');
-      const memberB = await insertVerifiedUser('memberb@example.test', '成员B');
+      const ownerA = await insertUser('ownera', '家主A');
+      const ownerB = await insertUser('ownerb', '家主B');
+      const memberB = await insertUser('memberb', '成员B');
 
       const h1 = await createHouseholdWithRole(app, ownerA.id, ownerA.accessToken, '家庭A');
       const h2 = await createHouseholdWithRole(app, ownerB.id, ownerB.accessToken, '家庭B');
@@ -492,8 +520,8 @@ describe('changes roles', () => {
     });
 
     test('outsider returns 404 on unknown household', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const outsider = await insertVerifiedUser('outsider@example.test', '外人');
+      const owner = await insertUser('owner', '家主');
+      const outsider = await insertUser('outsider', '外人');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
 
@@ -522,8 +550,8 @@ describe('changes roles', () => {
 
   describe('transfers ownership', () => {
     test('owner transfers ownership to a member', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const successor = await insertVerifiedUser('successor@example.test', '继任者');
+      const owner = await insertUser('owner', '家主');
+      const successor = await insertUser('successor', '继任者');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, successor.id, 'MEMBER');
@@ -562,8 +590,8 @@ describe('changes roles', () => {
     });
 
     test('owner transfers ownership to an admin', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin = await insertVerifiedUser('admin@example.test', '管理员');
+      const owner = await insertUser('owner', '家主');
+      const admin = await insertUser('admin', '管理员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -600,9 +628,9 @@ describe('changes roles', () => {
     });
 
     test('admin cannot transfer ownership', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const admin = await insertVerifiedUser('admin@example.test', '管理员');
-      const member = await insertVerifiedUser('member@example.test', '成员');
+      const owner = await insertUser('owner', '家主');
+      const admin = await insertUser('admin', '管理员');
+      const member = await insertUser('member', '成员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -623,9 +651,9 @@ describe('changes roles', () => {
     });
 
     test('member cannot transfer ownership', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const member = await insertVerifiedUser('member@example.test', '成员');
-      const other = await insertVerifiedUser('other@example.test', '其他');
+      const owner = await insertUser('owner', '家主');
+      const member = await insertUser('member', '成员');
+      const other = await insertUser('other', '其他');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, member.id, 'MEMBER');
@@ -646,7 +674,7 @@ describe('changes roles', () => {
     });
 
     test('cannot transfer to self', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
+      const owner = await insertUser('owner', '家主');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
 
@@ -666,9 +694,9 @@ describe('changes roles', () => {
     });
 
     test('cross-household successor returns 404', async () => {
-      const ownerA = await insertVerifiedUser('ownera@example.test', '家主A');
-      const ownerB = await insertVerifiedUser('ownerb@example.test', '家主B');
-      const memberB = await insertVerifiedUser('memberb@example.test', '成员B');
+      const ownerA = await insertUser('ownera', '家主A');
+      const ownerB = await insertUser('ownerb', '家主B');
+      const memberB = await insertUser('memberb', '成员B');
 
       const h1 = await createHouseholdWithRole(app, ownerA.id, ownerA.accessToken, '家庭A');
       const h2 = await createHouseholdWithRole(app, ownerB.id, ownerB.accessToken, '家庭B');
@@ -690,8 +718,8 @@ describe('changes roles', () => {
     });
 
     test('outsider returns 404 on unknown household', async () => {
-      const owner = await insertVerifiedUser('owner@example.test', '家主');
-      const outsider = await insertVerifiedUser('outsider@example.test', '外人');
+      const owner = await insertUser('owner', '家主');
+      const outsider = await insertUser('outsider', '外人');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
 
@@ -704,8 +732,8 @@ describe('changes roles', () => {
     });
 
     test('stale owner pointer blocks owner leave', async () => {
-      const owner = await insertVerifiedUser('owner3@example.test', '家主');
-      const successor = await insertVerifiedUser('successor3@example.test', '继任者');
+      const owner = await insertUser('owner3', '家主');
+      const successor = await insertUser('successor3', '继任者');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭3');
       await addMemberViaDb(household.id, successor.id, 'MEMBER');
@@ -735,8 +763,8 @@ describe('changes roles', () => {
     });
 
     test('former owner role is MEMBER after transfer', async () => {
-      const owner = await insertVerifiedUser('owner4@example.test', '家主');
-      const successor = await insertVerifiedUser('successor4@example.test', '继任者');
+      const owner = await insertUser('owner4', '家主');
+      const successor = await insertUser('successor4', '继任者');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭4');
       await addMemberViaDb(household.id, successor.id, 'MEMBER');
@@ -821,10 +849,167 @@ describe('changes roles', () => {
     });
   }
 
+  describe('departed member task assignments', () => {
+    test('departure waiting for a task writer retries with a fresh snapshot and clears its new assignment', async () => {
+      const owner = await insertUser('owner', '家主');
+      const member = await insertUser('leaving', '成员');
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭');
+      await addMemberViaDb(household.id, member.id, 'MEMBER');
+      const taskId = randomUUID();
+      await withDatabase(async (writer) => {
+        await writer.query('BEGIN');
+        try {
+          // Same household write as a task creation transaction, left uncommitted.
+          await writer.query('UPDATE households SET name = name WHERE id = $1', [household.id]);
+          await writer.query('INSERT INTO tasks (id, household_id, created_by, title) VALUES ($1, $2, $3, $4)', [taskId, household.id, owner.id, '并发创建']);
+          await writer.query('INSERT INTO task_assignees (task_id, user_id) VALUES ($1, $2)', [taskId, member.id]);
+          const pid = (await writer.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;
+          const departure = app.inject({ method: 'POST', url: `/api/v1/households/${household.id}/leave`, headers: { authorization: `Bearer ${member.accessToken}` } }).then(response => response);
+          await vi.waitFor(async () => {
+            const blocked = await writer.query<{ blocked: boolean }>('SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))) AS blocked', [pid]);
+            expect(blocked.rows[0]!.blocked).toBe(true);
+          });
+          await writer.query('COMMIT');
+          expect((await departure).statusCode).toBe(204);
+        } finally { await writer.query('ROLLBACK'); }
+      });
+      const prisma = app.get(PrismaService);
+      expect(await prisma.task.count({ where: { id: taskId } })).toBe(1);
+      expect(await prisma.taskAssignee.count({ where: { taskId } })).toBe(0);
+    });
+
+    test.each(['MEMBER', 'ADMIN', 'removed', 'owner-handoff'])(
+      '%s departure clears all statuses and recurrence seeds only in that household', async (mode) => {
+        const owner = await insertUser('owner', '家主');
+        const member = await insertUser('leaving', '成员');
+        const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭');
+        await addMemberViaDb(household.id, member.id, mode === 'ADMIN' ? 'ADMIN' : 'MEMBER');
+        const departing = mode === 'owner-handoff' ? owner : member;
+        const remaining = mode === 'owner-handoff' ? member : owner;
+        const prisma = app.get(PrismaService);
+        const other = await createHouseholdWithRole(app, departing.id, departing.accessToken, '其他家庭');
+        const unrelated = await prisma.task.create({ data: {
+          householdId: other.id, createdBy: departing.id, title: '其他家庭任务',
+          assignees: { create: { userId: departing.id } },
+        } });
+        const tasks = [];
+        for (const status of ['pending', 'in_progress', 'completed', 'cancelled']) {
+          tasks.push(await prisma.task.create({ data: {
+            householdId: household.id, createdBy: departing.id, title: `保留 ${status}`, status,
+            assignees: { create: [departing, remaining].map(({ id }) => ({ userId: id })) },
+          } }));
+        }
+        const alone = await prisma.task.create({ data: {
+          householdId: household.id, createdBy: departing.id, title: '无人负责',
+          assignees: { create: { userId: departing.id } },
+        } });
+        const today = new Date().toISOString().slice(0, 10);
+        const rule = await prisma.recurrenceRule.create({ data: {
+          householdId: household.id, createdBy: departing.id, freq: 'daily', byWeekday: [],
+          startsOn: new Date(`${today}T00:00:00Z`), timezone: 'UTC', templateTitle: '重复任务',
+        } });
+        const seed = await prisma.task.create({ data: {
+          householdId: household.id, createdBy: departing.id, title: '重复任务',
+          recurrenceRuleId: rule.id, occurrenceDate: new Date(`${today}T00:00:00Z`),
+          assignees: { create: [departing, remaining].map(({ id }) => ({ userId: id })) },
+        } });
+        const target = await prisma.membership.findUniqueOrThrow({ where: {
+          userId_householdId: { userId: member.id, householdId: household.id },
+        } });
+        const response = mode === 'removed'
+          ? await removeMember(owner.accessToken, household.id, target.id)
+          : mode === 'owner-handoff'
+            ? await leaveHousehold(owner.accessToken, household.id, target.id)
+            : await app.inject({ method: 'POST', url: `/api/v1/households/${household.id}/leave`, headers: { authorization: `Bearer ${member.accessToken}` } });
+        expect(response.statusCode).toBe(mode === 'removed' ? 200 : 204);
+        expect(await prisma.taskAssignee.count({ where: { userId: departing.id, task: { householdId: household.id } } })).toBe(0);
+        for (const before of [...tasks, seed]) {
+          const after = await prisma.task.findUniqueOrThrow({ where: { id: before.id }, include: { assignees: true } });
+          expect(after).toMatchObject({ title: before.title, status: before.status, createdBy: departing.id });
+          expect(after.assignees.map(({ userId }) => userId)).toEqual([remaining.id]);
+          expect(after.updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
+        }
+        expect(await prisma.taskAssignee.count({ where: { taskId: alone.id } })).toBe(0);
+        expect(await prisma.taskAssignee.count({ where: { taskId: unrelated.id, userId: departing.id } })).toBe(1);
+        expect((await prisma.task.findUniqueOrThrow({ where: { id: unrelated.id } })).updatedAt).toEqual(unrelated.updatedAt);
+        expect((await prisma.recurrenceRule.findUniqueOrThrow({ where: { id: rule.id } })).updatedAt.getTime()).toBeGreaterThan(rule.updatedAt.getTime());
+        const stale = await app.inject({ method: 'PUT', url: `/api/v1/households/${household.id}/tasks/${tasks[0]!.id}`,
+          headers: { authorization: `Bearer ${remaining.accessToken}` },
+          payload: { title: '旧表单', expectedUpdatedAt: tasks[0]!.updatedAt.toISOString(), assigneeIds: [departing.id] },
+        });
+        expect(stale.statusCode).toBe(409);
+        expect(stale.json().error.code).toBe('EDIT_CONFLICT');
+        // Advance the scheduler clock to prove new instances inherit the cleaned seed.
+        vi.useFakeTimers({ toFake: ['Date'] });
+        try {
+          vi.setSystemTime(new Date(`${today}T12:00:00Z`).getTime() + 86_400_000);
+          const result = await app.get(RecurrenceMaterializerService).materializeRule(rule.id);
+          expect(result.created).toBeGreaterThan(0);
+        } finally { vi.useRealTimers(); }
+        const generated = await prisma.task.findMany({ where: { recurrenceRuleId: rule.id, id: { not: seed.id } }, include: { assignees: true } });
+        expect(generated.length).toBeGreaterThan(0);
+        for (const task of generated) expect(task.assignees.map(({ userId }) => userId)).toEqual([remaining.id]);
+      },
+    );
+  });
+
+  describe('members leave directly', () => {
+    function leaveDirectly(token: string, householdId: string) {
+      return app.inject({ method: 'POST', url: `/api/v1/households/${householdId}/leave`, headers: { authorization: `Bearer ${token}` } });
+    }
+
+    test.each(['MEMBER', 'ADMIN'])('%s leaves while shared content and authors remain accessible to the family', async (role) => {
+      const owner = await insertUser('owner', '家主');
+      const member = await insertUser('leaving', '离开的人');
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭');
+      await addMemberViaDb(household.id, member.id, role);
+      const prisma = app.get(PrismaService);
+      const common = { householdId: household.id, createdBy: member.id, title: '保留内容' };
+      const event = await prisma.event.create({ data: { ...common, startTime: new Date(), endTime: new Date() } });
+      const task = await prisma.task.create({ data: common });
+      const note = await prisma.note.create({ data: common });
+      expect((await leaveDirectly(member.accessToken, household.id)).statusCode).toBe(204);
+      expect((await getHousehold(member.accessToken, household.id)).statusCode).toBe(404);
+      expect((await getHousehold(owner.accessToken, household.id)).json().members).toHaveLength(1);
+      for (const [resource, item] of [['events', event], ['tasks', task], ['notes', note]] as const) {
+        const get = (token: string) => app.inject({ method: 'GET', url: `/api/v1/households/${household.id}/${resource}/${item.id}`, headers: { authorization: `Bearer ${token}` } });
+        expect((await get(member.accessToken)).statusCode).toBe(404);
+        const remaining = await get(owner.accessToken);
+        expect(remaining.statusCode).toBe(200);
+        expect(remaining.json()).toMatchObject({ id: item.id, title: item.title, createdBy: member.id });
+      }
+      expect(await prisma.user.findUnique({ where: { id: member.id } })).not.toBeNull();
+      expect((await leaveDirectly(member.accessToken, household.id)).statusCode).toBe(404);
+    });
+
+    test('owner must transfer first; outsiders cannot leave another household', async () => {
+      const owner = await insertUser('owner', '家主');
+      const member = await insertUser('member', '成员');
+      const outsider = await insertUser('outsider', '外人');
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭');
+      await addMemberViaDb(household.id, member.id, 'MEMBER');
+      const denied = await leaveDirectly(owner.accessToken, household.id);
+      expect(denied.statusCode).toBe(403);
+      expect(denied.json().error.code).toBe('OWNER_TRANSFER_REQUIRED');
+      expect((await leaveDirectly(outsider.accessToken, household.id)).statusCode).toBe(404);
+      const before = (await getHousehold(owner.accessToken, household.id)).json();
+      expect(before.members).toHaveLength(2);
+      expect(before.ownerMembershipId).toBe(household.ownerMembershipId);
+      const successor = before.members.find((m: { userId: string }) => m.userId === member.id);
+      const transfer = await app.inject({ method: 'POST', url: `/api/v1/households/${household.id}/ownership/transfer`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { successorMembershipId: successor.membershipId } });
+      expect(transfer.statusCode).toBe(200);
+      expect((await leaveDirectly(owner.accessToken, household.id)).statusCode).toBe(204);
+      const after = (await getHousehold(member.accessToken, household.id)).json();
+      expect(after.ownerMembershipId).toBe(successor.membershipId);
+      expect(after.members).toHaveLength(1);
+      expect((await leaveDirectly(member.accessToken, household.id)).statusCode).toBe(403);
+    });
+  });
+
   describe('owner leaves', () => {
     test('owner leaves and hands off to a member', async () => {
-      const owner = await insertVerifiedUser('owner-lv1@example.test', '家主');
-      const successor = await insertVerifiedUser('successor-lv1@example.test', '继任者');
+      const owner = await insertUser('owner-lv1', '家主');
+      const successor = await insertUser('successor-lv1', '继任者');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, successor.id, 'MEMBER');
@@ -855,8 +1040,8 @@ describe('changes roles', () => {
     });
 
     test('owner leaves and hands off to an admin', async () => {
-      const owner = await insertVerifiedUser('owner-lv2@example.test', '家主');
-      const admin = await insertVerifiedUser('admin-lv2@example.test', '管理员');
+      const owner = await insertUser('owner-lv2', '家主');
+      const admin = await insertUser('admin-lv2', '管理员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -882,8 +1067,8 @@ describe('changes roles', () => {
     });
 
     test('admin cannot leave as owner', async () => {
-      const owner = await insertVerifiedUser('owner-lv3@example.test', '家主');
-      const admin = await insertVerifiedUser('admin-lv3@example.test', '管理员');
+      const owner = await insertUser('owner-lv3', '家主');
+      const admin = await insertUser('admin-lv3', '管理员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, admin.id, 'ADMIN');
@@ -903,8 +1088,8 @@ describe('changes roles', () => {
     });
 
     test('member cannot leave as owner', async () => {
-      const owner = await insertVerifiedUser('owner-lv4@example.test', '家主');
-      const member = await insertVerifiedUser('member-lv4@example.test', '成员');
+      const owner = await insertUser('owner-lv4', '家主');
+      const member = await insertUser('member-lv4', '成员');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
       await addMemberViaDb(household.id, member.id, 'MEMBER');
@@ -924,7 +1109,7 @@ describe('changes roles', () => {
     });
 
     test('cannot leave with no other members', async () => {
-      const owner = await insertVerifiedUser('owner-lv5@example.test', '家主');
+      const owner = await insertUser('owner-lv5', '家主');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '唯一家庭');
 
@@ -943,9 +1128,9 @@ describe('changes roles', () => {
     });
 
     test('cross-household successor returns 404', async () => {
-      const ownerA = await insertVerifiedUser('ownera-lv6@example.test', '家主A');
-      const ownerB = await insertVerifiedUser('ownerb-lv6@example.test', '家主B');
-      const memberB = await insertVerifiedUser('memberb-lv6@example.test', '成员B');
+      const ownerA = await insertUser('ownera-lv6', '家主A');
+      const ownerB = await insertUser('ownerb-lv6', '家主B');
+      const memberB = await insertUser('memberb-lv6', '成员B');
 
       const h1 = await createHouseholdWithRole(app, ownerA.id, ownerA.accessToken, '家庭A');
       const h2 = await createHouseholdWithRole(app, ownerB.id, ownerB.accessToken, '家庭B');
@@ -967,8 +1152,8 @@ describe('changes roles', () => {
     });
 
     test('outsider returns 404 on unknown household', async () => {
-      const owner = await insertVerifiedUser('owner-lv7@example.test', '家主');
-      const outsider = await insertVerifiedUser('outsider-lv7@example.test', '外人');
+      const owner = await insertUser('owner-lv7', '家主');
+      const outsider = await insertUser('outsider-lv7', '外人');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '我的家庭');
 
@@ -981,8 +1166,8 @@ describe('changes roles', () => {
     });
 
     test('stale owner pointer rollback on concurrent transfer', async () => {
-      const owner = await insertVerifiedUser('owner-lv8@example.test', '家主');
-      const successor = await insertVerifiedUser('successor-lv8@example.test', '继任者');
+      const owner = await insertUser('owner-lv8', '家主');
+      const successor = await insertUser('successor-lv8', '继任者');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭8');
       await addMemberViaDb(household.id, successor.id, 'MEMBER');
@@ -1012,8 +1197,8 @@ describe('changes roles', () => {
     });
 
     test('leave is atomic: rollback preserves membership and pointer on failure', async () => {
-      const owner = await insertVerifiedUser('owner-lv9@example.test', '家主');
-      const successor = await insertVerifiedUser('successor-lv9@example.test', '继任者');
+      const owner = await insertUser('owner-lv9', '家主');
+      const successor = await insertUser('successor-lv9', '继任者');
 
       const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '家庭9');
       await addMemberViaDb(household.id, successor.id, 'MEMBER');

@@ -50,12 +50,12 @@ export default function HouseholdSettingsRoute() {
   }, [id, currentHouseholdId, switchHousehold, router]);
 
   const handleRenameAccessChanged = useCallback((lostHouseholdName: string) => {
-    enterAccessChanged(lostHouseholdName);
-  }, [enterAccessChanged]);
+    enterAccessChanged(lostHouseholdName, id ?? currentHouseholdId ?? undefined);
+  }, [enterAccessChanged, id, currentHouseholdId]);
 
   const handleInviteAccessChanged = useCallback((lostHouseholdName: string) => {
-    enterAccessChanged(lostHouseholdName);
-  }, [enterAccessChanged]);
+    enterAccessChanged(lostHouseholdName, id ?? currentHouseholdId ?? undefined);
+  }, [enterAccessChanged, id, currentHouseholdId]);
 
   // ---- AccessChanged or member lost access ----
   if (viewState === 'accessChanged') {

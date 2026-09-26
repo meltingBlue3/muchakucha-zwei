@@ -7,9 +7,9 @@ import {
   HttpCode,
   NotFoundException,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
-  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -21,13 +21,13 @@ import {
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiNoContentResponse,
   ApiOperation,
   ApiProperty,
-  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsIn, IsString, IsUUID, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import { IsIn, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import {
   CreateHouseholdDto,
@@ -41,28 +41,14 @@ import { HouseholdsService } from './households.service.js';
 // ---- Invitation Send DTOs (exported from controller per Plan 02-05 scope exception) ----
 
 export class SendHouseholdInvitationDto {
-  @ApiProperty({
-    required: false,
-    format: 'email',
-    example: 'friend@example.test',
-    description: 'Canonical invited email address. Role is server-fixed to MEMBER per D-05.',
-  })
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim().normalize('NFC').toLowerCase() : value,
-  )
-  @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
-  @IsEmail()
-  email?: string;
-
-  @ApiProperty({ required: false, example: 'family-member', description: 'An existing username. Supply exactly one of username or email.' })
+  @ApiProperty({ example: 'family-member', description: 'An existing username. Invitations are bound to this account.' })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().normalize('NFC') : value,
   )
-  @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
   @IsString()
   @MinLength(1)
   @MaxLength(64)
-  username?: string;
+  username!: string;
 }
 
 export class SendHouseholdInvitationResponseDto {
@@ -72,44 +58,34 @@ export class SendHouseholdInvitationResponseDto {
   @ApiProperty({ example: '邀请已发送。' })
   message!: string;
 
-  @ApiProperty({ required: false, description: 'Share this link with the invited username account.' })
-  invitationUrl?: string;
+  @ApiProperty({ format: 'uuid' })
+  invitationId!: string;
 }
 
 // ---- Invitation Accept DTOs ----
 
 export class AcceptInvitationDto {
-  @ApiProperty({
-    description: 'The raw invitation token from the URL query parameter.',
-    example: 'abc123def456',
-  })
-  @IsString()
-  token!: string;
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  invitationId!: string;
 }
 
-export class InvitationPreviewResponseDto {
-  @ApiProperty({ enum: ['valid', 'invalid', 'expired', 'used'] })
-  kind!: 'valid' | 'invalid' | 'expired' | 'used';
+export class InboxInvitationDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+  @ApiProperty()
+  householdName!: string;
+  @ApiProperty()
+  inviterDisplayName!: string;
+  @ApiProperty()
+  expiresAt!: string;
+  @ApiProperty()
+  createdAt!: string;
+}
 
-  @ApiProperty({
-    required: false,
-    example: '温暖小家',
-    description: 'Only present when kind is "valid".',
-  })
-  householdName?: string;
-
-  @ApiProperty({
-    required: false,
-    example: '家主',
-    description: 'Only present when kind is "valid".',
-  })
-  inviterDisplayName?: string;
-
-  @ApiProperty({
-    required: false,
-    description: 'ISO 8601 expiry. Only present when kind is "valid".',
-  })
-  expiresAt?: string;
+export class InvitationInboxResponseDto {
+  @ApiProperty({ type: [InboxInvitationDto] })
+  invitations!: InboxInvitationDto[];
 }
 
 // ---- Invitation Lifecycle DTOs ----
@@ -118,14 +94,11 @@ export class InvitationListItemDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
-  @ApiProperty({ format: 'email', example: 'pending@example.test' })
-  emailCanonical!: string;
+  @ApiProperty({ example: 'family-member' })
+  username!: string;
 
-  @ApiProperty({ required: false, example: 'family-member' })
-  username?: string;
-
-  @ApiProperty({ enum: ['pending', 'expired', 'accepted', 'revoked'] })
-  status!: 'pending' | 'expired' | 'accepted' | 'revoked';
+  @ApiProperty({ enum: ['pending', 'expired', 'accepted', 'revoked', 'declined'] })
+  status!: 'pending' | 'expired' | 'accepted' | 'revoked' | 'declined';
 
   @ApiProperty({ description: 'ISO 8601 expiry timestamp.' })
   expiresAt!: string;
@@ -149,8 +122,8 @@ export class ResendInvitationResponseDto {
   @ApiProperty({ example: '邀请已重新发送。' })
   message!: string;
 
-  @ApiProperty({ required: false, description: 'New link replacing the previous username invitation.' })
-  invitationUrl?: string;
+  @ApiProperty({ format: 'uuid' })
+  invitationId!: string;
 }
 
 export class RevokeInvitationResponseDto {
@@ -206,23 +179,26 @@ interface AuthenticatedRequest {
 export class HouseholdsController {
   constructor(private readonly householdsService: HouseholdsService) {}
 
-  // ---- Public invitation preview (no auth — D-07) ----
-
-  @Get('invitations/preview')
-  @HttpCode(200)
-  @ApiOperation({ operationId: 'previewInvitation' })
-  @ApiQuery({ name: 'token', required: true, description: 'Raw invitation token from the URL.' })
-  @ApiOkResponse({ type: InvitationPreviewResponseDto })
-  async previewInvitation(
-    @Query('token') token: string | undefined,
-  ): Promise<InvitationPreviewResponseDto> {
-    if (typeof token !== 'string' || token.length === 0) {
-      return { kind: 'invalid' };
-    }
-    return this.householdsService.previewInvitation(token);
+  @Get('invitations/inbox')
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'listInvitationInbox' })
+  @ApiOkResponse({ type: InvitationInboxResponseDto })
+  async listInvitationInbox(@Req() request: AuthenticatedRequest): Promise<InvitationInboxResponseDto> {
+    return this.householdsService.listInvitationInbox(request.auth.sub);
   }
 
-  // ---- Authenticated invitation accept (D-07/D-08) ----
+  @Post('invitations/decline')
+  @HttpCode(204)
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'declineInvitation' })
+  @ApiNoContentResponse()
+  @ApiNotFoundResponse({ description: 'Invitation not found for this recipient.' })
+  @ApiConflictResponse({ description: 'Invitation is already handled, revoked, or expired.' })
+  async declineInvitation(@Req() request: AuthenticatedRequest, @Body() input: AcceptInvitationDto): Promise<void> {
+    await this.householdsService.declineInvitation(request.auth.sub, input.invitationId);
+  }
 
   @Post('invitations/accept')
   @HttpCode(200)
@@ -230,9 +206,9 @@ export class HouseholdsController {
   @ApiBearerAuth()
   @ApiOperation({ operationId: 'acceptInvitation' })
   @ApiOkResponse({ type: GetHouseholdResponseDto })
-  @ApiBadRequestResponse({ description: 'Invitation is invalid, expired, or already used.' })
-  @ApiForbiddenResponse({ description: 'The authenticated email does not match the invitation recipient.' })
-  @ApiConflictResponse({ description: 'The invitation was already claimed by a concurrent request.' })
+  @ApiBadRequestResponse({ description: 'Invitation ID is malformed.' })
+  @ApiNotFoundResponse({ description: 'Invitation not found for this recipient.' })
+  @ApiConflictResponse({ description: 'Invitation is already handled, revoked, or expired.' })
   async acceptInvitation(
     @Req() request: AuthenticatedRequest,
     @Body() input: AcceptInvitationDto,
@@ -240,7 +216,7 @@ export class HouseholdsController {
     if (request.auth === undefined) {
       throw new Error('AccessTokenGuard did not attach verified session claims.');
     }
-    return this.householdsService.acceptInvitation(request.auth.sub, input.token);
+    return this.householdsService.acceptInvitation(request.auth.sub, input.invitationId);
   }
 
   // ---- Household CRUD (authenticated) ----
@@ -349,8 +325,8 @@ export class HouseholdsController {
   @ApiBearerAuth()
   @ApiOperation({ operationId: 'sendHouseholdInvitation' })
   @ApiCreatedResponse({ type: SendHouseholdInvitationResponseDto })
-  @ApiBadRequestResponse({ description: 'Email is invalid or the request is malformed.' })
-  @ApiConflictResponse({ description: 'The email already belongs to a current member of this household.' })
+  @ApiBadRequestResponse({ description: 'Username is invalid or the request is malformed.' })
+  @ApiConflictResponse({ description: 'The account is already a current member of this household.' })
   @ApiForbiddenResponse({ description: 'Actor is a member but not authorized to send invitations.' })
   @ApiNotFoundResponse({ description: 'Household not found or actor is not a member.' })
   async sendHouseholdInvitation(
@@ -529,6 +505,22 @@ export class HouseholdsController {
       });
     }
     return result;
+  }
+
+  @Post(':id/leave')
+  @HttpCode(204)
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ operationId: 'leaveHouseholdMembership' })
+  @ApiNoContentResponse({ description: 'Caller left; shared household content is retained.' })
+  @ApiForbiddenResponse({ description: 'OWNER_TRANSFER_REQUIRED: transfer ownership before leaving.' })
+  @ApiNotFoundResponse({ description: 'Household not found or caller is not a member.' })
+  async leaveMembership(
+    @Req() request: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<void> {
+    if (request.auth === undefined) throw new Error('Missing authenticated session.');
+    await this.householdsService.leaveMembership(request.auth.sub, id);
   }
 
   // ---- Owner leave (D-11, D-12) ----

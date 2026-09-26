@@ -1,3 +1,4 @@
+import { draftWorkspace } from '../../../ui/workspace-runtime';
 import type { ListMyHouseholdsItemDto } from '@muchakucha/api-client';
 import { act, render, waitFor } from '@testing-library/react-native';
 import { Text } from 'react-native';
@@ -119,4 +120,26 @@ describe('HouseholdProvider recovery state machine', () => {
     expect(current?.accessChangedHouseholdName).toBe('Alpha');
     expect(store.clearHouseholdData).toHaveBeenCalledWith('household-a');
   });
+});
+
+
+test('access loss uses the explicit household rather than the previously selected household', async () => {
+  const store = createStore();
+  const api = { listMyHouseholds: jest.fn().mockResolvedValue([alpha, beta]) } as unknown as HouseholdApi;
+  const Provider = createHouseholdProvider(api, () => 'access-token', store);
+  let context: HouseholdContextValue | undefined;
+  function Probe() { context = useHouseholdContext(); return <Text>{context.viewState}</Text>; }
+  draftWorkspace.activateAccount('draft-cleanup-test');
+  try {
+    const view = await render(<Provider><Probe /></Provider>);
+    await view.findByText('ready');
+    draftWorkspace.set(`draft:${alpha.id}:notes:new:form`, { title: 'lost', body: '' });
+    draftWorkspace.set(`draft:${beta.id}:notes:new:form`, { title: 'retained', body: '' });
+    await act(async () => { context!.enterAccessChanged(alpha.name, alpha.id); });
+    expect(store.clearHouseholdData).toHaveBeenCalledWith(alpha.id);
+    expect(draftWorkspace.get(`draft:${alpha.id}:notes:new:form`)).toBeUndefined();
+    expect(draftWorkspace.get(`draft:${beta.id}:notes:new:form`)).toEqual({ title: 'retained', body: '' });
+    draftWorkspace.set(`draft:${alpha.id}:notes:new:form`, { title: 'late update', body: '' });
+    expect(draftWorkspace.get(`draft:${alpha.id}:notes:new:form`)).toBeUndefined();
+  } finally { draftWorkspace.endSession(); }
 });

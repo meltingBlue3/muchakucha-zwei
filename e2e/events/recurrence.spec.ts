@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
-import { loginEmailFixture } from '../support/auth';
+import { loginUsernameFixture } from '../support/auth';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -11,7 +11,7 @@ const DATABASE_URL =
 const password = 'correct horse battery staple 2026';
 
 type ApiResult<T = any> = { status: number; body: T };
-type TestAccount = { email: string; accessToken: string; userId: string };
+type TestAccount = { username: string; accessToken: string; userId: string };
 
 function toIsoDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -35,25 +35,25 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   }
 }
 
-async function prepareVerifiedAccount(seed: string): Promise<TestAccount> {
+async function prepareAccount(seed: string): Promise<TestAccount> {
   return withDatabase(async (database) => {
-    const email = `recurrence-${seed}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const username = `u-${seed.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
     const registerResponse = await fetch(`${API_ORIGIN}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, displayName: '重复旅程测试', password, platform: 'web' }),
+      body: JSON.stringify({ username, confirmPassword: password, password, platform: 'web' }),
     });
     expect(registerResponse.status).toBe(202);
 
     await database.query(
-      `UPDATE "User" SET "email_verified_at" = now() WHERE "email_canonical" = lower($1)`,
-      [email],
+      `UPDATE "User" SET "display_name" = $2 WHERE "username_canonical" = lower($1)`,
+      [username, '重复旅程测试'],
     );
 
     const loginResponse = await fetch(`${API_ORIGIN}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
-      body: JSON.stringify({ email, password, platform: 'web' }),
+      body: JSON.stringify({ username, password, platform: 'web' }),
     });
     expect(loginResponse.status).toBe(200);
     const loginBody = (await loginResponse.json()) as { accessToken: string };
@@ -62,7 +62,7 @@ async function prepareVerifiedAccount(seed: string): Promise<TestAccount> {
     });
     expect(meResponse.status).toBe(200);
     const me = (await meResponse.json()) as { id: string };
-    return { email, accessToken: loginBody.accessToken, userId: me.id };
+    return { username, accessToken: loginBody.accessToken, userId: me.id };
   });
 }
 
@@ -93,8 +93,8 @@ async function apiCall<T = any>(
   };
 }
 
-async function loginFixture(page: Page, email: string): Promise<void> {
-  await loginEmailFixture(page, email, password);
+async function loginFixture(page: Page, username: string): Promise<void> {
+  await loginUsernameFixture(page, username, password);
 }
 
 async function listEvents(accessToken: string, householdId: string, start: string, end: string) {
@@ -118,8 +118,36 @@ async function listTasks(accessToken: string, householdId: string) {
 }
 
 test.describe('recurring event and task journeys', () => {
+  test('browsing a future month shows daily occurrences and opens their real details', async ({ page }) => {
+    const account = await prepareAccount('future');
+    const householdId = await createHousehold(account.accessToken, '未来日历之家');
+    const today = new Date();
+    const startsOn = toIsoDate(today);
+    const future = dateAt(today.getFullYear(), today.getMonth() + 2, 15);
+    const futureDate = toIsoDate(future);
+    const title = `未来每日安排-${Date.now()}`;
+    const result = await apiCall(account.accessToken, 'POST', `/api/v1/households/${householdId}/events`, {
+      title, startTime: `${startsOn}T09:00:00Z`, endTime: `${startsOn}T10:00:00Z`,
+      recurrence: { freq: 'daily', startsOn, timezone: 'UTC' },
+    });
+    expect(result.status).toBe(201);
+    await loginFixture(page, account.username);
+    await page.getByRole('tab', { name: '日历', exact: true }).click();
+    for (let i = 0; i < 2; i += 1) {
+      const loaded = page.waitForResponse((response) => response.url().includes('/events?') && response.url().includes('expandRecurring=true'));
+      await page.getByRole('button', { name: '下一个月', exact: true }).click();
+      expect((await loaded).status()).toBe(200);
+    }
+    await page.getByRole('button', { name: `${futureDate}，1个事件`, exact: true }).click();
+    await page.getByRole('button', { name: new RegExp(`事件：${title}`) }).click();
+    await expect(page.getByRole('main', { name: '事件详情' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    const persisted = await listEvents(account.accessToken, householdId, futureDate, futureDate);
+    expect(persisted.some((event) => event.occurrenceDate === futureDate && event.title === title)).toBe(true);
+  });
+
   test('creates a weekly event in the Web form and presents every generated occurrence', async ({ page }) => {
-    const account = await prepareVerifiedAccount('create');
+    const account = await prepareAccount('create');
     const householdId = await createHousehold(account.accessToken, '重复事件之家');
     const title = `每周家庭会-${Date.now()}`;
     const now = new Date();
@@ -127,7 +155,7 @@ test.describe('recurring event and task journeys', () => {
     const startDate = toIsoDate(start);
     const monthStart = toIsoDate(dateAt(now.getFullYear(), now.getMonth(), 1));
     const monthEnd = toIsoDate(dateAt(now.getFullYear(), now.getMonth() + 1, 0));
-    await loginFixture(page, account.email);
+    await loginFixture(page, account.username);
     await page.getByRole('tab', { name: '日历', exact: true }).click();
     await expect(page.getByLabel('创建事件')).toBeVisible();
     await page.getByLabel('创建事件').click();
@@ -180,7 +208,7 @@ test.describe('recurring event and task journeys', () => {
   });
 
   test('splits an event only after scope selection and cancels one task occurrence', async ({ page }) => {
-    const account = await prepareVerifiedAccount('scope');
+    const account = await prepareAccount('scope');
     const householdId = await createHousehold(account.accessToken, '范围选择之家');
     const now = new Date();
     const seriesStart = dateAt(now.getFullYear(), now.getMonth(), 2);
@@ -213,13 +241,15 @@ test.describe('recurring event and task journeys', () => {
     const selected = before[2]!;
     const removedWeekday = byWeekday.find((weekday) => weekday !== new Date(`${selected.occurrenceDate}T00:00:00Z`).getUTCDay())!;
 
-    await loginFixture(page, account.email);
+    await loginFixture(page, account.username);
     await page.getByRole('tab', { name: '日历', exact: true }).click();
     await page.getByLabel(new RegExp(`^${String(selected.occurrenceDate).slice(0, 10)}(?:，今天)?，\\d+个事件$`)).click();
     await page.getByLabel(`事件：${eventTitle}，重复`).click();
     await page.getByLabel('编辑事件').click();
     await expect(page.getByRole('main', { name: '编辑事件' })).toBeVisible();
     await page.getByLabel(weekdayLabel(removedWeekday)).click();
+    await page.reload();
+    await expect(page.getByLabel(weekdayLabel(removedWeekday))).not.toBeChecked();
     await page.getByLabel('保存', { exact: true }).click();
 
     const dialog = page.getByRole('dialog', { name: '更改重复规则？' });

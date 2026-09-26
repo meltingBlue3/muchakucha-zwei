@@ -23,14 +23,14 @@ async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> 
   try { return await run(client); } finally { await client.end(); }
 }
 
-async function insertActor(email: string): Promise<ActorFixture> {
+async function insertActor(username: string): Promise<ActorFixture> {
   const userId = randomUUID();
   const sessionId = randomUUID();
   await withDatabase(async (client) => {
     await client.query(
-      `INSERT INTO "User" ("id", "email", "email_canonical", "display_name", "password_hash", "email_verified_at")
-       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-      [userId, email, email.toLowerCase(), 'recurring-filter actor', passwordHash],
+      `INSERT INTO "User" ("id", "username", "username_canonical", "display_name", "password_hash")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, username, username.toLowerCase(), 'recurring-filter actor', passwordHash],
     );
     await client.query(
       `INSERT INTO "AuthSession" ("id", "user_id", "absolute_ends_at")
@@ -176,7 +176,7 @@ beforeEach(async () => { await resetDatabase(); });
 
 describe('recurring list filter (D-15) — tasks', () => {
   test('?recurring=true returns only the recurring task', async () => {
-    const actor = await insertActor('recurring-true-tasks@example.test');
+    const actor = await insertActor('recurring-true-tasks');
     const householdId = await createHousehold(actor.accessToken);
     const recurringTaskId = await createRecurringTask(actor, householdId);
     await createPlainTask(actor, householdId);
@@ -189,7 +189,7 @@ describe('recurring list filter (D-15) — tasks', () => {
   });
 
   test('?recurring=false returns only the plain task', async () => {
-    const actor = await insertActor('recurring-false-tasks@example.test');
+    const actor = await insertActor('recurring-false-tasks');
     const householdId = await createHousehold(actor.accessToken);
     await createRecurringTask(actor, householdId);
     const plainTaskId = await createPlainTask(actor, householdId);
@@ -202,7 +202,7 @@ describe('recurring list filter (D-15) — tasks', () => {
   });
 
   test('no recurring parameter returns both tasks and total matches the unfiltered count', async () => {
-    const actor = await insertActor('recurring-unset-tasks@example.test');
+    const actor = await insertActor('recurring-unset-tasks');
     const householdId = await createHousehold(actor.accessToken);
     await createRecurringTask(actor, householdId);
     await createPlainTask(actor, householdId);
@@ -215,10 +215,10 @@ describe('recurring list filter (D-15) — tasks', () => {
   });
 
   test('a non-member requesting ?recurring=true gets 404 HOUSEHOLD_NOT_FOUND', async () => {
-    const owner = await insertActor('recurring-owner-tasks@example.test');
+    const owner = await insertActor('recurring-owner-tasks');
     const householdId = await createHousehold(owner.accessToken);
     await createRecurringTask(owner, householdId);
-    const outsider = await insertActor('recurring-outsider-tasks@example.test');
+    const outsider = await insertActor('recurring-outsider-tasks');
 
     const { statusCode, body } = await listTasks(outsider, householdId, 'true');
     expect(statusCode).toBe(404);
@@ -228,7 +228,7 @@ describe('recurring list filter (D-15) — tasks', () => {
 
 describe('recurring list filter (D-15) — events', () => {
   test('?recurring=true returns only the recurring event', async () => {
-    const actor = await insertActor('recurring-true-events@example.test');
+    const actor = await insertActor('recurring-true-events');
     const householdId = await createHousehold(actor.accessToken);
     const recurringEventId = await createRecurringEvent(actor, householdId);
     await createPlainEvent(actor, householdId);
@@ -241,7 +241,7 @@ describe('recurring list filter (D-15) — events', () => {
   });
 
   test('?recurring=false returns only the plain event', async () => {
-    const actor = await insertActor('recurring-false-events@example.test');
+    const actor = await insertActor('recurring-false-events');
     const householdId = await createHousehold(actor.accessToken);
     await createRecurringEvent(actor, householdId);
     const plainEventId = await createPlainEvent(actor, householdId);
@@ -254,7 +254,7 @@ describe('recurring list filter (D-15) — events', () => {
   });
 
   test('no recurring parameter returns both events and total matches the unfiltered count', async () => {
-    const actor = await insertActor('recurring-unset-events@example.test');
+    const actor = await insertActor('recurring-unset-events');
     const householdId = await createHousehold(actor.accessToken);
     await createRecurringEvent(actor, householdId);
     await createPlainEvent(actor, householdId);
@@ -267,10 +267,10 @@ describe('recurring list filter (D-15) — events', () => {
   });
 
   test('a non-member requesting ?recurring=true gets 404 HOUSEHOLD_NOT_FOUND', async () => {
-    const owner = await insertActor('recurring-owner-events@example.test');
+    const owner = await insertActor('recurring-owner-events');
     const householdId = await createHousehold(owner.accessToken);
     await createRecurringEvent(owner, householdId);
-    const outsider = await insertActor('recurring-outsider-events@example.test');
+    const outsider = await insertActor('recurring-outsider-events');
 
     const { statusCode, body } = await listEvents(outsider, householdId, { recurring: 'true' });
     expect(statusCode).toBe(404);
@@ -278,7 +278,7 @@ describe('recurring list filter (D-15) — events', () => {
   });
 
   test('startDate/endDate and recurring=true apply together — date range and recurring filter both take effect', async () => {
-    const actor = await insertActor('recurring-daterange-events@example.test');
+    const actor = await insertActor('recurring-daterange-events');
     const householdId = await createHousehold(actor.accessToken);
     const recurringEventId = await createRecurringEvent(actor, householdId);
     await createPlainEvent(actor, householdId);

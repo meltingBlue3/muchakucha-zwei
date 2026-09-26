@@ -65,7 +65,7 @@ export default function LeaveHouseholdPage() {
       // loss and render the explicit access-changed explanation before any
       // further routing. If the user has no other households, they land on
       // the D-01 create/accept handoff page.
-      enterAccessChanged(householdName);
+      enterAccessChanged(householdName, householdId);
       router.replace('/households');
     } catch (_err: unknown) {
       setError('离开家庭失败，当前家庭状态未改变。请重试。');
