@@ -1,8 +1,11 @@
+import { NoteEditorChromeContext } from '../../features/notes/note-editor-chrome';
 import { fireEvent, render } from '@testing-library/react-native';
 import { useState } from 'react';
 import { NoteForm } from '../../features/notes/note-form';
 import { Button, MuchakuchaThemeProvider } from '../primitives';
 import { WorkspaceStateProvider, useWorkspaceStore } from '../workspace-state';
+
+const ignoreEditorChrome = () => undefined;
 
 test('note drafts survive leaving the editor, stay household-scoped and clear after save', async () => {
   const save = jest.fn(async () => undefined);
@@ -12,7 +15,7 @@ test('note drafts survive leaving the editor, stay household-scoped and clear af
     return <>
       <Button label="打开 A" onPress={() => setHousehold('a')} />
       <Button label="打开 B" onPress={() => setHousehold('b')} />
-      {household ? <NoteForm key={household} draftKey={`draft:${household}:note:form`} isSubmitting={false} submitLabel="保存" onCancel={() => setHousehold(null)} onSubmit={async () => { await save(); workspace.clear(`draft:${household}:note:`); setHousehold(null); }} /> : null}
+      {household ? <NoteEditorChromeContext.Provider value={ignoreEditorChrome}><NoteForm key={household} draftKey={`draft:${household}:note:form`} isSubmitting={false} submitLabel="保存" onCancel={() => setHousehold(null)} onSubmit={async () => { await save(); workspace.clear(`draft:${household}:note:`); setHousehold(null); }} /></NoteEditorChromeContext.Provider> : null}
     </>;
   }
   const view = await render(<MuchakuchaThemeProvider><WorkspaceStateProvider><Demo /></WorkspaceStateProvider></MuchakuchaThemeProvider>);

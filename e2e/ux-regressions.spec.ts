@@ -216,7 +216,7 @@ for (const kind of ['tasks', 'events'] as const) {
       await expect(page.getByText('保存到：家庭 A', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: /当前家庭/ })).toHaveCount(0);
     }
-    if (kind === 'events') await page.getByRole('button', { name: '更多日程选项' }).click();
+    await page.getByRole('button', { name: kind === 'tasks' ? '更多任务选项' : '更多日程选项' }).click();
     await page.getByLabel('选择标签 家务', { exact: true }).click();
     await page.getByLabel(kind === 'tasks' ? '创建任务' : '创建', { exact: true }).filter({ visible: true }).last().click();
     await expect(page.getByText('内容已创建，但标签未保存。重试只会保存标签，不会重复创建。')).toBeVisible();
@@ -291,3 +291,106 @@ for (const width of [320, 390, 1440]) {
     expect(pageErrors).toEqual([]);
   });
 }
+
+for (const width of [320, 390, 1440]) {
+  test(`Markdown note editor preserves source and fits ${width}px`, async ({ page }) => {
+    const requests = await setup(page);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/households/${a}/notes/new`);
+    const dialog = page.getByRole('dialog', { name: '创建笔记', exact: true });
+    await dialog.getByLabel('笔记标题').fill('日语学习');
+    const input = dialog.getByLabel('笔记内容');
+    const previewButton = dialog.getByRole('button', { name: '预览', exact: true });
+    const closeButton = dialog.getByRole('button', { name: '关闭创建笔记', exact: true });
+    const previewBox = await previewButton.boundingBox();
+    const closeBox = await closeButton.boundingBox();
+    expect(Math.abs(previewBox!.y - closeBox!.y)).toBeLessThan(2);
+    expect(previewBox!.x + previewBox!.width).toBeLessThanOrEqual(closeBox!.x);
+    await expect(previewButton).toHaveText('');
+
+    await input.fill('日语学习');
+    await input.selectText();
+    await dialog.getByRole('button', { name: '粗体', exact: true }).click();
+    await expect(input).toHaveValue('**日语学习**');
+    await dialog.getByRole('button', { name: '标题格式' }).click();
+    const headings = page.getByRole('dialog', { name: '标题格式', exact: true });
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(headings.getByRole('button', { name: 'H6', exact: true })).toBeVisible();
+    await headings.getByRole('button', { name: 'H2', exact: true }).click();
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue('## **日语学习**');
+    await input.press('End');
+    await input.press('Enter');
+    await dialog.getByRole('button', { name: '链接', exact: true }).click();
+    const linkWindow = page.getByRole('dialog', { name: '插入链接', exact: true });
+    await expect(input).not.toBeVisible();
+    await linkWindow.getByLabel('显示文字', { exact: true }).fill('学习资料');
+    await linkWindow.getByLabel('网址', { exact: true }).fill('https://example.com');
+    expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
+    await page.screenshot({ path: `/tmp/muchakucha-markdown-link-window-${width}.png` });
+    await linkWindow.getByRole('button', { name: '插入链接', exact: true }).click();
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(/学习资料/);
+    await dialog.getByRole('button', { name: '表格', exact: true }).click();
+    const tableWindow = page.getByRole('dialog', { name: '插入表格', exact: true });
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await tableWindow.getByRole('button', { name: '插入表格', exact: true }).click();
+    const source = await input.inputValue();
+    await dialog.getByRole('button', { name: '预览', exact: true }).click();
+    await expect(dialog.getByRole('heading', { name: '日语学习', level: 2 })).toBeVisible();
+    await expect(dialog.getByRole('link', { name: '学习资料' })).toBeVisible();
+    await expect(dialog.getByRole('columnheader')).toHaveCount(2);
+    const panel = dialog.getByTestId('app-dialog-panel');
+    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
+    await page.screenshot({ path: `/tmp/muchakucha-markdown-preview-${width}.png` });
+    await dialog.getByRole('button', { name: '编辑', exact: true }).click();
+    await expect(input).toHaveValue(source);
+    const toolbar = dialog.getByRole('toolbar', { name: '笔记格式' });
+    await expect(toolbar).toBeVisible();
+    expect(await toolbar.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.screenshot({ path: `/tmp/muchakucha-markdown-editor-${width}.png` });
+    await dialog.getByRole('button', { name: '创建', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/households/${a}/notes$`));
+    const saved = requests.find(request => request.method === 'POST' && request.path.endsWith('/notes'));
+    expect(JSON.parse(saved!.data as string).body).toBe(source);
+  });
+}
+
+test('note format windows close back to editing without losing the selection or draft', async ({ page }) => {
+  await setup(page);
+  const note = { id: taskId, householdId: a, title: '日语学习', body: '词语练习', createdBy: 'user', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' };
+  await page.route(`**/api/v1/households/${a}/notes/${taskId}`, route => route.fulfill({ json: note }));
+  await page.goto(`/households/${a}/notes/${taskId}/edit`);
+  const editor = page.getByRole('dialog', { name: '编辑笔记', exact: true });
+  const input = editor.getByLabel('笔记内容');
+  await expect(input).toHaveValue('词语练习');
+  await input.selectText();
+  await editor.getByRole('button', { name: '链接', exact: true }).click();
+  const link = page.getByRole('dialog', { name: '插入链接', exact: true });
+  await expect(link.getByLabel('显示文字')).toHaveValue('词语练习');
+  await link.getByLabel('网址', { exact: true }).fill('https://example.com');
+  await link.getByRole('button', { name: '关闭插入链接', exact: true }).click();
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('词语练习');
+  await editor.getByRole('button', { name: '粗体', exact: true }).click();
+  await expect(input).toHaveValue('**词语练习**');
+  await editor.getByRole('button', { name: '表格', exact: true }).click();
+  const table = page.getByRole('dialog', { name: '插入表格', exact: true });
+  await table.getByRole('button', { name: '关闭插入表格' }).click();
+  await expect(input).toHaveValue('**词语练习**');
+  await editor.getByRole('button', { name: '标题格式' }).click();
+  const headings = page.getByRole('dialog', { name: '标题格式', exact: true });
+  await expect(headings).toBeVisible();
+  expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
+  await page.screenshot({ path: '/tmp/muchakucha-markdown-heading-window.png' });
+  await page.keyboard.press('Escape');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('**词语练习**');
+  await expect(editor.getByRole('button', { name: '丢弃草稿' })).toHaveCount(0);
+  await editor.getByRole('button', { name: '预览', exact: true }).click();
+  await expect(editor.getByTestId('markdown-body')).toHaveText('词语练习');
+  await editor.getByRole('button', { name: '编辑', exact: true }).click();
+  await expect(input).toHaveValue('**词语练习**');
+  await expect(page).toHaveURL(new RegExp(`/notes/${taskId}/edit$`));
+});

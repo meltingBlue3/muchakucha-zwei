@@ -1,3 +1,4 @@
+import { markdownExcerpt } from './markdown';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { NoteResponseDto } from '@muchakucha/api-client';
@@ -15,7 +16,7 @@ export function NoteCard({ note, onPress }: NoteCardProps) {
   const updatedDate = new Date(note.updatedAt);
   const dateLabel = `${updatedDate.getFullYear()}-${String(updatedDate.getMonth() + 1).padStart(2, '0')}-${String(updatedDate.getDate()).padStart(2, '0')}`;
 
-  const bodyPreview = (note.body ?? '').trim();
+  const bodyPreview = markdownExcerpt(note.body ?? '');
   const previewText = bodyPreview.length > 120 ? bodyPreview.slice(0, 120) + '…' : bodyPreview;
 
   return (

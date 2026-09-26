@@ -14,7 +14,7 @@ function webDialogName(title: string): object {
   return Platform.OS === 'web' ? { 'aria-label': title } : {};
 }
 
-export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', footer }: {
+export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', footer, headerActions }: {
   title: string;
   busy: boolean;
   onClose(): void;
@@ -22,6 +22,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   children: ReactNode;
   size?: 'standard' | 'editor';
   footer?: ReactNode;
+  headerActions?: ReactNode;
 }) {
   const panel = useRef<View>(null);
   const blurTarget = useContext(DialogBackground);
@@ -41,6 +42,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
           <View ref={panel} testID="app-dialog-panel" {...(Platform.OS === 'web' ? {} : { accessibilityViewIsModal: true, accessibilityLabel: title })} style={{ width: '100%', maxWidth: size === 'editor' ? theme.layout.editorDialogMaxWidth : theme.layout.dialogMaxWidth, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, borderColor: theme.colors.separator, borderWidth: theme.borderWidths.default, padding: theme.spacing[6], gap: theme.spacing[4] }}>
             <Inline>
               <Heading style={{ flex: 1 }}>{title}</Heading>
+              {headerActions}
               <Pressable ref={initial} accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surfaceSubtle, borderRadius: theme.borderRadii.full })}>
                 <X size={theme.controlSizes.icon} color={theme.colors.inkMuted} />
               </Pressable>

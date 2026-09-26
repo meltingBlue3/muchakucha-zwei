@@ -1,3 +1,4 @@
+import { MarkdownBody } from '../../../../../../src/features/notes/markdown-body';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import type { NoteResponseDto } from '@muchakucha/api-client';
@@ -62,14 +63,14 @@ export default function NoteDetailRoute() {
     </Stack></NoteWindow>;
   }
 
-  const body = (note.body ?? '').trim();
+  const body = note.body ?? '';
 
   return (
     <NoteWindow title="笔记详情" footer={<Button label="编辑笔记" onPress={handleEdit} />}>
       <Stack gap={4}>
         <Heading>{note.title}</Heading>
         <Text variant="caption" color="inkMuted">最后更新于 {formatDateTime(note.updatedAt)}</Text>
-        <Text selectable color={body ? 'ink' : 'inkMuted'}>{body || '这篇笔记还没有内容。'}</Text>
+        <MarkdownBody source={body} />
       </Stack>
     </NoteWindow>
   );

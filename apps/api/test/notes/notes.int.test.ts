@@ -153,7 +153,7 @@ describe('notes API contract', () => {
     await addMemberViaDb(householdId, otherMember, 'MEMBER');
   });
 
-  test('creates a note with trimmed title and body', async () => {
+  test('trims the title but preserves Markdown body whitespace', async () => {
     const response = await noteApi(member, householdId, 'POST', '', {
       title: '  购物清单  ',
       body: '  牛奶\n鸡蛋  ',
@@ -164,12 +164,20 @@ describe('notes API contract', () => {
     expect(body).toMatchObject({
       householdId,
       title: '购物清单',
-      body: '牛奶\n鸡蛋',
+      body: '  牛奶\n鸡蛋  ',
       createdBy: member.userId,
     });
     expect(body.id).toEqual(expect.any(String));
     expect(Date.parse(body.createdAt)).not.toBeNaN();
     expect(Date.parse(body.updatedAt)).not.toBeNaN();
+  });
+
+  test('preserves Markdown source on update and subsequent read', async () => {
+    const noteId = await createNote(member, householdId, { title: '格式笔记' });
+    const source = '    缩进代码\n\n**粗体**  \n下一行\n';
+    const update = await noteApi(member, householdId, 'PUT', `/${noteId}`, { body: source });
+    expect(update.statusCode).toBe(200);
+    expect((await noteApi(member, householdId, 'GET', `/${noteId}`)).json().body).toBe(source);
   });
 
   test('stores a missing or blank body as null', async () => {

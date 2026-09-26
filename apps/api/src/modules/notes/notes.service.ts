@@ -60,7 +60,8 @@ export class NotesService {
       data: {
         householdId,
         title: trimmedTitle,
-        body: input.body?.trim() || null,
+        // Whitespace is Markdown syntax; only entirely blank bodies become null.
+        body: input.body?.trim() ? input.body : null,
         createdBy: actorId,
       },
     });
@@ -133,7 +134,7 @@ export class NotesService {
       data.title = trimmed;
     }
     if (input.body !== undefined) {
-      data.body = input.body?.trim() || null;
+      data.body = input.body?.trim() ? input.body : null;
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {

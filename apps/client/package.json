@@ -23,6 +23,7 @@
     "expo-router": "57.0.9",
     "expo-secure-store": "57.0.1",
     "lucide-react-native": "1.28.0",
+    "markdown-it": "14.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hook-form": "7.83.0",
@@ -34,6 +35,7 @@
   "devDependencies": {
     "@testing-library/react-native": "14.0.1",
     "@types/jest": "30.0.0",
+    "@types/markdown-it": "14.1.2",
     "@types/react": "19.2.18",
     "jest": "30.4.2",
     "jest-expo": "57.0.3",

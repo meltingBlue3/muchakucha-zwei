@@ -27,11 +27,20 @@ export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 're
 
 /** A route owns the URL; the dialog owns presentation and focus. Previous
  * transparent routes stay mounted, but only the focused route opens a modal. */
+export interface RouteWindowStep {
+  title: string;
+  content: ReactNode;
+  onClose(): void;
+  onReturn?(): void;
+}
+
 export interface RouteWindowProps {
   title: string;
   busy?: boolean;
   children: ReactNode;
   footer?: ReactNode;
+  headerActions?: ReactNode;
+  step?: RouteWindowStep | null;
   onClose?: () => void;
   onBackStep?: (() => void) | undefined;
   exitAllowed?: RefObject<boolean>;
@@ -39,8 +48,17 @@ export interface RouteWindowProps {
   fallback: ReactNode;
 }
 
-export function RouteWindow({ title, busy = false, children, footer, onClose, onBackStep, exitAllowed, resource, fallback }: RouteWindowProps) {
+export function RouteWindow({ title, busy = false, children, footer, headerActions, step, onClose, onBackStep, exitAllowed, resource, fallback }: RouteWindowProps) {
   const focused = useIsFocused();
+  const previousStep = useRef(step);
+  useEffect(() => {
+    const previous = previousStep.current;
+    previousStep.current = step;
+    if (!previous || step) return;
+    // Wait until the window has restored its normal content and initial focus.
+    const frame = requestAnimationFrame(() => previous.onReturn?.());
+    return () => cancelAnimationFrame(frame);
+  }, [step]);
   const [confirmation, setConfirmation] = useState<WindowConfirmationRequest | null>(null);
   const confirmationRef = useRef(confirmation);
   confirmationRef.current = confirmation;
@@ -52,34 +70,40 @@ export function RouteWindow({ title, busy = false, children, footer, onClose, on
   const close = useCallback(() => {
     if (busy) return;
     if (confirmation) { setConfirmation(null); return; }
+    if (step) { step.onClose(); return; }
     if (onClose) onClose();
     else dismiss();
-  }, [busy, confirmation, onClose, dismiss]);
+  }, [busy, confirmation, step, onClose, dismiss]);
   useEffect(() => {
     navigation.setOptions({ gestureEnabled: !busy });
     return navigation.addListener('beforeRemove', event => {
       if (exitAllowed?.current) return;
-      if (busy || confirmationRef.current || onBackStep) {
+      if (busy || confirmationRef.current || step || onBackStep) {
         event.preventDefault();
         if (!busy) {
           if (confirmationRef.current) setConfirmation(null);
+          else if (step) step.onClose();
           else onBackStep?.();
         }
       }
     });
-  }, [navigation, busy, confirmation, onBackStep, exitAllowed]);
+  }, [navigation, busy, confirmation, step, onBackStep, exitAllowed]);
   return (
     <DialogBackground.Provider value={hasBackground ? parentBackground : background}>
       <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={focused ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
-      {focused ? <AppDialog title={confirmation?.title ?? title} busy={busy} onClose={close} trigger={trigger} size="editor" {...(footer === undefined || confirmation ? {} : { footer })}>
+      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step ? 'standard' : 'editor'} headerActions={confirmation || step ? null : headerActions} {...(footer === undefined || confirmation || step ? {} : { footer })}>
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>
             <Button label="继续编辑" tone="secondary" disabled={busy} onPress={() => setConfirmation(null)} />
             <Button label={confirmation.confirmLabel} disabled={busy} onPress={() => { const request = confirmation; confirmationRef.current = null; setConfirmation(null); request.onConfirm(); }} />
-          </Stack> : children}
+          </Stack> : step !== undefined ? <>
+            {/* Keep the editor mounted while a format window owns focus. */}
+            <View style={step ? { display: 'none' } : undefined} aria-hidden={Boolean(step)} importantForAccessibility={step ? 'no-hide-descendants' : 'auto'}>{children}</View>
+            {step?.content}
+          </> : children}
         </WindowConfirmation.Provider>
       </AppDialog> : null}
     </DialogBackground.Provider>

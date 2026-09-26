@@ -1,3 +1,4 @@
+import { MarkdownEditor } from './markdown-editor';
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useState } from 'react';
@@ -44,6 +45,8 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
     setError(null);
   }, [setForm]);
 
+  const updateBody = useCallback((value: string) => updateField('body', value), [updateField]);
+
   const handleSubmit = useCallback(async () => {
     if (form.title.trim().length === 0) {
       setError('请输入笔记标题。');
@@ -54,10 +57,10 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
       title: form.title.trim(),
     };
     // Updates omit unchanged fields, so an edit must send an empty body to clear it.
-    if (initial !== undefined || form.body.trim() !== '') data.body = form.body.trim();
+    if (initial !== undefined || form.body.trim() !== '') data.body = form.body;
 
     await onSubmit(data);
-  }, [form, onSubmit]);
+  }, [form, initial, onSubmit]);
 
   const inputStyle = {
     backgroundColor: activeTheme.colors.surface,
@@ -94,17 +97,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
       {/* Body */}
       <Stack gap={1}>
         <Text variant="label">内容（可选）</Text>
-        <TextInput
-          editable={!isSubmitting}
-          value={form.body}
-          onChangeText={(v) => updateField('body', v)}
-          placeholder="笔记内容..."
-          placeholderTextColor={activeTheme.colors.inkMuted}
-          style={[inputStyle, { minHeight: 160, textAlignVertical: 'top' }]}
-          multiline
-          numberOfLines={8}
-          accessibilityLabel="笔记内容"
-        />
+        <MarkdownEditor value={form.body} onChange={updateBody} disabled={isSubmitting} />
       </Stack>
 
       {/* Error */}
