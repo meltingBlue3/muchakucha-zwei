@@ -1,3 +1,4 @@
+import { useContentDelete } from '../content/use-content-delete';
 import { FilterOptions } from '../../ui/filter-options';
 import { AppDialog } from '../../ui/app-dialog';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
@@ -56,6 +57,7 @@ const PRIORITY_FILTERS: { key: PriorityFilterKey; label: string }[] = [
 export default function TaskListScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const deleteTask = useContentDelete('tasks');
   const activeTheme = useTheme<Theme>();
   const {
     viewState,
@@ -339,7 +341,7 @@ export default function TaskListScreen() {
             key={task.id}
             task={task}
             assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-            onPress={handleTaskPress}
+            onPress={handleTaskPress} onDelete={deleteTask(task)}
             {...completion.cardProps(task)}
           />
         ))}

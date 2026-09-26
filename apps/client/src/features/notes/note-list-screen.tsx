@@ -1,3 +1,4 @@
+import { useContentDelete } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { PageIntro } from '../../ui/page-intro';
@@ -24,6 +25,7 @@ import type { Theme } from '../../ui/theme';
 export default function NotesListRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const deleteNote = useContentDelete('notes');
   const activeTheme = useTheme<Theme>();
   const {
     viewState,
@@ -194,7 +196,7 @@ export default function NotesListRoute() {
           )}
 
           {visibleNotes.map((note) => (
-            <NoteCard key={note.id} note={note} onPress={handleNotePress} />
+            <NoteCard key={note.id} note={note} onPress={handleNotePress} onDelete={deleteNote(note)} />
           ))}
         </Stack>
       </AppShell>

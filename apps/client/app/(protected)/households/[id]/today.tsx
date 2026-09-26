@@ -1,3 +1,4 @@
+import { useContentDelete } from '../../../../src/features/content/use-content-delete';
 import { rememberRouteTrigger } from '../../../../src/platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../../../src/ui/workspace-state';
 import { TodaySummary } from '../../../../src/ui/page-intro';
@@ -95,6 +96,8 @@ export function partitionTodayTasks(tasks: TaskResponseDto[], retainCompletedId:
 export default function TodayRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const deleteTask = useContentDelete('tasks');
+  const deleteEvent = useContentDelete('events');
   const activeTheme = useTheme<Theme>();
   const {
     viewState,
@@ -314,7 +317,7 @@ export default function TodayRoute() {
               ) : (
                 <Stack gap={2}>
                   {events.map((event) => (
-                    <EventCard key={event.id} event={event} onPress={handleEventPress} />
+                    <EventCard key={event.id} event={event} onPress={handleEventPress} onDelete={deleteEvent(event)} />
                   ))}
                 </Stack>
               )}
@@ -340,7 +343,7 @@ export default function TodayRoute() {
                       key={task.id}
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress}
+                      onPress={handleTaskPress} onDelete={deleteTask(task)}
                       {...completion.cardProps(task)}
                     />
                   ))}
@@ -367,7 +370,7 @@ export default function TodayRoute() {
                       key={task.id}
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress}
+                      onPress={handleTaskPress} onDelete={deleteTask(task)}
                       {...completion.cardProps(task)}
                     />
                   ))}
@@ -412,7 +415,7 @@ export default function TodayRoute() {
                       key={task.id}
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress}
+                      onPress={handleTaskPress} onDelete={deleteTask(task)}
                       {...completion.cardProps(task)}
                     />
                   ))}
@@ -432,7 +435,7 @@ export default function TodayRoute() {
                       key={task.id}
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress}
+                      onPress={handleTaskPress} onDelete={deleteTask(task)}
                       {...completion.cardProps(task)}
                     />
                   ))}
@@ -462,7 +465,7 @@ export default function TodayRoute() {
                       key={task.id}
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress}
+                      onPress={handleTaskPress} onDelete={deleteTask(task)}
                       {...completion.cardProps(task)}
                     />
                   ))}

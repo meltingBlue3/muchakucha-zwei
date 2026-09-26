@@ -1,3 +1,4 @@
+import { useContentDelete } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { AppDialog } from '../../ui/app-dialog';
 import { FilterOptions } from '../../ui/filter-options';
@@ -34,6 +35,7 @@ import type { Theme } from '../../ui/theme';
 export default function CalendarScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const deleteEvent = useContentDelete('events');
   const activeTheme = useTheme<Theme>();
   const { width } = useWindowDimensions();
   const wide = width >= activeTheme.layout.navigationBreakpoint;
@@ -237,7 +239,7 @@ export default function CalendarScreen() {
               <Text variant="bodySm" color="inkMuted">{recurringFilter === 'recurring' ? RECURRING_EMPTY_EVENTS : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}</Text>
               {filterSummary ? <Button label="清除筛选" tone="secondary" onPress={() => { setLabelFilter('all'); setRecurringFilter('all'); }} /> : null}
             </Stack> : null}
-            {selectedDateEvents.map(event => <EventCard key={event.id} event={event} onPress={handleEventPress} />)}
+            {selectedDateEvents.map(event => <EventCard key={event.id} event={event} onPress={handleEventPress} onDelete={deleteEvent(event)} />)}
           </Stack>
         </View>
       </Stack>

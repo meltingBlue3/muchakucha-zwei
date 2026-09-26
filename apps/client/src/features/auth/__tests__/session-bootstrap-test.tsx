@@ -24,6 +24,7 @@ const householdPageSuffixes = [
   '/tasks', '/tasks/new', `/tasks/${resourceId}`, `/tasks/${resourceId}/edit`,
   '/events', '/events/new', `/events/${resourceId}`, `/events/${resourceId}/edit`,
   '/notes', '/notes/new', `/notes/${resourceId}`, `/notes/${resourceId}/edit`,
+  `/tasks/${resourceId}/delete`, `/events/${resourceId}/delete`, `/notes/${resourceId}/delete`,
   '/recurrence-rules', `/recurrence-rules/${resourceId}`,
   '/ownership/transfer', '/ownership/leave',
   `/members/${resourceId}/role`, `/members/${resourceId}/remove`,
@@ -161,7 +162,7 @@ describe('session bootstrap contract', () => {
   test.each([
     `${householdRoute}/calendar`,
     `${householdRoute}/tasks/archive`,
-    `${householdRoute}/tasks/${resourceId}/delete`,
+    `${householdRoute}/tasks/${resourceId}/unsupported`,
     `${householdRoute}/events/new/edit`,
     `${householdRoute}/labels/${resourceId}`,
     `${householdRoute}/recurrence-rules/new`,

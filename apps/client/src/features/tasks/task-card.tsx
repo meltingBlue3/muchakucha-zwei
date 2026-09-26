@@ -1,3 +1,4 @@
+import { CardActionsMenu } from '../../ui/card-actions-menu';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { TaskResponseDto } from '@muchakucha/api-client';
@@ -12,6 +13,7 @@ import { statusLabel, priorityLabel, formatDueDate, isOverdue } from './task-uti
 import { completionActionLabel } from './task-completion';
 
 interface TaskCardProps {
+  onDelete?: (() => void) | undefined;
   task: TaskResponseDto;
   assigneeNames?: string[];
   onPress: (task: TaskResponseDto) => void;
@@ -28,6 +30,7 @@ export function TaskCard({
   task,
   assigneeNames,
   onPress,
+  onDelete,
   onToggleComplete,
   statusChanging = false,
   statusError = null,
@@ -85,6 +88,7 @@ export function TaskCard({
             ) : null}
           </Stack>
         </Pressable>
+        {onDelete ? <CardActionsMenu label={`删除任务：${task.title}`} onPress={onDelete} disabled={statusChanging} /> : null}
       </View>
 
       {/* A sibling of the card body, never inside it: a control nested in the

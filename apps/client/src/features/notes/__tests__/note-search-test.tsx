@@ -18,6 +18,7 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('../../auth/session-runtime', () => ({
+  sessionStateStore: jest.requireActual('../../auth/session-state').createSessionStateStore(),
   sessionApiClient: { listNotes: (...args: unknown[]) => mockListNotes(...args) },
   sessionTransport: { getAccessToken: () => Promise.resolve('access-token') },
 }));

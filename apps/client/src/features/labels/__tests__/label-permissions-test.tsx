@@ -87,7 +87,7 @@ describe('labels screen offers only the actions the API will accept', () => {
 
     expect(getByLabelText('新建标签')).toBeTruthy();
     await waitFor(() => expect(getByLabelText('编辑标签 采购')).toBeTruthy());
-    expect(getByLabelText('删除标签 采购')).toBeTruthy();
+    expect(getByLabelText('更多操作：标签 采购')).toBeTruthy();
   });
 
   test('MEMBER sees the labels but no mutation entry point', async () => {

@@ -148,21 +148,21 @@ test.describe('event recurrence accessibility', () => {
     await expect(page.getByText('至少需要选择一天。')).toHaveAttribute('aria-live', 'polite');
   });
 
-  test('keeps scope selection in one window and Escape returns to editing', async ({ page }) => {
+  test('card deletion scope stays in one window and Escape returns to the card', async ({ page }) => {
     await loginFixture(page, fixture.username);
-    await openEventEdit(page, fixture);
-    const deleteTrigger = page.getByLabel('删除事件');
-    await deleteTrigger.click();
-    const dialog = page.getByRole('dialog', { name: '删除这次重复？' });
+    await page.goto(`/households/${fixture.householdId}/events`);
+    const more = page.getByRole('button', { name: `更多操作：日程：${fixture.title}`, exact: true }).first();
+    await more.click();
+    await page.getByRole('menuitem', { name: `删除日程：${fixture.title}`, exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '删除日程', exact: true });
     await expect(dialog).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(1);
-    await expect(dialog.getByRole('button', { name: '关闭删除这次重复？' })).toBeFocused();
+    await expect(dialog.getByRole('button', { name: '关闭删除日程' })).toBeFocused();
     await page.keyboard.press('Shift+Tab');
     await expect(dialog.getByRole('button', { name: '取消', exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '关闭编辑日程' })).toBeFocused();
-    await expect(deleteTrigger).toBeVisible();
+    await expect(more).toBeFocused();
   });
 
   test('remains usable at 200% zoom without horizontal overflow or inert weekday chips', async ({ page }) => {

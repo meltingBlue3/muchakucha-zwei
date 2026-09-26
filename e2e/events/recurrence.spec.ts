@@ -333,12 +333,11 @@ test.describe('recurring event and task journeys', () => {
     // Reach the occurrence from the Today view. The overdue section is empty and
     // 今日待办 precedes the upcoming section, so this resolves to today's
     // occurrence even though every occurrence in the series shares one title.
-    await page.getByLabel(`任务：${taskTitle}，重复`).first().click();
-    await page.getByLabel('编辑任务').click();
-    await page.getByLabel('删除任务').click();
-    const deleteDialog = page.getByRole('dialog', { name: '删除这次重复？' });
+    await page.getByRole('button', { name: `更多操作：任务：${taskTitle}`, exact: true }).first().click();
+    await page.getByRole('menuitem', { name: `删除任务：${taskTitle}`, exact: true }).click();
+    const deleteDialog = page.getByRole('dialog', { name: '删除任务' });
     await expect(deleteDialog).toBeVisible();
-    await expect(deleteDialog.getByRole('button', { name: '关闭删除这次重复？' })).toBeFocused();
+    await expect(deleteDialog.getByRole('button', { name: '关闭删除任务' })).toBeFocused();
     await deleteDialog.getByLabel('仅此一次').click();
     await expect(deleteDialog).toHaveCount(0);
 

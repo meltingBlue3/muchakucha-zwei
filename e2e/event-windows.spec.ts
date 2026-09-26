@@ -106,12 +106,7 @@ test('direct event edit links restore drafts and confirmation stays in one windo
   await page.getByLabel('事件标题', { exact: true }).fill('保留修改');
   await page.reload();
   await expect(page.getByLabel('事件标题', { exact: true })).toHaveValue('保留修改');
-  await page.getByRole('button', { name: '删除事件', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '删除日程' })).toBeVisible();
-  await expect(page.getByRole('dialog')).toHaveCount(1);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: '编辑日程' })).toBeVisible();
-  await expect(page.getByLabel('事件标题', { exact: true })).toHaveValue('保留修改');
+  await expect(page.getByRole('button', { name: '删除事件', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '关闭编辑日程' }).click();
   await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
   await page.getByRole('button', { name: '关闭日程详情' }).click();
@@ -154,4 +149,39 @@ test('a late response from the previous month cannot replace the selected month'
   await page.getByRole('button', { name: '查看结果', exact: true }).click();
   await expect(july).toBeVisible();
   await expect(page.getByRole('button', { name: /^2030-07-01/ })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('card deletion confirms, removes the event, and returns to Today', async ({ page }) => {
+  const events = await setup(page);
+  await page.goto(`${base}/today`);
+  const more = page.getByRole('button', { name: /^更多操作：日程：/ });
+  await more.click();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.getByRole('menuitem', { name: /^删除日程：/ }).click();
+  await page.getByRole('button', { name: '取消删除', exact: true }).click();
+  await expect(more).toBeFocused();
+  expect(events.has(eventId)).toBe(true);
+  await more.click();
+  await page.getByRole('menuitem', { name: /^删除日程：/ }).click();
+  await page.getByRole('button', { name: '确认删除日程', exact: true }).click();
+  await expect(page).toHaveURL(`${base}/today`);
+  await expect(page.getByRole('button', { name: /^事件：/ })).toHaveCount(0);
+  expect(events.has(eventId)).toBe(false);
+});
+
+test('recurring card deletion submits the selected series scope', async ({ page }) => {
+  await setup(page);
+  const recurring = { ...initialEvent, recurrenceRuleId: 'rule', recurrence: { frequency: 'daily', interval: 1 } };
+  await page.route(`**/api/v1/households/${householdId}/events/${eventId}`, route => route.fulfill({ json: recurring }));
+  let selectedScope: string | null = null;
+  await page.route(`**/api/v1/households/${householdId}/events/${eventId}/series?**`, route => {
+    selectedScope = new URL(route.request().url()).searchParams.get('scope');
+    return route.fulfill({ json: {} });
+  });
+  await page.goto(`${base}/events`);
+  await page.getByRole('button', { name: /^更多操作：日程：/ }).click();
+  await page.getByRole('menuitem', { name: /^删除日程：/ }).click();
+  await page.getByRole('button', { name: '仅此一次', exact: true }).click();
+  await expect(page).toHaveURL(`${base}/events`);
+  expect(selectedScope).toBe('this_only');
 });

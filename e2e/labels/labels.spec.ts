@@ -137,12 +137,14 @@ test('manages labels and applies them to a task in the browser', async ({ page }
 
   // --- Deleting the label asks for confirmation and detaches it from the task ---
   await page.goto(`${householdPath}/labels`);
-  await page.getByRole('button', { name: '删除标签 学习' }).click();
+  await page.getByRole('button', { name: '更多操作：标签 学习', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除标签 学习', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '删除标签', exact: true })).toContainText('日程和任务本身会保留');
   await page.getByRole('button', { name: '取消删除' }).click();
   await expect(page.getByLabel('标签：学习')).toBeVisible();
 
-  await page.getByRole('button', { name: '删除标签 学习' }).click();
+  await page.getByRole('button', { name: '更多操作：标签 学习', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除标签 学习', exact: true }).click();
   await page.getByRole('button', { name: '确认删除标签 学习' }).click();
   await expect(page.getByText('还没有标签，点击“新建”为日程和任务分类。')).toBeVisible();
 

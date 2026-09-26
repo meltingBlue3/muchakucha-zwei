@@ -59,7 +59,7 @@ for (const width of [320, 390, 1440]) {
     await expect(detail.getByText('这篇笔记还没有内容。')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByLabel('搜索笔记', { exact: true })).toHaveValue('暑假');
-    await expect(page.getByRole('button', { name: '笔记：暑假改好的计划' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '笔记：暑假改好的计划', exact: true })).toBeVisible();
     await page.goto(`${base}/more`);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`family-${width}.png`) });
@@ -113,7 +113,8 @@ test('label save and delete failures retain the form and offer retry', async ({ 
   await expect(page.getByLabel('编辑标签名称')).toHaveValue('清洁');
   state.failLabels(false);
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByRole('button', { name: '删除标签 清洁', exact: true }).click();
+  await page.getByRole('button', { name: '更多操作：标签 清洁', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除标签 清洁', exact: true }).click();
   state.failLabels(true);
   await page.getByRole('button', { name: '确认删除标签 清洁', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('删除失败');
@@ -145,4 +146,59 @@ test('a completed preview task keeps its undo action even if the server reorders
   await expect(page.getByRole('button', { name: '撤销完成：预览任务 0' })).toBeVisible();
   await page.getByRole('button', { name: '撤销完成：预览任务 0' }).click();
   expect(tasks.find(task => task.id === 'preview-0')?.status).toBe('pending');
+});
+
+for (const role of ['OWNER', 'ADMIN', 'MEMBER']) {
+  test(`${role} uses the note card menu and failed deletion remains retryable`, async ({ page }) => {
+    await setup(page, role);
+    let deleted = false;
+    let fail = true;
+    const note = { id: noteId, householdId, title: '待删除笔记', body: null, createdBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
+    await page.route(`**/api/v1/households/${householdId}/notes`, route => route.fulfill({ json: { notes: deleted ? [] : [note], total: deleted ? 0 : 1 } }));
+    await page.route(`**/api/v1/households/${householdId}/notes/${noteId}`, async route => {
+      if (route.request().method() === 'DELETE') {
+        if (fail) { await route.fulfill({ status: 500, json: { error: { code: 'server_error' } } }); return; }
+        deleted = true;
+      }
+      await route.fulfill({ json: note });
+    });
+    await page.goto(`${base}/notes`);
+    const more = page.getByRole('button', { name: '更多操作：笔记：待删除笔记', exact: true });
+    await expect(page.getByRole('menuitem')).toHaveCount(0);
+    const card = await page.getByRole('button', { name: '笔记：待删除笔记', exact: true }).boundingBox();
+    const action = await more.boundingBox();
+    expect(action!.x).toBeGreaterThan(card!.x);
+    expect(Math.abs(action!.y - card!.y)).toBeLessThan(10);
+    await more.click();
+    await page.getByRole('menuitem', { name: '删除笔记：待删除笔记', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/notes/${noteId}/delete`);
+    await page.reload();
+    await expect(page.getByRole('dialog', { name: '删除笔记', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '确认删除笔记', exact: true }).click();
+    await expect(page.getByText('删除失败，请检查网络后重试。')).toBeVisible();
+    expect(deleted).toBe(false);
+    fail = false;
+    await page.getByRole('button', { name: '确认删除笔记', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/notes`);
+    await expect(more).toHaveCount(0);
+    expect(deleted).toBe(true);
+  });
+}
+
+test('member cannot delete another author note through the card or direct URL', async ({ page }) => {
+  await setup(page, 'MEMBER');
+  const note = { id: noteId, householdId, title: '其他成员的笔记', body: null, createdBy: 'other-user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
+  let writes = 0;
+  await page.route(`**/api/v1/households/${householdId}/notes`, route => route.fulfill({ json: { notes: [note], total: 1 } }));
+  await page.route(`**/api/v1/households/${householdId}/notes/${noteId}`, route => {
+    if (route.request().method() !== 'GET') writes++;
+    return route.fulfill({ json: note });
+  });
+  await page.goto(`${base}/notes`);
+  await expect(page.getByRole('button', { name: '笔记：其他成员的笔记', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^更多操作：笔记：/ })).toHaveCount(0);
+  await page.goto(`${base}/notes/${noteId}/delete`);
+  await expect(page.getByText('你没有删除这条笔记的权限。')).toBeVisible();
+  await expect(page.getByRole('button', { name: '确认删除笔记', exact: true })).toHaveCount(0);
+  expect(writes).toBe(0);
 });

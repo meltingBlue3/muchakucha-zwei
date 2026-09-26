@@ -27,7 +27,7 @@ function isHouseholdPage(value: string): boolean {
     return section === 'recurrence-rules' && isUuid(resourceId);
   }
   if (segments.length !== 3 || !isUuid(resourceId)) return false;
-  if (EDITABLE_RESOURCES.has(section)) return action === 'edit';
+  if (EDITABLE_RESOURCES.has(section)) return action === 'edit' || action === 'delete';
   if (section === 'members') return action === 'role' || action === 'remove';
   return section === 'invitations' && action === 'revoke';
 }

@@ -60,7 +60,7 @@ for (const width of [320, 390, 1440]) {
     await detail.getByRole('button', { name: '关闭任务详情' }).click();
     await expect(page).toHaveURL(`${base}/tasks`);
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '任务：已修改的聚餐安排' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '任务：已修改的聚餐安排', exact: true })).toBeVisible();
   });
 }
 
@@ -133,16 +133,17 @@ test('a failed save retains the draft and busy windows resist closing', async ({
   await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible();
 });
 
-test('delete confirmation stays in one window and Escape returns to the draft', async ({ page }) => {
+test('card menu opens deletion and Escape restores the card action', async ({ page }) => {
   await setup(page);
-  await page.goto(`${base}/tasks/${taskId}/edit`);
-  await page.getByRole('textbox', { name: '任务标题', exact: true }).fill('删除前的草稿');
-  await page.getByRole('button', { name: '删除任务', exact: true }).click();
+  await page.goto(`${base}/tasks`);
+  const more = page.getByRole('button', { name: /^更多操作：任务：/ });
+  await more.click();
+  await page.getByRole('menuitem', { name: /^删除任务：/ }).click();
   await expect(page.getByRole('dialog', { name: '删除任务', exact: true })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(1);
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: '编辑任务', exact: true })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: '任务标题', exact: true })).toHaveValue('删除前的草稿');
+  await expect(page).toHaveURL(`${base}/tasks`);
+  await expect(more).toBeFocused();
 });
 
 test('browser history moves one window level at a time', async ({ page }) => {

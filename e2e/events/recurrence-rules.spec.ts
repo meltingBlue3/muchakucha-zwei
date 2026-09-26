@@ -297,7 +297,7 @@ test.describe('recurrence rule addendum journeys', () => {
     await loginFixture(page, account.username);
     await openTaskList(page, householdId);
     await expect(page.getByLabel(`任务：${recurringTitle}，重复`)).toBeVisible();
-    await expect(page.getByLabel(`任务：${plainTitle}`)).toBeVisible();
+    await expect(page.getByLabel(`任务：${plainTitle}`, { exact: true })).toBeVisible();
 
     const before = await activeFilterCount(page);
     await page.getByLabel(/^筛选任务/).click();
@@ -308,7 +308,7 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(group).toBeVisible();
 
     await group.getByLabel('重复筛选：仅看周期性').click();
-    await expect(page.getByLabel(`任务：${plainTitle}`)).toHaveCount(0);
+    await expect(page.getByLabel(`任务：${plainTitle}`, { exact: true })).toHaveCount(0);
     await expect(page.getByLabel(`任务：${recurringTitle}，重复`)).toBeVisible();
 
     const after = await activeFilterCount(page);
@@ -316,7 +316,7 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(page.getByLabel(/^筛选任务/).getByText(String(after), { exact: true })).toBeVisible();
 
     await group.getByLabel('重复筛选：全部').click();
-    await expect(page.getByLabel(`任务：${plainTitle}`)).toBeVisible();
+    await expect(page.getByLabel(`任务：${plainTitle}`, { exact: true })).toBeVisible();
     await expect(page.getByLabel(`任务：${recurringTitle}，重复`)).toBeVisible();
     expect(await activeFilterCount(page)).toBe(before);
   });

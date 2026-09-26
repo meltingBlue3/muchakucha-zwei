@@ -104,7 +104,7 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   await page.getByRole('button', { name: '创建', exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`${notesPath}$`));
-  const card = page.getByRole('button', { name: '笔记：暑假计划' });
+  const card = page.getByRole('button', { name: '笔记：暑假计划', exact: true });
   await expect(card).toBeVisible();
   await expect(card).toContainText('游泳课');
 
@@ -134,13 +134,15 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   expect(updated.body).toMatchObject({ title: '暑假安排', body: null });
 
   // --- Delete: cancel keeps the note, confirm returns to the empty list ---
-  await page.getByRole('button', { name: '编辑笔记' }).click();
-  await page.getByRole('button', { name: '删除笔记' }).click();
-  await expect(page.getByText('确定要删除这篇笔记吗？此操作不可撤销。')).toBeVisible();
+  await page.getByRole('button', { name: '关闭笔记详情' }).click();
+  await page.getByRole('button', { name: '更多操作：笔记：暑假安排' }).click();
+  await page.getByRole('menuitem', { name: '删除笔记：暑假安排' }).click();
+  await expect(page.getByText('确定要删除这条笔记吗？此操作不可撤销。')).toBeVisible();
   await page.getByRole('button', { name: '取消删除' }).click();
-  await expect(page.getByText('确定要删除这篇笔记吗？此操作不可撤销。')).toBeHidden();
+  await expect(page.getByText('确定要删除这条笔记吗？此操作不可撤销。')).toBeHidden();
 
-  await page.getByRole('button', { name: '删除笔记' }).click();
+  await page.getByRole('button', { name: '更多操作：笔记：暑假安排' }).click();
+  await page.getByRole('menuitem', { name: '删除笔记：暑假安排' }).click();
   await page.getByRole('button', { name: '确认删除笔记' }).click();
 
   await expect(page).toHaveURL(new RegExp(`${notesPath}$`));

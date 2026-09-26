@@ -1,3 +1,4 @@
+import { CardActionsMenu } from '../../../../../src/ui/card-actions-menu';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
@@ -101,7 +102,7 @@ export default function LabelsIndexRoute() {
           <Text style={{ flex: 1 }} accessibilityLabel={`标签：${label.name}`}>{label.name}</Text>
           {canManage ? <>
             <Pressable accessibilityRole="button" accessibilityLabel={`编辑标签 ${label.name}`} onPress={() => open({ kind: 'edit', label })} style={{ minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, justifyContent: 'center', alignItems: 'center' }}><Text variant="label" color="link">编辑</Text></Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={`删除标签 ${label.name}`} onPress={() => open({ kind: 'delete', label })} style={{ minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, justifyContent: 'center', alignItems: 'center' }}><Text variant="label" color="destructive">删除</Text></Pressable>
+            <CardActionsMenu label={`删除标签 ${label.name}`} onPress={() => open({ kind: 'delete', label })} />
           </> : null}
         </View>)}
       </Stack>
