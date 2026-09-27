@@ -2,7 +2,8 @@ import { FloatingCreateButton } from '../../../../src/ui/floating-create-button'
 import { useContentDelete } from '../../../../src/features/content/use-content-delete';
 import { rememberRouteTrigger } from '../../../../src/platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../../../src/ui/workspace-state';
-import { TodaySummary } from '../../../../src/ui/page-intro';
+import { PageIntro, TodaySummary } from '../../../../src/ui/page-intro';
+import { formatDate } from '../../../../src/ui/date-values';
 import { HouseholdNavigation } from '../../../../src/ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -28,7 +29,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../src/ui/household-components';
-import { Button, EmptyState, Heading, LoadError, LoadingState, Stack, Text } from '../../../../src/ui/primitives';
+import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../../../src/ui/primitives';
 import type { Theme } from '../../../../src/ui/theme';
 
 function todayIso(): string {
@@ -210,11 +211,7 @@ export default function TodayRoute() {
   );
 
 
-  const dateLabel = useMemo(() => {
-    const now = new Date();
-    const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
-    return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${weekDays[now.getDay()]}`;
-  }, []);
+  const dateLabel = useMemo(() => formatDate(new Date(), { weekday: true }), []);
 
   const handleSwitch = useCallback(async (householdId: string) => {
     if (householdId === (id ?? currentHouseholdId)) {
@@ -263,7 +260,7 @@ export default function TodayRoute() {
         { kind: 'notes', label: '创建笔记', onPress: () => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/notes/new`); } },
       ]} /> : null}>
       <Stack gap={4}>
-        <Heading variant="caption" color="coral" style={{ fontSize: activeTheme.typography.section.fontSize, lineHeight: activeTheme.typography.section.lineHeight }}>{dateLabel}</Heading>
+        <PageIntro title="今日" action={<Text variant="label" color="inkMuted">{dateLabel}</Text>} />
         {!loading && error === null ? <TodaySummary events={events.length} tasks={todayTasks.length} overdue={overdueTasks.length} /> : null}
 
         {/* Loading */}

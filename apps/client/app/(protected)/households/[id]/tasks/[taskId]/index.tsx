@@ -145,7 +145,7 @@ export default function TaskDetailRoute() {
     <TaskWindow title="任务详情" busy={statusBusy} footer={footer}>
       <Stack gap={5}>
         <Stack gap={2}>
-          <Heading>{task.title}</Heading>
+          <Heading level={2}>{task.title}</Heading>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
             <Text variant="label" color={task.status === 'completed' || task.status === 'in_progress' ? 'teal' : 'inkMuted'}>{cancelled ? '已取消' : statusLabel(task.status)}</Text>
             {overdue ? <Text variant="label" color="destructive">已逾期</Text> : null}

@@ -1,7 +1,6 @@
-import { useCallback, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { BlurView } from 'expo-blur';
-import { DialogBackground } from './dialog-background';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { DialogBackdrop } from './dialog-backdrop';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import X from 'lucide-react-native/icons/x';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
@@ -26,7 +25,6 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   headerActions?: ReactNode;
 }) {
   const panel = useRef<View>(null);
-  const blurTarget = useContext(DialogBackground);
   const initial = useRef<View>(null);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -47,8 +45,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   return (
     <Modal {...webDialogName(title)} transparent visible animationType="none" onShow={focus} onRequestClose={Platform.OS === 'web' ? undefined : close} statusBarTranslucent navigationBarTranslucent>
       <View style={{ flex: 1 }}>
-        <BlurView testID="app-dialog-blur" pointerEvents="none" {...(blurTarget ? { blurTarget } : {})} blurMethod="dimezisBlurView" intensity={theme.blur.dialog} tint="light" style={StyleSheet.absoluteFill} />
-        <Pressable testID="app-dialog-dismiss" accessible={false} tabIndex={-1} onPress={close} style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.dialogOverlay }]} />
+        <DialogBackdrop onPress={close} />
         <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={sheet
           ? { flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + theme.spacing[2] }
           : { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing[5], paddingTop: insets.top + theme.spacing[5], paddingBottom: insets.bottom + theme.spacing[5] }}>
@@ -58,7 +55,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
             {sheet ? (
               <Inline gap={1} style={{ paddingRight: theme.spacing[2] }}>
                 {closeButton}
-                <Heading variant="section" numberOfLines={1} style={{ flex: 1 }}>{title}</Heading>
+                <Heading variant="section" level={1} numberOfLines={1} style={{ flex: 1 }}>{title}</Heading>
                 {headerActions}
                 {sheetAction ? <Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} style={{ minHeight: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.full, paddingHorizontal: theme.spacing[5] }} /> : null}
               </Inline>

@@ -3,6 +3,12 @@ import { Client } from 'pg';
 
 import { loginUsernameFixture } from '../support/auth';
 
+/** The calendar grid names a day as "2030年6月20日". */
+const dayLabel = (iso: string): string => {
+  const [year, month, day] = iso.slice(0, 10).split('-').map(Number);
+  return `${year}年${month}月${day}日`;
+};
+
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
 const DATABASE_URL =
@@ -153,7 +159,7 @@ test.describe('recurring event and task journeys', () => {
       await page.getByRole('button', { name: '下一个月', exact: true }).click();
       expect((await loaded).status()).toBe(200);
     }
-    await page.getByRole('button', { name: `${futureDate}，1个日程`, exact: true }).click();
+    await page.getByRole('button', { name: `${dayLabel(futureDate)}，1个日程`, exact: true }).click();
     await page.getByRole('button', { name: new RegExp(`日程：${title}`) }).click();
     await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
@@ -213,12 +219,12 @@ test.describe('recurring event and task journeys', () => {
     expect(occurrences).toHaveLength(4);
     for (const occurrence of occurrences) {
       const day = Number(String(occurrence.occurrenceDate).slice(-2));
-      await page.getByLabel(new RegExp(`^\\d{4}-\\d{2}-${String(day).padStart(2, '0')}(?:，今天)?，\\d+个日程$`)).click();
+      await page.getByLabel(new RegExp(`^\\d{4}年\\d{1,2}月${day}日(?:，今天)?，\\d+个日程$`)).click();
       await expect(page.getByLabel(`日程：${title}，重复`)).toBeVisible();
     }
 
     const detailOccurrence = occurrences[2]!;
-    await page.getByLabel(new RegExp(`^${String(detailOccurrence.occurrenceDate).slice(0, 10)}(?:，今天)?，\\d+个日程$`)).click();
+    await page.getByLabel(new RegExp(`^${dayLabel(String(detailOccurrence.occurrenceDate))}(?:，今天)?，\\d+个日程$`)).click();
     await page.getByLabel(`日程：${title}，重复`).click();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     await expect(page.getByText('重复安排', { exact: true })).toBeVisible();
@@ -261,7 +267,7 @@ test.describe('recurring event and task journeys', () => {
 
     await loginFixture(page, account.username);
     await page.getByRole('tab', { name: '日历', exact: true }).click();
-    await page.getByLabel(new RegExp(`^${String(selected.occurrenceDate).slice(0, 10)}(?:，今天)?，\\d+个日程$`)).click();
+    await page.getByLabel(new RegExp(`^${dayLabel(String(selected.occurrenceDate))}(?:，今天)?，\\d+个日程$`)).click();
     await page.getByLabel(`日程：${eventTitle}，重复`).click();
     await page.getByLabel('编辑日程').click();
     await expect(page.getByRole('dialog', { name: '编辑日程' })).toBeVisible();

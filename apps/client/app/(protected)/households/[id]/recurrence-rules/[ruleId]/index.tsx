@@ -251,7 +251,7 @@ export default function RecurrenceRuleDetailRoute() {
               <FormRow>
                 <Stack gap={2} style={{ flex: 1, paddingVertical: activeTheme.spacing[3] }}>
                   {/* Never truncated: the template title is the rule's identity. */}
-                  <Heading>{formatted.title}</Heading>
+                  <Heading level={2}>{formatted.title}</Heading>
                   <View style={{
                     alignItems: 'center',
                     flexDirection: 'row',

@@ -268,10 +268,10 @@ for (const width of [320, 390, 1440]) {
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
     await page.setViewportSize({ width, height: 900 });
-    for (const [route, title] of [['today', '今天'], ['events', '日历'], ['tasks', '任务'], ['notes', '笔记'], ['more', '家庭']]) {
+    for (const [route, title] of [['today', '今日'], ['events', '日历'], ['tasks', '任务'], ['notes', '笔记'], ['more', '家庭']]) {
       if (route === 'today') await page.goto(`/households/${a}/today`);
       else await page.getByRole('tab', { name: title, exact: true }).click();
-      await expect(page.getByRole('heading', { name: route === 'today' ? /^\d{4}年\d{1,2}月\d{1,2}日 星期/ : title, exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: title, exact: true, level: 1 })).toBeVisible();
       const navigation = page.getByRole('tablist', { name: '家庭主导航' });
       await expect(navigation.getByRole('tab')).toHaveCount(5);
       const navBounds = await navigation.boundingBox();

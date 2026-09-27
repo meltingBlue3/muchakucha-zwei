@@ -100,9 +100,20 @@ export const Text = ({ variant = 'body', ...props }: OwnedTextProps) => (
   <RestyleText allowFontScaling maxFontSizeMultiplier={2} variant={variant} {...props} />
 );
 
-export const Heading = forwardRef<React.ElementRef<typeof RestyleText>, OwnedTextProps>(
-  ({ variant = 'heading', ...props }, ref) => (
-    <Text accessibilityRole="header" aria-level={1} ref={ref} variant={variant} {...props} />
+type HeadingProps = OwnedTextProps & {
+  /**
+   * Outline level for assistive technology. Defaults follow the visual size:
+   * page and window titles are 1, section titles 2, anything smaller 3.
+   */
+  level?: 1 | 2 | 3;
+};
+
+const defaultHeadingLevel = (variant: TextVariant): 1 | 2 | 3 =>
+  variant === 'heading' || variant === 'display' ? 1 : variant === 'section' ? 2 : 3;
+
+export const Heading = forwardRef<React.ElementRef<typeof RestyleText>, HeadingProps>(
+  ({ variant = 'heading', level, ...props }, ref) => (
+    <Text accessibilityRole="header" aria-level={level ?? defaultHeadingLevel(variant)} ref={ref} variant={variant} {...props} />
   ),
 );
 
@@ -261,9 +272,11 @@ type IconButtonProps = Omit<PressableProps, 'children'> & {
   icon: ReactElement;
   label: string;
   visibleLabel?: boolean;
+  /** `plain` sits in a header beside other bare icons; `outlined` groups tools such as a formatting bar. */
+  appearance?: 'outlined' | 'plain';
 };
 
-export const IconButton = ({ icon, label, style, visibleLabel = false, ...props }: IconButtonProps) => {
+export const IconButton = ({ icon, label, style, visibleLabel = false, appearance = 'outlined', ...props }: IconButtonProps) => {
   const activeTheme = useTheme<Theme>();
   return (
     <Pressable
@@ -273,8 +286,8 @@ export const IconButton = ({ icon, label, style, visibleLabel = false, ...props 
       style={(state) => [
         {
           alignItems: 'center',
-          backgroundColor: state.pressed ? activeTheme.colors.coralSoft : activeTheme.colors.surface,
-          borderColor: state.pressed ? activeTheme.colors.coral : activeTheme.colors.separator,
+          backgroundColor: state.pressed ? activeTheme.colors.coralSoft : appearance === 'plain' ? activeTheme.colors.transparent : activeTheme.colors.surface,
+          borderColor: appearance === 'plain' ? activeTheme.colors.transparent : state.pressed ? activeTheme.colors.coral : activeTheme.colors.separator,
           borderRadius: activeTheme.borderRadii.full,
           borderWidth: activeTheme.borderWidths.default,
           flexDirection: 'row',

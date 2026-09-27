@@ -1,3 +1,4 @@
+import { formatDateTime } from '../../ui/date-values';
 import type { GetHouseholdResponseDto, InboxInvitationDto, InvitationInboxResponseDto } from '@muchakucha/api-client';
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -76,10 +77,10 @@ export function useInbox({ api, getAccessToken, onAccepted }: {
     summary: `${invitation.inviterDisplayName}邀请你加入「${invitation.householdName}」`,
     createdAt: invitation.createdAt,
     details: [
-      { label: '发送时间', value: new Date(invitation.createdAt).toLocaleString('zh-CN') },
+      { label: '发送时间', value: formatDateTime(new Date(invitation.createdAt)) },
       { label: '状态', value: '待处理' },
       { label: '加入后的身份', value: '普通成员，可以查看和编辑家庭共享的日程、任务和笔记。' },
-      { label: '有效期至', value: new Date(invitation.expiresAt).toLocaleString('zh-CN') },
+      { label: '有效期至', value: formatDateTime(new Date(invitation.expiresAt)) },
     ],
     actions: [
       { id: 'accept', label: '接受', accessibilityLabel: `接受「${invitation.householdName}」的邀请`, primary: true, run: () => respond(invitation, true) },

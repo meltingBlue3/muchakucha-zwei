@@ -96,11 +96,9 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPi
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
             accessibilityLabel={`${isSelected ? '取消选择' : '选择'}标签 ${label.name}`}
-            style={({ pressed }) => ({
-              opacity: pressed ? 0.7 : isSelected ? 1 : 0.5,
-            })}
+            style={({ pressed }) => ({ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}
           >
-            <LabelChip label={label} />
+            <LabelChip label={label} selected={isSelected} />
           </Pressable>
         );
       })}

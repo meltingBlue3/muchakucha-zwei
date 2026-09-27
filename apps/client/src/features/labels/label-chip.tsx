@@ -1,24 +1,31 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import Check from 'lucide-react-native/icons/check';
 import { useTheme } from '@shopify/restyle';
 import type { LabelResponseDto } from '@muchakucha/api-client';
-import X from 'lucide-react-native/icons/x';
 import type { Theme } from '../../ui/theme';
 import { Text } from '../../ui/primitives';
 
-/** Map a label color hex to a light background variant for the chip. */
-function lightenColor(hex: string): string {
-  // Simple approach: return a very light version
-  return hex + '22'; // Add 13% alpha
+/** A faint wash of the label's own color for the chip background. */
+function tint(hex: string): string {
+  return hex + '1F'; // about 12% alpha
 }
 
 interface LabelChipProps {
   label: LabelResponseDto;
-  onRemove?: (label: LabelResponseDto) => void;
   small?: boolean;
+  /** Set in a picker: unselected chips are plain outlines, selected ones filled and checked. */
+  selected?: boolean;
 }
 
-export function LabelChip({ label, onRemove, small = false }: LabelChipProps) {
+/**
+ * Labels carry arbitrary member-chosen colors, so the color lives in the dot,
+ * wash and outline while the name stays in ink: light presets such as yellow
+ * would otherwise be unreadable as text.
+ */
+export function LabelChip({ label, small = false, selected }: LabelChipProps) {
+  const unselected = selected === false;
   const activeTheme = useTheme<Theme>();
+  const dot = small ? activeTheme.spacing[2] : activeTheme.spacing[2] + activeTheme.spacing[1] / 2;
 
   return (
     <View
@@ -27,35 +34,22 @@ export function LabelChip({ label, onRemove, small = false }: LabelChipProps) {
         flexDirection: 'row',
         alignItems: 'center',
         gap: activeTheme.spacing[1],
-        backgroundColor: lightenColor(label.color),
-        borderWidth: 1,
-        borderColor: label.color,
+        backgroundColor: unselected ? activeTheme.colors.surface : tint(label.color),
+        borderWidth: activeTheme.borderWidths.default,
+        borderColor: unselected ? activeTheme.colors.border : label.color,
         borderRadius: activeTheme.borderRadii.full,
         paddingHorizontal: small ? activeTheme.spacing[2] : activeTheme.spacing[3],
-        paddingVertical: small ? 2 : activeTheme.spacing[1],
+        paddingVertical: small ? activeTheme.spacing[1] / 2 : activeTheme.spacing[1],
       }}
     >
-      <View
-        style={{
-          width: small ? 8 : 10,
-          height: small ? 8 : 10,
-          borderRadius: activeTheme.borderRadii.full,
-          backgroundColor: label.color,
-        }}
-      />
-      <Text variant={small ? 'caption' : 'bodySm'} style={{ color: label.color }}>
+      {selected ? (
+        <Check size={dot + activeTheme.spacing[1]} color={activeTheme.colors.ink} strokeWidth={activeTheme.controlSizes.iconStroke} />
+      ) : (
+        <View style={{ width: dot, height: dot, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} />
+      )}
+      <Text variant={small ? 'caption' : 'bodySm'} color="ink">
         {label.name}
       </Text>
-      {onRemove !== undefined && (
-        <Pressable
-          onPress={() => onRemove(label)}
-          hitSlop={activeTheme.spacing[2]}
-          accessibilityLabel={`移除标签 ${label.name}`}
-          style={{ marginLeft: activeTheme.spacing[1] }}
-        >
-          <X size={14} color={label.color} strokeWidth={2} />
-        </Pressable>
-      )}
     </View>
   );
 }

@@ -3,6 +3,7 @@ import { BlurTargetView } from 'expo-blur';
 import Inbox from 'lucide-react-native/icons/inbox';
 import { AccountMenu } from './account-menu';
 import { DialogBackground } from './dialog-background';
+import { DialogBackdrop } from './dialog-backdrop';
 import type { GetHouseholdMemberDto, ListMyHouseholdsItemDto } from '@muchakucha/api-client';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import Building2 from 'lucide-react-native/icons/building-2';
@@ -45,6 +46,7 @@ import {
   Text,
 } from './primitives';
 import { theme } from './theme';
+import { formatDateTime } from './date-values';
 
 // ---- AppShell ----
 
@@ -148,7 +150,7 @@ export const AppShell = ({
 
           {/* Global destinations: inbox directly precedes the account menu. */}
           <View style={{ minWidth: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center' }}>
-            {showProfile ? <><IconButton label="收件箱" icon={<Inbox color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} /><AccountMenu /></> : null}
+            {showProfile ? <><IconButton appearance="plain" label="收件箱" icon={<Inbox color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} /><AccountMenu /></> : null}
           </View>
         </View>
       ) : null}
@@ -340,7 +342,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
         ref={ref}
         style={{
           backgroundColor: theme.colors.surface,
-          borderRadius: Platform.OS === 'web' ? theme.borderRadii.lg : 0,
+          borderRadius: Platform.OS === 'web' ? theme.borderRadii.xl : 0,
           // Native needs a definite (not max-only) height here: the header
           // above is intrinsically sized and the household ScrollView below
           // is flex:1, so without a concrete height to allocate, Yoga gives
@@ -368,6 +370,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
           <Heading ref={headingRef}>切换家庭</Heading>
           <Pressable
             accessibilityLabel="关闭切换家庭"
+            accessibilityRole="button"
             onPress={onClose}
             style={{
               alignItems: 'center',
@@ -430,20 +433,10 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
           transparent
           visible={visible}
         >
-          <Pressable
-            onPress={onClose}
-            style={{
-              alignItems: 'center',
-              backgroundColor: theme.colors.overlay,
-              flex: 1,
-              justifyContent: 'center',
-              padding: theme.spacing[6],
-            }}
-          >
-            <Pressable onPress={() => undefined}>
-              {content}
-            </Pressable>
-          </Pressable>
+          <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center', padding: theme.spacing[6] }}>
+            <DialogBackdrop onPress={onClose} />
+            {content}
+          </View>
         </Modal>
       );
     }
@@ -456,13 +449,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
         visible={visible}
       >
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Pressable
-            onPress={onClose}
-            style={{
-              backgroundColor: theme.colors.overlay,
-              flex: 1,
-            }}
-          />
+          <DialogBackdrop onPress={onClose} />
           {content}
         </View>
       </Modal>
@@ -799,13 +786,7 @@ export const InvitationRow = ({
   const canRevoke = isPending && canManage && onRevoke !== undefined;
 
   const expiresDate = new Date(invitation.expiresAt);
-  const expiryText = expiresDate.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const expiryText = formatDateTime(expiresDate);
 
   return (
     <View

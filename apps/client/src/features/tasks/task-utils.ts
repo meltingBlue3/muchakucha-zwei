@@ -1,3 +1,5 @@
+import { formatDate } from '../../ui/date-values';
+
 const STATUS_LABELS: Record<string, string> = {
   pending: '待办',
   in_progress: '进行中',
@@ -23,10 +25,7 @@ export function formatDueDate(iso: string | null): string {
   if (iso === null || iso === '') return '';
   const date = new Date(iso);
   if (isNaN(date.getTime())) return '';
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return formatDate(date);
 }
 
 export function isOverdue(dueDateIso: string | null): boolean {
