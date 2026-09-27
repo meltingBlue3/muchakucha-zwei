@@ -2,7 +2,7 @@ import { render, waitFor } from '@testing-library/react-native';
 import { router, useGlobalSearchParams, usePathname } from 'expo-router';
 
 import RootLayout from '../../../../app/_layout';
-import { sessionStateStore, sessionTransport } from '../session-runtime';
+import { sessionStateStore, sessionTransport, setSessionLostHandler } from '../session-runtime';
 
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn() },
@@ -23,6 +23,7 @@ jest.mock('../session-runtime', () => ({
     clear: jest.fn(),
     restore: jest.fn(),
   },
+  setSessionLostHandler: jest.fn(),
 }));
 
 beforeEach(() => {
@@ -83,6 +84,22 @@ describe('root authentication routing', () => {
       pathname: '/login', params: { reason: 'reauth-required' },
     }));
     expect(sessionTransport.clear).toHaveBeenCalledTimes(1);
+  });
+
+  test('a session lost mid-use goes to sign-in and returns to the current page', async () => {
+    jest.mocked(usePathname).mockReturnValue('/households/11111111-1111-4111-8111-111111111111/events');
+    jest.mocked(sessionTransport.restore).mockResolvedValue({ kind: 'authenticated', session: { accessToken: 'restored' } });
+    await render(<RootLayout />);
+    await waitFor(() => expect(router.replace).toHaveBeenCalled());
+    jest.mocked(router.replace).mockClear();
+
+    const handler = jest.mocked(setSessionLostHandler).mock.calls.at(-1)![0]!;
+    sessionStateStore.enterReauthenticationRequired('expired');
+    handler();
+
+    expect(router.replace).toHaveBeenCalledWith({
+      pathname: '/login', params: { intended: '/households/11111111-1111-4111-8111-111111111111/events', reason: 'reauth-required' },
+    });
   });
 
   test('sends an already signed-in user to the safe return query', async () => {

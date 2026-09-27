@@ -1,5 +1,5 @@
 import { router, Stack, useGlobalSearchParams, usePathname } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 
 import {
   sanitizeIntendedRoute,
@@ -7,7 +7,7 @@ import {
   type SafeIntendedRoute,
   type SessionDestination,
 } from '../src/features/auth/session-bootstrap';
-import { sessionStateStore, sessionTransport } from '../src/features/auth/session-runtime';
+import { sessionStateStore, sessionTransport, setSessionLostHandler } from '../src/features/auth/session-runtime';
 import { MuchakuchaThemeProvider } from '../src/ui/primitives';
 
 export default function RootLayout() {
@@ -34,6 +34,12 @@ export default function RootLayout() {
     },
     [],
   );
+
+  // An expired session found mid-use goes to sign-in and returns here afterwards.
+  useEffect(() => {
+    setSessionLostHandler(() => routeSession('/login', intendedRoute));
+    return () => setSessionLostHandler(null);
+  }, [routeSession, intendedRoute]);
 
   return (
     <MuchakuchaThemeProvider>
