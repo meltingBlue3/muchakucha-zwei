@@ -26,14 +26,19 @@
       "typedRoutes": true
     },
     "android": {
-      "package": "app.muchakucha.zwei"
+      "package": "app.muchakucha.zwei",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#FDF7EF"
+      }
     },
     "ios": {
       "bundleIdentifier": "app.muchakucha.zwei",
       "associatedDomains": []
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/images/icon.png"
     },
     "extra": {
       "router": {},
