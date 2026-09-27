@@ -24,3 +24,16 @@ export function useContentDelete(resource: DeletableResource) {
     };
   };
 }
+
+/** Any member may edit shared content, so cards always offer it while the household is usable. */
+export function useContentEdit(resource: DeletableResource) {
+  const router = useRouter();
+  const { viewState } = useHouseholdContext();
+  return (content: { id: string; householdId: string }): (() => void) | undefined => {
+    if (viewState !== 'ready') return undefined;
+    return () => {
+      rememberRouteTrigger();
+      router.push(`/households/${encodeURIComponent(content.householdId)}/${resource}/${encodeURIComponent(content.id)}/edit`);
+    };
+  };
+}

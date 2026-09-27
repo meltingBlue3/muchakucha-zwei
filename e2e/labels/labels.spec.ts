@@ -105,7 +105,8 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   await page.keyboard.press('Escape');
 
   // --- Rename and recolor ---
-  await page.getByRole('button', { name: '编辑标签 学校' }).click();
+  await page.getByRole('button', { name: '更多操作：标签 学校', exact: true }).click();
+  await page.getByRole('menuitem', { name: '编辑标签 学校', exact: true }).click();
   await expect(page.getByLabel('编辑标签名称')).toHaveValue('学校');
   await page.getByLabel('编辑标签名称').fill('学习');
   await page.getByLabel('选择颜色 #3B7DD8').click();

@@ -1,5 +1,5 @@
 import { FloatingCreateButton } from '../../ui/floating-create-button';
-import { useContentDelete } from '../content/use-content-delete';
+import { useContentDelete, useContentEdit } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { PageIntro } from '../../ui/page-intro';
@@ -24,6 +24,7 @@ export default function NotesListRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const deleteNote = useContentDelete('notes');
+  const editNote = useContentEdit('notes');
   const {
     viewState,
     households,
@@ -162,7 +163,7 @@ export default function NotesListRoute() {
           )}
 
           {visibleNotes.map((note) => (
-            <NoteCard key={note.id} note={note} onPress={handleNotePress} onDelete={deleteNote(note)} />
+            <NoteCard key={note.id} note={note} onPress={handleNotePress} onEdit={editNote(note)} onDelete={deleteNote(note)} />
           ))}
         </Stack>
       </AppShell>

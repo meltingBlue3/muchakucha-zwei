@@ -97,6 +97,8 @@
 | 确认与危险操作 | `ConfirmActions`，破坏性确认使用 `destructive` |
 | 加载中、加载失败、空数据 | `LoadingState`、`LoadError`、`EmptyState` |
 | 日程、任务、笔记卡片 | `ContentCard` |
+| 卡片与列表行的「…」菜单 | `CardActionsMenu`（编辑、删除；无权限的项不出现） |
+| 详情窗口的关键信息 | `DetailPanel`、`DetailField`（名称在上、值在下） |
 | 占据整屏的弹层背景 | `DialogBackdrop` |
 | 登录及账户布局 | `account-components.tsx` |
 | 业务内容卡片 | 对应 `features/` 下的现有组件 |

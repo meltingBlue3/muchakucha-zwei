@@ -1,5 +1,5 @@
 import { FloatingCreateButton } from '../../ui/floating-create-button';
-import { useContentDelete } from '../content/use-content-delete';
+import { useContentDelete, useContentEdit } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { AppDialog } from '../../ui/app-dialog';
 import { FilterOptions } from '../../ui/filter-options';
@@ -38,6 +38,7 @@ export default function CalendarScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const deleteEvent = useContentDelete('events');
+  const editEvent = useContentEdit('events');
   const activeTheme = useTheme<Theme>();
   const { width } = useWindowDimensions();
   const wide = width >= activeTheme.layout.navigationBreakpoint;
@@ -223,7 +224,7 @@ export default function CalendarScreen() {
           <Text variant="bodySm" color="inkMuted" style={{ flex: 1 }}>{filterSummary}</Text>
           {filterSummary ? <Pressable accessibilityRole="button" accessibilityLabel="清除日程筛选" onPress={() => { setLabelFilter('all'); setRecurringFilter('all'); }} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}><Text variant="label" color="link">清除</Text></Pressable> : null}
         </View>
-        {filtersOpen ? <AppDialog title="筛选日程" busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<Button label="查看结果" onPress={() => setFiltersOpen(false)} />}>
+        {filtersOpen ? <AppDialog title="筛选日程" busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<Button label="完成" onPress={() => setFiltersOpen(false)} />}>
           <Stack gap={4}>
             <FilterOptions label="重复筛选" options={RECURRING_FILTERS.map(f => ({ value: f.key, label: f.label, name: recurringFilterAccessibilityLabel(f.key) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
             <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(label => ({ value: label.id, label: label.name, name: `筛选标签：${label.name}` }))]} value={labelFilter} onChange={setLabelFilter} />
@@ -241,7 +242,7 @@ export default function CalendarScreen() {
               message={recurringFilter === 'recurring' ? RECURRING_EMPTY_EVENTS : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}
               {...(filterSummary ? { action: <Button label="清除筛选" tone="secondary" onPress={() => { setLabelFilter('all'); setRecurringFilter('all'); }} /> } : {})}
             /> : null}
-            {selectedDateEvents.map(event => <EventCard key={event.id} event={event} onPress={handleEventPress} onDelete={deleteEvent(event)} />)}
+            {selectedDateEvents.map(event => <EventCard key={event.id} event={event} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />)}
           </Stack>
         </View>
       </Stack>

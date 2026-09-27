@@ -105,7 +105,8 @@ test('direct note edits restore drafts and closing returns to detail without sta
 test('label save and delete failures retain the form and offer retry', async ({ page }) => {
   const state = await setup(page);
   await page.goto(`${base}/labels`);
-  await page.getByRole('button', { name: '编辑标签 家务', exact: true }).click();
+  await page.getByRole('button', { name: '更多操作：标签 家务', exact: true }).click();
+  await page.getByRole('menuitem', { name: '编辑标签 家务', exact: true }).click();
   await page.getByLabel('编辑标签名称', { exact: true }).fill('清洁');
   state.failLabels(true);
   await page.getByRole('button', { name: '保存', exact: true }).click();
@@ -196,7 +197,11 @@ test('member cannot delete another author note through the card or direct URL', 
   });
   await page.goto(`${base}/notes`);
   await expect(page.getByRole('button', { name: '笔记：其他成员的笔记', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: /^更多操作：笔记：/ })).toHaveCount(0);
+  // Any member may edit, so the menu stays; only the delete entry is withheld.
+  await page.getByRole('button', { name: '更多操作：笔记：其他成员的笔记', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: '编辑笔记：其他成员的笔记', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /^删除笔记：/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await page.goto(`${base}/notes/${noteId}/delete`);
   await expect(page.getByText('你没有删除这条笔记的权限。')).toBeVisible();
   await expect(page.getByRole('button', { name: '确认删除笔记', exact: true })).toHaveCount(0);

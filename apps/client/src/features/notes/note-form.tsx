@@ -2,11 +2,12 @@ import { MarkdownEditor } from './markdown-editor';
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useState } from 'react';
-import { TextInput } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { CreateNoteDto, NoteResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text, FormActions } from '../../ui/primitives';
+import { FormSection, titleInputStyle } from '../../ui/compose-rows';
 
 export interface NoteInput {
   title: string;
@@ -62,47 +63,30 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
     await onSubmit(data);
   }, [form, initial, onSubmit]);
 
-  const inputStyle = {
-    backgroundColor: activeTheme.colors.surface,
-    borderWidth: 1,
-    borderColor: activeTheme.colors.border,
-    borderRadius: activeTheme.borderRadii.md,
-    paddingHorizontal: activeTheme.spacing[4],
-    paddingVertical: activeTheme.spacing[3],
-    fontSize: activeTheme.typography.body.fontSize,
-    fontFamily: activeTheme.fontFamilies.regular,
-    lineHeight: activeTheme.typography.body.lineHeight,
-    color: activeTheme.colors.ink,
-    minHeight: activeTheme.controlSizes.field,
-  };
-
   return (
-    <Stack gap={4}>
+    <Stack gap={0}>
       {draftKey ? <DraftNotice /> : null}
-      {/* Title */}
-      <Stack gap={1}>
-        <Text variant="label">标题</Text>
+      {/* The compose layout of events and tasks: a large borderless title, then the content. Notes have no icon rows, so both start at the same edge. */}
+      <View>
         <TextInput
           editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}
-          placeholder="笔记标题"
+          placeholder="添加标题"
           placeholderTextColor={activeTheme.colors.inkMuted}
-          style={inputStyle}
+          style={[titleInputStyle, { paddingHorizontal: activeTheme.spacing[2] }]}
           maxLength={200}
           accessibilityLabel="笔记标题"
         />
-      </Stack>
+      </View>
 
-      {/* Body */}
-      <Stack gap={1}>
-        <Text variant="label">内容（可选）</Text>
+      <FormSection>
         <MarkdownEditor value={form.body} onChange={updateBody} disabled={isSubmitting} />
-      </Stack>
+      </FormSection>
 
       {/* Error */}
       {error !== null && (
-        <Text variant="bodySm" color="destructive" accessibilityRole="alert">
+        <Text variant="bodySm" color="destructive" accessibilityRole="alert" style={{ marginTop: activeTheme.spacing[4] }}>
           {error}
         </Text>
       )}

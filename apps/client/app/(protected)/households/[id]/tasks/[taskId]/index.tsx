@@ -14,7 +14,8 @@ import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
 import { formatDueDate, isOverdue, priorityLabel, statusLabel } from '../../../../../../src/features/tasks/task-utils';
-import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
+import { DetailField, DetailPanel } from '../../../../../../src/ui/detail-fields';
+import { Banner, Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
 function currentTimeZone(fallback: string): string {
@@ -32,7 +33,6 @@ export default function TaskDetailRoute() {
   const [task, setTask] = useState<TaskResponseDto | null>(null);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTask = useCallback(async () => {
@@ -128,17 +128,11 @@ export default function TaskDetailRoute() {
 
   const footer = (
     <Stack gap={2}>
-      {statusError ? <Text variant="bodySm" color="destructive" accessibilityRole="alert">{statusError}</Text> : null}
+      {statusError ? <Banner>{statusError}</Banner> : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
         {!cancelled ? <Button label={task.status === 'completed' ? '标记为未完成' : '标记为完成'} loading={statusBusy} onPress={() => void writeStatus(task.status === 'completed' ? 'pending' : 'completed')} style={{ flexGrow: 1 }} /> : null}
-        <Button label="编辑" accessibilityLabel="编辑任务" tone="secondary" disabled={statusBusy} onPress={handleEdit} style={{ flexGrow: 1 }} />
+        <Button label="编辑任务" tone="secondary" disabled={statusBusy} onPress={handleEdit} style={{ flexGrow: 1 }} />
       </View>
-      {!cancelled && task.status !== 'completed' ? <>
-        <Pressable accessibilityRole="button" accessibilityLabel="更多任务操作" accessibilityState={{ expanded: moreOpen }} disabled={statusBusy} onPress={() => setMoreOpen(v => !v)} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', alignSelf: 'flex-start' }}>
-          <Text variant="label" color="inkMuted">{moreOpen ? '收起操作' : '更多操作'}</Text>
-        </Pressable>
-        {moreOpen ? <Button label={task.status === 'in_progress' ? '退回待办' : '标记为进行中'} tone="secondary" disabled={statusBusy} onPress={() => void writeStatus(task.status === 'in_progress' ? 'pending' : 'in_progress')} /> : null}
-      </> : null}
     </Stack>
   );
   return (
@@ -146,22 +140,27 @@ export default function TaskDetailRoute() {
       <Stack gap={5}>
         <Stack gap={2}>
           <Heading level={2}>{task.title}</Heading>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[2] }}>
             <Text variant="label" color={task.status === 'completed' || task.status === 'in_progress' ? 'teal' : 'inkMuted'}>{cancelled ? '已取消' : statusLabel(task.status)}</Text>
             {overdue ? <Text variant="label" color="destructive">已逾期</Text> : null}
+            {/* 进行中 is a deliberate stage, offered beside the status it changes rather than behind a "more" toggle. */}
+            {!cancelled && task.status !== 'completed' ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={task.status === 'in_progress' ? '退回待办' : '标记为进行中'} disabled={statusBusy} onPress={() => void writeStatus(task.status === 'in_progress' ? 'pending' : 'in_progress')} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', marginLeft: 'auto' }}>
+                <Text variant="label" color={statusBusy ? 'inkMuted' : 'link'}>{task.status === 'in_progress' ? '退回待办' : '标记为进行中'}</Text>
+              </Pressable>
+            ) : null}
           </View>
         </Stack>
-        <View style={{ backgroundColor: activeTheme.colors.surfaceSubtle, borderRadius: activeTheme.borderRadii.lg, padding: activeTheme.spacing[4], gap: activeTheme.spacing[3] }}>
-          <DetailRow label="截止日期" value={task.dueDate ? formatDueDate(task.dueDate) : '未设置'} urgent={overdue} />
-          <DetailRow label="负责人" value={assigneeNames.join('、') || '未分配'} />
-          <DetailRow label="优先级" value={priorityLabel(task.priority)} urgent={task.priority === 'urgent'} />
-          {recurrenceSummary ? <Stack gap={1}>
-            <DetailRow label="重复安排" value={recurrenceSummary.summary} />
-            {recurrenceSummary.clampNote ? <Text variant="caption" color="inkMuted">{recurrenceSummary.clampNote}</Text> : null}
-            {recurrenceSummary.timeZoneNote ? <Text variant="caption" color="inkMuted">{recurrenceSummary.timeZoneNote}</Text> : null}
-            <Text variant="caption" color="inkMuted">{cancelled ? '这次重复已取消。' : '当前查看这一次任务，编辑时可选择影响范围。'}</Text>
-          </Stack> : null}
-        </View>
+        <DetailPanel>
+          <DetailField label="截止日期" value={task.dueDate ? formatDueDate(task.dueDate) : '未设置'} urgent={overdue} />
+          <DetailField label="负责人" value={assigneeNames.join('、') || '未分配'} />
+          <DetailField label="优先级" value={priorityLabel(task.priority)} urgent={task.priority === 'urgent'} />
+          {recurrenceSummary ? <DetailField label="重复安排" value={recurrenceSummary.summary} notes={[
+            recurrenceSummary.clampNote,
+            recurrenceSummary.timeZoneNote,
+            cancelled ? '这次重复已取消。' : '当前查看这一次任务，编辑时可选择影响范围。',
+          ]} /> : null}
+        </DetailPanel>
         {task.description ? <Stack gap={2}><Text variant="label" color="inkMuted">描述</Text><Text>{task.description}</Text></Stack> : null}
         {(task.labels ?? []).length ? <Stack gap={2}>
           <Text variant="label" color="inkMuted">标签</Text>
@@ -172,10 +171,3 @@ export default function TaskDetailRoute() {
   );
 }
 
-function DetailRow({ label, value, urgent = false }: { label: string; value: string; urgent?: boolean }) {
-  const theme = useTheme<Theme>();
-  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2], alignItems: 'flex-start' }}>
-    <Text variant="bodySm" color="inkMuted">{label}</Text>
-    <Text variant="bodySm" color={urgent ? 'destructive' : 'ink'} style={{ flexGrow: 1, flexShrink: 1, textAlign: 'right' }}>{value}</Text>
-  </View>;
-}

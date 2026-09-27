@@ -1,5 +1,5 @@
 import { FloatingCreateButton } from '../../../../src/ui/floating-create-button';
-import { useContentDelete } from '../../../../src/features/content/use-content-delete';
+import { useContentDelete, useContentEdit } from '../../../../src/features/content/use-content-delete';
 import { rememberRouteTrigger } from '../../../../src/platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../../../src/ui/workspace-state';
 import { PageIntro, TodaySummary } from '../../../../src/ui/page-intro';
@@ -99,7 +99,9 @@ export default function TodayRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const deleteTask = useContentDelete('tasks');
+  const editTask = useContentEdit('tasks');
   const deleteEvent = useContentDelete('events');
+  const editEvent = useContentEdit('events');
   const activeTheme = useTheme<Theme>();
   const {
     viewState,
@@ -288,7 +290,7 @@ export default function TodayRoute() {
               </View>
               <Stack gap={2}>
                 {events.map((event) => (
-                  <EventCard key={event.id} event={event} onPress={handleEventPress} onDelete={deleteEvent(event)} />
+                  <EventCard key={event.id} event={event} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />
                 ))}
               </Stack>
             </View> : null}
@@ -313,7 +315,7 @@ export default function TodayRoute() {
                       key={task.id}
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress} onDelete={deleteTask(task)}
+                      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
                       {...completion.cardProps(task)}
                     />
                   ))}
@@ -340,7 +342,7 @@ export default function TodayRoute() {
                       key={task.id}
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress} onDelete={deleteTask(task)}
+                      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
                       {...completion.cardProps(task)}
                     />
                   ))}
@@ -349,7 +351,37 @@ export default function TodayRoute() {
               </View>
             )}
 
-            <Pressable
+            {/* A bounded preview keeps unscheduled work reachable without burying the day. */}
+            {unscheduledTasks.length > 0 && (
+              <View>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: activeTheme.spacing[2],
+                  marginBottom: activeTheme.spacing[2],
+                }}>
+                  <Inbox size={16} color={activeTheme.colors.inkMuted} />
+                  <Text accessibilityRole="header" aria-level={2} variant="section">
+                  待安排（{unscheduledTasks.length}）
+                  </Text>
+                </View>
+                <Stack gap={2}>
+                  {previewTasks(unscheduledTasks, allUnscheduled).map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
+                      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
+                      {...completion.cardProps(task)}
+                    />
+                  ))}
+                </Stack>
+                {unscheduledTasks.length > 3 ? <Button label={allUnscheduled ? '收起待安排' : `查看全部待安排（${unscheduledTasks.length}）`} tone="secondary" onPress={() => setAllUnscheduled(value => !value)} /> : null}
+              </View>
+            )}
+
+            {/* Hidden when nothing is coming up: a toggle that reveals zero items is noise. */}
+            {approachingTasks.length + otherUpcomingTasks.length > 0 ? <Pressable
               accessibilityRole="button"
               accessibilityState={{ expanded: showUpcoming }}
               aria-expanded={showUpcoming}
@@ -359,8 +391,8 @@ export default function TodayRoute() {
               <Text variant="label" color="link">
                 {showUpcoming ? '收起后续安排' : `查看后续安排（${approachingTasks.length + otherUpcomingTasks.length}）`}
               </Text>
-            </Pressable>
-            {showUpcoming ? <>
+            </Pressable> : null}
+            {showUpcoming && approachingTasks.length + otherUpcomingTasks.length > 0 ? <>
             {/* Upcoming work is secondary to today's actions. */}
             <View>
               <View style={{
@@ -385,7 +417,7 @@ export default function TodayRoute() {
                       key={task.id}
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress} onDelete={deleteTask(task)}
+                      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
                       {...completion.cardProps(task)}
                     />
                   ))}
@@ -405,7 +437,7 @@ export default function TodayRoute() {
                       key={task.id}
                       task={task}
                       assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress} onDelete={deleteTask(task)}
+                      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
                       {...completion.cardProps(task)}
                     />
                   ))}
@@ -414,37 +446,6 @@ export default function TodayRoute() {
             )}
 
             </> : null}
-
-            {/* A bounded preview keeps unscheduled work reachable without burying the day. */}
-            {unscheduledTasks.length > 0 && (
-              <View>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: activeTheme.spacing[2],
-                  marginBottom: activeTheme.spacing[2],
-                }}>
-                  <Inbox size={16} color={activeTheme.colors.inkMuted} />
-                  <Text accessibilityRole="header" aria-level={2} variant="section">
-                  待安排（{unscheduledTasks.length}）
-                  </Text>
-                </View>
-                <Stack gap={2}>
-                  {previewTasks(unscheduledTasks, allUnscheduled).map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress} onDelete={deleteTask(task)}
-                      {...completion.cardProps(task)}
-                    />
-                  ))}
-                </Stack>
-                {unscheduledTasks.length > 3 ? <Button label={allUnscheduled ? '收起待安排' : `查看全部待安排（${unscheduledTasks.length}）`} tone="secondary" onPress={() => setAllUnscheduled(value => !value)} /> : null}
-              </View>
-            )}
-
-
           </>
         )}
       </Stack>

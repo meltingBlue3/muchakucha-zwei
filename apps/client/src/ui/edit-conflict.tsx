@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ApiClientError } from '@muchakucha/api-client';
+import { ApiClientError, type RecurrenceResponseDto } from '@muchakucha/api-client';
 import { Button, Stack, Text } from './primitives';
 import { useWorkspaceState, useWorkspaceStore } from './workspace-state';
+import { formatDate, formatDateTime } from './date-values';
+import { recurrenceInputFromResponse } from '../features/recurrence/recurrence-options';
+import { formatRecurrenceSummary } from '../features/recurrence/recurrence-summary';
 
 export const EDIT_CONFLICT_MESSAGE = '内容已更新，请查看最新版本后再保存。你的草稿已保留。';
 const UNKNOWN_VERSION = '1970-01-01T00:00:00.000Z';
@@ -65,24 +68,52 @@ export function useEditConflict<T extends Versioned>(prefix: string, current: T 
   };
 }
 
-function summarizeLatest(value: Versioned): Array<[string, string]> {
+const STATUS_NAMES: Record<string, string> = { pending: '待办', in_progress: '进行中', completed: '已完成', cancelled: '已取消' };
+const PRIORITY_NAMES: Record<string, string> = { low: '低', medium: '中', high: '高', urgent: '紧急' };
+const EXCERPT_LENGTH = 120;
+
+function deviceTimeZone(fallback: string): string {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || fallback; } catch { return fallback; }
+}
+
+/**
+ * The other person's version in the words the rest of the app uses: dates as
+ * "6月20日 16:00", statuses by name, and the repeat as its usual summary —
+ * never raw timestamps, enum keys or time-zone identifiers.
+ */
+export function summarizeLatest(value: Versioned): Array<[string, string]> {
   const data = value as Record<string, unknown>;
-  const fields: Array<[string, string]> = [['title','标题'],['body','正文'],['description','说明'],['status','状态'],['priority','优先级'],['startTime','开始时间'],['endTime','结束时间'],['dueDate','截止日期'],['location','地点'],['allDay','全天']];
-  const names: Record<string, string> = { pending: '待办', in_progress: '进行中', completed: '已完成', cancelled: '已取消', low: '低', medium: '中', high: '高', urgent: '紧急' };
-  const rows: Array<[string, string]> = fields.filter(([key]) => key in data).map(([key,label]) => {
-    const raw = data[key]; const text = raw === null || raw === '' ? '无' : raw === true ? '是' : raw === false ? '否' : String(raw);
-    return [label, names[text] ?? text];
-  });
-  if (Array.isArray(data.labels)) rows.push(['标签', data.labels.map((label: { name: string }) => label.name).join('、') || '无']);
-  if (Array.isArray(data.assigneeNames)) rows.push(['负责人', data.assigneeNames.join('、') || '无']);
-  const rule = (data.recurrence ?? ('freq' in data ? data : null)) as Record<string, unknown> | null;
-  if (rule) {
-    const frequencies: Record<string,string> = { daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年' };
-    if (Array.isArray(rule.byWeekday) && rule.byWeekday.length) rows.push(['星期', rule.byWeekday.map(day => ['日','一','二','三','四','五','六'][Number(day)]).map(day => `周${day}`).join('、')]);
-    rows.push(['重复', `${frequencies[String(rule.freq)] ?? rule.freq}，间隔 ${rule.interval ?? 1}`]);
-    for (const [key,label] of [['startsOn','重复开始'],['endsOn','重复结束'],['count','重复次数'],['timezone','时区'],['startTimeLocal','当地时间']] as const) {
-      if (rule[key] != null) rows.push([label,String(rule[key])]);
-    }
+  const rows: Array<[string, string]> = [];
+  const text = (key: string) => typeof data[key] === 'string' ? (data[key] as string) : null;
+  const add = (label: string, shown: string | null) => { if (shown !== null) rows.push([label, shown || '无']); };
+  const allDay = data.allDay === true;
+  const when = (key: string) => {
+    const raw = text(key);
+    if (raw === null || raw === '') return raw;
+    const date = new Date(raw);
+    return Number.isNaN(date.getTime()) ? raw : allDay ? formatDate(date) : formatDateTime(date);
+  };
+
+  if ('title' in data) add('标题', text('title'));
+  if ('body' in data) {
+    const body = text('body') ?? '';
+    add('正文', body.length > EXCERPT_LENGTH ? `${body.slice(0, EXCERPT_LENGTH)}…` : body);
   }
+  if ('description' in data) add('说明', text('description') ?? '');
+  if ('status' in data) add('状态', STATUS_NAMES[String(data.status)] ?? String(data.status));
+  if ('priority' in data) add('优先级', PRIORITY_NAMES[String(data.priority)] ?? String(data.priority));
+  if ('startTime' in data) add('开始', when('startTime'));
+  if ('endTime' in data) add('结束', when('endTime'));
+  if ('allDay' in data) add('全天', allDay ? '是' : '否');
+  if ('dueDate' in data) {
+    const due = text('dueDate');
+    add('截止日期', due ? formatDate(new Date(due)) : '');
+  }
+  if ('location' in data) add('地点', text('location') ?? '');
+  if (Array.isArray(data.labels)) add('标签', data.labels.map((label: { name: string }) => label.name).join('、'));
+  if (Array.isArray(data.assigneeNames)) add('负责人', data.assigneeNames.join('、'));
+  const rule = (data.recurrence ?? ('freq' in data ? data : null)) as RecurrenceResponseDto | null;
+  const recurrence = recurrenceInputFromResponse(rule);
+  if (recurrence) add('重复', formatRecurrenceSummary(recurrence, deviceTimeZone(recurrence.timezone)).summary);
   return rows;
 }

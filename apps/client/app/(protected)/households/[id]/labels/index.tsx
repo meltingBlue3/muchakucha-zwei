@@ -100,10 +100,10 @@ export default function LabelsIndexRoute() {
         {labels.map(label => <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingVertical: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderColor: theme.colors.separator }}>
           <View style={{ width: theme.spacing[3], height: theme.spacing[3], borderRadius: theme.borderRadii.full, backgroundColor: label.color }} />
           <Text style={{ flex: 1 }} accessibilityLabel={`标签：${label.name}`}>{label.name}</Text>
-          {canManage ? <>
-            <Pressable accessibilityRole="button" accessibilityLabel={`编辑标签 ${label.name}`} onPress={() => open({ kind: 'edit', label })} style={{ minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, justifyContent: 'center', alignItems: 'center' }}><Text variant="label" color="link">编辑</Text></Pressable>
-            <CardActionsMenu label={`删除标签 ${label.name}`} onPress={() => open({ kind: 'delete', label })} />
-          </> : null}
+          {canManage ? <CardActionsMenu subject={`标签 ${label.name}`} actions={[
+            { kind: 'edit', accessibilityLabel: `编辑标签 ${label.name}`, onPress: () => open({ kind: 'edit', label }) },
+            { kind: 'delete', accessibilityLabel: `删除标签 ${label.name}`, onPress: () => open({ kind: 'delete', label }) },
+          ]} /> : null}
         </View>)}
       </Stack>
     </Stack>

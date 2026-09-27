@@ -1,3 +1,4 @@
+import { useEditWindowExit } from '../../../../../../src/ui/route-window';
 import { TaskWindow } from '../../../../../../src/features/tasks/task-window';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
@@ -60,6 +61,7 @@ export default function EditTaskRoute() {
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:tasks:${taskId}:`;
   const router = useRouter();
+  const exitEdit = useEditWindowExit('tasks', taskId);
   const exitAllowed = useRef(false);
   const {
     viewState,
@@ -148,7 +150,7 @@ export default function EditTaskRoute() {
       await sessionApiClient.updateTask(token, householdId, taskId, { ...data, ...conflict.precondition, labelIds: selectedLabelIds });
       workspace.clear(draftPrefix);
       exitAllowed.current = true;
-      router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`);
+      exitEdit();
     } catch (error: unknown) {
       if (conflict.handle(error)) {
         setSubmitError(null);
@@ -168,7 +170,7 @@ export default function EditTaskRoute() {
       }
       setSubmitting(false);
     }
-  }, [householdId, task, taskId, router, selectedLabelIds, workspace, draftPrefix, conflict]);
+  }, [householdId, task, taskId, router, selectedLabelIds, workspace, draftPrefix, conflict, exitEdit]);
 
   const handleSeriesSelect = useCallback(async (scope: SeriesScope) => {
     if (
@@ -201,7 +203,7 @@ export default function EditTaskRoute() {
       workspace.clear(draftPrefix);
       if (scope === 'this_only') {
         exitAllowed.current = true;
-        router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`);
+        exitEdit();
       } else {
         exitAllowed.current = true;
         router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks`);
@@ -221,11 +223,11 @@ export default function EditTaskRoute() {
     } finally {
       setSeriesSubmitting(null);
     }
-  }, [fetchTask, householdId, pendingSeriesAction, router, selectedLabelIds, taskId, workspace, draftPrefix, conflict]);
+  }, [fetchTask, householdId, pendingSeriesAction, router, selectedLabelIds, taskId, workspace, draftPrefix, conflict, exitEdit]);
 
   const closeEdit = () => {
     if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
-    else router.dismissTo(`/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`);
+    else exitEdit();
   };
 
   if (viewState === 'accessChanged') {

@@ -83,12 +83,12 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
   return <Stack gap={2}>
     {preview ? <MarkdownBody source={value} /> : <TextInput
       ref={input} value={value} editable={!disabled} multiline accessibilityLabel="笔记内容"
-      placeholder="写下笔记，或使用下方按钮添加格式…" placeholderTextColor={theme.colors.inkMuted}
+      placeholder="写下内容，或用下方按钮添加格式…" placeholderTextColor={theme.colors.inkMuted}
       selection={cursor}
       onSelectionChange={event => { selection.current = event.nativeEvent.selection; setCursor(undefined); }}
       onBlur={() => { selection.current = readTextSelection(input.current) ?? selection.current; }}
       onChangeText={onChange}
-      style={{ minHeight: theme.controlSizes.field * 4, color: theme.colors.ink, backgroundColor: theme.colors.surface, borderWidth: theme.borderWidths.default, borderColor: theme.colors.border, borderRadius: theme.borderRadii.md, padding: theme.spacing[3], fontFamily: theme.fontFamilies.regular, fontSize: theme.typography.body.fontSize, lineHeight: theme.typography.body.lineHeight, textAlignVertical: 'top' }}
+      style={{ minHeight: theme.controlSizes.field * 4, color: theme.colors.ink, paddingVertical: theme.spacing[3], paddingHorizontal: theme.spacing[2], fontFamily: theme.fontFamilies.regular, fontSize: theme.typography.body.fontSize, lineHeight: theme.typography.body.lineHeight, textAlignVertical: 'top' }}
     />}
   </Stack>;
 }
