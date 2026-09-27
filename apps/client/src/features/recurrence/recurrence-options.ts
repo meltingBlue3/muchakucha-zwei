@@ -52,14 +52,16 @@ export function presetRule(
 }
 
 /**
- * Keeps a rule anchored to the event's start date. A weekly rule that only
- * repeats on the old start weekday moves with it, as Google Calendar does.
+ * Keeps a rule anchored to the start date. When the user moves the start
+ * date (`moveWeekday`), a weekly rule that only repeats on the old start
+ * weekday moves with it, as Google Calendar does. Anchoring an existing rule
+ * to a new split date keeps its weekdays.
  */
-export function followStartDate(rule: RecurrenceDto, startDate: string): RecurrenceDto {
+export function followStartDate(rule: RecurrenceDto, startDate: string, moveWeekday = true): RecurrenceDto {
   if (startDate === '' || rule.startsOn === startDate) return rule;
   const next: RecurrenceDto = { ...rule, startsOn: startDate };
   const days = rule.byWeekday ?? [];
-  if (rule.freq === 'weekly' && (days.length === 0 || (days.length === 1 && days[0] === weekdayOf(rule.startsOn)))) {
+  if (rule.freq === 'weekly' && (days.length === 0 || (moveWeekday && days.length === 1 && days[0] === weekdayOf(rule.startsOn)))) {
     next.byWeekday = [weekdayOf(startDate)];
   }
   return next;

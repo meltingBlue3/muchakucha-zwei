@@ -6,6 +6,8 @@ import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/w
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
+import Ban from 'lucide-react-native/icons/ban';
+import Repeat from 'lucide-react-native/icons/repeat';
 import { useTheme } from '@shopify/restyle';
 import { ApiClientError, type RecurrenceRuleListItemDto } from '@muchakucha/api-client';
 
@@ -13,10 +15,11 @@ import { sessionApiClient, sessionTransport } from '../../../../../../src/featur
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
 import { RecurrenceKindBadge } from '../../../../../../src/features/recurrence/recurrence-kind-badge';
 import {
-  RecurrencePicker,
   recurrenceInputFromResponse,
   type RecurrenceInput,
 } from '../../../../../../src/features/recurrence/recurrence-picker';
+import { RecurrenceField } from '../../../../../../src/features/recurrence/recurrence-field';
+import { FormRow, FormSection, ROW_CONTENT_INSET, rowIcon } from '../../../../../../src/ui/compose-rows';
 import {
   formatRuleRow,
   nextDayIsoIn,
@@ -25,7 +28,7 @@ import {
   AccessChangedPanel,
   AppShell,
 } from '../../../../../../src/ui/household-components';
-import { Banner, Button, Heading, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Banner, Button, FormActions, FormMessage, Heading, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
 const LOAD_ERROR = '无法加载这条周期规则，请检查网络连接后重试。';
@@ -43,6 +46,8 @@ const END_CONFIRM_PROMPT = '确定结束？明天起不再重复，今天和之�
 const END_ERROR = '没有结束成功。这个重复安排没有发生任何改变，请重试。';
 const END_FORBIDDEN = '只有创建者、管理员或所有者可以结束这条重复规则。';
 const ENDED_NOTE = '这个重复已经结束了。';
+const TURN_OFF_HINT = '要停止这个重复，请使用下方的「结束此重复」。';
+const ENDS_ON_ERROR = '截止日期必须晚于明天。';
 
 function resolveDeviceTimeZone(): string {
   try {
@@ -68,7 +73,6 @@ export default function RecurrenceRuleDetailRoute() {
 
   const [rule, setRule] = useState<RecurrenceRuleListItemDto | null>(null);
   const [recurrence, setRecurrence] = useWorkspaceState<RecurrenceInput | null>(`draft:${id}:recurrence-rules:${ruleId}:form`, null);
-  const [pickerValid, setPickerValid] = useState(true);
   const loadedOnce = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,8 +191,6 @@ export default function RecurrenceRuleDetailRoute() {
     }
   }, [householdId, ruleId, backToList]);
 
-  const handleValidityChange = useCallback((valid: boolean) => setPickerValid(valid), []);
-
   const formatted = rule === null ? null : formatRuleRow(rule, deviceTimeZone);
   const ended = formatted?.ended ?? false;
   // The split anchor: tomorrow in the RULE's timezone. Memoized so the picker's
@@ -197,6 +199,8 @@ export default function RecurrenceRuleDetailRoute() {
     () => (rule === null ? null : nextDayIsoIn(rule.timezone)),
     [rule],
   );
+  // The split starts tomorrow, so an end date must come after it.
+  const endsOnInvalid = anchor !== null && recurrence?.endsOn !== undefined && recurrence.endsOn <= anchor;
 
   if (viewState === 'accessChanged') {
     return (
@@ -255,88 +259,78 @@ export default function RecurrenceRuleDetailRoute() {
           )}
 
           {rule !== null && formatted !== null && anchor !== null && (
-            <Stack gap={5}>
-              <Stack gap={2}>
-                {/* Never truncated: the template title is the rule's identity. */}
-                <Heading>{formatted.title}</Heading>
-                <View style={{
-                  alignItems: 'center',
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  gap: activeTheme.spacing[2],
-                }}>
-                  {rule.kind !== null && <RecurrenceKindBadge kind={rule.kind} />}
-                  <Text variant="caption" color={ended ? 'inkMuted' : 'ink'}>
-                    {formatted.nextLine}
-                  </Text>
-                </View>
-              </Stack>
-
-              <Stack gap={1}>
-                <Text variant="label" color="inkMuted">重复</Text>
-                <Text variant="body">{formatted.summary}</Text>
-                {formatted.clampNote !== null && (
-                  <Text variant="caption" color="inkMuted">{formatted.clampNote}</Text>
-                )}
-                {formatted.timeZoneNote !== null && (
-                  <Text variant="caption" color="inkMuted">{formatted.timeZoneNote}</Text>
-                )}
-              </Stack>
-
-              {/* `startDate` is the split anchor, NOT the rule's original
-                  startsOn: the picker force-syncs `value.startsOn` to whatever
-                  it is handed, so the original date here would rewrite the
-                  user's selection on every render. */}
+            <Stack gap={0}>
               <DraftNotice />
               {conflict.panel}
-              <RecurrencePicker
-                value={recurrence}
-                onChange={setRecurrence}
-                startDate={anchor}
-                disabled={ended || busy}
-                onValidityChange={handleValidityChange}
-              />
+              <FormRow>
+                <Stack gap={2} style={{ flex: 1, paddingVertical: activeTheme.spacing[3] }}>
+                  {/* Never truncated: the template title is the rule's identity. */}
+                  <Heading>{formatted.title}</Heading>
+                  <View style={{
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: activeTheme.spacing[2],
+                  }}>
+                    {rule.kind !== null && <RecurrenceKindBadge kind={rule.kind} />}
+                    <Text variant="caption" color={ended ? 'inkMuted' : 'ink'}>
+                      {formatted.nextLine}
+                    </Text>
+                  </View>
+                </Stack>
+              </FormRow>
 
-              <Stack gap={2}>
+              <FormSection>
+                {/* `startDate` is the split anchor (tomorrow), NOT the rule's
+                    original startsOn: saved changes apply from tomorrow on.
+                    不重复 stays disabled; ending the series is its own action. */}
+                <RecurrenceField
+                  name="重复规则"
+                  icon={rowIcon(Repeat)}
+                  value={recurrence}
+                  onChange={setRecurrence}
+                  startDate={anchor}
+                  disabled={ended || busy}
+                  disableTurnOff
+                  turnOffHint={TURN_OFF_HINT}
+                />
                 {/* Always visible, because a rule-level edit can only ever mean
                     "this and everything after". A scope sheet with one live
                     option would be noise, so there is none. */}
-                <Text variant="caption" color="inkMuted">{SCOPE_NOTE}</Text>
+                <Text variant="caption" color="inkMuted" style={{ paddingLeft: ROW_CONTENT_INSET, paddingBottom: activeTheme.spacing[2] }}>{SCOPE_NOTE}</Text>
+                {endsOnInvalid ? <View style={{ paddingLeft: ROW_CONTENT_INSET }}><FormMessage>{ENDS_ON_ERROR}</FormMessage></View> : null}
+              </FormSection>
 
-                <Button
-                  label="保存更改"
-                  accessibilityLabel="保存更改"
-                  disabled={ended || busy || saveConfirmOpen || recurrence === null || !pickerValid}
-                  onPress={() => setSaveConfirmOpen(true)}
-                />
-
-              </Stack>
-
-              <Stack gap={2}>
-                <Pressable
-                  accessibilityLabel={END_ACTION}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: ended || busy || endConfirmOpen }}
-                  disabled={ended || busy || endConfirmOpen}
-                  hitSlop={activeTheme.spacing[4]}
-                  onPress={() => setEndConfirmOpen(true)}
-                  style={({ pressed }) => ({
-                    alignSelf: 'flex-start',
-                    justifyContent: 'center',
-                    minHeight: activeTheme.controlSizes.touchTarget,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Text variant="bodySm" color={ended || busy ? 'disabled' : 'destructive'}>
-                    {END_ACTION}
-                  </Text>
-                </Pressable>
-
+              <FormSection>
+                <FormRow icon={rowIcon(Ban)}>
+                  <Pressable
+                    accessibilityLabel={END_ACTION}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: ended || busy || endConfirmOpen }}
+                    disabled={ended || busy || endConfirmOpen}
+                    onPress={() => setEndConfirmOpen(true)}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      justifyContent: 'center',
+                      minHeight: activeTheme.controlSizes.touchTarget,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <Text color={ended || busy ? 'disabled' : 'destructive'}>{END_ACTION}</Text>
+                  </Pressable>
+                </FormRow>
                 {ended && (
-                  <Text variant="caption" color="inkMuted">{ENDED_NOTE}</Text>
+                  <Text variant="caption" color="inkMuted" style={{ paddingLeft: ROW_CONTENT_INSET }}>{ENDED_NOTE}</Text>
                 )}
+              </FormSection>
 
-              </Stack>
+              <FormActions
+                onCancel={close}
+                onSubmit={() => setSaveConfirmOpen(true)}
+                submitting={false}
+                submitLabel="保存更改"
+                disabled={ended || busy || saveConfirmOpen || recurrence === null || endsOnInvalid}
+              />
             </Stack>
           )}
         </Stack>

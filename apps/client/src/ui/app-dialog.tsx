@@ -60,7 +60,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
                 {closeButton}
                 <Heading variant="section" numberOfLines={1} style={{ flex: 1 }}>{title}</Heading>
                 {headerActions}
-                {sheetAction ? <Button label={sheetAction.label} loading={sheetAction.submitting} onPress={sheetAction.onPress} style={{ minHeight: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.full, paddingHorizontal: theme.spacing[5] }} /> : null}
+                {sheetAction ? <Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} style={{ minHeight: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.full, paddingHorizontal: theme.spacing[5] }} /> : null}
               </Inline>
             ) : (
               <Inline>

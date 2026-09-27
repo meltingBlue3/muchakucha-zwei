@@ -259,3 +259,49 @@ test('editing changes status and priority through their lists and clears the des
   await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible();
   expect(state.getTask()).toMatchObject({ status: 'in_progress', priority: 'medium', description: '' });
 });
+
+for (const width of [390, 1440]) {
+  test(`the rule window uses the shared repeat rows and keeps weekdays when anchored to tomorrow at ${width}px`, async ({ page }, testInfo) => {
+    await setup(page);
+    // Saturday in Asia/Shanghai; changes apply from tomorrow, a Sunday.
+    await page.clock.setFixedTime(new Date('2030-06-15T04:00:00Z'));
+    const ruleId = '55555555-5555-4555-8555-555555555555';
+    let rule = { id: ruleId, kind: 'task', title: '倒垃圾', freq: 'weekly', interval: 1, byWeekday: [1], startsOn: '2030-06-03', endsOn: null, count: null, timezone: 'Asia/Shanghai', startTimeLocal: null, durationMinutes: null, nextOccurrenceDate: '2030-06-17', updatedAt: '2030-06-01T00:00:00.000Z' };
+    let saved: { recurrence?: Record<string, unknown> } | null = null;
+    await page.route('**/api/v1/households/*/recurrence-rules**', async route => {
+      const path = new URL(route.request().url()).pathname;
+      if (route.request().method() === 'PUT') {
+        saved = route.request().postDataJSON();
+        rule = { ...rule, ...saved!.recurrence, updatedAt: '2030-06-15T04:01:00.000Z' };
+      }
+      await route.fulfill({ json: path.endsWith('/recurrence-rules') ? { rules: [rule] } : rule });
+    });
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${base}/recurrence-rules/${ruleId}`);
+    const window = page.getByRole('dialog', { name: '重复安排', exact: true });
+    const repeat = window.getByRole('button', { name: /^重复规则，/ });
+    await expect(repeat).toHaveAccessibleName('重复规则，每周一重复');
+    await expect(window.getByText('更改会从明天开始生效，今天和之前的安排都保留。', { exact: true })).toBeVisible();
+    await expect(window.getByRole('button', { name: '结束此重复', exact: true })).toBeEnabled();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`rule-window-${width}.png`) });
+
+    await repeat.click();
+    const options = page.getByRole('dialog', { name: '重复', exact: true });
+    await expect(options.getByRole('radio', { name: '不重复' })).toBeDisabled();
+    await expect(options.getByText('要停止这个重复，请使用下方的「结束此重复」。', { exact: true })).toBeVisible();
+    await options.getByRole('radio', { name: '自定义…' }).click();
+    const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
+    await expect(custom.getByRole('checkbox', { name: '星期一' })).toBeChecked();
+    await custom.getByLabel('重复间隔', { exact: true }).fill('2');
+    await custom.getByRole('button', { name: '完成', exact: true }).click();
+    await expect(repeat).toHaveAccessibleName('重复规则，每 2 周的周一重复');
+
+    await window.getByRole('button', { name: '保存更改', exact: true }).click();
+    const confirm = page.getByRole('dialog', { name: '确认保存重复安排', exact: true });
+    await expect(confirm.getByText('这会影响明天起的每一次。', { exact: true })).toBeVisible();
+    await confirm.getByRole('button', { name: '确认保存', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/recurrence-rules`);
+    expect(saved!.recurrence).toMatchObject({ freq: 'weekly', interval: 2, byWeekday: [1], startsOn: '2030-06-16' });
+  });
+}

@@ -461,9 +461,16 @@ test('a direct rule window preserves draft choices and saves only after confirma
   const householdId = await createHousehold(account.accessToken, '重复安排窗口');
   const ruleId = await createDailyTaskRule(account.accessToken, householdId, '每周整理');
   await loginUsernameFixture(page, account.username, password, `/households/${householdId}/recurrence-rules/${ruleId}`);
-  await page.getByRole('radio', { name: '每周', exact: true }).click();
+  const repeat = page.getByRole('button', { name: /^重复规则，/ });
+  await expect(repeat).toHaveAccessibleName('重复规则，每天重复');
+  await repeat.click();
+  const options = page.getByRole('dialog', { name: '重复', exact: true });
+  // Ending a series is its own action, so 不重复 is not offered here.
+  await expect(options.getByRole('radio', { name: '不重复' })).toBeDisabled();
+  await options.getByRole('radio', { name: '每周' }).click();
+  await expect(repeat).toHaveAccessibleName(/^重复规则，每周.重复$/);
   await page.reload();
-  await expect(page.getByRole('radio', { name: '每周', exact: true })).toBeChecked();
+  await expect(repeat).toHaveAccessibleName(/^重复规则，每周.重复$/);
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -476,7 +483,7 @@ test('a direct rule window preserves draft choices and saves only after confirma
   expect(unchanged.status).toBe(200);
   expect(unchanged.body.freq).toBe('daily');
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('radio', { name: '每周', exact: true })).toBeChecked();
+  await expect(repeat).toHaveAccessibleName(/^重复规则，每周.重复$/);
   await page.getByRole('button', { name: '保存更改', exact: true }).click();
   await page.getByRole('button', { name: '确认保存', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/households/${householdId}/recurrence-rules$`));

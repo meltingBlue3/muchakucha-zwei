@@ -33,6 +33,11 @@ describe('Google-style repeat presets', () => {
     expect(followStartDate(custom, '2026-09-29')).toMatchObject({ startsOn: '2026-09-29', byWeekday: [1, 3] });
     expect(followStartDate(weekly, start)).toBe(weekly);
   });
+
+  test('anchoring an existing rule to a new split date keeps its weekday', () => {
+    const monday = { ...presetRule('weekly', '2026-09-28', tz, null) };
+    expect(followStartDate(monday, '2026-10-04', false)).toMatchObject({ startsOn: '2026-10-04', byWeekday: [1] });
+  });
 });
 
 describe('custom repeat drafts', () => {

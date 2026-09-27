@@ -178,26 +178,28 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', sty
   );
 };
 
-export function FormActions({ onCancel, onSubmit, submitting, submitLabel }: {
+export function FormActions({ onCancel, onSubmit, submitting, submitLabel, disabled = false }: {
   onCancel(): void;
   onSubmit(): void;
   submitting: boolean;
   submitLabel: string;
+  /** Keeps the submit unavailable, for example when there is nothing to save. */
+  disabled?: boolean;
 }) {
   const sheet = useContext(SheetActionSlot);
   const submit = useRef(onSubmit);
   submit.current = onSubmit;
   useEffect(() => {
     if (!sheet) return;
-    sheet({ label: submitLabel, submitting, onPress: () => submit.current() });
+    sheet({ label: submitLabel, submitting, disabled, onPress: () => submit.current() });
     return () => sheet(null);
-  }, [sheet, submitLabel, submitting]);
+  }, [sheet, submitLabel, submitting, disabled]);
   // A compact editor sheet shows the submit in its header and cancels through its close button.
   if (sheet) return null;
   return (
     <Inline gap={3} style={{ marginTop: theme.spacing[4] }}>
       <Button label="取消" tone="secondary" disabled={submitting} onPress={onCancel} style={{ flex: 1 }} />
-      <Button label={submitLabel} loading={submitting} onPress={onSubmit} style={{ flex: 2 }} />
+      <Button label={submitLabel} loading={submitting} disabled={disabled} onPress={onSubmit} style={{ flex: 2 }} />
     </Inline>
   );
 }

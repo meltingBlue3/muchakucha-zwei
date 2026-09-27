@@ -46,6 +46,8 @@ interface RecurrenceFieldProps {
   disabled?: boolean;
   /** An occurrence of an existing series cannot be detached here (CR-03). */
   disableTurnOff?: boolean;
+  /** Explains where to stop the series instead; shown with a disabled 不重复. */
+  turnOffHint?: string;
   /** Server validation messages keyed by `recurrence.<field>`. */
   errors?: Record<string, string>;
 }
@@ -57,16 +59,22 @@ type Stage = 'closed' | 'options' | 'custom';
  * list (不重复, 每天, 每周, 每月, 每年, 自定义…), and a custom page for
  * intervals, weekdays and an end condition.
  */
-export function RecurrenceField({ value, onChange, startDate, name, icon, disabled = false, disableTurnOff = false, errors = {} }: RecurrenceFieldProps) {
+export function RecurrenceField({ value, onChange, startDate, name, icon, disabled = false, disableTurnOff = false, turnOffHint = TURN_OFF_DISABLED_HINT, errors = {} }: RecurrenceFieldProps) {
   const [stage, setStage] = useState<Stage>('closed');
   const [draft, setDraft] = useState<CustomDraft>(() => draftFromRule(value, startDate));
   const [draftErrors, setDraftErrors] = useState<CustomErrors>({});
   const [timeZoneError, setTimeZoneError] = useState(false);
   const trigger = useRef<View>(null);
 
+  // Only a start date the user changes while the field is open moves a
+  // weekly rule's weekday; the initial sync (for example a rule anchored to
+  // tomorrow) keeps the weekdays it already has.
+  const previousStart = useRef(startDate);
   useEffect(() => {
+    const moved = previousStart.current !== startDate;
+    previousStart.current = startDate;
     if (value === null) return;
-    const next = followStartDate(value, startDate);
+    const next = followStartDate(value, startDate, moved);
     if (next !== value) onChange(next);
   }, [onChange, startDate, value]);
 
@@ -115,7 +123,7 @@ export function RecurrenceField({ value, onChange, startDate, name, icon, disabl
         title: '重复',
         onClose: close,
         onReturn,
-        content: <OptionList preset={preset} summary={summary} disableTurnOff={disableTurnOff} timeZoneError={timeZoneError} onChoose={choose} onCustom={openCustom} />,
+        content: <OptionList preset={preset} summary={summary} disableTurnOff={disableTurnOff} turnOffHint={turnOffHint} timeZoneError={timeZoneError} onChoose={choose} onCustom={openCustom} />,
       };
     }
     if (stage === 'custom') {
@@ -127,7 +135,7 @@ export function RecurrenceField({ value, onChange, startDate, name, icon, disabl
       };
     }
     return null;
-  }, [choose, close, disableTurnOff, draft, draftErrors, finishCustom, openCustom, preset, stage, startDate, summary, timeZoneError]);
+  }, [choose, close, disableTurnOff, turnOffHint, draft, draftErrors, finishCustom, openCustom, preset, stage, startDate, summary, timeZoneError]);
   const inWindow = useWindowStep(step);
 
   const serverErrors = [...new Set(Object.entries(errors).filter(([field]) => field === 'recurrence' || field.startsWith('recurrence.')).map(([, message]) => message))];
@@ -142,10 +150,11 @@ export function RecurrenceField({ value, onChange, startDate, name, icon, disabl
   );
 }
 
-function OptionList({ preset, summary, disableTurnOff, timeZoneError, onChoose, onCustom }: {
+function OptionList({ preset, summary, disableTurnOff, turnOffHint, timeZoneError, onChoose, onCustom }: {
   preset: ReturnType<typeof presetOf>;
   summary: string;
   disableTurnOff: boolean;
+  turnOffHint: string;
   timeZoneError: boolean;
   onChoose(preset: Exclude<ReturnType<typeof presetOf>, 'custom'>): void;
   onCustom(): void;
@@ -158,7 +167,7 @@ function OptionList({ preset, summary, disableTurnOff, timeZoneError, onChoose, 
         ))}
         <OptionRow label="自定义…" {...(preset === 'custom' ? { detail: summary } : {})} checked={preset === 'custom'} onPress={onCustom} />
       </View>
-      {disableTurnOff ? <Text variant="caption">{TURN_OFF_DISABLED_HINT}</Text> : null}
+      {disableTurnOff ? <Text variant="caption">{turnOffHint}</Text> : null}
       {timeZoneError ? <FormMessage>{TIMEZONE_ERROR}</FormMessage> : null}
     </Stack>
   );

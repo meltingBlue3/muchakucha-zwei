@@ -4,6 +4,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 export interface SheetAction {
   label: string;
   submitting: boolean;
+  disabled?: boolean;
   onPress(): void;
 }
 
