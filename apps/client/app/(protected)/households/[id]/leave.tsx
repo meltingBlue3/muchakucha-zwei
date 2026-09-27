@@ -4,7 +4,7 @@ import { ApiClientError } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../src/features/households/household-context';
 import { HouseholdActionWindow, useHouseholdActionClose } from '../../../../src/features/households/household-action-window';
-import { Banner, Button, Stack, Text } from '../../../../src/ui/primitives';
+import { Banner, ConfirmActions, Stack, Text } from '../../../../src/ui/primitives';
 
 export default function LeaveHouseholdMembershipPage() {
   const { id, householdName = '此家庭' } = useLocalSearchParams<{ id: string; householdName?: string }>();
@@ -39,7 +39,7 @@ export default function LeaveHouseholdMembershipPage() {
         return;
       }
       setError(err instanceof ApiClientError && err.status === 403
-        ? '请先转让家庭所有权，再离开家庭。'
+        ? '请先转移家庭所有权，再离开家庭。'
         : '离开家庭失败，请检查网络连接后重试。');
     } finally {
       submitting.current = false;
@@ -51,8 +51,7 @@ export default function LeaveHouseholdMembershipPage() {
     <Stack gap={4}>
       {error ? <Banner title="离开失败">{error}</Banner> : null}
       <Text>离开「{householdName}」后，你将无法访问这个家庭。共享日程、任务和笔记会保留在家庭中。重新加入需要家人邀请。</Text>
-      <Button label="取消离开" tone="secondary" disabled={busy} onPress={close} />
-      <Button label="确认离开家庭" loading={busy} onPress={() => void leave()} />
+      <ConfirmActions cancelLabel="取消离开" confirmLabel="确认离开家庭" destructive busy={busy} onCancel={close} onConfirm={() => void leave()} />
     </Stack>
   </HouseholdActionWindow>;
 }

@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { sessionStateStore } from '../../../../../../src/features/auth/session-runtime';
 import { ApiClient } from '@muchakucha/api-client';
-import { Banner, Button, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Banner, ConfirmActions, Stack, Text } from '../../../../../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
@@ -78,8 +78,8 @@ export default function ChangeMemberRolePage() {
     <Stack gap={4}>
       {error ? <Banner title="角色变更失败">{error}</Banner> : null}
       <Text>{isPromotion ? '对方将获得邀请和管理普通成员的权限。' : '对方将不能再邀请或管理成员。'}</Text>
-      <Button label={isPromotion ? '保留成员权限' : '保留管理员权限'} tone="secondary" disabled={busy} onPress={handleSafeAction} />
-      <Button label={isPromotion ? '确认提升为管理员' : '降级为成员'} loading={busy} onPress={() => void handleRoleChange()} />
+      {/* A demotion takes rights away, so it reads as destructive; a promotion does not. */}
+      <ConfirmActions cancelLabel={isPromotion ? '保留成员权限' : '保留管理员权限'} confirmLabel={isPromotion ? '确认提升为管理员' : '降级为成员'} destructive={!isPromotion} busy={busy} onCancel={handleSafeAction} onConfirm={() => void handleRoleChange()} />
     </Stack>
   </HouseholdActionWindow>;
 }

@@ -8,13 +8,13 @@ export type RecurringFilterKey = 'all' | 'recurring';
 
 export const RECURRING_FILTERS: readonly { key: RecurringFilterKey; label: string }[] = [
   { key: 'all', label: '全部' },
-  { key: 'recurring', label: '仅看周期性' },
+  { key: 'recurring', label: '仅看重复' },
 ];
 
 export const RECURRING_FILTER_GROUP_LABEL = '重复';
 
 export function recurringFilterAccessibilityLabel(key: RecurringFilterKey): string {
-  return key === 'all' ? '重复筛选：全部' : '重复筛选：仅看周期性';
+  return key === 'all' ? '重复筛选：全部' : '重复筛选：仅看重复';
 }
 
 export function isRecurringInstance(item: {
@@ -50,9 +50,9 @@ export function classifyGenerationWindow(input: {
 // 07-UI-SPEC.md (Copywriting table, D-19 and D-15 addendum rows).
 export const GENERATION_BEHIND_HEADING = '重复安排还在补齐';
 export const GENERATION_BEHIND_BODY =
-  '周期性安排会在临近日期时自动生成，这一轮还没跑完。稍后下拉刷新就能看到。';
+  '重复安排会在临近日期时自动生成，这一轮还没跑完。稍后下拉刷新就能看到。';
 export const GENERATION_AHEAD_NOTE =
-  '周期性安排会在临近日期时才生成，更远的重复还没出现在这里。';
+  '重复安排会在临近日期时才生成，更远的重复还没出现在这里。';
 export const RECURRING_EMPTY_TASKS =
-  '还没有周期性任务。创建任务时打开"重复"，它就会出现在这里。';
-export const RECURRING_EMPTY_EVENTS = '这一天没有周期性安排。';
+  '还没有重复任务。创建任务时打开「重复」，它就会出现在这里。';
+export const RECURRING_EMPTY_EVENTS = '这一天没有重复安排。';

@@ -34,7 +34,7 @@ type DateFieldProps = {
   align?: 'start' | 'end';
 };
 
-const PICKER_TITLES = { date: '请选择日期', time: '选择时间' } as const;
+const PICKER_TITLES = { date: '选择日期', time: '选择时间' } as const;
 
 /**
  * Pickers follow Google Calendar on each platform: Android opens the system

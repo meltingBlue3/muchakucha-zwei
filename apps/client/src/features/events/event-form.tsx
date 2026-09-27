@@ -43,6 +43,31 @@ const EMPTY_INPUT: EventInput = {
   recurrence: null,
 };
 
+type EventSpan = Pick<EventInput, 'startDate' | 'startTime' | 'endDate' | 'endTime'>;
+
+function localDateTime(date: string, time: string): Date {
+  return new Date(`${date}T${time}:00`);
+}
+
+/**
+ * Moving the start carries the end along so the event keeps its length, as
+ * in Google Calendar. An end already before the start is left for the user.
+ */
+export function moveEventStart(span: EventSpan, next: Partial<Pick<EventSpan, 'startDate' | 'startTime'>>): EventSpan {
+  const moved = { ...span, ...next };
+  const oldStart = localDateTime(span.startDate, span.startTime);
+  const oldEnd = localDateTime(span.endDate, span.endTime);
+  const newStart = localDateTime(moved.startDate, moved.startTime);
+  const duration = oldEnd.getTime() - oldStart.getTime();
+  if (![duration, newStart.getTime()].every(Number.isFinite) || duration < 0) return moved;
+  const newEnd = new Date(newStart.getTime() + duration);
+  return {
+    ...moved,
+    endDate: toDateIso(newEnd),
+    endTime: `${String(newEnd.getHours()).padStart(2, '0')}:${String(newEnd.getMinutes()).padStart(2, '0')}`,
+  };
+}
+
 interface EventFormProps {
   draftKey?: string;
   initial?: EventResponseDto;
@@ -94,10 +119,14 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
   }, [setForm]);
 
   const setRecurrence = useCallback((next: RecurrenceInput | null) => updateField('recurrence', next), [updateField]);
+  const moveStart = useCallback((next: Partial<Pick<EventSpan, 'startDate' | 'startTime'>>) => {
+    setForm((prev) => ({ ...prev, ...moveEventStart(prev, next) }));
+    setError(null);
+  }, [setForm]);
 
   const handleSubmit = useCallback(async () => {
     if (form.title.trim().length === 0) {
-      setError('请输入事件标题。');
+      setError('请输入日程标题。');
       return;
     }
     if (form.recurrence?.endsOn !== undefined && form.recurrence.endsOn <= form.startDate) {
@@ -130,7 +159,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
     // non-recurring event has no such cap — only the recurring branch
     // derives a per-occurrence duration from this span.
     if (form.recurrence !== null && endDateTime.getTime() - startDateTime.getTime() > 24 * 60 * 60 * 1000) {
-      setError('重复事件的单次时长不能超过 24 小时。');
+      setError('重复日程的单次时长不能超过 24 小时。');
       return;
     }
 
@@ -160,7 +189,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
       if (Object.keys(fieldErrors).length > 0) {
         setRecurrenceErrors(fieldErrors);
       } else {
-        setError('重复规则没有保存成功。请检查网络后重试。');
+        setError('保存失败，请检查网络后重试。');
       }
     }
   }, [form, onSubmit]);
@@ -177,7 +206,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
           placeholderTextColor={activeTheme.colors.inkMuted}
           style={titleInputStyle}
           maxLength={200}
-          accessibilityLabel="事件标题"
+          accessibilityLabel="日程标题"
         />
       </FormRow>
 
@@ -186,17 +215,19 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
           <Text style={{ flex: 1 }}>全天</Text>
           <Switch
             disabled={isSubmitting}
-            accessibilityLabel="全天事件"
+            accessibilityLabel="全天日程"
             value={form.allDay}
             onValueChange={(v) => updateField('allDay', v)}
-            trackColor={{ false: activeTheme.colors.border, true: activeTheme.colors.tealSoft }}
-            thumbColor={form.allDay ? activeTheme.colors.teal : activeTheme.colors.surfaceMuted}
+            // Like a system switch: a neutral track when off, the accent when on, and a white thumb.
+            trackColor={{ false: activeTheme.colors.border, true: activeTheme.colors.teal }}
+            thumbColor={activeTheme.colors.surface}
+            ios_backgroundColor={activeTheme.colors.border}
           />
         </FormRow>
         <FormRow>
-          <DateField appearance="plain" disabled={isSubmitting} value={form.startDate} onChange={(v) => updateField('startDate', v)} mode="date" placeholder="选择开始日期" accessibilityLabel="开始日期" />
+          <DateField appearance="plain" disabled={isSubmitting} value={form.startDate} onChange={(v) => moveStart({ startDate: v })} mode="date" placeholder="选择开始日期" accessibilityLabel="开始日期" />
           {!form.allDay && (
-            <DateField appearance="plain" align="end" disabled={isSubmitting} value={form.startTime} onChange={(v) => updateField('startTime', v)} mode="time" placeholder="开始时间" accessibilityLabel="开始时间" />
+            <DateField appearance="plain" align="end" disabled={isSubmitting} value={form.startTime} onChange={(v) => moveStart({ startTime: v })} mode="time" placeholder="开始时间" accessibilityLabel="开始时间" />
           )}
         </FormRow>
         <FormRow>
@@ -243,7 +274,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
             style={[rowInputStyle, { minHeight: activeTheme.spacing[16] + activeTheme.spacing[4], textAlignVertical: 'top' }]}
             multiline
             numberOfLines={4}
-            accessibilityLabel="事件描述"
+            accessibilityLabel="日程描述"
           />
         </FormRow>
       </FormSection>

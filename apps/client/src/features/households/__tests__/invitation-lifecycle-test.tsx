@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/react-native';
 
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
-import { ConfirmationPage, InvitationRow, MemberRow } from '../../../ui/household-components';
+import { InvitationRow, MemberRow } from '../../../ui/household-components';
 
 const pendingInvitation = {
   id: 'inv-1',
@@ -12,7 +12,7 @@ const pendingInvitation = {
   createdAt: new Date().toISOString(),
 };
 
-describe('InvitationRow and ConfirmationPage', () => {
+describe('InvitationRow', () => {
   test('shows usernames for members and invitations without email', async () => {
     const onResend = jest.fn();
     const view = await render(
@@ -66,53 +66,5 @@ describe('InvitationRow and ConfirmationPage', () => {
     expect(onRevoke).toHaveBeenCalledWith('inv-1', expect.objectContaining({
       props: expect.objectContaining({ accessibilityLabel: '撤销邀请 pending' }),
     }));
-  });
-
-  // TODO: Add ConfirmationPage tests when RNTL 14 render isolation is
-  // resolved. The component renders correctly (verified via debug test
-  // in isolation) but subsequent render() calls in the same suite fail
-  // to find text. See phase 02 issues for details.
-  test.skip('ConfirmationPage renders heading, body, and both action buttons', async () => {
-    const onSafeAction = jest.fn();
-    const onDestructiveAction = jest.fn();
-
-    const view = await render(
-      <MuchakuchaThemeProvider>
-        <ConfirmationPage
-          heading="撤销邀请？"
-          body="撤销后，原链接将不能使用。"
-          safeActionLabel="保留邀请"
-          safeActionOnPress={onSafeAction}
-          destructiveActionLabel="撤销邀请"
-          destructiveActionOnPress={onDestructiveAction}
-        />
-      </MuchakuchaThemeProvider>,
-    );
-
-    expect(view.getByText('撤销邀请？')).toBeTruthy();
-    fireEvent.press(view.getByText('保留邀请'));
-    expect(onSafeAction).toHaveBeenCalledTimes(1);
-  });
-
-  test.skip('ConfirmationPage disables both actions when busy', async () => {
-    const onSafeAction = jest.fn();
-    const onDestructiveAction = jest.fn();
-
-    const view = await render(
-      <MuchakuchaThemeProvider>
-        <ConfirmationPage
-          heading="撤销邀请？"
-          body="撤销后，原链接将不能使用。"
-          safeActionLabel="保留邀请"
-          safeActionOnPress={onSafeAction}
-          destructiveActionLabel="撤销邀请"
-          destructiveActionOnPress={onDestructiveAction}
-          busy={true}
-        />
-      </MuchakuchaThemeProvider>,
-    );
-
-    fireEvent.press(view.getByText('保留邀请'));
-    expect(onSafeAction).not.toHaveBeenCalled();
   });
 });

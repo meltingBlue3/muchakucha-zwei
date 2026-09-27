@@ -85,7 +85,7 @@ describe('labels screen offers only the actions the API will accept', () => {
   test.each(['OWNER', 'ADMIN'] as const)('%s sees create, edit, and delete', async (actorRole) => {
     const { getByLabelText } = await renderAs(actorRole);
 
-    expect(getByLabelText('新建标签')).toBeTruthy();
+    expect(getByLabelText('创建标签')).toBeTruthy();
     await waitFor(() => expect(getByLabelText('编辑标签 采购')).toBeTruthy());
     expect(getByLabelText('更多操作：标签 采购')).toBeTruthy();
   });
@@ -97,7 +97,7 @@ describe('labels screen offers only the actions the API will accept', () => {
     // though they cannot maintain the label set.
     await waitFor(() => expect(queryByText('采购')).not.toBeNull());
 
-    expect(queryByLabelText('新建标签')).toBeNull();
+    expect(queryByLabelText('创建标签')).toBeNull();
     expect(queryByLabelText('编辑标签 采购')).toBeNull();
     expect(queryByLabelText('删除标签 采购')).toBeNull();
   });
@@ -105,7 +105,7 @@ describe('labels screen offers only the actions the API will accept', () => {
   test('MEMBER is told why, rather than shown a page that looks broken', async () => {
     const { queryByText } = await renderAs('MEMBER');
 
-    expect(queryByText(/标签由家主和管理员维护/)).not.toBeNull();
+    expect(queryByText(/标签由所有者和管理员维护/)).not.toBeNull();
   });
 
   test('empty list does not point a MEMBER at a form they cannot see', async () => {
@@ -113,6 +113,6 @@ describe('labels screen offers only the actions the API will accept', () => {
 
     await waitFor(() => expect(queryByText(/还没有标签/)).not.toBeNull());
     expect(queryByText(/使用上方表单创建标签/)).toBeNull();
-    expect(queryByText(/家主或管理员创建后/)).not.toBeNull();
+    expect(queryByText(/所有者或管理员创建后/)).not.toBeNull();
   });
 });

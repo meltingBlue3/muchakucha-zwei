@@ -6,7 +6,7 @@ import { sessionTransport } from '../../../../../src/features/auth/session-runti
 import { sessionStateStore } from '../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import { ApiClient } from '@muchakucha/api-client';
-import { Banner, Button, Stack, Text } from '../../../../../src/ui/primitives';
+import { Banner, ConfirmActions, Stack, Text } from '../../../../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
@@ -101,8 +101,8 @@ export default function LeaveHouseholdPage() {
       {error ? <Banner>{error}</Banner> : null}
       <Text>你即将离开「{householdName}」，并将所有权移交给 {successorDisplayName}。离开后你将无法访问家庭，共享日程、任务和笔记会保留在家庭中。</Text>
       {stage === 'final' ? <Text>请确认上述变更。此操作不可撤销。</Text> : null}
-      <Button label="取消离开" tone="secondary" disabled={busy} onPress={() => { exitAllowed.current = true; handleCancel(); }} />
-      {stage === 'consequence' ? <Button label="继续" onPress={handleContinue} /> : <Button label="确认离开家庭" loading={busy} onPress={() => void handleConfirm()} />}
+      {/* Only the final step commits, so only it carries the destructive treatment. */}
+      <ConfirmActions cancelLabel="取消离开" confirmLabel={stage === 'consequence' ? '继续' : '确认离开家庭'} destructive={stage !== 'consequence'} busy={busy} onCancel={() => { exitAllowed.current = true; handleCancel(); }} onConfirm={() => { if (stage === 'consequence') handleContinue(); else void handleConfirm(); }} />
     </Stack>
   </HouseholdActionWindow>;
 }

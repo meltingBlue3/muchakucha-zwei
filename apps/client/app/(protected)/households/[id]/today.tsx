@@ -6,7 +6,7 @@ import { TodaySummary } from '../../../../src/ui/page-intro';
 import { HouseholdNavigation } from '../../../../src/ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import Calendar from 'lucide-react-native/icons/calendar';
@@ -28,7 +28,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../../../src/ui/household-components';
-import { Button, Heading, Stack, Text } from '../../../../src/ui/primitives';
+import { Button, EmptyState, Heading, LoadError, LoadingState, Stack, Text } from '../../../../src/ui/primitives';
 import type { Theme } from '../../../../src/ui/theme';
 
 function todayIso(): string {
@@ -258,46 +258,24 @@ export default function TodayRoute() {
           householdName={currentHousehold?.name ?? ''}
           onOpenSwitcher={() => setSwitcherOpen(true)}
         />} footer={<HouseholdNavigation householdId={householdId} active="today" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton actions={[
-        { kind: 'events', label: '新增日历', onPress: () => { setCalendarDate(todayIso()); rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/events/new`); } },
-        { kind: 'tasks', label: '新增任务', onPress: () => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/tasks/new`); } },
-        { kind: 'notes', label: '新增笔记', onPress: () => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/notes/new`); } },
+        { kind: 'events', label: '创建日程', onPress: () => { setCalendarDate(todayIso()); rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/events/new`); } },
+        { kind: 'tasks', label: '创建任务', onPress: () => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/tasks/new`); } },
+        { kind: 'notes', label: '创建笔记', onPress: () => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/notes/new`); } },
       ]} /> : null}>
       <Stack gap={4}>
         <Heading variant="caption" color="coral" style={{ fontSize: activeTheme.typography.section.fontSize, lineHeight: activeTheme.typography.section.lineHeight }}>{dateLabel}</Heading>
         {!loading && error === null ? <TodaySummary events={events.length} tasks={todayTasks.length} overdue={overdueTasks.length} /> : null}
 
         {/* Loading */}
-        {loading && (
-          <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
-            <ActivityIndicator color={activeTheme.colors.coral} />
-          </View>
-        )}
+        {loading && <LoadingState label="正在加载今日安排" />}
 
         {/* Error */}
-        {error !== null && (
-          <View style={{
-            backgroundColor: activeTheme.colors.destructiveSoft,
-            padding: activeTheme.spacing[4],
-            borderRadius: activeTheme.borderRadii.md,
-          }}>
-            <Text variant="bodySm" color="destructive">{error}</Text>
-            <Pressable
-              onPress={() => void fetchData()}
-              hitSlop={activeTheme.spacing[3]}
-              accessibilityLabel="重试加载今日数据"
-              style={{ marginTop: activeTheme.spacing[2], alignSelf: 'flex-start' }}
-            >
-              <Text variant="label" color="coral">重试</Text>
-            </Pressable>
-          </View>
-        )}
+        {error !== null && <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载今日数据" />}
 
         {!loading && (error === null || loaded.current) && (
           <>
             {/* Empty primary groups */}
-            {events.length === 0 && todayTasks.length === 0 ? <Stack gap={3}>
-              <Text color="inkMuted">今天没有待处理安排。</Text>
-            </Stack> : null}
+            {events.length === 0 && todayTasks.length === 0 ? <EmptyState message="今天没有待处理安排。" /> : null}
             {/* Today's events */}
             {events.length > 0 ? <View>
               <View style={{
@@ -308,20 +286,14 @@ export default function TodayRoute() {
               }}>
                 <Calendar size={16} color={activeTheme.colors.coral} />
                 <Text accessibilityRole="header" aria-level={2} variant="section">
-                  今日事件 ({events.length})
+                  今日日程（{events.length}）
                 </Text>
               </View>
-              {events.length === 0 ? (
-                <Text variant="bodySm" color="inkMuted">
-                  今天没有安排事件。
-                </Text>
-              ) : (
-                <Stack gap={2}>
-                  {events.map((event) => (
-                    <EventCard key={event.id} event={event} onPress={handleEventPress} onDelete={deleteEvent(event)} />
-                  ))}
-                </Stack>
-              )}
+              <Stack gap={2}>
+                {events.map((event) => (
+                  <EventCard key={event.id} event={event} onPress={handleEventPress} onDelete={deleteEvent(event)} />
+                ))}
+              </Stack>
             </View> : null}
 
             {/* Today's tasks */}
@@ -335,7 +307,7 @@ export default function TodayRoute() {
                 }}>
                   <Clock size={16} color={activeTheme.colors.teal} />
                   <Text accessibilityRole="header" aria-level={2} variant="section">
-                  今日待办 ({todayTasks.length})
+                  今日待办（{todayTasks.length}）
                   </Text>
                 </View>
                 <Stack gap={2}>
@@ -362,7 +334,7 @@ export default function TodayRoute() {
                 }}>
                   <TriangleAlert size={16} color={activeTheme.colors.destructive} />
                   <Text accessibilityRole="header" aria-level={2} variant="section" color="destructive">
-                  逾期任务 ({overdueTasks.length})
+                  逾期任务（{overdueTasks.length}）
                   </Text>
                 </View>
                 <Stack gap={2}>
@@ -402,7 +374,7 @@ export default function TodayRoute() {
               }}>
                 <Hourglass size={16} color={activeTheme.colors.coral} />
                 <Text accessibilityRole="header" aria-level={2} variant="section">
-                  临近截止日期 ({approachingTasks.length})
+                  临近截止日期（{approachingTasks.length}）
                 </Text>
               </View>
               {approachingTasks.length === 0 ? (
@@ -428,7 +400,7 @@ export default function TodayRoute() {
             {otherUpcomingTasks.length > 0 && (
               <View>
                 <Text variant="label" color="inkMuted" style={{ marginBottom: activeTheme.spacing[2] }}>
-                  稍后待办 ({otherUpcomingTasks.length})
+                  稍后待办（{otherUpcomingTasks.length}）
                 </Text>
                 <Stack gap={2}>
                   {otherUpcomingTasks.map((task) => (
@@ -457,7 +429,7 @@ export default function TodayRoute() {
                 }}>
                   <Inbox size={16} color={activeTheme.colors.inkMuted} />
                   <Text accessibilityRole="header" aria-level={2} variant="section">
-                  待安排 ({unscheduledTasks.length})
+                  待安排（{unscheduledTasks.length}）
                   </Text>
                 </View>
                 <Stack gap={2}>

@@ -4,6 +4,8 @@ export interface WindowConfirmationRequest {
   title: string;
   message: string;
   confirmLabel: string;
+  /** The confirmation discards or removes something, such as a draft. */
+  destructive?: boolean;
   onConfirm(): void;
 }
 

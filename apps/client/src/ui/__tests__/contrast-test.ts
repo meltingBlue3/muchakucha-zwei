@@ -45,6 +45,7 @@ describe('measured WCAG 2.2 AA palette contract', () => {
 
   test('keeps pressed primary actions above AA instead of relying on opacity', () => {
     expect(contrast(theme.colors.surface, theme.colors.coralPressed)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(theme.colors.surface, theme.colors.destructivePressed)).toBeGreaterThanOrEqual(4.5);
   });
 
   test('pairs success, error, and disabled colors with readable text and non-color semantics', () => {

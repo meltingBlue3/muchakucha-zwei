@@ -15,7 +15,7 @@ import {
   type SeriesScope,
   type SeriesScopeMode,
 } from '../../../../../../src/features/recurrence/series-scope-sheet';
-import { Button, Spinner, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Banner, LoadError, LoadingState, Stack } from '../../../../../../src/ui/primitives';
 
 type PendingSeriesAction =
   { kind: 'save'; data: CreateEventDto; mode: SeriesScopeMode };
@@ -74,7 +74,7 @@ export default function EditEventRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期。');
+        setError('登录已过期，请重新登录。');
         return;
       }
       const result = await sessionApiClient.getEvent(token, id, eventId);
@@ -82,7 +82,7 @@ export default function EditEventRoute() {
       setEvent(result);
       workspace.seed(draftPrefix + 'labels', (result.labels ?? []).map((l) => l.id));
     } catch {
-      if (showLoading) setError('无法加载事件。');
+      if (showLoading) setError('无法加载日程，请重试或确认它是否已被删除。');
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -108,7 +108,7 @@ export default function EditEventRoute() {
       try {
         const token = await sessionTransport.getAccessToken();
         if (token === null) {
-          setError('登录已过期。');
+          setError('登录已过期，请重新登录。');
           return;
         }
         await sessionApiClient.updateEvent(token, id!, eventId!, { ...data, ...conflict.precondition, labelIds: selectedLabelIds });
@@ -131,7 +131,7 @@ export default function EditEventRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setSeriesError('登录已过期。');
+        setSeriesError('登录已过期，请重新登录。');
         return;
       }
 
@@ -179,11 +179,10 @@ export default function EditEventRoute() {
   return (
     <EventWindow title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : '编辑日程'} busy={isSubmitting || seriesSubmitting !== null} onClose={handleCancel} onBackStep={pendingSeriesAction ? handleCancel : undefined} exitAllowed={exitAllowed}>
       {pendingSeriesAction ? <SeriesScopeContent mode={pendingSeriesAction.mode} error={seriesError} submitting={seriesSubmitting} onClose={handleCancel} onSelect={scope => void handleSeriesSelect(scope)} />
-        : loading ? <Spinner label="正在加载日程" /> : event === null ? <Stack gap={3}>
-          <Text accessibilityRole="alert">{error ?? '日程未找到或已被删除。'}</Text>
-          <Button label="重试" tone="secondary" onPress={() => void fetchEvent()} />
+        : loading ? <LoadingState label="正在加载日程" /> : event === null ? <Stack gap={3}>
+          <LoadError message={error ?? '日程未找到或已被删除。'} onRetry={() => void fetchEvent()} />
         </Stack> : <Stack gap={4}>
-          {error ? <Text variant="bodySm" color="destructive" accessibilityRole="alert">{error}</Text> : null}
+          {error ? <Banner>{error}</Banner> : null}
           {conflict.panel}
           <EventForm draftKey={draftPrefix + 'form'} initial={event} onSubmit={handleSubmit} onCancel={handleCancel} submitLabel="保存" isSubmitting={isSubmitting} householdId={id} selectedLabelIds={selectedLabelIds} onLabelChange={setSelectedLabelIds} />
         </Stack>}

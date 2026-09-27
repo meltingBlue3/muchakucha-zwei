@@ -1,8 +1,6 @@
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
-import { useTheme } from '@shopify/restyle';
 import type { RecurrenceRuleListItemDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
@@ -14,12 +12,11 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../ui/household-components';
-import { Heading, Stack, Text } from '../../ui/primitives';
-import type { Theme } from '../../ui/theme';
+import { EmptyState, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 
-const LOAD_ERROR = '无法加载周期规则，请检查网络连接后重试。';
+const LOAD_ERROR = '无法加载重复安排，请检查网络连接后重试。';
 // Straight quotes match the published sibling copy in `recurring-filter.ts`.
-const EMPTY_COPY = '还没有周期规则。创建任务或事件时打开"重复"，规则就会出现在这里。';
+const EMPTY_COPY = '还没有重复安排。创建任务或日程时打开「重复」，它就会出现在这里。';
 
 function resolveDeviceTimeZone(): string {
   try {
@@ -32,7 +29,6 @@ function resolveDeviceTimeZone(): string {
 export default function RecurrenceRulesIndexRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const activeTheme = useTheme<Theme>();
   const {
     viewState,
     households,
@@ -66,7 +62,7 @@ export default function RecurrenceRulesIndexRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期。');
+        setError('登录已过期，请重新登录。');
         return;
       }
       const result = await sessionApiClient.listRecurrenceRules(token, householdId);
@@ -142,39 +138,16 @@ export default function RecurrenceRulesIndexRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="周期规则" refreshing={refreshing} onRefresh={handleRefresh} title="重复安排" showBack showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />}>
+      <AppShell accessibilityLabel="重复安排" refreshing={refreshing} onRefresh={handleRefresh} title="重复安排" showBack showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />}>
         <Stack gap={4}>
           <Heading>重复安排</Heading>
 
-          {loading && (
-            <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
-              <ActivityIndicator color={activeTheme.colors.coral} />
-            </View>
-          )}
+          {loading && <LoadingState label="正在加载重复安排" />}
 
-          {error !== null && (
-            <View style={{
-              backgroundColor: activeTheme.colors.destructiveSoft,
-              padding: activeTheme.spacing[4],
-              borderRadius: activeTheme.borderRadii.md,
-            }}>
-              <Stack gap={2}>
-                <Text variant="bodySm" color="destructive">{error}</Text>
-                <Pressable
-                  accessibilityLabel="重试"
-                  accessibilityRole="button"
-                  hitSlop={activeTheme.spacing[3]}
-                  onPress={() => { void fetchRules(); }}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                >
-                  <Text variant="bodySm" color="destructive">重试</Text>
-                </Pressable>
-              </Stack>
-            </View>
-          )}
+          {error !== null && <LoadError message={error} onRetry={() => void fetchRules()} />}
 
           {!loading && error === null && rules.length === 0 && (
-            <Text variant="bodySm" color="inkMuted">{EMPTY_COPY}</Text>
+            <EmptyState message={EMPTY_COPY} />
           )}
 
           {/* Rendered in the order the server returned: unresolved rules first

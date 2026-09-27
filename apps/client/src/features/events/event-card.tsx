@@ -36,7 +36,7 @@ export function EventCard({ event, onPress, onDelete }: EventCardProps) {
       <Pressable
         onPress={() => onPress(event)}
         accessibilityRole="button"
-        accessibilityLabel={`事件：${event.title}${event.recurrenceRuleId == null ? '' : '，重复'}`}
+        accessibilityLabel={`日程：${event.title}${event.recurrenceRuleId == null ? '' : '，重复'}`}
         style={({ pressed }) => ({ flex: 1, minWidth: 0, opacity: pressed ? 0.8 : 1 })}
       >
         <Stack gap={2}>

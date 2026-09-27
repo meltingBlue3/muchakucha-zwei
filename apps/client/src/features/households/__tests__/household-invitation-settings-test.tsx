@@ -76,3 +76,23 @@ describe('username invitation settings', () => {
     expect(view.queryByLabelText('邀请链接')).toBeNull();
   });
 });
+
+describe('recovering from failed loads', () => {
+  test('a failed member load offers a retry that brings the roster back', async () => {
+    const api = createApi();
+    (api.getHousehold as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    const view = await renderSettings(api);
+    await fireEvent.press(await view.findByRole('button', { name: '重试加载成员' }));
+    expect(await view.findByText('family-member')).toBeTruthy();
+    expect(api.getHousehold).toHaveBeenCalledTimes(2);
+  });
+
+  test('a failed invitation list offers its own retry without reloading members', async () => {
+    const api = createApi();
+    (api.listInvitations as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    const view = await renderSettings(api);
+    await fireEvent.press(await view.findByRole('button', { name: '重试加载邀请' }));
+    expect(await view.findByText('family-member')).toBeTruthy();
+    expect(api.getHousehold).toHaveBeenCalledTimes(1);
+  });
+});

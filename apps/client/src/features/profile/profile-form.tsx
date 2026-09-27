@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import type { SessionStateStore } from '../auth/session-state';
 import type { SessionTransport } from '../../platform/session/session-transport';
-import { Banner, Button, Heading, Spinner, Stack, Text, TextField } from '../../ui/primitives';
+import { Banner, Button, Heading, LoadError, Spinner, Stack, Text, TextField } from '../../ui/primitives';
 
 const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
 const nicknameSchema = z
@@ -142,10 +142,11 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, sh
         <Text variant="display" color="teal">{savedName ? [...savedName][0] : '我'}</Text>
         {showHeading ? <Heading>个人资料</Heading> : null}
       </Stack>
-      {loadError || errors.root?.server?.message ? (
-        <Banner title={loadError ? '暂时无法加载资料' : '暂时无法保存'}>{loadError ?? errors.root?.server?.message}</Banner>
+      {loadError ? (
+        <LoadError title="暂时无法加载资料" message={loadError} retryLabel="重新加载资料" onRetry={() => setReload((value) => value + 1)} />
+      ) : errors.root?.server?.message ? (
+        <Banner title="暂时无法保存">{errors.root.server.message}</Banner>
       ) : null}
-      {loadError ? <Button label="重新加载资料" onPress={() => setReload((value) => value + 1)} /> : null}
       {success ? (
         <Stack accessibilityLiveRegion="polite" accessibilityRole={'status' as never} gap={1}>
           <Text>{success}</Text>

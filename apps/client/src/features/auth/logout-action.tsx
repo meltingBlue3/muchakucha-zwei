@@ -1,11 +1,11 @@
 import type { ApiClient } from '@muchakucha/api-client';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 
 import type { SessionStateStore } from './session-state';
 import type { SessionTransport } from '../../platform/session/session-transport';
-import { Banner, Heading, Stack, Text } from '../../ui/primitives';
+import { Banner, ConfirmActions, Heading, Stack, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
 
 const LOGOUT_ERROR = '暂时无法退出。请检查网络后重试。';
@@ -79,48 +79,15 @@ export const LogoutAction = ({
         >
           {!confirmationOnly ? <Heading>退出这台设备？</Heading> : null}
           <Text>只会结束这台设备上的登录，其他设备不会退出。</Text>
-          {/* Cancel-then-confirm ordering and outline-vs-filled styling match
-              the delete-confirmation pattern used across events/tasks/notes. */}
-          <View style={{ flexDirection: 'row', gap: activeTheme.spacing[3] }}>
-            <Pressable
-              disabled={pending}
-              onPress={() => confirmationOnly ? onCancel?.() : setConfirming(false)}
-              hitSlop={activeTheme.spacing[1]}
-              accessibilityRole="button"
-              accessibilityLabel="取消退出登录"
-              style={({ pressed }) => ({
-                flex: 1,
-                alignItems: 'center',
-                paddingVertical: activeTheme.spacing[3],
-                borderRadius: activeTheme.borderRadii.sm,
-                borderWidth: 1,
-                borderColor: activeTheme.colors.border,
-                opacity: pressed ? 0.7 : 1,
-              })}
-            >
-              <Text variant="button" color="ink">取消</Text>
-            </Pressable>
-            <Pressable
-              disabled={pending}
-              onPress={() => void logout()}
-              hitSlop={activeTheme.spacing[1]}
-              accessibilityRole="button"
-              accessibilityLabel="确认退出登录"
-              accessibilityState={{ busy: pending, disabled: pending }}
-              style={({ pressed }) => ({
-                flex: 1,
-                alignItems: 'center',
-                paddingVertical: activeTheme.spacing[3],
-                borderRadius: activeTheme.borderRadii.sm,
-                backgroundColor: pending ? activeTheme.colors.disabled : activeTheme.colors.coral,
-                opacity: pressed ? 0.7 : 1,
-              })}
-            >
-              <Text variant="button" color="surface">
-                {pending ? '退出中…' : '确认退出'}
-              </Text>
-            </Pressable>
-          </View>
+          <ConfirmActions
+            cancelAccessibilityLabel="取消退出登录"
+            confirmLabel="确认退出"
+            confirmAccessibilityLabel="确认退出登录"
+            destructive
+            busy={pending}
+            onCancel={() => confirmationOnly ? onCancel?.() : setConfirming(false)}
+            onConfirm={() => void logout()}
+          />
         </Stack>
       )}
     </Stack>

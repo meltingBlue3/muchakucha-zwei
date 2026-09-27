@@ -13,7 +13,7 @@ export type RecurrenceKind = 'task' | 'event';
 // from an event rule in the merged list (D-20 accessibility floor).
 const KIND_LABELS: Record<RecurrenceKind, string> = {
   task: '任务',
-  event: '事件',
+  event: '日程',
 };
 
 export function recurrenceKindLabel(kind: RecurrenceKind | null): string | null {

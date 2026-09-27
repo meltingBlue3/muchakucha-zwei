@@ -272,7 +272,7 @@ test.describe('Tasks API', () => {
     await loginUsernameFixture(page, memberB.username, password, `/households/${householdId}/tasks/${taskId}`);
     await page.getByRole('button', { name: '编辑任务', exact: true }).click();
     await page.getByLabel('任务标题', { exact: true }).fill('B共同修改');
-    await page.getByRole('button', { name: '保存修改', exact: true }).click();
+    await page.getByRole('button', { name: '保存', exact: true }).click();
     await expect(page.getByRole('button', { name: '编辑任务', exact: true })).toBeVisible();
     await expect(page.getByText('B共同修改', { exact: true })).toBeVisible();
     const saved = await apiCall(memberA.accessToken, 'GET', `/api/v1/households/${householdId}/tasks/${taskId}`);

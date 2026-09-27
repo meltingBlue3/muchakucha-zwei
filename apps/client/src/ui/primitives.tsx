@@ -120,18 +120,21 @@ export const Spinner = ({ label = '正在处理', inverse = false }: { label?: s
   );
 };
 
+type ButtonTone = 'primary' | 'secondary' | 'destructive';
+
 type ButtonProps = Omit<PressableProps, 'children'> & {
   label: string;
   loading?: boolean;
-  tone?: 'primary' | 'secondary';
+  /** `destructive` commits an irreversible or access-removing change. */
+  tone?: ButtonTone;
 };
 
-export const getButtonFill = (state: { disabled: boolean; pressed: boolean }): string =>
+export const getButtonFill = (state: { disabled: boolean; pressed: boolean }, tone: Exclude<ButtonTone, 'secondary'> = 'primary'): string =>
   state.disabled
     ? theme.colors.disabled
-    : state.pressed
-      ? theme.colors.coralPressed
-      : theme.colors.coral;
+    : tone === 'destructive'
+      ? state.pressed ? theme.colors.destructivePressed : theme.colors.destructive
+      : state.pressed ? theme.colors.coralPressed : theme.colors.coral;
 
 export const Button = ({ disabled, label, loading = false, tone = 'primary', style, ...props }: ButtonProps) => {
   const activeTheme = useTheme<Theme>();
@@ -158,7 +161,7 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', sty
           alignItems: 'center',
           backgroundColor: tone === 'secondary' && !unavailable
             ? state.pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.surface
-            : getButtonFill({ disabled: unavailable, pressed: state.pressed }),
+            : getButtonFill({ disabled: unavailable, pressed: state.pressed }, tone === 'destructive' ? 'destructive' : 'primary'),
           borderColor: focused ? activeTheme.colors.focusRing : activeTheme.colors.transparent,
           borderRadius: activeTheme.borderRadii.lg,
           borderWidth: activeTheme.borderWidths.focus,
@@ -201,6 +204,56 @@ export function FormActions({ onCancel, onSubmit, submitting, submitLabel, disab
       <Button label="取消" tone="secondary" disabled={submitting} onPress={onCancel} style={{ flex: 1 }} />
       <Button label={submitLabel} loading={submitting} disabled={disabled} onPress={onSubmit} style={{ flex: 2 }} />
     </Inline>
+  );
+}
+
+/**
+ * The two answers to a confirmation: the safe choice first, the committing
+ * choice second. Side by side when both labels fit, stacked otherwise, so
+ * every confirmation in the app reads the same way.
+ */
+export function ConfirmActions({
+  cancelLabel = '取消',
+  cancelAccessibilityLabel,
+  confirmLabel,
+  confirmAccessibilityLabel,
+  onCancel,
+  onConfirm,
+  busy = false,
+  destructive = false,
+  confirmDisabled = false,
+}: {
+  cancelLabel?: string;
+  cancelAccessibilityLabel?: string;
+  confirmLabel: string;
+  confirmAccessibilityLabel?: string;
+  onCancel(): void;
+  onConfirm(): void;
+  busy?: boolean;
+  destructive?: boolean;
+  confirmDisabled?: boolean;
+}) {
+  const actionStyle = { flexGrow: 1, flexBasis: theme.controlSizes.touchTarget * 3 };
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[3] }}>
+      <Button
+        label={cancelLabel}
+        {...(cancelAccessibilityLabel ? { accessibilityLabel: cancelAccessibilityLabel } : {})}
+        tone="secondary"
+        disabled={busy}
+        onPress={onCancel}
+        style={actionStyle}
+      />
+      <Button
+        label={confirmLabel}
+        {...(confirmAccessibilityLabel ? { accessibilityLabel: confirmAccessibilityLabel } : {})}
+        tone={destructive ? 'destructive' : 'primary'}
+        loading={busy}
+        disabled={confirmDisabled}
+        onPress={onConfirm}
+        style={actionStyle}
+      />
+    </View>
   );
 }
 
@@ -384,9 +437,9 @@ export const FormMessage = ({ children, id }: PropsWithChildren<{ id?: string }>
   </Inline>
 );
 
-type BannerProps = PropsWithChildren<{ title?: string }>;
+type BannerProps = PropsWithChildren<{ title?: string; action?: ReactNode }>;
 
-export const Banner = ({ children, title }: BannerProps) => (
+export const Banner = ({ children, title, action }: BannerProps) => (
   <Box
     accessibilityLiveRegion="assertive"
     accessibilityRole="alert"
@@ -396,14 +449,66 @@ export const Banner = ({ children, title }: BannerProps) => (
     borderWidth={theme.borderWidths.default}
     padding={4}
   >
-    <Inline gap={2}>
+    {/* Top-aligned: the icon sits beside the first line however tall the message grows. */}
+    <Inline gap={2} style={{ alignItems: 'flex-start' }}>
       <CircleAlert color={theme.colors.destructive} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
       <Stack gap={1} style={{ flex: 1 }}>
         {title ? <Text variant="label">{title}</Text> : null}
         <Text variant="bodySm">{children}</Text>
+        {action ? <View style={{ alignSelf: 'flex-start', marginTop: theme.spacing[2] }}>{action}</View> : null}
       </Stack>
     </Inline>
   </Box>
+);
+
+/**
+ * A failed load: what went wrong and a way to try again, in one place. Screens
+ * keep showing any content they already have beneath it.
+ */
+export const LoadError = ({ title, message, onRetry, retryLabel = '重试', retryAccessibilityLabel, retrying = false, disabled = false }: {
+  title?: string;
+  message: string;
+  onRetry(): void;
+  retryLabel?: string;
+  retryAccessibilityLabel?: string;
+  retrying?: boolean;
+  /** Another operation owns the screen; retrying now would race it. */
+  disabled?: boolean;
+}) => (
+  <Banner
+    {...(title ? { title } : {})}
+    action={
+      <Button
+        label={retryLabel}
+        {...(retryAccessibilityLabel ? { accessibilityLabel: retryAccessibilityLabel } : {})}
+        tone="secondary"
+        loading={retrying}
+        disabled={disabled}
+        onPress={onRetry}
+      />
+    }
+  >
+    {message}
+  </Banner>
+);
+
+/** An unknown amount of content still on its way; never shown as an empty list. */
+export const LoadingState = ({ label }: { label: string }) => (
+  <View style={{ alignItems: 'center', paddingVertical: theme.spacing[6] }}>
+    <Spinner label={label} />
+  </View>
+);
+
+/**
+ * Nothing to show yet. Aligned with the page's text edge; an optional action
+ * offers the obvious next step, such as clearing a filter.
+ */
+export const EmptyState = ({ title, message, action }: { title?: string; message: string; action?: ReactNode }) => (
+  <Stack gap={2} style={{ paddingVertical: theme.spacing[4] }}>
+    {title ? <Text variant="section">{title}</Text> : null}
+    <Text variant="bodySm" color="inkMuted">{message}</Text>
+    {action ? <View style={{ alignSelf: 'flex-start', marginTop: theme.spacing[1] }}>{action}</View> : null}
+  </Stack>
 );
 
 export const BrandMark = () => (

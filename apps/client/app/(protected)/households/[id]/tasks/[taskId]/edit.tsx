@@ -3,8 +3,6 @@ import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/e
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { useTheme } from '@shopify/restyle';
 import { ApiClientError } from '@muchakucha/api-client';
 import type {
   TaskResponseDto,
@@ -27,8 +25,7 @@ import {
   AppShell,
   HouseholdContextNote,
 } from '../../../../../../src/ui/household-components';
-import { Stack, Text } from '../../../../../../src/ui/primitives';
-import type { Theme } from '../../../../../../src/ui/theme';
+import { Banner, LoadError, LoadingState, Stack } from '../../../../../../src/ui/primitives';
 import type { CreateTaskDto } from '@muchakucha/api-client';
 
 type PendingSeriesAction =
@@ -64,7 +61,6 @@ export default function EditTaskRoute() {
   const draftPrefix = `draft:${id}:tasks:${taskId}:`;
   const router = useRouter();
   const exitAllowed = useRef(false);
-  const activeTheme = useTheme<Theme>();
   const {
     viewState,
     households,
@@ -76,6 +72,7 @@ export default function EditTaskRoute() {
   const [task, setTask] = useState<TaskResponseDto | null>(null);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedLabelIds, setSelectedLabelIds] = useWorkspaceState<string[]>(draftPrefix + 'labels', []);
@@ -101,10 +98,13 @@ export default function EditTaskRoute() {
 
   const fetchTask = useCallback(async (showLoading = true) => {
     if (householdId === undefined || householdId === '' || taskId === undefined || taskId === '') return;
-    if (showLoading) setLoading(true);
+    if (showLoading) { setLoading(true); setLoadError(null); }
     try {
       const token = await sessionTransport.getAccessToken();
-      if (token === null) return;
+      if (token === null) {
+        if (showLoading) setLoadError('登录已过期，请重新登录。');
+        return;
+      }
       const [taskResult, householdResult] = await Promise.all([
         sessionApiClient.getTask(token, householdId, taskId),
         sessionApiClient.getHousehold(token, householdId),
@@ -115,6 +115,7 @@ export default function EditTaskRoute() {
       workspace.seed(draftPrefix + 'labels', (taskResult.labels ?? []).map((l) => l.id));
     } catch {
       // Keep the current authoritative snapshot when a silent refresh fails.
+      if (showLoading) setLoadError('无法加载任务，请重试或确认它是否已被删除。');
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -248,21 +249,9 @@ export default function EditTaskRoute() {
         {pendingSeriesAction ? <SeriesScopeContent
           error={seriesError} mode={pendingSeriesAction.mode} onClose={closeEdit}
           onSelect={scope => void handleSeriesSelect(scope)} submitting={seriesSubmitting}
-        /> : loading ? (
-          <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
-            <ActivityIndicator color={activeTheme.colors.coral} />
-          </View>
-        ) : task !== null ? (
+        /> : loading ? <LoadingState label="正在加载任务" /> : task !== null ? (
           <Stack gap={4}>
-            {submitError !== null && (
-              <View style={{
-                backgroundColor: activeTheme.colors.destructiveSoft,
-                padding: activeTheme.spacing[4],
-                borderRadius: activeTheme.borderRadii.md,
-              }}>
-                <Text variant="bodySm" color="destructive">{submitError}</Text>
-              </View>
-            )}
+            {submitError !== null && <Banner>{submitError}</Banner>}
             {conflict.panel}
             <TaskForm
             draftKey={draftPrefix + 'form'}
@@ -270,7 +259,7 @@ export default function EditTaskRoute() {
               members={memberOptions}
               onSubmit={handleSubmit}
               onCancel={closeEdit}
-              submitLabel="保存修改"
+              submitLabel="保存"
               isSubmitting={submitting}
               householdId={householdId}
               selectedLabelIds={selectedLabelIds}
@@ -278,7 +267,9 @@ export default function EditTaskRoute() {
             />
           </Stack>
         ) : (
-          <Text variant="bodySm" color="inkMuted">任务未找到。</Text>
+          <Stack gap={3}>
+            <LoadError message={loadError ?? '任务未找到或已被删除。'} onRetry={() => void fetchTask()} />
+          </Stack>
         )}
       </Stack>
     </TaskWindow>

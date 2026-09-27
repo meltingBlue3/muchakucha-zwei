@@ -15,7 +15,7 @@ export function getRouteTrigger(): View | null {
       const target = original.isConnected ? original : label
         ? document.querySelector<HTMLElement>(`[aria-label="${CSS.escape(label)}"]`) : null;
       const fallback = target ?? document.querySelector<HTMLElement>(
-        '[role="main"] [aria-label^="创建"], [role="main"] [aria-label^="新建"], [role="main"] button:not([disabled])',
+        '[role="main"] [aria-label^="创建"], [role="main"] button:not([disabled])',
       );
       fallback?.focus({ preventScroll: true });
     });

@@ -8,7 +8,7 @@ import { useWorkspaceState } from '../../ui/workspace-state';
 import { HouseholdNavigation } from '../../ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import ListFilter from 'lucide-react-native/icons/list-filter';
@@ -34,7 +34,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../ui/household-components';
-import { Stack, StatusPanel, Text, Button } from '../../ui/primitives';
+import { Button, EmptyState, LoadError, LoadingState, Stack, StatusPanel, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
 
 type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
@@ -134,6 +134,10 @@ export default function TaskListScreen() {
     labelFilter !== 'all',
     recurringFilter !== 'all',
   ].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setFilter('all'); setPriorityFilter('all'); setAssigneeFilter('all'); setLabelFilter('all'); setRecurringFilter('all');
+  };
 
   const assigneeOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -276,7 +280,7 @@ export default function TaskListScreen() {
             labelFilter !== 'all' ? availableLabels.find(l => l.id === labelFilter)?.name ?? '已选标签' : '',
             recurringFilter !== 'all' ? '仅重复' : '',
           ].filter(Boolean).join(' · ')}</Text>
-          {activeFilterCount ? <Pressable accessibilityRole="button" accessibilityLabel="清除任务筛选" onPress={() => { setFilter('all'); setPriorityFilter('all'); setAssigneeFilter('all'); setLabelFilter('all'); setRecurringFilter('all'); }} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}><Text variant="label" color="link">清除</Text></Pressable> : null}
+          {activeFilterCount ? <Pressable accessibilityRole="button" accessibilityLabel="清除任务筛选" onPress={clearFilters} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}><Text variant="label" color="link">清除</Text></Pressable> : null}
         </View>
         {filtersOpen ? <AppDialog title="筛选任务" trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<Button label="查看结果" onPress={() => setFiltersOpen(false)} />}>
           <Stack gap={4}>
@@ -288,30 +292,10 @@ export default function TaskListScreen() {
         </AppDialog> : null}
 
         {/* Loading */}
-        {loading && (
-          <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
-            <ActivityIndicator color={activeTheme.colors.coral} />
-          </View>
-        )}
+        {loading && <LoadingState label="正在加载任务" />}
 
         {/* Error */}
-        {error !== null && (
-          <View style={{
-            backgroundColor: activeTheme.colors.destructiveSoft,
-            padding: activeTheme.spacing[4],
-            borderRadius: activeTheme.borderRadii.md,
-          }}>
-            <Text variant="bodySm" color="destructive">{error}</Text>
-            <Pressable
-              onPress={() => void fetchData()}
-              hitSlop={activeTheme.spacing[3]}
-              accessibilityLabel="重试加载任务"
-              style={{ marginTop: activeTheme.spacing[2], alignSelf: 'flex-start' }}
-            >
-              <Text variant="label" color="coral">重试</Text>
-            </Pressable>
-          </View>
-        )}
+        {error !== null && <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载任务" />}
 
         {/* Task list */}
         {!loading && error === null && filteredTasks.length === 0 && (
@@ -323,8 +307,8 @@ export default function TaskListScreen() {
               kind="offline"
             />
           ) : (
-            <Text variant="bodySm" color="inkMuted">
-              {activeFilterCount === 0
+            <EmptyState
+              message={activeFilterCount === 0
                 ? '还没有任务。点击右下角“＋”创建第一个任务。'
                 : recurringFilter === 'recurring' &&
                     filter === 'all' &&
@@ -333,7 +317,8 @@ export default function TaskListScreen() {
                     labelFilter === 'all'
                   ? RECURRING_EMPTY_TASKS
                   : '没有符合筛选条件的任务。'}
-            </Text>
+              {...(activeFilterCount ? { action: <Button label="清除筛选" tone="secondary" onPress={clearFilters} /> } : {})}
+            />
           )
         )}
 

@@ -55,7 +55,7 @@ test('an expired access token is refreshed instead of failing the next load', as
   const refreshesBefore = api.refreshCount();
   api.expireTokens();
   await page.getByRole('tab', { name: '日历', exact: true }).click();
-  await expect(page.getByRole('button', { name: /^事件：周末聚餐/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^日程：周末聚餐/ })).toBeVisible();
   await expect(page.getByText(/无法加载|刷新失败/)).toHaveCount(0);
   expect(api.refreshCount()).toBe(refreshesBefore + 1);
 });

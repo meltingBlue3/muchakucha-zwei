@@ -4,8 +4,6 @@ import { useCreateWithLabels } from '../../../../../src/features/households/use-
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { useTheme } from '@shopify/restyle';
 import type { GetHouseholdMemberDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
@@ -16,8 +14,7 @@ import {
   AppShell,
   HouseholdContextNote,
 } from '../../../../../src/ui/household-components';
-import { Button, Stack, Text } from '../../../../../src/ui/primitives';
-import type { Theme } from '../../../../../src/ui/theme';
+import { Banner, LoadError, LoadingState, Stack } from '../../../../../src/ui/primitives';
 import type { CreateTaskDto } from '@muchakucha/api-client';
 
 export default function CreateTaskRoute() {
@@ -27,7 +24,6 @@ export default function CreateTaskRoute() {
   const router = useRouter();
   const exitAllowed = useRef(false);
   const { close: handleClose } = useTaskWindowClose();
-  const activeTheme = useTheme<Theme>();
   const {
     viewState,
     households,
@@ -100,28 +96,18 @@ export default function CreateTaskRoute() {
         <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
 
         {created !== null ? (
-          <Stack gap={4}><DraftNotice /><Text>任务已创建</Text><Text accessibilityRole="alert">{submitError ?? '内容已创建，标签尚未保存。'}</Text><Button label="重试保存标签" loading={submitting} onPress={() => void retry()} /></Stack>
+          <Stack gap={4}><DraftNotice /><LoadError title="任务已创建" message={submitError ?? '内容已创建，标签尚未保存。'} retryLabel="重试保存标签" retrying={submitting} onRetry={() => void retry()} /></Stack>
         ) : loading ? (
-          <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
-            <ActivityIndicator color={activeTheme.colors.coral} />
-          </View>
+          <LoadingState label="正在加载成员" />
         ) : (
           <Stack gap={4}>
-            {submitError !== null && (
-              <View style={{
-                backgroundColor: activeTheme.colors.destructiveSoft,
-                padding: activeTheme.spacing[4],
-                borderRadius: activeTheme.borderRadii.md,
-              }}>
-                <Text variant="bodySm" color="destructive">{submitError}</Text>
-              </View>
-            )}
+            {submitError !== null ? <Banner>{submitError}</Banner> : null}
             <TaskForm
             draftKey={draftPrefix + 'form'}
               members={memberOptions}
               onSubmit={handleSubmit}
               onCancel={handleClose}
-              submitLabel="创建任务"
+              submitLabel="创建"
               isSubmitting={submitting}
               householdId={householdId}
               selectedLabelIds={selectedLabelIds}

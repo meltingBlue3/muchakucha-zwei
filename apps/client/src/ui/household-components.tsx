@@ -39,6 +39,7 @@ import {
   IconButton,
   Heading,
   Inline,
+  LoadError,
   Spinner,
   Stack,
   Text,
@@ -381,7 +382,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
         <ScrollView style={{ flex: 1 }}>
           {households.map((household) => (
             <Pressable
-              accessibilityLabel={`${household.name}，${household.role === 'ADMIN' ? '管理员' : '成员'}`}
+              accessibilityLabel={`${household.name}，${ROLE_LABELS[household.role] ?? household.role}`}
               accessibilityRole="button"
               accessibilityState={{ selected: household.id === currentHouseholdId }}
               key={household.id}
@@ -402,7 +403,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
                 </Text>
                 <Inline gap={2}>
                   <Text variant="caption">
-                    {household.role === 'ADMIN' ? '管理员' : '成员'}
+                    {ROLE_LABELS[household.role] ?? household.role}
                   </Text>
                   <Text variant="caption">
                     {household.memberCount} 位成员
@@ -727,10 +728,10 @@ export const MemberRow = ({
           ) : null}
           {canTransferTo ? (
             <RowAction
-              accessibilityLabel={`转让所有权给 ${member.displayName}`}
+              accessibilityLabel={`转移所有权给 ${member.displayName}`}
               icon={Crown}
               color={theme.colors.coral}
-              label="转让所有权"
+              label="转移所有权"
               showLabel={labeledActions}
               onPress={onTransfer}
             />
@@ -900,156 +901,6 @@ export const InvitationRow = ({
   );
 };
 
-// ---- ConfirmationPage ----
-
-export interface ConfirmationPageProps {
-  heading: string;
-  body: string;
-  safeActionLabel: string;
-  safeActionOnPress: () => void;
-  destructiveActionLabel: string;
-  destructiveActionOnPress: () => void;
-  busy?: boolean;
-}
-
-export const ConfirmationPage = ({
-  heading,
-  body,
-  safeActionLabel,
-  safeActionOnPress,
-  destructiveActionLabel,
-  destructiveActionOnPress,
-  busy = false,
-}: ConfirmationPageProps) => (
-  <View
-    accessibilityLabel={heading}
-    accessibilityLiveRegion="assertive"
-    accessibilityRole="alert"
-    style={{
-      alignItems: 'center',
-      flex: 1,
-      justifyContent: 'center',
-      padding: theme.spacing[6],
-    }}
-  >
-    <Stack gap={6} style={{ alignItems: 'stretch', maxWidth: 480, width: '100%' }}>
-      <Stack gap={4}>
-        <Heading>{heading}</Heading>
-        <Text>{body}</Text>
-      </Stack>
-      <Stack gap={3}>
-        <Button
-          disabled={busy}
-          label={safeActionLabel}
-          onPress={safeActionOnPress}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={destructiveActionLabel}
-          disabled={busy}
-          onPress={destructiveActionOnPress}
-          style={({ pressed }) => ({
-            alignItems: 'center',
-            backgroundColor: busy
-              ? theme.colors.disabled
-              : theme.colors.destructive,
-            borderRadius: theme.borderRadii.xl,
-            flexDirection: 'row',
-            gap: theme.spacing[2],
-            justifyContent: 'center',
-            minHeight: theme.controlSizes.primary,
-            minWidth: theme.controlSizes.touchTarget,
-            opacity: busy ? 0.5 : pressed ? 0.85 : 1,
-            paddingHorizontal: theme.spacing[4],
-          })}
-        >
-          <Text variant="button">{destructiveActionLabel}</Text>
-        </Pressable>
-      </Stack>
-    </Stack>
-  </View>
-);
-
-// ---- FinalConfirmation (D-10 ownership transfer) ----
-
-export interface FinalConfirmationProps {
-  heading: string;
-  body: string;
-  safeActionLabel: string;
-  destructiveActionLabel: string;
-  onSafeAction: () => void;
-  onDestructiveAction: () => void;
-  busy?: boolean;
-}
-
-/**
- * D-10 three-stage final confirmation for ownership transfer.
- *
- * First stage: the caller renders a summary/consequence view.
- * Second stage (this component): a dedicated final confirmation
- * with safe-default focus and safe-first DOM ordering.
- *
- * The safe action is visually primary (top, no destructive styling),
- * the destructive action is second and styled as a destructive button.
- */
-export const FinalConfirmation = ({
-  heading,
-  body,
-  safeActionLabel,
-  destructiveActionLabel,
-  onSafeAction,
-  onDestructiveAction,
-  busy = false,
-}: FinalConfirmationProps) => (
-  <View
-    accessibilityLabel={heading}
-    accessibilityLiveRegion="assertive"
-    accessibilityRole="alert"
-    style={{
-      alignItems: 'center',
-      flex: 1,
-      justifyContent: 'center',
-      padding: theme.spacing[6],
-    }}
-  >
-    <Stack gap={6} style={{ alignItems: 'stretch', maxWidth: 480, width: '100%' }}>
-      <Stack gap={4}>
-        <Heading>{heading}</Heading>
-        <Text>{body}</Text>
-      </Stack>
-      <Stack gap={3}>
-        <Button
-          disabled={busy}
-          label={safeActionLabel}
-          onPress={onSafeAction}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={destructiveActionLabel}
-          disabled={busy}
-          onPress={onDestructiveAction}
-          style={({ pressed }) => ({
-            alignItems: 'center',
-            backgroundColor: busy
-              ? theme.colors.disabled
-              : theme.colors.destructive,
-            borderRadius: theme.borderRadii.xl,
-            flexDirection: 'row',
-            gap: theme.spacing[2],
-            justifyContent: 'center',
-            minHeight: theme.controlSizes.primary,
-            minWidth: theme.controlSizes.touchTarget,
-            opacity: busy ? 0.5 : pressed ? 0.85 : 1,
-            paddingHorizontal: theme.spacing[4],
-          })}
-        >
-          <Text variant="button">{destructiveActionLabel}</Text>
-        </Pressable>
-      </Stack>
-    </Stack>
-  </View>
-);
-
 // ---- SwitchErrorBanner ----
 
 interface SwitchErrorBannerProps {
@@ -1058,21 +909,5 @@ interface SwitchErrorBannerProps {
 }
 
 export const SwitchErrorBanner = ({ householdName, onRetry }: SwitchErrorBannerProps) => (
-  <View
-    accessibilityLiveRegion="polite"
-    style={{
-      backgroundColor: theme.colors.surfaceMuted,
-      borderColor: theme.colors.separator,
-      borderRadius: theme.borderRadii.md,
-      borderWidth: theme.borderWidths.default,
-      padding: theme.spacing[4],
-    }}
-  >
-    <Stack gap={2}>
-      <Text variant="bodySm">
-        暂时无法切换家庭。当前仍在「{householdName}」。
-      </Text>
-      <Button label="重试" onPress={onRetry} />
-    </Stack>
-  </View>
+  <LoadError message={`暂时无法切换家庭。当前仍在「${householdName}」。`} onRetry={onRetry} />
 );

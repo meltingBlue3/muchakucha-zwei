@@ -8,7 +8,7 @@ import { useLocalSearchParams } from 'expo-router';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { EventForm } from '../../../../../src/features/events/event-form';
-import { Button, Stack, Text } from '../../../../../src/ui/primitives';
+import { Banner, LoadError, Stack } from '../../../../../src/ui/primitives';
 import type { CreateEventDto } from '@muchakucha/api-client';
 
 export default function CreateEventRoute() {
@@ -40,12 +40,8 @@ export default function CreateEventRoute() {
     <EventWindow title="创建日程" busy={isSubmitting} exitAllowed={exitAllowed}>
 
         <Stack gap={4}>
-          {error !== null && (
-            <Text variant="bodySm" color="destructive">
-              {error}
-            </Text>
-          )}
-          {created !== null ? <Stack gap={4}><DraftNotice /><Text>日程已创建</Text><Button label="重试保存标签" loading={isSubmitting} onPress={() => void retry()} /></Stack> : <EventForm
+          {error !== null && created === null ? <Banner>{error}</Banner> : null}
+          {created !== null ? <Stack gap={4}><DraftNotice /><LoadError title="日程已创建" message={error ?? '内容已创建，标签尚未保存。'} retryLabel="重试保存标签" retrying={isSubmitting} onRetry={() => void retry()} /></Stack> : <EventForm
             draftKey={draftPrefix + 'form'}
             defaultDate={selectedDate ?? toDateIso(new Date())}
             onSubmit={handleSubmit}

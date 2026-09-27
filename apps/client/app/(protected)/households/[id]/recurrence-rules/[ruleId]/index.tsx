@@ -5,7 +5,7 @@ import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/e
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Ban from 'lucide-react-native/icons/ban';
 import Repeat from 'lucide-react-native/icons/repeat';
 import { useTheme } from '@shopify/restyle';
@@ -28,15 +28,15 @@ import {
   AccessChangedPanel,
   AppShell,
 } from '../../../../../../src/ui/household-components';
-import { Banner, Button, FormActions, FormMessage, Heading, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Banner, ConfirmActions, FormActions, FormMessage, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
-const LOAD_ERROR = '无法加载这条周期规则，请检查网络连接后重试。';
+const LOAD_ERROR = '无法加载这条重复安排，请检查网络连接后重试。';
 // One copy for every 404 cause. Saying the rule "was taken away" would assert
 // a history the client cannot know, and would confirm that a rule belonging to
 // another household exists at all (T-07-46) — so this says only what is true
 // from the user's side: they cannot see it.
-const NOT_FOUND_ERROR = '这条周期规则不存在，或者你已经看不到它了。';
+const NOT_FOUND_ERROR = '这条重复安排不存在，或者你已经看不到它了。';
 const SCOPE_NOTE = '更改会从明天开始生效，今天和之前的安排都保留。';
 const SAVE_CONFIRM_PROMPT = '这会影响明天起的每一次。';
 const SAVE_ERROR = '更改没有保存成功。这条重复规则没有发生任何改变，请重试。';
@@ -103,7 +103,7 @@ export default function RecurrenceRuleDetailRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期。');
+        setError('登录已过期，请重新登录。');
         return;
       }
       const result = await sessionApiClient.getRecurrenceRule(token, householdId, ruleId);
@@ -235,28 +235,14 @@ export default function RecurrenceRuleDetailRoute() {
         {saveConfirmOpen || endConfirmOpen ? <Stack gap={3}>
           <Text>{saveConfirmOpen ? SAVE_CONFIRM_PROMPT : END_CONFIRM_PROMPT}</Text>
           {writeError ? <Banner>{writeError}</Banner> : null}
-          <Button label="取消" tone="secondary" disabled={busy} onPress={close} />
-          <Button label={saveConfirmOpen ? '确认保存' : '确认结束'} loading={busy} onPress={() => { void (saveConfirmOpen ? handleConfirmSave() : handleConfirmEnd()); }} />
+          <ConfirmActions confirmLabel={saveConfirmOpen ? '确认保存' : '确认结束'} destructive={endConfirmOpen} busy={busy} onCancel={close} onConfirm={() => { void (saveConfirmOpen ? handleConfirmSave() : handleConfirmEnd()); }} />
         </Stack> : <>
         <Stack gap={4}>
           {writeError !== null && <Banner>{writeError}</Banner>}
 
-          {loading && (
-            <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
-              <ActivityIndicator color={activeTheme.colors.coral} />
-            </View>
-          )}
+          {loading && <LoadingState label="正在加载重复安排" />}
 
-          {error !== null && (
-            <View style={{
-              backgroundColor: activeTheme.colors.destructiveSoft,
-              padding: activeTheme.spacing[4],
-              borderRadius: activeTheme.borderRadii.md,
-            }}>
-              <Text variant="bodySm" color="destructive" accessibilityRole="alert">{error}</Text>
-              <Button label="重试" tone="secondary" onPress={() => void fetchRule()} />
-            </View>
-          )}
+          {error !== null && <LoadError message={error} onRetry={() => void fetchRule()} />}
 
           {rule !== null && formatted !== null && anchor !== null && (
             <Stack gap={0}>

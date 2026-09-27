@@ -10,7 +10,7 @@ import { canManageLabels } from '../../../../../src/features/labels/label-permis
 import { AccessChangedPanel, AppShell } from '../../../../../src/ui/household-components';
 import { AppDialog } from '../../../../../src/ui/app-dialog';
 import { PageIntro } from '../../../../../src/ui/page-intro';
-import { Button, FormActions, Spinner, Stack, Text, TextField } from '../../../../../src/ui/primitives';
+import { Button, ConfirmActions, EmptyState, FormActions, LoadError, LoadingState, Stack, Text, TextField } from '../../../../../src/ui/primitives';
 import { labelColorPresets, type Theme } from '../../../../../src/ui/theme';
 import { getRouteTrigger, rememberRouteTrigger } from '../../../../../src/platform/overlays/route-trigger';
 
@@ -91,11 +91,11 @@ export default function LabelsIndexRoute() {
 
   return <AppShell accessibilityLabel="标签管理" title="标签管理" showBack showProfile refreshing={refreshing} onRefresh={() => void refresh()}>
     <Stack gap={4}>
-      <PageIntro title="标签" action={canManage ? <Button label="新建" accessibilityLabel="新建标签" onPress={() => open({ kind: 'create' })} /> : undefined} />
-      {!canManage ? <Text variant="bodySm" color="inkMuted">标签由家主和管理员维护，你可以给日程和任务使用它们。</Text> : null}
-      {loading ? <Spinner label="正在加载标签" /> : null}
-      {error ? <Stack gap={2}><Text color="destructive" accessibilityRole="alert">{error}</Text><Button label="重试" tone="secondary" onPress={() => void fetchLabels()} /></Stack> : null}
-      {!loading && !error && !labels.length ? <Text color="inkMuted">{canManage ? '还没有标签，点击“新建”为日程和任务分类。' : '还没有标签，家主或管理员创建后即可使用。'}</Text> : null}
+      <PageIntro title="标签" action={canManage ? <Button label="创建" accessibilityLabel="创建标签" onPress={() => open({ kind: 'create' })} /> : undefined} />
+      {!canManage ? <Text variant="bodySm" color="inkMuted">标签由所有者和管理员维护，你可以给日程和任务使用它们。</Text> : null}
+      {loading ? <LoadingState label="正在加载标签" /> : null}
+      {error ? <LoadError message={error} onRetry={() => void fetchLabels()} /> : null}
+      {!loading && !error && !labels.length ? <EmptyState message={canManage ? '还没有标签，点击“创建”为日程和任务分类。' : '还没有标签，所有者或管理员创建后即可使用。'} /> : null}
       <Stack gap={1}>
         {labels.map(label => <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingVertical: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderColor: theme.colors.separator }}>
           <View style={{ width: theme.spacing[3], height: theme.spacing[3], borderRadius: theme.borderRadii.full, backgroundColor: label.color }} />
@@ -107,7 +107,7 @@ export default function LabelsIndexRoute() {
         </View>)}
       </Stack>
     </Stack>
-    {action && canManage ? <AppDialog title={action.kind === 'create' ? '新建标签' : action.kind === 'edit' ? '编辑标签' : '删除标签'} busy={busy} onClose={close} trigger={trigger}>
+    {action && canManage ? <AppDialog title={action.kind === 'create' ? '创建标签' : action.kind === 'edit' ? '编辑标签' : '删除标签'} busy={busy} onClose={close} trigger={trigger}>
       <Stack gap={4}>
         {action.kind === 'delete' ? <Text>删除“{action.label.name}”后，它会从所有日程和任务中移除，日程和任务本身会保留。</Text> : <>
           <TextField label={action.kind === 'create' ? '标签名称' : '编辑标签名称'} value={name} onChangeText={setName} maxLength={30} editable={!busy} />
@@ -121,10 +121,7 @@ export default function LabelsIndexRoute() {
           </Stack>
         </>}
         {actionError ? <Text color="destructive" accessibilityRole="alert">{actionError}</Text> : null}
-        {action.kind === 'delete' ? <>
-          <Button label="取消删除" tone="secondary" disabled={busy} onPress={close} />
-          <Button label="确认删除" accessibilityLabel={`确认删除标签 ${action.label.name}`} loading={busy} onPress={() => void submit()} />
-        </> : <FormActions onCancel={close} onSubmit={() => void submit()} submitting={busy} submitLabel={action.kind === 'create' ? '创建标签' : '保存'} />}
+        {action.kind === 'delete' ? <ConfirmActions cancelLabel="取消删除" confirmLabel="确认删除" confirmAccessibilityLabel={`确认删除标签 ${action.label.name}`} destructive busy={busy} onCancel={close} onConfirm={() => void submit()} /> : <FormActions onCancel={close} onSubmit={() => void submit()} submitting={busy} submitLabel={action.kind === 'create' ? '创建' : '保存'} />}
       </Stack>
     </AppDialog> : null}
   </AppShell>;

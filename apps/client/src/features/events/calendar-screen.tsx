@@ -30,7 +30,7 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../ui/household-components';
-import { Stack, Text, Button, Spinner } from '../../ui/primitives';
+import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
 
 export default function CalendarScreen() {
@@ -211,7 +211,7 @@ export default function CalendarScreen() {
 
   return (
   <>
-    <AppShell accessibilityLabel="家庭日历" refreshing={refreshing} onRefresh={handleRefresh} title="家庭日历" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="events" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton label="创建事件" onPress={handleCreateEvent} /> : null}>
+    <AppShell accessibilityLabel="家庭日历" refreshing={refreshing} onRefresh={handleRefresh} title="家庭日历" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="events" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton label="创建日程" onPress={handleCreateEvent} /> : null}>
       <Stack gap={4}>
         {/* Header with household name and create button */}
 
@@ -234,12 +234,12 @@ export default function CalendarScreen() {
           </View>
           <Stack gap={3} testID="calendar-agenda-pane" style={{ flex: wide ? 1 : undefined, minWidth: 0 }}>
             <Text variant="section" accessibilityRole="header">{dateLabel}</Text>
-            {loading ? <Spinner label="正在加载日程" /> : null}
-            {error ? <Stack gap={2}><Text variant="bodySm" color="destructive" accessibilityRole="alert">{error}</Text><Button label="重试" accessibilityLabel="重试加载事件" tone="secondary" onPress={() => void fetchEvents()} /></Stack> : null}
-            {!loading && !error && selectedDateEvents.length === 0 ? <Stack gap={3}>
-              <Text variant="bodySm" color="inkMuted">{recurringFilter === 'recurring' ? RECURRING_EMPTY_EVENTS : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}</Text>
-              {filterSummary ? <Button label="清除筛选" tone="secondary" onPress={() => { setLabelFilter('all'); setRecurringFilter('all'); }} /> : null}
-            </Stack> : null}
+            {loading ? <LoadingState label="正在加载日程" /> : null}
+            {error ? <LoadError message={error} onRetry={() => void fetchEvents()} retryAccessibilityLabel="重试加载日程" /> : null}
+            {!loading && !error && selectedDateEvents.length === 0 ? <EmptyState
+              message={recurringFilter === 'recurring' ? RECURRING_EMPTY_EVENTS : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}
+              {...(filterSummary ? { action: <Button label="清除筛选" tone="secondary" onPress={() => { setLabelFilter('all'); setRecurringFilter('all'); }} /> } : {})}
+            /> : null}
             {selectedDateEvents.map(event => <EventCard key={event.id} event={event} onPress={handleEventPress} onDelete={deleteEvent(event)} />)}
           </Stack>
         </View>

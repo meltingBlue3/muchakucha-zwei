@@ -68,7 +68,7 @@ export function useEditConflict<T extends Versioned>(prefix: string, current: T 
 function summarizeLatest(value: Versioned): Array<[string, string]> {
   const data = value as Record<string, unknown>;
   const fields: Array<[string, string]> = [['title','标题'],['body','正文'],['description','说明'],['status','状态'],['priority','优先级'],['startTime','开始时间'],['endTime','结束时间'],['dueDate','截止日期'],['location','地点'],['allDay','全天']];
-  const names: Record<string, string> = { pending: '待处理', in_progress: '进行中', completed: '已完成', cancelled: '已取消', low: '低', medium: '中', high: '高', urgent: '紧急' };
+  const names: Record<string, string> = { pending: '待办', in_progress: '进行中', completed: '已完成', cancelled: '已取消', low: '低', medium: '中', high: '高', urgent: '紧急' };
   const rows: Array<[string, string]> = fields.filter(([key]) => key in data).map(([key,label]) => {
     const raw = data[key]; const text = raw === null || raw === '' ? '无' : raw === true ? '是' : raw === false ? '否' : String(raw);
     return [label, names[text] ?? text];

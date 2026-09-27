@@ -84,8 +84,8 @@ test('undated tasks appear under 待安排 instead of inflating 今日待办', a
   await loginUsernameFixture(page, owner.username, password, `/households/${encodeURIComponent(householdId)}/today`);
 
   // The headline group counts only work that is actually due today.
-  await expect(page.getByRole('heading', { name: '今日待办 (1)' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '待安排 (2)' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '今日待办（1）' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '待安排（2）' })).toBeVisible();
 
   // Splitting the group must not hide the undated work, only relabel it.
   await expect(page.getByRole('button', { name: /^任务：修水龙头/ })).toBeVisible();
@@ -188,7 +188,7 @@ test('upcoming reminders show the nearest open occurrence per series', async ({ 
   expect(created.status).toBe(201);
   await loginUsernameFixture(page, owner.username, password, `/households/${householdId}/today`);
   await page.getByRole('button', { name: /^查看后续安排/ }).click();
-  await expect(page.getByRole('heading', { name: '临近截止日期 (1)', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '临近截止日期（1）', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^任务：重复收拾/ })).toHaveCount(1);
   const listed = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/tasks`);
   const upcoming = listed.body.tasks.filter((task: { recurrenceRuleId: string }) => task.recurrenceRuleId === created.body.recurrenceRuleId);

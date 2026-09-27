@@ -73,7 +73,7 @@ async function openCalendar(page: Page) {
 
 async function openNewEvent(page: Page) {
   await openCalendar(page);
-  await page.getByLabel('创建事件').click();
+  await page.getByLabel('创建日程').click();
   await expect(page.getByRole('dialog', { name: '创建日程' })).toBeVisible();
 }
 
@@ -88,14 +88,14 @@ async function openCustomWeekly(page: Page) {
 async function openEventDetail(page: Page, fixture: Fixture) {
   await openCalendar(page);
   const day = Number(new Date().toISOString().slice(8, 10));
-  await page.getByLabel(new RegExp(`^\\d{4}-\\d{2}-${String(day).padStart(2, '0')}(?:，今天)?，\\d+个事件$`)).click();
-  await page.getByLabel(`事件：${fixture.title}，重复`).click();
+  await page.getByLabel(new RegExp(`^\\d{4}-\\d{2}-${String(day).padStart(2, '0')}(?:，今天)?，\\d+个日程$`)).click();
+  await page.getByLabel(`日程：${fixture.title}，重复`).click();
   await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
 }
 
 async function openEventEdit(page: Page, fixture: Fixture) {
   await openEventDetail(page, fixture);
-  await page.getByLabel('编辑事件').click();
+  await page.getByLabel('编辑日程').click();
   await expect(page.getByRole('dialog', { name: '编辑日程' })).toBeVisible();
 }
 
@@ -114,21 +114,21 @@ test.describe('event recurrence accessibility', () => {
     await loginFixture(page, fixture.username);
     await openCalendar(page);
     await expectNoSeriousAxeViolations(page);
-    await page.getByLabel('创建事件').click();
+    await page.getByLabel('创建日程').click();
     await expectNoSeriousAxeViolations(page);
     await page.getByLabel('取消').click();
     const day = Number(new Date().toISOString().slice(8, 10));
-    await page.getByLabel(new RegExp(`^\\d{4}-\\d{2}-${String(day).padStart(2, '0')}(?:，今天)?，\\d+个事件$`)).click();
-    await page.getByLabel(`事件：${fixture.title}，重复`).click();
+    await page.getByLabel(new RegExp(`^\\d{4}-\\d{2}-${String(day).padStart(2, '0')}(?:，今天)?，\\d+个日程$`)).click();
+    await page.getByLabel(`日程：${fixture.title}，重复`).click();
     await expectNoSeriousAxeViolations(page);
-    await page.getByLabel('编辑事件').click();
+    await page.getByLabel('编辑日程').click();
     await expectNoSeriousAxeViolations(page);
   });
 
   test('supports keyboard traversal and a Google-style repeat list', async ({ page }) => {
     await loginFixture(page, fixture.username);
     await openNewEvent(page);
-    await page.getByLabel('事件标题').focus();
+    await page.getByLabel('日程标题').focus();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('switch')).toBeFocused();
     const repeat = page.getByRole('button', { name: /^日程重复设置/ });

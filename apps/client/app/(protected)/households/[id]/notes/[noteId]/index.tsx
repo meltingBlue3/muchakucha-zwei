@@ -6,7 +6,7 @@ import type { NoteResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { NoteWindow } from '../../../../../../src/features/notes/note-window';
 import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
-import { Button, Heading, Spinner, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -28,7 +28,7 @@ export default function NoteDetailRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期。');
+        setError('登录已过期，请重新登录。');
         return;
       }
       const result = await sessionApiClient.getNote(token, id, noteId);
@@ -56,9 +56,8 @@ export default function NoteDetailRoute() {
 
   if (loading || note === null || error !== null) {
     return <NoteWindow title="笔记详情"><Stack gap={3}>
-      {loading ? <Spinner label="正在加载笔记" /> : <>
-        <Text accessibilityRole="alert">{error ?? '笔记未找到或已被删除。'}</Text>
-        <Button label="重试" tone="secondary" onPress={() => void fetchNote()} />
+      {loading ? <LoadingState label="正在加载笔记" /> : <>
+        <LoadError message={error ?? '笔记未找到或已被删除。'} onRetry={() => void fetchNote()} />
       </>}
     </Stack></NoteWindow>;
   }

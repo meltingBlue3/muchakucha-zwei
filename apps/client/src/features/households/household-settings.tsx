@@ -25,15 +25,7 @@ import {
   InvitationRow,
   MemberRow,
 } from '../../ui/household-components';
-import {
-  Banner,
-  Button,
-  Inline,
-  Spinner,
-  Stack,
-  Text,
-  TextField,
-} from '../../ui/primitives';
+import { Banner, Button, ConfirmActions, EmptyState, Inline, LoadError, LoadingState, Stack, Text, TextField } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 
 const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
@@ -100,6 +92,9 @@ export function HouseholdSettings({
   const revokePending = useRef(false);
   const [revokeError, setRevokeError] = useState<string>();
   const [viewState, setViewState] = useState<ViewState>({ kind: 'loading' });
+  // Bumping an attempt re-runs its load; a failed load is otherwise a dead end.
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [invitationAttempt, setInvitationAttempt] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
 
@@ -315,7 +310,7 @@ export function HouseholdSettings({
         mountedRef.current = false;
         controller.abort();
       };
-    }, [deps, householdId]),
+    }, [deps, householdId, loadAttempt]),
   );
 
   // ---- Load invitation list when data is ready and showInvite is enabled ----
@@ -345,7 +340,7 @@ export function HouseholdSettings({
     };
 
     void loadInvitations();
-  }, [showInvite, viewState.kind === 'ready' ? (viewState as { kind: 'ready'; data: GetHouseholdResponseDto }).data.members.length : 0, deps, householdId]);
+  }, [showInvite, viewState.kind === 'ready' ? (viewState as { kind: 'ready'; data: GetHouseholdResponseDto }).data.members.length : 0, deps, householdId, invitationAttempt]);
 
   // ---- Resend handler ----
   const handleResend = async (invitationId: string) => {
@@ -414,11 +409,7 @@ export function HouseholdSettings({
             householdName={householdName}
             onOpenSwitcher={onOpenSwitcher}
           />
-          <Stack gap={4} style={{ paddingTop: theme.spacing[4] }}>
-            {[1, 2, 3].map((i) => (
-              <Spinner key={i} label={`加载成员 ${i}`} />
-            ))}
-          </Stack>
+          <LoadingState label="正在加载成员" />
         </Stack>
       </AppShell>
     );
@@ -432,7 +423,7 @@ export function HouseholdSettings({
             householdName={householdName}
             onOpenSwitcher={onOpenSwitcher}
           />
-          <Banner title="加载失败">{viewState.message}</Banner>
+          <LoadError message={viewState.message} onRetry={() => { setViewState({ kind: 'loading' }); setLoadAttempt(value => value + 1); }} retryAccessibilityLabel="重试加载成员" />
         </Stack>
       </AppShell>
     );
@@ -446,7 +437,7 @@ export function HouseholdSettings({
             householdName={householdName}
             onOpenSwitcher={onOpenSwitcher}
           />
-          <Banner title="数据异常">{viewState.message}</Banner>
+          <LoadError message={viewState.message} onRetry={() => { setViewState({ kind: 'loading' }); setLoadAttempt(value => value + 1); }} retryAccessibilityLabel="重试加载成员" />
         </Stack>
       </AppShell>
     );
@@ -577,17 +568,13 @@ export function HouseholdSettings({
           <SettingsSection title="邀请" icon={<Mail size={theme.controlSizes.icon} color={theme.colors.coral} />}>
 
             {invitationListError !== undefined ? (
-              <Banner title="邀请列表加载失败">{invitationListError}</Banner>
+              <LoadError message={`邀请列表没有加载成功。${invitationListError}`} onRetry={() => setInvitationAttempt(value => value + 1)} retryAccessibilityLabel="重试加载邀请" />
             ) : null}
 
             {invitationListLoading ? (
-              <Stack gap={4} style={{ paddingVertical: theme.spacing[4] }}>
-                {[1, 2].map((i) => (
-                  <Spinner key={i} label={`加载邀请 ${i}`} />
-                ))}
-              </Stack>
+              <LoadingState label="正在加载邀请" />
             ) : invitationList.length === 0 ? (
-              <Text variant="bodySm">还没有待处理的邀请。</Text>
+              <EmptyState message="还没有待处理的邀请。" />
             ) : (
               <Stack>
                 {invitationList.map((inv) => (
@@ -613,7 +600,7 @@ export function HouseholdSettings({
       {leaveOpen && canTransferBeforeLeaving ? (
         <AppDialog title="离开家庭" busy={false} onClose={() => setLeaveOpen(false)} trigger={leaveTrigger}>
           <Stack gap={4}>
-            <Text>你是家庭所有者，需要先转让所有权。转让完成后，你仍是家庭成员，可以再选择离开。请选择新的所有者：</Text>
+            <Text>你是家庭所有者，需要先转移所有权。转移完成后，你仍是家庭成员，可以再选择离开。请选择新的所有者：</Text>
             <View accessibilityRole="radiogroup" accessibilityLabel="新的所有者" style={{ gap: theme.spacing[2] }}>
               {otherMembers.map((member) => {
                 const selected = successorId === member.membershipId;
@@ -636,20 +623,17 @@ export function HouseholdSettings({
                 );
               })}
             </View>
-            <View style={{ flexDirection: 'row', gap: theme.spacing[3] }}>
-              <Button label="取消" tone="secondary" onPress={() => setLeaveOpen(false)} style={{ flex: 1 }} />
-              <Button
-                label="下一步"
-                disabled={successorId === null}
-                onPress={() => {
-                  const successor = otherMembers.find((m) => m.membershipId === successorId);
-                  if (successor === undefined) return;
-                  setLeaveOpen(false);
-                  governance.transfer?.(successor.membershipId, successor.displayName);
-                }}
-                style={{ flex: 1 }}
-              />
-            </View>
+            <ConfirmActions
+              confirmLabel="下一步"
+              confirmDisabled={successorId === null}
+              onCancel={() => setLeaveOpen(false)}
+              onConfirm={() => {
+                const successor = otherMembers.find((m) => m.membershipId === successorId);
+                if (successor === undefined) return;
+                setLeaveOpen(false);
+                governance.transfer?.(successor.membershipId, successor.displayName);
+              }}
+            />
           </Stack>
         </AppDialog>
       ) : null}
@@ -658,10 +642,7 @@ export function HouseholdSettings({
           <Stack gap={4}>
             {revokeError ? <Banner title="撤销失败">{revokeError}</Banner> : null}
             <Text>撤销后，对方将无法接受这份邀请。</Text>
-            <View style={{ flexDirection: 'row', gap: theme.spacing[3] }}>
-              <Button label="保留邀请" tone="secondary" disabled={revokeBusy} onPress={() => setRevokeId(null)} style={{ flex: 1 }} />
-              <Button label="撤销邀请" loading={revokeBusy} onPress={() => { void confirmRevoke(); }} style={{ flex: 1 }} />
-            </View>
+            <ConfirmActions cancelLabel="保留邀请" confirmLabel="撤销邀请" destructive busy={revokeBusy} onCancel={() => setRevokeId(null)} onConfirm={() => { void confirmRevoke(); }} />
           </Stack>
         </AppDialog>
       ) : null}
