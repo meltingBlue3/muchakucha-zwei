@@ -115,22 +115,22 @@ describe('formatRuleRow — kind label and accessible name', () => {
     expect(formatted.kindLabel).toBe('任务');
     expect(formatted.accessibilityLabel.startsWith('任务')).toBe(true);
     expect(formatted.accessibilityLabel).toBe(
-      '任务周期规则：倒垃圾，每周二、四、六重复，永不结束',
+      '任务重复安排：倒垃圾，每周二、四、六重复，永不结束',
     );
   });
 
   test('labels an event rule and leads its accessible name with that word', () => {
     const formatted = formatRuleRow({ ...baseRule, kind: 'event' }, TZ);
 
-    expect(formatted.kindLabel).toBe('事件');
-    expect(formatted.accessibilityLabel.startsWith('事件')).toBe(true);
+    expect(formatted.kindLabel).toBe('日程');
+    expect(formatted.accessibilityLabel.startsWith('日程')).toBe(true);
   });
 
   test('degrades to a type-free accessible name when the kind cannot be derived', () => {
     const formatted = formatRuleRow({ ...baseRule, kind: null }, TZ);
 
     expect(formatted.kindLabel).toBeNull();
-    expect(formatted.accessibilityLabel).toBe('周期规则：倒垃圾，每周二、四、六重复，永不结束');
+    expect(formatted.accessibilityLabel).toBe('重复安排：倒垃圾，每周二、四、六重复，永不结束');
   });
 });
 
@@ -184,7 +184,7 @@ describe('RecurrenceRuleRow', () => {
     expect(view.getByText('倒垃圾')).toBeTruthy();
     expect(view.getByText('每周二、四、六重复，永不结束')).toBeTruthy();
     expect(view.getByText('下一次 2026-08-18')).toBeTruthy();
-    expect(view.getByLabelText('任务周期规则：倒垃圾，每周二、四、六重复，永不结束')).toBeTruthy();
+    expect(view.getByLabelText('任务重复安排：倒垃圾，每周二、四、六重复，永不结束')).toBeTruthy();
   });
 
   test('keeps the long title to two lines while the accessible name keeps it whole', async () => {
@@ -205,7 +205,7 @@ describe('RecurrenceRuleRow', () => {
     const view = await renderRow({ ...baseRule, kind: null });
 
     expect(view.queryByText('任务')).toBeNull();
-    expect(view.queryByText('事件')).toBeNull();
+    expect(view.queryByText('日程')).toBeNull();
     expect(view.getByText('倒垃圾')).toBeTruthy();
   });
 });
@@ -218,6 +218,6 @@ describe('RecurrenceKindBadge', () => {
       </MuchakuchaThemeProvider>,
     );
 
-    expect(view.getByText('事件')).toBeTruthy();
+    expect(view.getByText('日程')).toBeTruthy();
   });
 });

@@ -168,7 +168,7 @@ test('task and event drafts restore after reload, then logout clears account dra
   const account = await prepareAccount('forms', '草稿用户');
   const household = await createHousehold(account.accessToken, '任务日程草稿');
   await loginUsernameFixture(page, account.username, password);
-  for (const [resource, label, title] of [['tasks', '任务标题', '未保存任务'], ['events', '事件标题', '未保存日程']]) {
+  for (const [resource, label, title] of [['tasks', '任务标题', '未保存任务'], ['events', '日程标题', '未保存日程']]) {
     await page.goto(`${WEB_ORIGIN}/households/${household.id}/${resource}/new`);
     await page.getByLabel(label).fill(title);
     await page.reload();
@@ -230,7 +230,7 @@ test('retrying labels after restart uses the already-created task', async ({ pag
   await page.getByLabel('选择标签 重启重试', { exact: true }).click();
   const labeling = new RegExp(`/households/${household.id}/tasks/[^/]+/labels$`);
   await page.route(labeling, (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAVAILABLE' } }) }));
-  await page.getByRole('button', { name: '创建任务', exact: true }).click();
+  await page.getByRole('button', { name: '创建', exact: true }).click();
   await expect(page.getByRole('button', { name: '重试保存标签', exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: '重试保存标签', exact: true })).toBeVisible();

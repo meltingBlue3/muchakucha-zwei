@@ -1,5 +1,5 @@
 import { WindowConfirmation, type WindowConfirmationRequest } from './window-confirmation';
-import { Button, Stack, Text } from './primitives';
+import { ConfirmActions, Stack, Text } from './primitives';
 import { useIsFocused, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { View } from 'react-native';
@@ -101,8 +101,7 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>
-            <Button label="继续编辑" tone="secondary" disabled={busy} onPress={() => setConfirmation(null)} />
-            <Button label={confirmation.confirmLabel} disabled={busy} onPress={() => { const request = confirmation; confirmationRef.current = null; setConfirmation(null); request.onConfirm(); }} />
+            <ConfirmActions cancelLabel="继续编辑" confirmLabel={confirmation.confirmLabel} destructive={confirmation.destructive ?? false} busy={busy} onCancel={() => setConfirmation(null)} onConfirm={() => { const request = confirmation; confirmationRef.current = null; setConfirmation(null); request.onConfirm(); }} />
           </Stack> : <>
             {/* Keep the editor mounted while a step owns focus. */}
             <View style={step ? { display: 'none' } : undefined} aria-hidden={Boolean(step)} importantForAccessibility={step ? 'no-hide-descendants' : 'auto'}>

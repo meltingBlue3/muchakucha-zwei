@@ -10,7 +10,7 @@ test('calendar dates have unambiguous names and expose selection independently f
       <CalendarMonth year={2025} month={0} selectedDateIso="2025-01-03" eventsByDate={new Map([['2025-01-03', 2]])} onSelectDate={onSelectDate} onPrevMonth={jest.fn()} onNextMonth={onNextMonth} />
     </MuchakuchaThemeProvider>,
   );
-  expect(view.getByRole('button', { name: '2025-01-03，2个事件' }).props.accessibilityState.selected).toBe(true);
+  expect(view.getByRole('button', { name: '2025-01-03，2个日程' }).props.accessibilityState.selected).toBe(true);
   const adjacentMonth = view.getByRole('button', { name: '2024-12-31' });
   expect(adjacentMonth.props.accessibilityState.selected).toBe(false);
   await fireEvent.press(adjacentMonth);

@@ -3,7 +3,7 @@ import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/ro
 import { isEditConflict } from '../../../../../../src/ui/edit-conflict';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { GetHouseholdMemberDto, TaskResponseDto } from '@muchakucha/api-client';
 
@@ -14,7 +14,7 @@ import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
 import { formatDueDate, isOverdue, priorityLabel, statusLabel } from '../../../../../../src/features/tasks/task-utils';
-import { Button, Heading, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
 function currentTimeZone(fallback: string): string {
@@ -41,7 +41,7 @@ export default function TaskDetailRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期。');
+        setError('登录已过期，请重新登录。');
         return;
       }
       const [taskResult, householdResult] = await Promise.all([
@@ -108,9 +108,8 @@ export default function TaskDetailRoute() {
   if (loading || task === null || error !== null) {
     return <TaskWindow title="任务详情" busy={statusBusy}>
       <Stack gap={4}>
-        {loading ? <ActivityIndicator accessibilityLabel="正在加载任务" color={activeTheme.colors.coral} /> : <>
-          <Text accessibilityRole="alert">{error ?? '任务未找到或已被删除。'}</Text>
-          <Button label="重试" tone="secondary" onPress={() => void fetchTask()} />
+        {loading ? <LoadingState label="正在加载任务" /> : <>
+          <LoadError message={error ?? '任务未找到或已被删除。'} onRetry={() => void fetchTask()} />
         </>}
       </Stack>
     </TaskWindow>;

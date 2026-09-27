@@ -7,7 +7,7 @@ import type { NoteResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { NoteForm } from '../../../../../../src/features/notes/note-form';
 import { NoteWindow } from '../../../../../../src/features/notes/note-window';
-import { Button, Spinner, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Banner, LoadError, LoadingState, Stack } from '../../../../../../src/ui/primitives';
 import type { CreateNoteDto } from '@muchakucha/api-client';
 
 export default function EditNoteRoute() {
@@ -34,7 +34,7 @@ export default function EditNoteRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期。');
+        setError('登录已过期，请重新登录。');
         return;
       }
       const result = await sessionApiClient.getNote(token, id, noteId);
@@ -58,7 +58,7 @@ export default function EditNoteRoute() {
       try {
         const token = await sessionTransport.getAccessToken();
         if (token === null) {
-          setError('登录已过期。');
+          setError('登录已过期，请重新登录。');
           return;
         }
         await sessionApiClient.updateNote(token, id!, noteId!, { ...data, expectedUpdatedAt: conflict.precondition.expectedUpdatedAt });
@@ -80,11 +80,10 @@ export default function EditNoteRoute() {
 
   return (
     <NoteWindow title="编辑笔记" busy={isSubmitting} onClose={close} exitAllowed={exitAllowed}>
-      {loading ? <Spinner label="正在加载笔记" /> : note === null ? <Stack gap={3}>
-        <Text accessibilityRole="alert">{error ?? '笔记未找到或已被删除。'}</Text>
-        <Button label="重试" tone="secondary" onPress={() => void fetchNote()} />
+      {loading ? <LoadingState label="正在加载笔记" /> : note === null ? <Stack gap={3}>
+        <LoadError message={error ?? '笔记未找到或已被删除。'} onRetry={() => void fetchNote()} />
       </Stack> : <Stack gap={4}>
-        {error ? <Text color="destructive" accessibilityRole="alert">{error}</Text> : null}
+        {error ? <Banner>{error}</Banner> : null}
         {conflict.panel}
         <NoteForm draftKey={draftPrefix + 'form'} initial={note} onSubmit={handleSubmit} onCancel={close} submitLabel="保存" isSubmitting={isSubmitting} />
       </Stack>}

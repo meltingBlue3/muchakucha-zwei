@@ -48,7 +48,7 @@ export interface FormattedRuleRow {
 function accessibilityLabelFor(kindLabel: string | null, title: string, summary: string): string {
   // 07-UI-SPEC.md line 612: `{任务或事件}周期规则：{标题}，{频率摘要}`. With no
   // derivable kind the type word is simply omitted; nothing else changes.
-  return `${kindLabel ?? ''}周期规则：${title}，${summary}`;
+  return `${kindLabel ?? ''}重复安排：${title}，${summary}`;
 }
 
 /**

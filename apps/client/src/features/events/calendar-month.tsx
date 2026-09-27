@@ -126,7 +126,7 @@ export function CalendarMonth({
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
                 aria-pressed={isSelected}
-                accessibilityLabel={`${day.iso}${day.isToday ? '，今天' : ''}${eventCount > 0 ? `，${eventCount}个事件` : ''}`}
+                accessibilityLabel={`${day.iso}${day.isToday ? '，今天' : ''}${eventCount > 0 ? `，${eventCount}个日程` : ''}`}
                 style={({ pressed }) => ({
                   flex: 1,
                   minHeight: activeTheme.controlSizes.touchTarget + activeTheme.spacing[2],

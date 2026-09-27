@@ -104,7 +104,7 @@ for (const resource of ['notes', 'tasks', 'events'] as const) {
     expect(created.status).toBe(201);
     const path = `${root}/${created.body.id}`;
     const noun = resource === 'notes' ? '笔记' : resource === 'tasks' ? '任务' : '事件';
-    const save = resource === 'tasks' ? '保存修改' : '保存';
+    const save = resource === 'tasks' ? '保存' : '保存';
     await loginUsernameFixture(page, editor.username, password, path);
     await page.getByRole('button', { name: `编辑${noun}`, exact: true }).click();
     await page.getByLabel(`${noun}标题`, { exact: true }).fill('我的未保存草稿');

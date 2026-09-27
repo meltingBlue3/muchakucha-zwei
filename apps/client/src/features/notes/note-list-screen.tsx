@@ -6,8 +6,6 @@ import { PageIntro } from '../../ui/page-intro';
 import { HouseholdNavigation } from '../../ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
-import { useTheme } from '@shopify/restyle';
 import type { NoteResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
@@ -20,14 +18,12 @@ import {
   HouseholdHeader,
   HouseholdSwitcher,
 } from '../../ui/household-components';
-import { Stack, Text, Button, TextField } from '../../ui/primitives';
-import type { Theme } from '../../ui/theme';
+import { Button, EmptyState, LoadError, LoadingState, Stack, Text, TextField } from '../../ui/primitives';
 
 export default function NotesListRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const deleteNote = useContentDelete('notes');
-  const activeTheme = useTheme<Theme>();
   const {
     viewState,
     households,
@@ -153,47 +149,16 @@ export default function NotesListRoute() {
             />
           )}
 
-          {loading && (
-            <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[6] }}>
-              <ActivityIndicator color={activeTheme.colors.coral} />
-            </View>
-          )}
+          {loading && <LoadingState label="正在加载笔记" />}
 
-          {error !== null && (
-            <View style={{
-              backgroundColor: activeTheme.colors.destructiveSoft,
-              padding: activeTheme.spacing[4],
-              borderRadius: activeTheme.borderRadii.md,
-            }}>
-              <Text variant="bodySm" color="destructive">{error}</Text>
-              <Pressable
-                onPress={() => void fetchData()}
-                hitSlop={activeTheme.spacing[3]}
-                accessibilityRole="button"
-                accessibilityLabel="重试加载笔记"
-                style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', alignSelf: 'flex-start' }}
-              >
-                <Text variant="label" color="coral">重试</Text>
-              </Pressable>
-            </View>
-          )}
+          {error !== null && <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载笔记" />}
 
           {!loading && error === null && notes.length === 0 && (
-            <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[8], gap: activeTheme.spacing[3] }}>
-              <Text variant="bodySm" color="inkMuted">
-                还没有笔记。适合记采购清单、旅行计划、家电说明这类要一起查的事。
-              </Text>
-
-            </View>
+            <EmptyState message="还没有笔记。适合记采购清单、旅行计划、家电说明这类要一起查的事。" />
           )}
 
           {!loading && error === null && notes.length > 0 && visibleNotes.length === 0 && (
-            <View style={{ alignItems: 'center', paddingVertical: activeTheme.spacing[8], gap: activeTheme.spacing[3] }}>
-              <Text variant="bodySm" color="inkMuted">
-                没有标题匹配「{query.trim()}」的笔记。
-              </Text>
-              <Button label="清除搜索" accessibilityLabel="清除搜索" tone="secondary" onPress={() => setQuery('')} />
-            </View>
+            <EmptyState message={`没有标题匹配「${query.trim()}」的笔记。`} action={<Button label="清除搜索" tone="secondary" onPress={() => setQuery('')} />} />
           )}
 
           {visibleNotes.map((note) => (

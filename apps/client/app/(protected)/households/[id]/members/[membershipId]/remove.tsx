@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { sessionStateStore } from '../../../../../../src/features/auth/session-runtime';
 import { ApiClient } from '@muchakucha/api-client';
-import { Banner, Button, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Banner, ConfirmActions, Stack, Text } from '../../../../../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
@@ -82,8 +82,7 @@ export default function RemoveMemberPage() {
     <Stack gap={4}>
       {error ? <Banner title="成员移除失败">{error}</Banner> : null}
       <Text>{isAdminTarget ? `${displayName} 将失去对家庭的所有管理权限和访问权。` : `${displayName} 将失去对家庭的访问权。此操作不可撤销。`}</Text>
-      <Button label="保留成员资格" tone="secondary" disabled={busy} onPress={handleSafeAction} />
-      <Button label="移除成员" loading={busy} onPress={() => void handleRemove()} />
+      <ConfirmActions cancelLabel="保留成员资格" confirmLabel="移除成员" destructive busy={busy} onCancel={handleSafeAction} onConfirm={() => void handleRemove()} />
     </Stack>
   </HouseholdActionWindow>;
 }

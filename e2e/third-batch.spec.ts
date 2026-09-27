@@ -64,8 +64,8 @@ for (const width of [320, 390, 1440]) {
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`family-${width}.png`) });
     await page.getByRole('button', { name: '管理标签', exact: true }).click();
-    await page.getByRole('button', { name: '新建标签', exact: true }).click();
-    const create = page.getByRole('dialog', { name: '新建标签', exact: true });
+    await page.getByRole('button', { name: '创建标签', exact: true }).click();
+    const create = page.getByRole('dialog', { name: '创建标签', exact: true });
     await create.getByLabel('标签名称', { exact: true }).fill('旅行');
     const colors = create.getByRole('radio');
     for (const color of await colors.all()) {
@@ -75,7 +75,7 @@ for (const width of [320, 390, 1440]) {
     }
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`label-create-${width}.png`) });
-    await create.getByRole('button', { name: '创建标签', exact: true }).click();
+    await create.getByRole('button', { name: '创建', exact: true }).click();
     await expect(page.getByLabel('标签：旅行', { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.goto(`${base}/today`);
@@ -128,7 +128,7 @@ test('ordinary members can browse labels without mutation controls', async ({ pa
   await setup(page, 'MEMBER');
   await page.goto(`${base}/labels`);
   await expect(page.getByLabel('标签：家务')).toBeVisible();
-  await expect(page.getByRole('button', { name: /新建标签|编辑标签|删除标签/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /创建标签|编辑标签|删除标签/ })).toHaveCount(0);
 });
 
 test('a completed preview task keeps its undo action even if the server reorders it', async ({ page }) => {

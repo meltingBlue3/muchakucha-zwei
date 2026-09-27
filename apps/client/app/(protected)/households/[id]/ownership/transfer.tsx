@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { sessionStateStore } from '../../../../../src/features/auth/session-runtime';
 import { ApiClient } from '@muchakucha/api-client';
-import { Banner, Button, Stack, Text } from '../../../../../src/ui/primitives';
+import { Banner, ConfirmActions, Stack, Text } from '../../../../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
@@ -90,8 +90,8 @@ export default function TransferOwnershipPage() {
       {error ? <Banner>{error}</Banner> : null}
       <Text>你即将把「{householdName}」的所有权转移给 {successorDisplayName}。转移后你将成为普通成员，失去管理家庭的权限。</Text>
       {stage === 'final' ? <Text>请确认上述变更。此操作不可撤销。</Text> : null}
-      <Button label="取消转移" tone="secondary" disabled={busy} onPress={() => { exitAllowed.current = true; handleCancel(); }} />
-      {stage === 'consequence' ? <Button label="继续" onPress={handleContinue} /> : <Button label="确认转移所有权" loading={busy} onPress={() => void handleConfirm()} />}
+      {/* Only the final step commits, so only it carries the destructive treatment. */}
+      <ConfirmActions cancelLabel="取消转移" confirmLabel={stage === 'consequence' ? '继续' : '确认转移所有权'} destructive={stage !== 'consequence'} busy={busy} onCancel={() => { exitAllowed.current = true; handleCancel(); }} onConfirm={() => { if (stage === 'consequence') handleContinue(); else void handleConfirm(); }} />
     </Stack>
   </HouseholdActionWindow>;
 }

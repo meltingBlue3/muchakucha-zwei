@@ -171,7 +171,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
       if (Object.keys(fieldErrors).length > 0) {
         setRecurrenceErrors(fieldErrors);
       } else {
-        setError('重复规则没有保存成功。请检查网络后重试。');
+        setError('保存失败，请检查网络后重试。');
       }
     }
   }, [form, onSubmit, recurrenceStart]);

@@ -11,7 +11,7 @@ import {
   HouseholdSwitcher,
   SwitchErrorBanner,
 } from '../../../src/ui/household-components';
-import { Banner, Button, Spinner, Stack, Text } from '../../../src/ui/primitives';
+import { Button, LoadError, Spinner, Stack, Text } from '../../../src/ui/primitives';
 import { theme } from '../../../src/ui/theme';
 
 export default function HouseholdsIndexRoute() {
@@ -119,7 +119,7 @@ export default function HouseholdsIndexRoute() {
         ) : null}
 
         {viewState === 'offlineRetained' ? (
-          <Stack gap={3}><Banner title="暂时无法连接">当前为离线内容，管理操作需要联网。家庭列表为空时，也不代表你尚未加入家庭。</Banner><Button label="重新加载家庭" loading={isSwitching} onPress={() => void handleRetrySwitch()} /></Stack>
+          <LoadError title="暂时无法连接" message="当前为离线内容，管理操作需要联网。家庭列表为空时，也不代表你尚未加入家庭。" retryLabel="重新加载家庭" retrying={isSwitching} onRetry={() => void handleRetrySwitch()} />
         ) : null}
 
         {switchError && currentHousehold !== null ? (

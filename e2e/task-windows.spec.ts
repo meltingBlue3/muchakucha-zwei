@@ -53,7 +53,7 @@ for (const width of [320, 390, 1440]) {
     await expect(page.getByRole('dialog')).toHaveCount(1);
     await edit.getByRole('textbox', { name: '任务标题', exact: true }).fill('已修改的聚餐安排');
     await expect(edit.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
-    await edit.getByRole('button', { name: '保存修改', exact: true }).click();
+    await edit.getByRole('button', { name: '保存', exact: true }).click();
     await expect(detail).toBeVisible();
     await expect(detail.getByText('已修改的聚餐安排', { exact: true })).toBeVisible();
     expect(state.getTask().title).toBe('已修改的聚餐安排');
@@ -121,7 +121,7 @@ test('a failed save retains the draft and busy windows resist closing', async ({
   await edit.getByRole('textbox', { name: '任务标题', exact: true }).fill('保留我的修改');
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('task-edit-390.png') });
-  await edit.getByRole('button', { name: '保存修改', exact: true }).click();
+  await edit.getByRole('button', { name: '保存', exact: true }).click();
   await expect.poll(() => release !== undefined).toBe(true);
   await expect(edit.getByRole('button', { name: '关闭编辑任务' })).toBeDisabled();
   await page.keyboard.press('Escape');
@@ -209,7 +209,7 @@ for (const width of [320, 390, 1440]) {
     await expect(dialog.getByRole('button', { name: '任务状态，进行中', exact: true })).toBeVisible();
     await expect(dialog.getByRole('textbox', { name: '任务描述' })).toHaveValue('带好证件和充电器');
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await dialog.getByRole('button', { name: '创建任务', exact: true }).click();
+    await dialog.getByRole('button', { name: '创建', exact: true }).click();
     await expect(page).toHaveURL(`${base}/tasks`);
     expect(state.getWrites()).toBe(1);
     expect(state.getTask()).toMatchObject({ title: '整理旅行用品', description: '带好证件和充电器', status: 'in_progress', priority: 'urgent' });
@@ -239,7 +239,7 @@ test('a custom task recurrence validates before applying and survives reload', a
   expect(state.getWrites()).toBe(0);
   await page.reload();
   await expect(recurrence).toHaveAccessibleName('任务重复设置，每天重复，共 4 次');
-  await page.getByRole('dialog', { name: '创建任务' }).getByRole('button', { name: '创建任务', exact: true }).click();
+  await page.getByRole('dialog', { name: '创建任务' }).getByRole('button', { name: '创建', exact: true }).click();
   await expect(page).toHaveURL(`${base}/tasks`);
   expect(state.getTask()).toMatchObject({ recurrence: { freq: 'daily', count: 4 } });
 });
@@ -255,7 +255,7 @@ test('editing changes status and priority through their lists and clears the des
   await status.click();
   await page.getByRole('dialog', { name: '状态', exact: true }).getByRole('radio', { name: '进行中', exact: true }).click();
   await expect(status).toHaveAccessibleName('任务状态，进行中');
-  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible();
   expect(state.getTask()).toMatchObject({ status: 'in_progress', priority: 'medium', description: '' });
 });

@@ -17,6 +17,7 @@ export const theme = createTheme({
     teal: '#277A72',
     tealSoft: '#DCEEEA',
     destructive: '#B42318',
+    destructivePressed: '#8C1B12',
     destructiveSoft: '#FDE4E1',
     focusRing: '#7B2F25',
     link: '#7B2F25',

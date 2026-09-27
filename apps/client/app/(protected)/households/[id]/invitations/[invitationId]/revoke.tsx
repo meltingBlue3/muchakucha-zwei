@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { sessionStateStore } from '../../../../../../src/features/auth/session-runtime';
 import { ApiClient } from '@muchakucha/api-client';
-import { Banner, Button, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Banner, ConfirmActions, Stack, Text } from '../../../../../../src/ui/primitives';
 
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
@@ -61,8 +61,7 @@ export default function RevokeInvitationPage() {
     <Stack gap={4}>
       {error ? <Banner title="撤销失败">{error}</Banner> : null}
       <Text>撤销后，对方将无法接受这份邀请。</Text>
-      <Button label="保留邀请" tone="secondary" disabled={busy} onPress={handleSafeAction} />
-      <Button label="撤销邀请" loading={busy} onPress={() => void handleRevoke()} />
+      <ConfirmActions cancelLabel="保留邀请" confirmLabel="撤销邀请" destructive busy={busy} onCancel={handleSafeAction} onConfirm={() => void handleRevoke()} />
     </Stack>
   </HouseholdActionWindow>;
 }

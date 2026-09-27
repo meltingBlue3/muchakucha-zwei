@@ -7,7 +7,7 @@ import { EventWindow } from '../events/event-window';
 import { NoteWindow } from '../notes/note-window';
 import { SeriesScopeContent, type SeriesScope } from '../recurrence/series-scope-sheet';
 import { useRouteWindowClose } from '../../ui/route-window';
-import { Button, Spinner, Stack, Text } from '../../ui/primitives';
+import { Banner, ConfirmActions, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { useWorkspaceStore } from '../../ui/workspace-state';
 import { canDeleteContent, type DeletableResource } from './use-content-delete';
 
@@ -76,15 +76,12 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
   };
 
   return <Window title={`删除${name}`} busy={submitting !== null} onClose={close} exitAllowed={exitAllowed}>
-    {loading ? <Spinner label={`正在加载${name}`} /> : target === null ? <Stack gap={3}>
-      <Text accessibilityRole="alert">{error}</Text><Button label="重试" onPress={() => void load()} />
-    </Stack> : !target.allowed ? <Text accessibilityRole="alert">你没有删除这条{name}的权限。</Text> : <Stack gap={3}>
+    {loading ? <LoadingState label={`正在加载${name}`} /> : target === null ? <LoadError message={error ?? `无法加载${name}。`} onRetry={() => void load()} /> : !target.allowed ? <Text accessibilityRole="alert">你没有删除这条{name}的权限。</Text> : <Stack gap={3}>
       <Text variant="section">{target.title}</Text>
       {target.recurring ? <SeriesScopeContent mode="delete" error={error} submitting={submitting === 'single' ? null : submitting} onClose={close} onSelect={scope => void remove(scope)} /> : <>
         <Text>确定要删除这条{name}吗？此操作不可撤销。</Text>
-        {error ? <Text color="destructive" accessibilityRole="alert">{error}</Text> : null}
-        <Button label="取消删除" tone="secondary" disabled={submitting !== null} onPress={close} />
-        <Button label={`确认删除${name}`} loading={submitting !== null} onPress={() => void remove()} />
+        {error ? <Banner>{error}</Banner> : null}
+        <ConfirmActions cancelLabel="取消删除" confirmLabel={`确认删除${name}`} destructive busy={submitting !== null} onCancel={close} onConfirm={() => void remove()} />
       </>}
     </Stack>}
   </Window>;

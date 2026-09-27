@@ -1,8 +1,7 @@
 import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import InboxIcon from 'lucide-react-native/icons/inbox';
 import { AppDialog } from '../../ui/app-dialog';
-import { Banner, Button, Spinner, Stack, Text } from '../../ui/primitives';
+import { Banner, EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 
 export interface InboxAction {
@@ -53,12 +52,9 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
   return <View ref={container} tabIndex={-1} accessibilityLabel="消息列表">
     <Stack gap={3}>
       {notice ? <View accessibilityLiveRegion="polite"><Text variant="bodySm">{notice}</Text></View> : null}
-      {error ? <Stack gap={2}><Banner>{error}</Banner><Button tone="secondary" label="重试" disabled={busy || loading} onPress={() => { void reload(); }} /></Stack> : null}
-      {loading && messages.length === 0 ? <Spinner label="正在加载消息" /> : null}
-      {!loading && !error && messages.length === 0 ? <Stack gap={3} style={{ alignItems: 'center', paddingVertical: theme.spacing[16] }}>
-        <InboxIcon color={theme.colors.inkMuted} size={theme.spacing[8]} />
-        <Text variant="section">暂无消息</Text><Text variant="bodySm">新的通知会显示在这里。</Text>
-      </Stack> : null}
+      {error ? <LoadError message={error} disabled={busy || loading} onRetry={() => { void reload(); }} /> : null}
+      {loading && messages.length === 0 ? <LoadingState label="正在加载消息" /> : null}
+      {!loading && !error && messages.length === 0 ? <EmptyState title="暂无消息" message="新的通知会显示在这里。" /> : null}
       {messages.length > 0 ? <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, overflow: 'hidden' }}>
         {messages.map((message, index) => <View key={message.id} testID={`inbox-row-${message.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], borderBottomWidth: index < messages.length - 1 ? theme.borderWidths.default : 0, borderBottomColor: theme.colors.separator, paddingHorizontal: theme.spacing[2] }}>
           <Pressable ref={node => { if (node) rowTriggers.current.set(message.id, node); else rowTriggers.current.delete(message.id); }} accessibilityRole="button" accessibilityLabel={`查看消息：${message.summary}`} accessibilityHint="打开消息详情"

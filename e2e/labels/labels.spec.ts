@@ -78,11 +78,11 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   const householdPath = `/households/${encodeURIComponent(householdId)}`;
 
   await loginUsernameFixture(page, owner.username, password, `${householdPath}/labels`);
-  await expect(page.getByText('还没有标签，点击“新建”为日程和任务分类。')).toBeVisible();
+  await expect(page.getByText('还没有标签，点击“创建”为日程和任务分类。')).toBeVisible();
 
   // --- Create with a chosen color ---
-  await page.getByRole('button', { name: '新建标签', exact: true }).click();
-  const createButton = page.getByRole('button', { name: '创建标签' });
+  await page.getByRole('button', { name: '创建标签', exact: true }).click();
+  const createButton = page.getByRole('button', { name: '创建', exact: true });
   await createButton.click();
   await expect(page.getByText('请输入标签名称。')).toBeVisible();
   await page.getByLabel('标签名称', { exact: true }).fill('学校');
@@ -97,7 +97,7 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   const labelId = labels.body.labels[0].id as string;
 
   // --- A duplicate name is rejected without losing the form ---
-  await page.getByRole('button', { name: '新建标签', exact: true }).click();
+  await page.getByRole('button', { name: '创建标签', exact: true }).click();
   await page.getByLabel('标签名称', { exact: true }).fill('学校');
   await createButton.click();
   await expect(page.getByRole('alert')).toContainText('保存失败');
@@ -123,7 +123,7 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   await page.getByLabel('任务标题').fill('准备开学用品');
   await page.getByLabel('选择标签 学习').click();
   await expect(page.getByLabel('取消选择标签 学习')).toBeVisible();
-  await page.getByRole('button', { name: '创建任务', exact: true }).last().click();
+  await page.getByRole('button', { name: '创建', exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`${householdPath}/tasks$`));
   const tasks = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/tasks`);
@@ -146,7 +146,7 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   await page.getByRole('button', { name: '更多操作：标签 学习', exact: true }).click();
   await page.getByRole('menuitem', { name: '删除标签 学习', exact: true }).click();
   await page.getByRole('button', { name: '确认删除标签 学习' }).click();
-  await expect(page.getByText('还没有标签，点击“新建”为日程和任务分类。')).toBeVisible();
+  await expect(page.getByText('还没有标签，点击“创建”为日程和任务分类。')).toBeVisible();
 
   const detached = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/tasks/${task!.id}`);
   expect(detached.body.labels).toEqual([]);

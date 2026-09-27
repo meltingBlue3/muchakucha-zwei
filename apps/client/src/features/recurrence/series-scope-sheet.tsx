@@ -38,13 +38,15 @@ export function seriesScopeTitle(mode: SeriesScopeMode): string { return MODE_CO
 
 export function SeriesScopeContent({ mode, error, onClose, onSelect, submitting = null }: Omit<SeriesScopeSheetProps, 'visible'>) {
   const busy = submitting !== null;
+  // Either delete scope removes something for good; neither may look like the safe choice.
+  const scopeTone = mode === 'delete' ? 'destructive' : undefined;
   return <Stack gap={3}>
     <Text>{MODE_COPY[mode].body}</Text>
     <Text variant="bodySm" color="inkMuted">「此后所有」只影响这一次和之后的重复，已经过去的不受影响。</Text>
     {error ? <Text accessibilityRole="alert" color="destructive">{error}</Text> : null}
-    <Button label="仅此一次" disabled={busy || mode === 'rule-change'} loading={submitting === 'this_only'} onPress={() => onSelect('this_only')} />
+    <Button label="仅此一次" tone={scopeTone ?? 'primary'} disabled={busy || mode === 'rule-change'} loading={submitting === 'this_only'} onPress={() => onSelect('this_only')} />
     {mode === 'rule-change' ? <Text variant="caption" color="inkMuted">重复规则的改动只能应用到这一次和之后。</Text> : null}
-    <Button label="此后所有" tone="secondary" disabled={busy} loading={submitting === 'this_and_following'} onPress={() => onSelect('this_and_following')} />
+    <Button label="此后所有" tone={scopeTone ?? 'secondary'} disabled={busy} loading={submitting === 'this_and_following'} onPress={() => onSelect('this_and_following')} />
     <Button label="取消" tone="secondary" disabled={busy} onPress={onClose} />
   </Stack>;
 }

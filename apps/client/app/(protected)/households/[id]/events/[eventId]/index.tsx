@@ -11,7 +11,7 @@ import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { formatTime } from '../../../../../../src/features/events/calendar-utils';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
-import { Button, Heading, Spinner, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
 function formatFullDateTime(iso: string, allDay: boolean): string {
@@ -42,7 +42,7 @@ export default function EventDetailRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期。');
+        setError('登录已过期，请重新登录。');
         return;
       }
       const result = await sessionApiClient.getEvent(token, id, eventId);
@@ -70,9 +70,8 @@ export default function EventDetailRoute() {
 
   if (loading || event === null || error !== null) {
     return <EventWindow title="日程详情"><Stack gap={4}>
-      {loading ? <Spinner label="正在加载日程" /> : <>
-        <Text accessibilityRole="alert">{error ?? '日程未找到或已被删除。'}</Text>
-        <Button label="重试" tone="secondary" onPress={() => void fetchEvent()} />
+      {loading ? <LoadingState label="正在加载日程" /> : <>
+        <LoadError message={error ?? '日程未找到或已被删除。'} onRetry={() => void fetchEvent()} />
       </>}
     </Stack></EventWindow>;
   }
@@ -89,7 +88,7 @@ export default function EventDetailRoute() {
     ? `${formatFullDateTime(event.startTime, event.allDay)}${event.allDay ? ' · 全天' : ` – ${formatTime(event.endTime)}`}`
     : `${formatFullDateTime(event.startTime, event.allDay)} 至 ${formatFullDateTime(event.endTime, event.allDay)}${event.allDay ? ' · 全天' : ''}`;
   return (
-    <EventWindow title="日程详情" footer={<Button label="编辑日程" accessibilityLabel="编辑事件" onPress={handleEdit} />}>
+    <EventWindow title="日程详情" footer={<Button label="编辑日程" onPress={handleEdit} />}>
       <Stack gap={5}>
         <Stack gap={2}>
           <Heading>{event.title}</Heading>

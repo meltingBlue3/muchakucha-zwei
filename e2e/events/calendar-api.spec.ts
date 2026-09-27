@@ -297,11 +297,11 @@ test('a household member edits a shared event in the browser', async ({ page }) 
   expect(created.status).toBe(201);
   const eventId = created.body.id as string;
   await loginUsernameFixture(page, member.username, password, `/households/${householdId}/events/${eventId}`);
-  await page.getByRole('button', { name: '编辑事件', exact: true }).click();
-  await page.getByLabel('事件标题').fill('家庭聚餐');
+  await page.getByRole('button', { name: '编辑日程', exact: true }).click();
+  await page.getByLabel('日程标题').fill('家庭聚餐');
   await page.getByLabel('地点', { exact: true }).fill('新餐厅');
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await expect(page.getByRole('button', { name: '编辑事件', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '编辑日程', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '家庭聚餐', exact: true })).toBeVisible();
   const deleted = await apiCall(member.accessToken, 'DELETE', `/api/v1/households/${householdId}/events/${eventId}`);
   expect(deleted.status).toBe(403);

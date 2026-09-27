@@ -223,7 +223,7 @@ async function openTaskList(page: Page, householdId: string): Promise<void> {
 // (`下一次 …`, `这个重复已经结束`). Every assertion below is scoped to one of
 // these two regions rather than to the page.
 function ruleListScreen(page: Page) {
-  return page.getByRole('main', { name: '周期规则', exact: true });
+  return page.getByRole('main', { name: '重复安排', exact: true });
 }
 
 function ruleDetailScreen(page: Page) {
@@ -233,7 +233,7 @@ function ruleDetailScreen(page: Page) {
 async function openRuleList(page: Page, householdId: string): Promise<void> {
   await page.goto(`/households/${householdId}`);
   await page.getByRole('tab', { name: '家庭', exact: true }).click();
-  await page.getByLabel('管理周期规则').click();
+  await page.getByLabel('管理重复安排').click();
   await expect(ruleListScreen(page)).toBeVisible();
 }
 
@@ -307,7 +307,7 @@ test.describe('recurrence rule addendum journeys', () => {
     const group = page.getByRole('radiogroup', { name: '重复筛选' });
     await expect(group).toBeVisible();
 
-    await group.getByLabel('重复筛选：仅看周期性').click();
+    await group.getByLabel('重复筛选：仅看重复').click();
     await expect(page.getByLabel(`任务：${plainTitle}`, { exact: true })).toHaveCount(0);
     await expect(page.getByLabel(`任务：${recurringTitle}，重复`)).toBeVisible();
 
@@ -343,13 +343,13 @@ test.describe('recurrence rule addendum journeys', () => {
 
     // D-20: one merged list. Both rows carry the type in *text*, the frequency
     // summary, and the server-computed next occurrence.
-    const taskRow = list.getByLabel(`任务周期规则：${taskTitle}，${taskSummary}`);
+    const taskRow = list.getByLabel(`任务重复安排：${taskTitle}，${taskSummary}`);
     await expect(taskRow).toBeVisible();
     await expect(taskRow.getByText('任务', { exact: true })).toBeVisible();
     await expect(taskRow.getByText(taskSummary, { exact: true })).toBeVisible();
     await expect(taskRow.getByText(`下一次 ${today}`, { exact: true })).toBeVisible();
 
-    const eventRow = list.getByLabel(`事件周期规则：${eventTitle}，${eventSummary}`);
+    const eventRow = list.getByLabel(`日程重复安排：${eventTitle}，${eventSummary}`);
     await expect(eventRow).toBeVisible();
     await expect(eventRow.getByText('事件', { exact: true })).toBeVisible();
     await expect(eventRow.getByText(`下一次 ${tomorrow}`, { exact: true })).toBeVisible();
@@ -428,7 +428,7 @@ test.describe('recurrence rule addendum journeys', () => {
 
     // The confirmation replaces the editor in the same window. Focus starts
     // on close and cycles back through the confirmation and cancel actions.
-    await list.getByLabel(`任务周期规则：${activeTitle}，每天重复，永不结束`).click();
+    await list.getByLabel(`任务重复安排：${activeTitle}，每天重复，永不结束`).click();
     await expect(detail).toBeVisible();
     await expectNoSeriousAxeViolations(page);
 
@@ -448,7 +448,7 @@ test.describe('recurrence rule addendum journeys', () => {
     // The ended rule's detail: the state is carried by words plus
     // `aria-disabled` on every write entry point, never by opacity alone.
     await openRuleList(page, householdId);
-    await list.getByLabel(new RegExp(`周期规则：${endedTitle}，`)).click();
+    await list.getByLabel(new RegExp(`重复安排：${endedTitle}，`)).click();
     await expect(detail).toBeVisible();
     await expect(detail.getByText(ENDED_DETAIL_NOTE, { exact: true })).toBeVisible();
     await expect(detail.getByLabel(END_ACTION)).toHaveAttribute('aria-disabled', 'true');
