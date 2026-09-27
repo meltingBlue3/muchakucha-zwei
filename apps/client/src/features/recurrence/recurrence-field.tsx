@@ -1,8 +1,8 @@
 import type { RecurrenceDto } from '@muchakucha/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Platform, Pressable, TextInput, View } from 'react-native';
-import ChevronDown from 'lucide-react-native/icons/chevron-down';
+import { Pressable, TextInput, View } from 'react-native';
 
+import { OptionRow, ROW_CONTENT_INSET, SummaryRow } from '../../ui/compose-rows';
 import { DateField } from '../../ui/date-field';
 import { PickerActions } from '../../ui/picker-panels';
 import { FormMessage, Inline, Stack, Text } from '../../ui/primitives';
@@ -134,69 +134,11 @@ export function RecurrenceField({ value, onChange, startDate, name, icon, disabl
 
   return (
     <Stack gap={0}>
-      <Inline gap={2}>
-        <View importantForAccessibility="no-hide-descendants" aria-hidden style={{ width: theme.controlSizes.touchTarget, alignItems: 'center' }}>{icon}</View>
-        <Pressable
-          ref={trigger}
-          accessibilityRole="button"
-          accessibilityLabel={`${name}，${summary}`}
-          accessibilityState={{ disabled, expanded: stage !== 'closed' }}
-          aria-haspopup="dialog"
-          disabled={disabled}
-          onPress={() => setStage(current => current === 'closed' ? 'options' : 'closed')}
-          style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], minHeight: theme.controlSizes.touchTarget, opacity: pressed ? 0.7 : 1 })}
-        >
-          <Text style={{ flex: 1 }}>{summary}</Text>
-          <ChevronDown size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
-        </Pressable>
-      </Inline>
-      {value ? <View style={{ paddingLeft: theme.controlSizes.touchTarget + theme.spacing[2] }}><RecurrenceNotes rule={value} deviceTimeZone={deviceTimeZone() ?? value.timezone} /></View> : null}
-      {!inWindow && step ? <View style={{ paddingLeft: theme.controlSizes.touchTarget + theme.spacing[2], paddingBottom: theme.spacing[3] }}>{step.content}</View> : null}
-      {serverErrors.map(message => <View key={message} style={{ paddingLeft: theme.controlSizes.touchTarget + theme.spacing[2] }}><FormMessage>{message}</FormMessage></View>)}
+      <SummaryRow name={name} summary={summary} icon={icon} open={stage !== 'closed'} disabled={disabled} trigger={trigger} onPress={() => setStage(current => current === 'closed' ? 'options' : 'closed')} />
+      {value ? <View style={{ paddingLeft: ROW_CONTENT_INSET }}><RecurrenceNotes rule={value} deviceTimeZone={deviceTimeZone() ?? value.timezone} /></View> : null}
+      {!inWindow && step ? <View style={{ paddingLeft: ROW_CONTENT_INSET, paddingBottom: theme.spacing[3] }}>{step.content}</View> : null}
+      {serverErrors.map(message => <View key={message} style={{ paddingLeft: ROW_CONTENT_INSET }}><FormMessage>{message}</FormMessage></View>)}
     </Stack>
-  );
-}
-
-type WebKeyEvent = { key: string; currentTarget: EventTarget & HTMLElement; preventDefault(): void };
-
-/** Arrow keys move focus between options without choosing, since choosing closes the list. */
-function moveFocus(event: WebKeyEvent, role: 'radio') {
-  if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-  event.preventDefault();
-  const group = event.currentTarget.closest('[role="radiogroup"]');
-  const options = Array.from(group?.querySelectorAll<HTMLElement>(`[role="${role}"]:not([aria-disabled="true"])`) ?? []);
-  const index = options.indexOf(event.currentTarget);
-  const delta = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 1;
-  options[(index + delta + options.length) % options.length]?.focus();
-}
-
-function RadioMark({ checked, disabled = false }: { checked: boolean; disabled?: boolean }) {
-  const color = disabled ? theme.colors.disabled : checked ? theme.colors.coral : theme.colors.inkMuted;
-  return (
-    <View style={{ width: theme.controlSizes.icon, height: theme.controlSizes.icon, borderRadius: theme.borderRadii.full, borderWidth: theme.borderWidths.focus, borderColor: color, alignItems: 'center', justifyContent: 'center' }}>
-      {checked ? <View style={{ width: theme.spacing[2] + theme.spacing[1] / 2, height: theme.spacing[2] + theme.spacing[1] / 2, borderRadius: theme.borderRadii.full, backgroundColor: color }} /> : null}
-    </View>
-  );
-}
-
-function RadioRow({ label, detail, checked, disabled = false, onPress }: { label: string; detail?: string; checked: boolean; disabled?: boolean; onPress(): void }) {
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={label}
-      accessibilityState={{ checked, disabled }}
-      aria-checked={checked}
-      disabled={disabled}
-      onPress={onPress}
-      {...(Platform.OS === 'web' ? { onKeyDown: (event: WebKeyEvent) => moveFocus(event, 'radio') } : {})}
-      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], minHeight: theme.controlSizes.touchTarget + theme.spacing[1], paddingHorizontal: theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
-    >
-      <RadioMark checked={checked} disabled={disabled} />
-      <View style={{ flex: 1 }}>
-        <Text color={disabled ? 'inkMuted' : 'ink'}>{label}</Text>
-        {detail ? <Text variant="bodySm">{detail}</Text> : null}
-      </View>
-    </Pressable>
   );
 }
 
@@ -212,9 +154,9 @@ function OptionList({ preset, summary, disableTurnOff, timeZoneError, onChoose, 
     <Stack gap={2}>
       <View accessibilityRole="radiogroup" accessibilityLabel="重复频率">
         {PRESET_OPTIONS.map(option => (
-          <RadioRow key={option.value} label={option.label} checked={preset === option.value} disabled={option.value === 'none' && disableTurnOff} onPress={() => onChoose(option.value)} />
+          <OptionRow key={option.value} label={option.label} checked={preset === option.value} disabled={option.value === 'none' && disableTurnOff} onPress={() => onChoose(option.value)} />
         ))}
-        <RadioRow label="自定义…" {...(preset === 'custom' ? { detail: summary } : {})} checked={preset === 'custom'} onPress={onCustom} />
+        <OptionRow label="自定义…" {...(preset === 'custom' ? { detail: summary } : {})} checked={preset === 'custom'} onPress={onCustom} />
       </View>
       {disableTurnOff ? <Text variant="caption">{TURN_OFF_DISABLED_HINT}</Text> : null}
       {timeZoneError ? <FormMessage>{TIMEZONE_ERROR}</FormMessage> : null}
@@ -302,15 +244,15 @@ function CustomEditor({ draft, errors, timeZoneError, startDate, onChange, onCan
       <Stack gap={1}>
         <Text variant="label">结束</Text>
         <View accessibilityRole="radiogroup" accessibilityLabel="重复结束条件">
-          <RadioRow label="永不" checked={draft.ending === 'never'} onPress={() => setEnding('never')} />
-          <RadioRow label="截止日期" checked={draft.ending === 'date'} onPress={() => setEnding('date')} />
+          <OptionRow label="永不" checked={draft.ending === 'never'} onPress={() => setEnding('never')} />
+          <OptionRow label="截止日期" checked={draft.ending === 'date'} onPress={() => setEnding('date')} />
           {draft.ending === 'date' ? (
             <View style={{ paddingLeft: theme.controlSizes.icon + theme.spacing[6] }}>
               <DateField value={draft.endsOn} onChange={endsOn => set({ endsOn })} mode="date" placeholder="选择截止日期" pickerDefault={startDate} accessibilityLabel="重复截止日期" />
               {errors.endsOn ? <FormMessage>{errors.endsOn}</FormMessage> : null}
             </View>
           ) : null}
-          <RadioRow label="重复次数" checked={draft.ending === 'count'} onPress={() => setEnding('count')} />
+          <OptionRow label="重复次数" checked={draft.ending === 'count'} onPress={() => setEnding('count')} />
           {draft.ending === 'count' ? (
             <View style={{ paddingLeft: theme.controlSizes.icon + theme.spacing[6] }}>
               <Inline gap={2}>

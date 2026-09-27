@@ -242,12 +242,10 @@ describe('task form recurrence integration', () => {
       </MuchakuchaThemeProvider>,
     );
 
-    expect(view.getByLabelText('已取消').props.accessibilityState).toEqual({
-      checked: true,
-      disabled: true,
-    });
-    expect(view.getByLabelText('每周').props.accessibilityState.checked).toBe(true);
+    expect(view.getByRole('button', { name: '任务状态，已取消' })).toBeTruthy();
+    expect(view.getByRole('button', { name: '任务重复设置，每周三重复，共 10 次' })).toBeTruthy();
     await fireEvent.press(view.getByLabelText('恢复这一次'));
+    expect(view.getByRole('button', { name: '任务状态，待办' })).toBeTruthy();
     await fireEvent.press(view.getByLabelText('保存'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit).toHaveBeenCalledWith(
@@ -356,6 +354,7 @@ describe('task form recurrence integration', () => {
       </MuchakuchaThemeProvider>,
     );
 
+    await fireEvent.press(view.getByRole('button', { name: /^任务重复设置，/ }));
     expect(view.getByLabelText('不重复').props.accessibilityState.disabled).toBe(true);
     expect(view.getByText('如需彻底停止这个重复，请到规则详情页使用「结束此重复」。')).toBeTruthy();
   });
@@ -375,7 +374,7 @@ describe('task form recurrence integration', () => {
       </MuchakuchaThemeProvider>,
     );
 
-    await fireEvent.press(view.getByRole('button', { name: '任务重复设置' }));
+    await fireEvent.press(view.getByRole('button', { name: '任务重复设置，不重复' }));
     expect(view.getByLabelText('不重复').props.accessibilityState.disabled).toBe(false);
   });
 });

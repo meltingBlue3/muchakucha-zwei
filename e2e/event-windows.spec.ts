@@ -250,6 +250,7 @@ for (const width of [390, 1440]) {
     await custom.getByRole('checkbox', { name: '星期四' }).click();
     await custom.getByRole('radio', { name: '截止日期' }).click();
     const endsOn = custom.getByRole('button', { name: /^重复截止日期，/ });
+    await expect(endsOn).toBeVisible();
     const panels = page.getByTestId('app-dialog-panel');
     const customBox = await panels.first().boundingBox();
     // The end date picker stacks above the custom page instead of expanding inside it;

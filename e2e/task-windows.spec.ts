@@ -183,33 +183,32 @@ test('closing a task preserves a long list scroll position', async ({ page }) =>
 });
 
 for (const width of [320, 390, 1440]) {
-  test(`task options retain collapsed values and restore drafts at ${width}px`, async ({ page }, testInfo) => {
+  test(`task rows summarize every option and restore drafts at ${width}px`, async ({ page }, testInfo) => {
     const state = await setup(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${base}/tasks/new`);
     const dialog = page.getByRole('dialog', { name: '创建任务' });
-    const more = dialog.getByRole('button', { name: '更多任务选项' });
-    await expect(more).toHaveAttribute('aria-expanded', 'false');
-    await expect(dialog.getByRole('textbox', { name: '任务描述' })).toBeHidden();
-    await expect(dialog.getByRole('radiogroup', { name: '任务状态' })).toBeHidden();
-    await expect(dialog.getByRole('button', { name: '任务重复设置' })).toHaveAttribute('aria-expanded', 'false');
+    for (const name of ['截止日期，添加截止日期', '任务重复设置，不重复', '负责人，未分配', '任务状态，待办', '任务优先级，中优先级']) {
+      await expect(dialog.getByRole('button', { name, exact: true })).toBeVisible();
+    }
+    await expect(dialog.getByRole('textbox', { name: '任务描述' })).toBeVisible();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath(`task-create-compact-${width}.png`) });
+    await page.screenshot({ path: testInfo.outputPath(`task-create-${width}.png`) });
     await dialog.getByRole('textbox', { name: '任务标题', exact: true }).fill('整理旅行用品');
-    await more.click();
-    await dialog.getByRole('radio', { name: '优先级: 紧急', exact: true }).click();
-    await dialog.getByRole('radio', { name: '进行中', exact: true }).click();
-    await dialog.getByRole('textbox', { name: '任务描述' }).fill('带好证件和充电器');
-    await more.click();
-    await expect(dialog.getByText('进行中 · 紧急优先级 · 已填写描述', { exact: true })).toBeVisible();
-    await page.reload();
-    await expect(more).toHaveAttribute('aria-expanded', 'true');
-    await expect(dialog.getByRole('textbox', { name: '任务描述' })).toHaveValue('带好证件和充电器');
-    await expect(dialog.getByRole('radio', { name: '优先级: 紧急', exact: true })).toBeChecked();
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await dialog.getByRole('button', { name: '任务优先级，中优先级', exact: true }).click();
+    const priority = page.getByRole('dialog', { name: '优先级', exact: true });
+    await expect(priority.getByRole('radio')).toHaveText(['低', '中', '高', '紧急']);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath(`task-create-options-${width}.png`) });
-    await more.click();
+    await page.screenshot({ path: testInfo.outputPath(`task-priority-${width}.png`) });
+    await priority.getByRole('radio', { name: '紧急', exact: true }).click();
+    await dialog.getByRole('button', { name: '任务状态，待办', exact: true }).click();
+    await page.getByRole('dialog', { name: '状态', exact: true }).getByRole('radio', { name: '进行中', exact: true }).click();
+    await dialog.getByRole('textbox', { name: '任务描述' }).fill('带好证件和充电器');
+    await page.reload();
+    await expect(dialog.getByRole('button', { name: '任务优先级，紧急优先级', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '任务状态，进行中', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: '任务描述' })).toHaveValue('带好证件和充电器');
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await dialog.getByRole('button', { name: '创建任务', exact: true }).click();
     await expect(page).toHaveURL(`${base}/tasks`);
     expect(state.getWrites()).toBe(1);
@@ -217,41 +216,45 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
-test('invalid collapsed task recurrence opens its error and blocks saving', async ({ page }) => {
+test('a custom task recurrence validates before applying and survives reload', async ({ page }) => {
   const state = await setup(page);
   await page.goto(`${base}/tasks/new`);
   await page.getByRole('textbox', { name: '任务标题', exact: true }).fill('重复打扫');
-  const recurrence = page.getByRole('button', { name: '任务重复设置' });
+  const recurrence = page.getByRole('button', { name: /^任务重复设置，/ });
   await recurrence.focus();
   await page.keyboard.press('Enter');
-  await page.getByRole('radio', { name: '每天', exact: true }).click();
-  await page.getByRole('radio', { name: '重复次数', exact: true }).click();
-  await page.getByRole('textbox', { name: '重复次数', exact: true }).fill('0');
-  await recurrence.click();
-  await page.getByRole('dialog', { name: '创建任务' }).getByRole('button', { name: '创建任务', exact: true }).click();
-  await expect(recurrence).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByText('重复次数需要在 1 到 1000 之间。', { exact: true })).toBeVisible();
+  await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
+  const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
+  await custom.getByRole('radio', { name: '天', exact: true }).click();
+  await custom.getByRole('radio', { name: '重复次数', exact: true }).click();
+  await custom.getByLabel('重复次数值', { exact: true }).fill('0');
+  await custom.getByRole('button', { name: '完成', exact: true }).click();
+  await expect(custom.getByText('重复次数需要在 1 到 1000 之间。', { exact: true })).toBeVisible();
+  await custom.getByLabel('重复次数值', { exact: true }).fill('4');
+  await custom.getByRole('button', { name: '完成', exact: true }).click();
+  await expect(recurrence).toHaveAccessibleName('任务重复设置，每天重复，共 4 次');
+  await expect(recurrence).toBeFocused();
+  // A new recurring task takes its due dates from the rule.
+  await expect(page.getByText('每次的截止日期按重复规则安排', { exact: true })).toBeVisible();
   expect(state.getWrites()).toBe(0);
-  await page.getByRole('textbox', { name: '重复次数', exact: true }).fill('4');
   await page.reload();
-  await expect(recurrence).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByRole('textbox', { name: '重复次数', exact: true })).toHaveValue('4');
-  await recurrence.click();
+  await expect(recurrence).toHaveAccessibleName('任务重复设置，每天重复，共 4 次');
   await page.getByRole('dialog', { name: '创建任务' }).getByRole('button', { name: '创建任务', exact: true }).click();
   await expect(page).toHaveURL(`${base}/tasks`);
   expect(state.getTask()).toMatchObject({ recurrence: { freq: 'daily', count: 4 } });
 });
 
-test('editing keeps task status visible and explicitly clears collapsed optional values', async ({ page }) => {
+test('editing changes status and priority through their lists and clears the description', async ({ page }) => {
   const state = await setup(page);
   await page.goto(`${base}/tasks/${taskId}/edit`);
-  await expect(page.getByRole('radiogroup', { name: '任务状态' })).toBeVisible();
-  const more = page.getByRole('button', { name: '更多任务选项' });
-  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  const status = page.getByRole('button', { name: /^任务状态，/ });
+  await expect(status).toBeVisible();
   await page.getByRole('textbox', { name: '任务描述' }).fill('');
-  await page.getByRole('radio', { name: '优先级: 中', exact: true }).click();
-  await more.click();
-  await page.getByRole('radio', { name: '进行中', exact: true }).click();
+  await page.getByRole('button', { name: /^任务优先级，/ }).click();
+  await page.getByRole('dialog', { name: '优先级', exact: true }).getByRole('radio', { name: '中', exact: true }).click();
+  await status.click();
+  await page.getByRole('dialog', { name: '状态', exact: true }).getByRole('radio', { name: '进行中', exact: true }).click();
+  await expect(status).toHaveAccessibleName('任务状态，进行中');
   await page.getByRole('button', { name: '保存修改', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible();
   expect(state.getTask()).toMatchObject({ status: 'in_progress', priority: 'medium', description: '' });

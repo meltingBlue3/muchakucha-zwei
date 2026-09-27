@@ -1,6 +1,6 @@
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useState } from 'react';
 import { Switch, TextInput, View } from 'react-native';
 import Clock from 'lucide-react-native/icons/clock';
 import MapPin from 'lucide-react-native/icons/map-pin';
@@ -11,6 +11,7 @@ import { useTheme } from '@shopify/restyle';
 import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text, FormActions } from '../../ui/primitives';
+import { FormRow, FormSection, rowIcon, rowInputStyle, titleInputStyle } from '../../ui/compose-rows';
 import { DateField } from '../../ui/date-field';
 import { LabelPicker } from '../labels/label-picker';
 import {
@@ -164,17 +165,6 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
     }
   }, [form, onSubmit]);
 
-  // Borderless inputs: the row icons and separators carry the structure.
-  const inputStyle = {
-    flex: 1,
-    paddingVertical: activeTheme.spacing[3],
-    fontSize: activeTheme.typography.body.fontSize,
-    fontFamily: activeTheme.fontFamilies.regular,
-    lineHeight: activeTheme.typography.body.lineHeight,
-    color: activeTheme.colors.ink,
-    minHeight: activeTheme.controlSizes.touchTarget,
-  };
-
   return (
     <Stack gap={0}>
       {draftKey ? <DraftNotice /> : null}
@@ -185,19 +175,14 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
           onChangeText={(v) => updateField('title', v)}
           placeholder="添加标题"
           placeholderTextColor={activeTheme.colors.inkMuted}
-          style={[inputStyle, {
-            fontSize: activeTheme.typography.heading.fontSize,
-            lineHeight: activeTheme.typography.heading.lineHeight,
-            fontWeight: activeTheme.typography.heading.fontWeight,
-            paddingVertical: activeTheme.spacing[4],
-          }]}
+          style={titleInputStyle}
           maxLength={200}
           accessibilityLabel="事件标题"
         />
       </FormRow>
 
       <FormSection>
-        <FormRow icon={<Clock size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} />}>
+        <FormRow icon={rowIcon(Clock)}>
           <Text style={{ flex: 1 }}>全天</Text>
           <Switch
             disabled={isSubmitting}
@@ -222,7 +207,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
         </FormRow>
         <RecurrenceField
           name="日程重复设置"
-          icon={<Repeat size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} />}
+          icon={rowIcon(Repeat)}
           disabled={isSubmitting}
           disableTurnOff={isExistingRecurring}
           errors={recurrenceErrors}
@@ -233,14 +218,14 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
       </FormSection>
 
       <FormSection>
-        <FormRow icon={<MapPin size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} />}>
+        <FormRow icon={rowIcon(MapPin)}>
           <TextInput
             editable={!isSubmitting}
             value={form.location}
             onChangeText={(v) => updateField('location', v)}
             placeholder="添加地点"
             placeholderTextColor={activeTheme.colors.inkMuted}
-            style={inputStyle}
+            style={rowInputStyle}
             maxLength={255}
             accessibilityLabel="地点"
           />
@@ -248,14 +233,14 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
       </FormSection>
 
       <FormSection>
-        <FormRow align="start" icon={<TextAlignStart size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} />}>
+        <FormRow align="start" icon={rowIcon(TextAlignStart)}>
           <TextInput
             editable={!isSubmitting}
             value={form.description}
             onChangeText={(v) => updateField('description', v)}
             placeholder="添加说明"
             placeholderTextColor={activeTheme.colors.inkMuted}
-            style={[inputStyle, { minHeight: activeTheme.spacing[16] + activeTheme.spacing[4], textAlignVertical: 'top' }]}
+            style={[rowInputStyle, { minHeight: activeTheme.spacing[16] + activeTheme.spacing[4], textAlignVertical: 'top' }]}
             multiline
             numberOfLines={4}
             accessibilityLabel="事件描述"
@@ -265,7 +250,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
 
       {householdId !== undefined && selectedLabelIds !== undefined && onLabelChange !== undefined && (
         <FormSection>
-          <FormRow align="start" icon={<Tag size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} />}>
+          <FormRow align="start" icon={rowIcon(Tag)}>
             <View style={{ flex: 1, paddingVertical: activeTheme.spacing[3] }}>
               <LabelPicker
                 householdId={householdId}
@@ -286,28 +271,5 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
 
       <FormActions onCancel={onCancel} onSubmit={() => void handleSubmit()} submitting={isSubmitting} submitLabel={submitLabel} />
     </Stack>
-  );
-}
-
-/** A separated group of rows, like the blocks of a calendar compose sheet. */
-function FormSection({ children }: { children: ReactNode }) {
-  const activeTheme = useTheme<Theme>();
-  return (
-    <View style={{ borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingVertical: activeTheme.spacing[2] }}>
-      {children}
-    </View>
-  );
-}
-
-/** Icon column plus content; rows without an icon keep the same text edge. */
-function FormRow({ icon, align = 'center', children }: { icon?: ReactNode; align?: 'center' | 'start'; children: ReactNode }) {
-  const activeTheme = useTheme<Theme>();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: align === 'start' ? 'flex-start' : 'center', gap: activeTheme.spacing[2], minHeight: activeTheme.controlSizes.touchTarget }}>
-      <View importantForAccessibility="no-hide-descendants" aria-hidden style={{ width: activeTheme.controlSizes.touchTarget, minHeight: activeTheme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center' }}>
-        {icon}
-      </View>
-      {children}
-    </View>
   );
 }

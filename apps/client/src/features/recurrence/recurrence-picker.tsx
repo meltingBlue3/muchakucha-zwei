@@ -6,7 +6,7 @@ import { Platform, Pressable, TextInput, View } from 'react-native';
 import { DateField } from '../../ui/date-field';
 import { FormMessage, Stack, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
-import { RecurrenceNotes, RecurrenceSummary } from './recurrence-summary';
+import { RecurrenceSummary } from './recurrence-summary';
 
 export type RecurrenceInput = RecurrenceDto;
 
@@ -152,10 +152,6 @@ interface RecurrencePickerProps {
    * rule detail screen is the real way to stop a series.
    */
   disableTurnOff?: boolean;
-  /** Omits the 重复 heading when a surrounding row already names the section. */
-  hideTitle?: boolean;
-  /** Shows only the clamp and time-zone notes when a surrounding row already shows the summary. */
-  hideSummary?: boolean;
 }
 
 const TURN_OFF_DISABLED_HINT = '如需彻底停止这个重复，请到规则详情页使用「结束此重复」。';
@@ -166,8 +162,6 @@ export function RecurrencePicker({
   startDate,
   disabled = false,
   disableTurnOff = false,
-  hideTitle = false,
-  hideSummary = false,
   errors = {},
   onValidityChange,
 }: RecurrencePickerProps) {
@@ -344,7 +338,7 @@ export function RecurrencePicker({
 
   return (
     <Stack gap={1}>
-      {hideTitle ? null : <Text variant="label">重复</Text>}
+      <Text variant="label">重复</Text>
       <View accessibilityLabel="重复频率" accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         {FREQUENCIES.map((frequency, frequencyIndex) => {
           const selected = frequency.value === null ? value === null : value?.freq === frequency.value;
@@ -492,9 +486,7 @@ export function RecurrencePicker({
             </Stack>
           )}
 
-          {hideSummary
-            ? <RecurrenceNotes rule={value} deviceTimeZone={deviceTimeZone ?? value.timezone} />
-            : <RecurrenceSummary rule={value} deviceTimeZone={deviceTimeZone ?? value.timezone} />}
+          <RecurrenceSummary rule={value} deviceTimeZone={deviceTimeZone ?? value.timezone} />
         </>
       )}
     </Stack>
