@@ -96,7 +96,9 @@ test('calendar filters have visible summaries and Today restores the current mon
   await expect(page.getByText('仅重复', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^日程：/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^2030年6月15日/ })).not.toHaveAttribute('aria-label', /个日程/);
-  await page.getByRole('button', { name: '清除日程筛选', exact: true }).click();
+  await page.getByRole('button', { name: /^筛选日程/ }).click();
+  await filter.getByRole('button', { name: '清除', exact: true }).click();
+  await filter.getByRole('button', { name: '完成', exact: true }).click();
   await expect(page.getByRole('button', { name: /^日程：/ })).toBeVisible();
 });
 

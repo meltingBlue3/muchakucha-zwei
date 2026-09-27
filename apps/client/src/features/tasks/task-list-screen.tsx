@@ -8,10 +8,9 @@ import { useWorkspaceState } from '../../ui/workspace-state';
 import { HouseholdNavigation } from '../../ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { useTheme } from '@shopify/restyle';
+import { View } from 'react-native';
 import type { TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
-import ListFilter from 'lucide-react-native/icons/list-filter';
+import { FilterActions, FilterButton } from '../../ui/filter-controls';
 
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useTaskCompletion } from './use-task-completion';
@@ -36,7 +35,6 @@ import {
   HouseholdSwitcher,
 } from '../../ui/household-components';
 import { Button, EmptyState, LoadError, LoadingState, Stack, StatusPanel, Text } from '../../ui/primitives';
-import type { Theme } from '../../ui/theme';
 
 type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
 type PriorityFilterKey = 'all' | 'low' | 'medium' | 'high' | 'urgent';
@@ -61,7 +59,6 @@ export default function TaskListScreen() {
   const router = useRouter();
   const deleteTask = useContentDelete('tasks');
   const editTask = useContentEdit('tasks');
-  const activeTheme = useTheme<Theme>();
   const {
     viewState,
     households,
@@ -77,7 +74,7 @@ export default function TaskListScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useWorkspaceState<FilterKey>(`view:${id}:tasks:filter`, 'all');
+  const [filter, setFilter] = useWorkspaceState<FilterKey>(`view:${id}:tasks:filter`, 'pending');
   const [priorityFilter, setPriorityFilter] = useWorkspaceState<PriorityFilterKey>(`view:${id}:tasks:priorityFilter`, 'all');
   const [assigneeFilter, setAssigneeFilter] = useWorkspaceState<string>(`view:${id}:tasks:assigneeFilter`, 'all');
   const [labelFilter, setLabelFilter] = useWorkspaceState<string>(`view:${id}:tasks:labelFilter`, 'all');
@@ -268,26 +265,17 @@ export default function TaskListScreen() {
     <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="tasks" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton label="创建任务" onPress={handleCreateTask} /> : null}>
       <Stack gap={4}>
 
-        {/* Header */}
-
-          <PageIntro title="任务" />
-
-        <FilterOptions label="任务状态" hideLabel options={FILTERS.map(f => ({ value: f.key, label: f.label, name: `筛选：${f.label}` }))} value={filter} onChange={value => setFilter(value as FilterKey)} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}>
-          <Pressable ref={filterTrigger} accessibilityRole="button" accessibilityLabel={`筛选任务${activeFilterCount ? `，已选择 ${activeFilterCount} 项` : ''}`} onPress={() => setFiltersOpen(true)} style={{ minHeight: activeTheme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}>
-            <ListFilter size={activeTheme.controlSizes.icon} color={activeTheme.colors.ink} />
-            <Text variant="label">筛选{activeFilterCount ? `（${activeFilterCount}）` : ''}</Text>
-          </Pressable>
-          <Text variant="bodySm" color="inkMuted" style={{ flex: 1 }}>{[
-            priorityFilter !== 'all' ? `${PRIORITY_FILTERS.find(p => p.key === priorityFilter)?.label}优先级` : '',
-            assigneeFilter !== 'all' ? memberNameMap.get(assigneeFilter) ?? '已选负责人' : '',
-            labelFilter !== 'all' ? availableLabels.find(l => l.id === labelFilter)?.name ?? '已选标签' : '',
-            recurringFilter !== 'all' ? '仅重复' : '',
-          ].filter(Boolean).join(' · ')}</Text>
-          {activeFilterCount ? <Pressable accessibilityRole="button" accessibilityLabel="清除任务筛选" onPress={clearFilters} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}><Text variant="label" color="link">清除</Text></Pressable> : null}
-        </View>
-        {filtersOpen ? <AppDialog title="筛选任务" trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<Button label="完成" onPress={() => setFiltersOpen(false)} />}>
+        <PageIntro title="任务" action={<FilterButton ref={filterTrigger} label="筛选任务" count={activeFilterCount} onPress={() => setFiltersOpen(true)} />} />
+        {activeFilterCount ? <Text variant="bodySm" color="inkMuted">{[
+          filter !== 'all' ? FILTERS.find(f => f.key === filter)?.label : '',
+          priorityFilter !== 'all' ? `${PRIORITY_FILTERS.find(p => p.key === priorityFilter)?.label}优先级` : '',
+          assigneeFilter !== 'all' ? memberNameMap.get(assigneeFilter) ?? '已选负责人' : '',
+          labelFilter !== 'all' ? availableLabels.find(l => l.id === labelFilter)?.name ?? '已选标签' : '',
+          recurringFilter !== 'all' ? '仅重复' : '',
+        ].filter(Boolean).join(' · ')}</Text> : null}
+        {filtersOpen ? <AppDialog title="筛选任务" trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
           <Stack gap={4}>
+            <FilterOptions label="任务状态" options={FILTERS.map(f => ({ value: f.key, label: f.label, name: `筛选：${f.label}` }))} value={filter} onChange={value => setFilter(value as FilterKey)} />
             <FilterOptions label="优先级" options={PRIORITY_FILTERS.map(p => ({ value: p.key, label: p.label, name: `优先级筛选：${p.label}` }))} value={priorityFilter} onChange={value => setPriorityFilter(value as PriorityFilterKey)} />
             <FilterOptions label="负责人" options={[{ value: 'all', label: '全部成员', name: '全部成员' }, ...assigneeOptions.map(m => ({ value: m.userId, label: m.displayName, name: `筛选：${m.displayName}` }))]} value={assigneeFilter} onChange={setAssigneeFilter} />
             {availableLabels.length ? <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(l => ({ value: l.id, label: l.name, name: `筛选标签：${l.name}` }))]} value={labelFilter} onChange={setLabelFilter} /> : null}
@@ -312,8 +300,8 @@ export default function TaskListScreen() {
             />
           ) : (
             <EmptyState
-              message={activeFilterCount === 0
-                ? '还没有任务。点击右下角“＋”创建第一个任务。'
+              message={tasks.length === 0
+                ? '还没有任务。创建第一个任务，和家人一起安排。'
                 : recurringFilter === 'recurring' &&
                     filter === 'all' &&
                     priorityFilter === 'all' &&
@@ -321,7 +309,7 @@ export default function TaskListScreen() {
                     labelFilter === 'all'
                   ? RECURRING_EMPTY_TASKS
                   : '没有符合筛选条件的任务。'}
-              {...(activeFilterCount ? { action: <Button label="清除筛选" tone="secondary" onPress={clearFilters} /> } : {})}
+              {...(activeFilterCount ? { action: <Button label="调整筛选" tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
             />
           )
         )}

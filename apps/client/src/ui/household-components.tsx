@@ -46,6 +46,7 @@ import {
   Text,
 } from './primitives';
 import { theme } from './theme';
+import { PageCreateActionContext } from './page-intro';
 import { formatDateTime } from './date-values';
 
 // ---- AppShell ----
@@ -83,6 +84,7 @@ export const AppShell = ({
   const router = useRouter();
   const blurTarget = useRef<View>(null);
   const { width } = useWindowDimensions();
+  const desktopActions = Platform.OS === 'web' && width >= theme.layout.navigationBreakpoint;
   const wideNavigation = width >= theme.layout.navigationBreakpoint && footer !== undefined;
 
   const handleBack = useCallback(() => {
@@ -166,7 +168,7 @@ export const AppShell = ({
             flexGrow: 1,
             paddingHorizontal: width < theme.breakpoints.mobile ? theme.layout.compactInset : theme.layout.mobileInset,
             paddingTop: footer !== undefined ? theme.spacing[3] : theme.spacing[6],
-            paddingBottom: floatingAction ? theme.spacing[16] + theme.spacing[10] : theme.spacing[10],
+            paddingBottom: floatingAction && !desktopActions ? theme.spacing[16] + theme.spacing[10] : theme.spacing[10],
             maxWidth: Platform.OS === 'web' ? theme.layout.householdMaxWidth : undefined,
             alignSelf: Platform.OS === 'web' ? 'center' : undefined,
             width: '100%',
@@ -183,9 +185,9 @@ export const AppShell = ({
             ) : undefined
           }
         >
-          {children}
+          <PageCreateActionContext.Provider value={desktopActions ? floatingAction : null}>{children}</PageCreateActionContext.Provider>
         </ScrollView>
-        {floatingAction ? <View pointerEvents="box-none" style={{ position: 'absolute', right: theme.layout.mobileInset, bottom: theme.spacing[4] }}>{floatingAction}</View> : null}
+        {floatingAction && !desktopActions ? <View pointerEvents="box-none" style={{ position: 'absolute', right: theme.layout.mobileInset, bottom: theme.spacing[4] }}>{floatingAction}</View> : null}
       </KeyboardAvoidingView>
       </View>
       {!wideNavigation ? footer : null}

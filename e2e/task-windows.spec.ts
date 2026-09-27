@@ -96,16 +96,18 @@ test('closing a task opened from today restores the original entry', async ({ pa
 test('filter summaries remain visible after closing the filter window', async ({ page }, testInfo) => {
   await setup(page);
   await page.goto(`${base}/tasks`);
-  await page.getByRole('button', { name: '筛选任务', exact: true }).click();
-  const filter = page.getByRole('dialog', { name: '筛选任务', exact: true });
+  await page.getByRole('button', { name: /^筛选任务/ }).click();
+  const filter = page.getByRole('dialog', { name: /^筛选任务/ });
   await filter.getByRole('radio', { name: '优先级筛选：高', exact: true }).click();
   await filter.getByRole('radio', { name: '筛选：小林', exact: true }).click();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await filter.getByRole('button', { name: '完成', exact: true }).click();
-  await expect(page.getByText('高优先级 · 小林', { exact: true })).toBeVisible();
+  await expect(page.getByText('待办 · 高优先级 · 小林', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('task-list-390.png') });
-  await page.getByRole('button', { name: '清除任务筛选', exact: true }).click();
-  await expect(page.getByText('高优先级 · 小林', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /^筛选任务/ }).click();
+  await filter.getByRole('button', { name: '清除', exact: true }).click();
+  await filter.getByRole('button', { name: '完成', exact: true }).click();
+  await expect(page.getByText('待办 · 高优先级 · 小林', { exact: true })).toHaveCount(0);
 });
 
 test('a failed save retains the draft and busy windows resist closing', async ({ page }, testInfo) => {

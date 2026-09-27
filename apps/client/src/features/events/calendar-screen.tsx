@@ -2,6 +2,7 @@ import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { AppDialog } from '../../ui/app-dialog';
+import { FilterActions, FilterButton } from '../../ui/filter-controls';
 import { FilterOptions } from '../../ui/filter-options';
 import { PageIntro } from '../../ui/page-intro';
 import { formatDate } from '../../ui/date-values';
@@ -9,7 +10,7 @@ import { useWorkspaceState } from '../../ui/workspace-state';
 import { HouseholdNavigation } from '../../ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, View, useWindowDimensions } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto } from '@muchakucha/api-client';
 
@@ -169,6 +170,8 @@ export default function CalendarScreen() {
     handleSelectDate(toDateIso(next));
   };
   const dateLabel = selectedDateIso ? formatDate(new Date(`${selectedDateIso}T12:00:00`), { weekday: true }) : '当天日程';
+  const activeFilterCount = [recurringFilter !== 'all', labelFilter !== 'all'].filter(Boolean).length;
+  const clearFilters = () => { setLabelFilter('all'); setRecurringFilter('all'); };
   const filterSummary = [recurringFilter === 'recurring' ? '仅重复' : '', labelFilter !== 'all' ? availableLabels.find(label => label.id === labelFilter)?.name ?? '已选标签' : ''].filter(Boolean).join(' · ');
 
   const handleEventPress = useCallback(
@@ -219,16 +222,9 @@ export default function CalendarScreen() {
   <>
     <AppShell accessibilityLabel="家庭日历" refreshing={refreshing} onRefresh={handleRefresh} title="家庭日历" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="events" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton label="创建日程" onPress={handleCreateEvent} /> : null}>
       <Stack gap={4}>
-        {/* Header with household name and create button */}
-
-          <PageIntro title="日历" />
-
-        <View style={{ flexDirection: 'row', gap: activeTheme.spacing[2], alignItems: 'center' }}>
-          <Pressable ref={filterTrigger} accessibilityRole="button" accessibilityLabel="筛选日程" onPress={() => setFiltersOpen(true)} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}><Text variant="label" color="link">筛选</Text></Pressable>
-          <Text variant="bodySm" color="inkMuted" style={{ flex: 1 }}>{filterSummary}</Text>
-          {filterSummary ? <Pressable accessibilityRole="button" accessibilityLabel="清除日程筛选" onPress={() => { setLabelFilter('all'); setRecurringFilter('all'); }} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}><Text variant="label" color="link">清除</Text></Pressable> : null}
-        </View>
-        {filtersOpen ? <AppDialog title="筛选日程" busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<Button label="完成" onPress={() => setFiltersOpen(false)} />}>
+        <PageIntro title="日历" action={<FilterButton ref={filterTrigger} label="筛选日程" count={activeFilterCount} onPress={() => setFiltersOpen(true)} />} />
+        {filterSummary ? <Text variant="bodySm" color="inkMuted">{filterSummary}</Text> : null}
+        {filtersOpen ? <AppDialog title="筛选日程" busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
           <Stack gap={4}>
             <FilterOptions label={RECURRING_FILTER_GROUP_LABEL} options={RECURRING_FILTERS.map(f => ({ value: f.key, label: f.label, name: recurringFilterAccessibilityLabel(f.key) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
             {availableLabels.length ? <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(label => ({ value: label.id, label: label.name, name: `筛选标签：${label.name}` }))]} value={labelFilter} onChange={setLabelFilter} /> : null}
@@ -244,7 +240,7 @@ export default function CalendarScreen() {
             {error ? <LoadError message={error} onRetry={() => void fetchEvents()} retryAccessibilityLabel="重试加载日程" /> : null}
             {!loading && !error && selectedDateEvents.length === 0 ? <EmptyState
               message={recurringFilter === 'recurring' ? RECURRING_EMPTY_EVENTS : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}
-              {...(filterSummary ? { action: <Button label="清除筛选" tone="secondary" onPress={() => { setLabelFilter('all'); setRecurringFilter('all'); }} /> } : {})}
+              {...(filterSummary ? { action: <Button label="调整筛选" tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
             /> : null}
             {selectedDateEvents.map(event => <EventCard key={event.id} event={event} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />)}
           </Stack>

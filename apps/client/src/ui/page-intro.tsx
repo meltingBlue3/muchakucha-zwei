@@ -1,17 +1,21 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Heading, Stack, Text } from './primitives';
 import { theme } from './theme';
+
+/** AppShell places the shared creation control in the desktop title row. */
+export const PageCreateActionContext = createContext<ReactNode>(null);
 
 /** Compact title row for the household's primary destinations. */
 export function PageIntro({ title, action }: {
   title: string;
   action?: ReactNode;
 }) {
+  const createAction = useContext(PageCreateActionContext);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing[4] }}>
       <Heading variant="heading" style={{ flex: 1 }}>{title}</Heading>
-      {action}
+      {action || createAction ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}>{action}{createAction}</View> : null}
     </View>
   );
 }

@@ -196,12 +196,15 @@ test('family management is a restorable destination', async ({ page }) => {
 test('task filters and calendar month survive tab switches', async ({ page }) => {
   await setup(page);
   await page.goto(`/households/${a}/tasks`);
-  await page.getByLabel('筛选：待办', { exact: true }).click();
+  await page.getByRole('button', { name: /^筛选任务/ }).click();
+  await page.getByRole('radio', { name: '筛选：进行中', exact: true }).click();
+  await page.getByRole('button', { name: '完成', exact: true }).click();
   await page.getByRole('tab', { name: '日历', exact: true }).click();
   await page.getByLabel('下一个月').click();
   const nextMonth = await page.getByText(/^\d{4}年\s*\d{1,2}月$/).innerText();
   await page.getByRole('tab', { name: '任务', exact: true }).click();
   await expect(page.getByRole('button', { name: '筛选任务，已选择 1 项' })).toBeVisible();
+  await expect(page.getByText('进行中', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: '日历', exact: true }).click();
   await expect(page.getByText(nextMonth, { exact: true })).toBeVisible();
 });
@@ -399,3 +402,76 @@ test('note format windows close back to editing without losing the selection or 
   await expect(input).toHaveValue('**词语练习**');
   await expect(page).toHaveURL(new RegExp(`/notes/${taskId}/edit$`));
 });
+
+for (const width of [320, 390, 1440]) {
+  test(`module actions and unified filters remain reachable at ${width}px`, async ({ page }, testInfo) => {
+    await setup(page);
+    await page.setViewportSize({ width, height: 844 });
+    const task = { id: taskId, householdId: a, title: '待办样例', status: 'pending', priority: 'medium', dueDate: null, description: null, assigneeIds: [], labels: [], createdBy: 'user', createdAt: '2026-09-27T00:00:00Z', updatedAt: '2026-09-27T00:00:00Z', recurrenceRuleId: null, recurrence: null, occurrenceDate: null };
+    await page.route(`**/api/v1/households/${a}/tasks`, route => route.fulfill({ json: { tasks: [task, { ...task, id: 'progress', title: '进行中样例', status: 'in_progress' }, { ...task, id: 'done', title: '已完成样例', status: 'completed' }] } }));
+    for (const [route, title, createLabel] of [
+      ['today', '今日', '创建新内容'], ['events', '日历', '创建日程'], ['tasks', '任务', '创建任务'], ['notes', '笔记', '创建笔记'],
+    ] as const) {
+      await page.goto(`/households/${a}/${route}`);
+      const create = page.getByRole('button', { name: createLabel, exact: true });
+      await expect(create).toBeInViewport();
+      const heading = await page.getByRole('heading', { name: title, exact: true }).boundingBox();
+      const button = await create.boundingBox();
+      if (width === 1440) {
+        expect(Math.abs(button!.y + button!.height / 2 - heading!.y - heading!.height / 2)).toBeLessThan(2);
+        await expect(page.getByTestId('floating-create')).toHaveCount(0);
+      } else {
+        expect(button!.y).toBeGreaterThan(844 / 2);
+        expect(button!.x).toBeGreaterThan(width / 2);
+        await expect(page.getByTestId('header-create')).toHaveCount(0);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`${route}-toolbar-${width}.png`) });
+      if (route === 'today') {
+        await create.click();
+        const menu = page.getByRole('menu', { name: '创建内容', exact: true });
+        await expect(menu).toBeInViewport();
+        if (width === 1440) expect((await menu.boundingBox())!.y).toBeGreaterThan(button!.y + button!.height);
+        await page.getByRole('menuitem', { name: '创建任务', exact: true }).click();
+      } else await create.click();
+      await expect(page.getByRole('dialog', { name: route === 'today' ? '创建任务' : createLabel, exact: true })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(create).toBeFocused();
+      if (route !== 'tasks' && route !== 'events') continue;
+      const filter = page.getByRole('button', { name: route === 'tasks' ? /^筛选任务/ : /^筛选日程/ });
+      const filterBox = await filter.boundingBox();
+      expect(Math.abs(filterBox!.y + filterBox!.height / 2 - heading!.y - heading!.height / 2)).toBeLessThan(2);
+      expect(filterBox!.x).toBeGreaterThan(heading!.x);
+      await expect(page.getByRole('radio')).toHaveCount(0);
+      if (route === 'tasks') {
+        await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(1);
+        await expect(page.getByRole('button', { name: '任务：待办样例', exact: true })).toBeVisible();
+      }
+      await filter.click();
+      const dialog = page.getByRole('dialog', { name: route === 'tasks' ? '筛选任务' : '筛选日程', exact: true });
+      const clear = dialog.getByRole('button', { name: '清除', exact: true });
+      const done = dialog.getByRole('button', { name: '完成', exact: true });
+      const clearBox = await clear.boundingBox(), doneBox = await done.boundingBox();
+      expect(clearBox!.x + clearBox!.width).toBeLessThan(doneBox!.x);
+      expect(Math.abs(clearBox!.y - doneBox!.y)).toBeLessThan(1);
+      expect(Math.abs(doneBox!.width - clearBox!.width * 2)).toBeLessThan(2);
+      await expect(clear).toBeInViewport();
+      await expect(done).toBeInViewport();
+      if (route === 'tasks') {
+        await expect(dialog.getByRole('radio', { name: '筛选：待办', exact: true })).toHaveAttribute('aria-checked', 'true');
+        await dialog.getByRole('radio', { name: '筛选：已完成', exact: true }).click();
+        await done.click();
+        await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(1);
+        await expect(page.getByRole('button', { name: '任务：已完成样例', exact: true })).toBeVisible();
+        await filter.click();
+      } else await dialog.getByRole('radio', { name: '重复筛选：仅看重复', exact: true }).click();
+      await page.screenshot({ path: testInfo.outputPath(`${route}-filters-${width}.png`) });
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await clear.click();
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole('radio', { name: route === 'tasks' ? '筛选：全部' : '重复筛选：全部', exact: true })).toHaveAttribute('aria-checked', 'true');
+      await done.click();
+      await expect(filter).toBeFocused();
+      if (route === 'tasks') await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(3);
+    }
+  });
+}
