@@ -22,7 +22,7 @@ import {
   recurrenceErrorsFromApi,
   recurrenceInputFromResponse,
   type RecurrenceInput,
-} from '../recurrence/recurrence-picker';
+} from '../recurrence/recurrence-options';
 
 const STATUSES = [
   { value: 'pending', label: '待办' },

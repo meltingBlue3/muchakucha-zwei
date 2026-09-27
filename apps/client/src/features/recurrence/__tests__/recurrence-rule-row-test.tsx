@@ -3,7 +3,7 @@ import { render } from '@testing-library/react-native';
 
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { RecurrenceKindBadge } from '../recurrence-kind-badge';
-import { recurrenceInputFromResponse } from '../recurrence-picker';
+import { recurrenceInputFromResponse } from '../recurrence-options';
 import { formatRecurrenceSummary } from '../recurrence-summary';
 import { formatRuleRow, nextDayIsoIn, RecurrenceRuleRow } from '../recurrence-rule-row';
 

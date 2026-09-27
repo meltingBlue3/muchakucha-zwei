@@ -9,7 +9,7 @@ import type { EventResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { formatTime } from '../../../../../../src/features/events/calendar-utils';
-import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
+import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
 import { Button, Heading, Spinner, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';

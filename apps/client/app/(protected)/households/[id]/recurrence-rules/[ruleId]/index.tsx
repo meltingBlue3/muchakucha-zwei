@@ -17,7 +17,7 @@ import { RecurrenceKindBadge } from '../../../../../../src/features/recurrence/r
 import {
   recurrenceInputFromResponse,
   type RecurrenceInput,
-} from '../../../../../../src/features/recurrence/recurrence-picker';
+} from '../../../../../../src/features/recurrence/recurrence-options';
 import { RecurrenceField } from '../../../../../../src/features/recurrence/recurrence-field';
 import { FormRow, FormSection, ROW_CONTENT_INSET, rowIcon } from '../../../../../../src/ui/compose-rows';
 import {

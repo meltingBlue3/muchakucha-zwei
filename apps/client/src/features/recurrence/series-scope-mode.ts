@@ -31,7 +31,7 @@ interface CanonicalRule {
 /**
  * `startsOn` is deliberately excluded.
  *
- * RecurrencePicker rewrites the form value's `startsOn` to the date of the
+ * RecurrenceField rewrites the form value's `startsOn` to the date of the
  * occurrence being edited, while the response carries the *rule's* start date.
  * The two therefore differ for every occurrence after the series start — and
  * for the first one too whenever `byWeekday` pushes the first materialized

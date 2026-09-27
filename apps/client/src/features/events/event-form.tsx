@@ -18,7 +18,7 @@ import {
   recurrenceErrorsFromApi,
   recurrenceInputFromResponse,
   type RecurrenceInput,
-} from '../recurrence/recurrence-picker';
+} from '../recurrence/recurrence-options';
 import { RecurrenceField } from '../recurrence/recurrence-field';
 import { toDateIso } from './calendar-utils';
 

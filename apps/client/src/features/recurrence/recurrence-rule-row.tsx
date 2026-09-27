@@ -5,7 +5,7 @@ import { Pressable, View } from 'react-native';
 import { Stack, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
 import { RecurrenceKindBadge, recurrenceKindLabel } from './recurrence-kind-badge';
-import { recurrenceInputFromResponse } from './recurrence-picker';
+import { recurrenceInputFromResponse } from './recurrence-options';
 import { formatRecurrenceSummary } from './recurrence-summary';
 
 const NEVER_ENDS_SUFFIX = '，永不结束';

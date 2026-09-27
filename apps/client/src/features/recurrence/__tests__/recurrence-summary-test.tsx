@@ -4,7 +4,7 @@ import { render } from '@testing-library/react-native';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import {
   formatRecurrenceSummary,
-  RecurrenceSummary,
+  RecurrenceNotes,
 } from '../recurrence-summary';
 
 const baseRule: RecurrenceDto = {
@@ -87,20 +87,27 @@ describe('recurrence summary formatting', () => {
   });
 });
 
-describe('RecurrenceSummary', () => {
-  test('renders summary, clamp explanation, and timezone note together', async () => {
+describe('RecurrenceNotes', () => {
+  test('renders the clamp explanation and timezone note together', async () => {
     const view = await render(
       <MuchakuchaThemeProvider>
-        <RecurrenceSummary
+        <RecurrenceNotes
           rule={{ ...baseRule, freq: 'monthly', startsOn: '2026-08-31', timezone: 'Asia/Tokyo' }}
           deviceTimeZone="Asia/Shanghai"
         />
       </MuchakuchaThemeProvider>,
     );
 
-    expect(view.getByText('每月 31 日重复')).toBeTruthy();
     expect(view.getByText('有些月份没有这一天，会自动改到当月最后一天。')).toBeTruthy();
     expect(view.getByText('按 Asia/Tokyo 的日期重复。')).toBeTruthy();
-    expect(view.getByLabelText('每月 31 日重复').props.numberOfLines).toBe(2);
+  });
+
+  test('renders nothing without a caveat', async () => {
+    const view = await render(
+      <MuchakuchaThemeProvider>
+        <RecurrenceNotes rule={baseRule} deviceTimeZone="Asia/Shanghai" />
+      </MuchakuchaThemeProvider>,
+    );
+    expect(view.toJSON()).toBeNull();
   });
 });

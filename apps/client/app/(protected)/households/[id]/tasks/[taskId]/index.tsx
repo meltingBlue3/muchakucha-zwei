@@ -11,7 +11,7 @@ import { ApiClientError } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { LabelChip } from '../../../../../../src/features/labels/label-chip';
-import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-picker';
+import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
 import { formatDueDate, isOverdue, priorityLabel, statusLabel } from '../../../../../../src/features/tasks/task-utils';
 import { Button, Heading, Stack, Text } from '../../../../../../src/ui/primitives';

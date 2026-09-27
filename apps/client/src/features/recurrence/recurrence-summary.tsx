@@ -1,9 +1,6 @@
 import type { RecurrenceDto } from '@muchakucha/api-client';
-import { useTheme } from '@shopify/restyle';
-import { View } from 'react-native';
 
 import { Text } from '../../ui/primitives';
-import type { Theme } from '../../ui/theme';
 
 const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'] as const;
 const CLAMP_NOTE = '有些月份没有这一天，会自动改到当月最后一天。';
@@ -74,50 +71,6 @@ export function formatRecurrenceSummary(
 interface RecurrenceSummaryProps {
   rule: RecurrenceDto;
   deviceTimeZone: string;
-}
-
-export function RecurrenceSummary({ rule, deviceTimeZone }: RecurrenceSummaryProps) {
-  const activeTheme = useTheme<Theme>();
-  const formatted = formatRecurrenceSummary(rule, deviceTimeZone);
-
-  return (
-    <View
-      style={{
-        backgroundColor: activeTheme.colors.tealSoft,
-        borderRadius: activeTheme.borderRadii.sm,
-        padding: activeTheme.spacing[3],
-      }}
-    >
-      {/*
-        `ink`, not `teal`. 07-UI-SPEC.md line 254 asks for `color="teal"` on a
-        `tealSoft` block, but that pairing measures 4.24:1 at this 12px caption
-        size and the same spec's Accessibility Contract (line 674) requires
-        ≥4.5:1 for normal text — the two cannot both hold. `ink` on `tealSoft`
-        is 12.2:1 and is the pairing `src/ui/__tests__/contrast-test.ts` already
-        guarantees for this surface. The block still reads as the teal
-        information block; only the text is legible. Caught by the axe
-        assertion in `e2e/events/recurrence-rules.spec.ts`.
-      */}
-      <Text
-        variant="caption"
-        color="ink"
-        numberOfLines={2}
-        accessibilityLabel={formatted.summary}
-      >
-        {formatted.summary}
-      </Text>
-      {formatted.clampNote !== null && (
-        <Text variant="caption" color="inkMuted">
-          {formatted.clampNote}
-        </Text>
-      )}
-      {formatted.timeZoneNote !== null && (
-        <Text variant="caption" color="inkMuted">
-          {formatted.timeZoneNote}
-        </Text>
-      )}
-    </View>
-  );
 }
 
 /** The clamp and time-zone caveats alone, for places that already show the summary line. */
