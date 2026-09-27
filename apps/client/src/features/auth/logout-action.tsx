@@ -1,5 +1,5 @@
 import type { ApiClient } from '@muchakucha/api-client';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 
@@ -34,7 +34,6 @@ export const LogoutAction = ({
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
   const [error, setError] = useState<string>();
-  useEffect(() => { onBusyChange?.(pending); }, [pending, onBusyChange]);
 
   const logout = async (): Promise<void> => {
     if (pendingRef.current) return;
@@ -44,6 +43,9 @@ export const LogoutAction = ({
       return;
     }
     pendingRef.current = true;
+    // Tell the host window at once, not after the next render: an Escape in
+    // between must not close the window while the request is in flight.
+    onBusyChange?.(true);
     setPending(true);
     setError(undefined);
     try {
@@ -57,6 +59,7 @@ export const LogoutAction = ({
     } finally {
       setPending(false);
       pendingRef.current = false;
+      onBusyChange?.(false);
     }
   };
 

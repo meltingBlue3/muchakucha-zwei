@@ -247,7 +247,8 @@ async function expectNoSeriousAxeViolations(page: Page): Promise<void> {
 
 /** The filter toggle's live count, read from its accessible name (0 when absent). */
 async function activeFilterCount(page: Page): Promise<number> {
-  const label = (await page.getByLabel(/^筛选任务/).getAttribute('aria-label')) ?? '';
+  // The open filter window is also named 筛选任务, so address the toggle by its role.
+  const label = (await page.getByRole('button', { name: /^筛选任务/ }).getAttribute('aria-label')) ?? '';
   const match = /已选择 (\d+) 项/.exec(label);
   return match === null ? 0 : Number(match[1]);
 }
@@ -304,7 +305,7 @@ test.describe('recurrence rule addendum journeys', () => {
 
     // D-15 / addendum a11y contract: the two options are one radio group, not
     // a pair of unrelated toggles.
-    const group = page.getByRole('radiogroup', { name: '重复筛选' });
+    const group = page.getByRole('radiogroup', { name: '重复', exact: true });
     await expect(group).toBeVisible();
 
     await group.getByLabel('重复筛选：仅看重复').click();
@@ -313,7 +314,7 @@ test.describe('recurrence rule addendum journeys', () => {
 
     const after = await activeFilterCount(page);
     expect(after).toBe(before + 1);
-    await expect(page.getByLabel(/^筛选任务/).getByText(String(after), { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^筛选任务/ }).getByText(`筛选（${after}）`, { exact: true })).toBeVisible();
 
     await group.getByLabel('重复筛选：全部').click();
     await expect(page.getByLabel(`任务：${plainTitle}`, { exact: true })).toBeVisible();
@@ -351,7 +352,7 @@ test.describe('recurrence rule addendum journeys', () => {
 
     const eventRow = list.getByLabel(`日程重复安排：${eventTitle}，${eventSummary}`);
     await expect(eventRow).toBeVisible();
-    await expect(eventRow.getByText('事件', { exact: true })).toBeVisible();
+    await expect(eventRow.getByText('日程', { exact: true })).toBeVisible();
     await expect(eventRow.getByText(`下一次 ${tomorrow}`, { exact: true })).toBeVisible();
 
     // --- Ending the event rule: two-step confirm, zero writes before it ---

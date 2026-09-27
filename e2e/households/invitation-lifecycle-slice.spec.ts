@@ -240,7 +240,7 @@ test('manages invitation lifecycle', async ({ page, request }) => {
 
   // The safe action closes the dialog without revoking.
   await revokeButton.click();
-  await expect(revokeDialog.getByText('撤销后，原链接将不能使用。')).toBeVisible();
+  await expect(revokeDialog.getByText('撤销后，对方将无法接受这份邀请。')).toBeVisible();
   await revokeDialog.getByRole('button', { name: '保留邀请', exact: true }).click();
   await expect(revokeDialog).toBeHidden();
   await expect(revokeButton).toBeFocused();

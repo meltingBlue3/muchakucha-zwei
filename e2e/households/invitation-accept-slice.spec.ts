@@ -45,8 +45,9 @@ for (const width of [320, 390, 1440]) {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('普通成员，可以查看和编辑家庭共享的日程、任务和笔记。')).toBeVisible();
     await expect(dialog.getByRole('button', { name: '关闭消息详情' })).toBeFocused();
+    // The window lists the secondary answer first and the primary last, so focus wraps back to 接受.
     await page.keyboard.press('Shift+Tab');
-    await expect(dialog.getByRole('button', { name: '拒绝「周末一起做饭的温暖家庭」的邀请' })).toBeFocused();
+    await expect(dialog.getByRole('button', { name: '接受「周末一起做饭的温暖家庭」的邀请' })).toBeFocused();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`inbox-detail-${width}.png`), fullPage: true });
     await page.keyboard.press('Escape');

@@ -160,7 +160,7 @@ test.describe('recurring event and task journeys', () => {
       expect((await loaded).status()).toBe(200);
     }
     await page.getByRole('button', { name: `${dayLabel(futureDate)}，1个日程`, exact: true }).click();
-    await page.getByRole('button', { name: new RegExp(`日程：${title}`) }).click();
+    await page.getByRole('button', { name: new RegExp(`^日程：${title}`) }).click();
     await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     const persisted = await listEvents(account.accessToken, householdId, futureDate, futureDate);
@@ -270,10 +270,21 @@ test.describe('recurring event and task journeys', () => {
     await page.getByLabel(new RegExp(`^${dayLabel(String(selected.occurrenceDate))}(?:，今天)?，\\d+个日程$`)).click();
     await page.getByLabel(`日程：${eventTitle}，重复`).click();
     await page.getByLabel('编辑日程').click();
-    await expect(page.getByRole('dialog', { name: '编辑日程' })).toBeVisible();
-    await page.getByLabel(weekdayLabel(removedWeekday)).click();
+    const edit = page.getByRole('dialog', { name: '编辑日程' });
+    await expect(edit).toBeVisible();
+    // Weekdays live on the custom repeat page, reached through the repeat row.
+    const openCustomRepeat = async () => {
+      await page.getByRole('button', { name: /^日程重复设置/ }).click();
+      await page.getByRole('dialog', { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
+      return page.getByRole('dialog', { name: '自定义重复' });
+    };
+    let custom = await openCustomRepeat();
+    await custom.getByLabel(weekdayLabel(removedWeekday)).click();
+    await custom.getByRole('button', { name: '完成', exact: true }).click();
     await page.reload();
-    await expect(page.getByLabel(weekdayLabel(removedWeekday))).not.toBeChecked();
+    custom = await openCustomRepeat();
+    await expect(custom.getByLabel(weekdayLabel(removedWeekday))).not.toBeChecked();
+    await custom.getByRole('button', { name: '完成', exact: true }).click();
     await page.getByLabel('保存', { exact: true }).click();
 
     const dialog = page.getByRole('dialog', { name: '更改重复规则？' });

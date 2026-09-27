@@ -203,4 +203,29 @@ describe('current-device logout contract', () => {
     expect(await view.findByText('暂时无法退出。请检查网络后重试。')).toBeTruthy();
     expect(sessionTransport.clear).not.toHaveBeenCalled();
   });
+
+  test('tells the host window it is busy the moment logout starts, before any re-render', async () => {
+    let finish: () => void = () => undefined;
+    const apiClient = { logout: jest.fn(() => new Promise<void>((resolve) => { finish = resolve; })) };
+    const onBusyChange = jest.fn();
+    const view = await render(
+      <MuchakuchaThemeProvider>
+        <LogoutAction
+          confirmationOnly
+          apiClient={apiClient}
+          onBusyChange={onBusyChange}
+          onLoggedOut={jest.fn()}
+          sessionStateStore={createSessionStateStore()}
+          sessionTransport={createTransport()}
+        />
+      </MuchakuchaThemeProvider>,
+    );
+    const confirm = view.getByRole('button', { name: '确认退出登录' });
+    // Press without awaiting React's flush: the busy signal must already be out,
+    // so an Escape in the same frame cannot close the window mid-request.
+    confirm.props.onClick?.() ?? confirm.props.onPress?.();
+    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+    finish();
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
+  });
 });

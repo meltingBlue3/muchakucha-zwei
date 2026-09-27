@@ -21,6 +21,7 @@ import { toDateIso, toDateRangeIso } from './calendar-utils';
 import {
   applyRecurringFilter,
   RECURRING_EMPTY_EVENTS,
+  RECURRING_FILTER_GROUP_LABEL,
   RECURRING_FILTERS,
   recurringFilterAccessibilityLabel,
   type RecurringFilterKey,
@@ -226,7 +227,7 @@ export default function CalendarScreen() {
         </View>
         {filtersOpen ? <AppDialog title="筛选日程" busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<Button label="完成" onPress={() => setFiltersOpen(false)} />}>
           <Stack gap={4}>
-            <FilterOptions label="重复筛选" options={RECURRING_FILTERS.map(f => ({ value: f.key, label: f.label, name: recurringFilterAccessibilityLabel(f.key) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
+            <FilterOptions label={RECURRING_FILTER_GROUP_LABEL} options={RECURRING_FILTERS.map(f => ({ value: f.key, label: f.label, name: recurringFilterAccessibilityLabel(f.key) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
             <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(label => ({ value: label.id, label: label.name, name: `筛选标签：${label.name}` }))]} value={labelFilter} onChange={setLabelFilter} />
           </Stack>
         </AppDialog> : null}
