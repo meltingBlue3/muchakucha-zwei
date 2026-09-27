@@ -1,3 +1,4 @@
+import { hasRecurrenceFieldErrors } from '../../../../../../src/features/recurrence/recurrence-options';
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
 import { HouseholdContextNote } from '../../../../../../src/ui/household-components';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
@@ -122,6 +123,8 @@ export default function EditEventRoute() {
         exitAllowed.current = true;
         exitEdit();
       } catch (err: unknown) {
+        // Repeat-rule field errors belong to the form, next to the repeat settings.
+        if (hasRecurrenceFieldErrors(err)) throw err;
         if (!conflict.handle(err)) setError('保存失败，请重试。');
       } finally {
         setIsSubmitting(false);

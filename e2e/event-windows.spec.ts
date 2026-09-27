@@ -181,7 +181,8 @@ test('recurring card deletion submits the selected series scope', async ({ page 
   await page.goto(`${base}/events`);
   await page.getByRole('button', { name: /^更多操作：日程：/ }).click();
   await page.getByRole('menuitem', { name: /^删除日程：/ }).click();
-  await page.getByRole('button', { name: '仅此一次', exact: true }).click();
+  await expect(page.getByRole('radio', { name: '仅此一次', exact: true })).toBeChecked();
+  await page.getByRole('button', { name: '确认删除日程', exact: true }).click();
   await expect(page).toHaveURL(`${base}/events`);
   expect(selectedScope).toBe('this_only');
 });

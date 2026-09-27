@@ -1,3 +1,4 @@
+import { hasRecurrenceFieldErrors } from '../recurrence/recurrence-options';
 import { useRef, useState } from 'react';
 import { useWorkspaceState } from '../../ui/workspace-state';
 
@@ -27,7 +28,10 @@ export function useCreateWithLabels<T>({ key, create, tag, onComplete }: {
       }
       if (record.labelIds.length > 0) await tag(record.id, record.labelIds);
       onComplete();
-    } catch {
+    } catch (failure) {
+      // Nothing was created and the repeat settings were refused: let the form
+      // show which field, instead of a generic network message.
+      if (record === null && hasRecurrenceFieldErrors(failure)) throw failure;
       setError(record === null ? '创建失败，请检查网络后重试。' : '内容已创建，但标签未保存。重试只会保存标签，不会重复创建。');
     } finally {
       inFlight.current = false;

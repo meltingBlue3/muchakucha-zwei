@@ -1,22 +1,11 @@
-import { useTheme } from '@shopify/restyle';
-import { useCallback, useEffect, useRef } from 'react';
-import { Modal, Platform, Pressable, ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useState } from 'react';
+import { View } from 'react-native';
 
-import { Banner, Button, Heading, Spinner, Stack, Text } from '../../ui/primitives';
-import type { Theme } from '../../ui/theme';
+import { OptionRow } from '../../ui/compose-rows';
+import { Banner, ConfirmActions, Stack, Text } from '../../ui/primitives';
 
 export type SeriesScope = 'this_only' | 'this_and_following';
 export type SeriesScopeMode = 'edit' | 'delete' | 'rule-change';
-
-export interface SeriesScopeSheetProps {
-  error?: string | null;
-  mode: SeriesScopeMode;
-  onClose(): void;
-  onSelect(scope: SeriesScope): void;
-  submitting?: SeriesScope | null;
-  visible: boolean;
-}
 
 const MODE_COPY: Record<SeriesScopeMode, { body: string; title: string }> = {
   edit: {
@@ -33,301 +22,51 @@ const MODE_COPY: Record<SeriesScopeMode, { body: string; title: string }> = {
   },
 };
 
-/** Embedded step for a host dialog; no second modal or focus trap. */
 export function seriesScopeTitle(mode: SeriesScopeMode): string { return MODE_COPY[mode].title; }
 
-export function SeriesScopeContent({ mode, error, onClose, onSelect, submitting = null }: Omit<SeriesScopeSheetProps, 'visible'>) {
+/**
+ * The scope step shown inside the host window, as in a system calendar: pick
+ * 仅此一次 or 此后所有, then confirm. A rule change can only apply from this
+ * occurrence on, so 仅此一次 stays visible but unavailable, with the reason.
+ */
+export function SeriesScopeContent({ mode, error, onClose, onSelect, submitting = null, confirmLabel }: {
+  mode: SeriesScopeMode;
+  error?: string | null;
+  onClose(): void;
+  onSelect(scope: SeriesScope): void;
+  submitting?: SeriesScope | null;
+  /** Defaults to 删除 for deletion and 保存 otherwise. */
+  confirmLabel?: string;
+}) {
+  const [scope, setScope] = useState<SeriesScope>(mode === 'rule-change' ? 'this_and_following' : 'this_only');
   const busy = submitting !== null;
-  // Either delete scope removes something for good; neither may look like the safe choice.
-  const scopeTone = mode === 'delete' ? 'destructive' : undefined;
-  return <Stack gap={3}>
-    <Text>{MODE_COPY[mode].body}</Text>
-    <Text variant="bodySm" color="inkMuted">「此后所有」只影响这一次和之后的重复，已经过去的不受影响。</Text>
-    {error ? <Text accessibilityRole="alert" color="destructive">{error}</Text> : null}
-    <Button label="仅此一次" tone={scopeTone ?? 'primary'} disabled={busy || mode === 'rule-change'} loading={submitting === 'this_only'} onPress={() => onSelect('this_only')} />
-    {mode === 'rule-change' ? <Text variant="caption" color="inkMuted">重复规则的改动只能应用到这一次和之后。</Text> : null}
-    <Button label="此后所有" tone={scopeTone ?? 'secondary'} disabled={busy} loading={submitting === 'this_and_following'} onPress={() => onSelect('this_and_following')} />
-    <Button label="取消" tone="secondary" disabled={busy} onPress={onClose} />
-  </Stack>;
-}
-
-const FOCUSABLE_SELECTOR = [
-  'button:not([disabled])',
-  '[href]',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',');
-
-type Focusable = { focus?: () => void };
-
-export const SeriesScopeSheet = ({
-  error = null,
-  mode,
-  onClose,
-  onSelect,
-  submitting = null,
-  visible,
-}: SeriesScopeSheetProps) => {
-  const activeTheme = useTheme<Theme>();
-  const insets = useSafeAreaInsets();
-  const panelRef = useRef<View>(null);
-  const thisOnlyRef = useRef<View>(null);
-  const followingRef = useRef<View>(null);
-  const cancelRef = useRef<View>(null);
-  const returnFocusRef = useRef<Focusable | null>(null);
-  const busy = submitting !== null;
-  const thisOnlyDisabled = busy || mode === 'rule-change';
-
-  const getDefaultRef = useCallback(
-    () =>
-      mode === 'delete'
-        ? cancelRef
-        : mode === 'rule-change'
-          ? followingRef
-          : thisOnlyRef,
-    [mode],
-  );
-
-  useEffect(() => {
-    if (!visible) return undefined;
-
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      returnFocusRef.current = document.activeElement as Focusable | null;
-    }
-
-    const focusTimer = setTimeout(() => {
-      (getDefaultRef().current as unknown as Focusable | null)?.focus?.();
-    }, activeTheme.motion.reducedTransitionMs);
-
-    return () => {
-      clearTimeout(focusTimer);
-      if (Platform.OS === 'web') returnFocusRef.current?.focus?.();
-    };
-  }, [activeTheme.motion.reducedTransitionMs, getDefaultRef, visible]);
-
-  useEffect(() => {
-    if (!visible || Platform.OS !== 'web' || typeof document === 'undefined') {
-      return undefined;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        if (!busy) onClose();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-
-      const panel = panelRef.current as unknown as HTMLElement | null;
-      const focusable = panel === null
-        ? []
-        : Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-      if (focusable.length === 0) {
-        event.preventDefault();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [busy, onClose, visible]);
-
-  // React Native Web keeps a closed Modal subtree in the DOM. Unmounting it
-  // prevents stale dialog copy from polluting navigation and a11y queries.
-  if (!visible) return null;
-
-  const actionStyle = (
-    scope: SeriesScope | 'cancel',
-    pressed: boolean,
-  ) => {
-    const disabled = scope === 'this_only' ? thisOnlyDisabled : busy;
-    const destructiveFill = mode === 'delete' && scope === 'this_and_following';
-    const primaryFill =
-      (mode === 'edit' && scope === 'this_only') ||
-      (mode === 'rule-change' && scope === 'this_and_following');
-    const filled = destructiveFill || primaryFill;
-    const destructiveOutline = mode === 'delete' && scope === 'this_only';
-
-    return {
-      alignItems: 'center' as const,
-      backgroundColor: disabled
-        ? activeTheme.colors.disabled
-        : destructiveFill
-          ? activeTheme.colors.destructive
-          : primaryFill
-            ? activeTheme.colors.coral
-            : activeTheme.colors.surface,
-      borderColor: destructiveOutline
-        ? activeTheme.colors.destructive
-        : filled
-          ? activeTheme.colors.transparent
-          : activeTheme.colors.border,
-      borderRadius: activeTheme.borderRadii.sm,
-      borderWidth: activeTheme.borderWidths.default,
-      flexDirection: 'row' as const,
-      gap: activeTheme.spacing[2],
-      justifyContent: 'center' as const,
-      minHeight: activeTheme.controlSizes.primary,
-      minWidth: activeTheme.controlSizes.touchTarget,
-      opacity: pressed ? 0.72 : 1,
-      paddingHorizontal: activeTheme.spacing[4],
-      width: '100%' as const,
-    };
-  };
-
-  const actionTextColor = (scope: SeriesScope | 'cancel') => {
-    if (scope === 'this_only' && thisOnlyDisabled) return 'surface' as const;
-    if (mode === 'delete') {
-      return scope === 'this_and_following' ? 'surface' as const :
-        scope === 'this_only' ? 'destructive' as const : 'ink' as const;
-    }
-    if (
-      (mode === 'edit' && scope === 'this_only') ||
-      (mode === 'rule-change' && scope === 'this_and_following')
-    ) {
-      return 'surface' as const;
-    }
-    return 'ink' as const;
-  };
-
-  const content = (
-    <View
-      accessibilityLabel={MODE_COPY[mode].title}
-      accessibilityViewIsModal
-      aria-modal
-      ref={panelRef}
-      role={'dialog' as never}
-      style={{
-        backgroundColor: activeTheme.colors.surface,
-        borderRadius: Platform.OS === 'web' ? activeTheme.borderRadii.lg : undefined,
-        borderTopLeftRadius: activeTheme.borderRadii.lg,
-        borderTopRightRadius: activeTheme.borderRadii.lg,
-        maxHeight: '75%',
-        maxWidth: Platform.OS === 'web' ? activeTheme.layout.switcherWidth : undefined,
-        overflow: 'hidden',
-        width:
-          Platform.OS === 'web'
-            ? (`calc(100% - ${activeTheme.spacing[6] * 2}px)` as never)
-            : '100%',
-        ...(Platform.OS === 'web'
-          ? { boxShadow: activeTheme.elevation.softWeb as string }
-          : {}),
-      }}
-    >
-      <ScrollView
-        contentContainerStyle={{
-          padding: activeTheme.spacing[4],
-          paddingBottom: activeTheme.spacing[4] + insets.bottom,
-        }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Stack gap={3}>
-          {error ? <Banner>{error}</Banner> : null}
-          <Heading>{MODE_COPY[mode].title}</Heading>
-          <Text variant="bodySm">{MODE_COPY[mode].body}</Text>
-          <Text color="inkMuted" variant="caption">
-            「此后所有」只影响这一次和之后的重复，已经过去的不受影响。
-          </Text>
-
-          <Pressable
-            accessibilityLabel="仅此一次"
-            accessibilityRole="button"
-            accessibilityState={{
-              busy: submitting === 'this_only',
-              disabled: thisOnlyDisabled,
-            }}
-            disabled={thisOnlyDisabled}
-            onPress={() => onSelect('this_only')}
-            ref={thisOnlyRef}
-            style={({ pressed }) => actionStyle('this_only', pressed)}
-          >
-            {submitting === 'this_only' ? <Spinner /> : null}
-            <Text color={actionTextColor('this_only')} variant="button">
-              仅此一次
-            </Text>
-          </Pressable>
-          {mode === 'rule-change' ? (
-            <Text color="inkMuted" variant="caption">
-              重复规则的改动只能应用到这一次和之后。
-            </Text>
-          ) : null}
-
-          <Pressable
-            accessibilityLabel="此后所有"
-            accessibilityRole="button"
-            accessibilityState={{
-              busy: submitting === 'this_and_following',
-              disabled: busy,
-            }}
-            disabled={busy}
-            onPress={() => onSelect('this_and_following')}
-            ref={followingRef}
-            style={({ pressed }) => actionStyle('this_and_following', pressed)}
-          >
-            {submitting === 'this_and_following' ? <Spinner /> : null}
-            <Text color={actionTextColor('this_and_following')} variant="button">
-              此后所有
-            </Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityLabel="取消"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: busy }}
-            disabled={busy}
-            onPress={onClose}
-            ref={cancelRef}
-            style={({ pressed }) => actionStyle('cancel', pressed)}
-          >
-            <Text color={actionTextColor('cancel')} variant="button">
-              取消
-            </Text>
-          </Pressable>
-        </Stack>
-      </ScrollView>
-    </View>
-  );
-
   return (
-    <Modal
-      animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
-      onRequestClose={busy ? undefined : onClose}
-      transparent
-      visible
-    >
-      <View
-        style={{
-          alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
-          flex: 1,
-          justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end',
-        }}
-      >
-        <Pressable
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          onPress={busy ? undefined : onClose}
-          style={{
-            backgroundColor: activeTheme.colors.overlay,
-            bottom: activeTheme.spacing[0],
-            left: activeTheme.spacing[0],
-            position: 'absolute',
-            right: activeTheme.spacing[0],
-            top: activeTheme.spacing[0],
-          }}
+    <Stack gap={3}>
+      <Text>{MODE_COPY[mode].body}</Text>
+      <View accessibilityRole="radiogroup" accessibilityLabel="影响范围">
+        <OptionRow
+          label="仅此一次"
+          checked={scope === 'this_only'}
+          disabled={busy || mode === 'rule-change'}
+          {...(mode === 'rule-change' ? { detail: '重复规则的改动只能应用到这一次和之后。' } : {})}
+          onPress={() => setScope('this_only')}
         />
-        {content}
+        <OptionRow
+          label="此后所有"
+          detail="这一次和之后的重复，已经过去的不受影响。"
+          checked={scope === 'this_and_following'}
+          disabled={busy}
+          onPress={() => setScope('this_and_following')}
+        />
       </View>
-    </Modal>
+      {error ? <Banner>{error}</Banner> : null}
+      <ConfirmActions
+        confirmLabel={confirmLabel ?? (mode === 'delete' ? '删除' : '保存')}
+        destructive={mode === 'delete'}
+        busy={busy}
+        onCancel={onClose}
+        onConfirm={() => onSelect(scope)}
+      />
+    </Stack>
   );
-};
+}

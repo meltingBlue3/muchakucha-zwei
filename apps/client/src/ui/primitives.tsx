@@ -140,6 +140,8 @@ type ButtonProps = Omit<PressableProps, 'children'> & {
   loading?: boolean;
   /** `destructive` commits an irreversible or access-removing change. */
   tone?: ButtonTone;
+  /** Set on a button that shows or hides content, so its state is announced. */
+  expanded?: boolean;
 };
 
 export const getButtonFill = (state: { disabled: boolean; pressed: boolean }, tone: Exclude<ButtonTone, 'secondary'> = 'primary'): string =>
@@ -149,7 +151,7 @@ export const getButtonFill = (state: { disabled: boolean; pressed: boolean }, to
       ? state.pressed ? theme.colors.destructivePressed : theme.colors.destructive
       : state.pressed ? theme.colors.coralPressed : theme.colors.coral;
 
-export const Button = ({ disabled, label, loading = false, tone = 'primary', style, ...props }: ButtonProps) => {
+export const Button = ({ disabled, label, loading = false, tone = 'primary', expanded, style, ...props }: ButtonProps) => {
   const activeTheme = useTheme<Theme>();
   const unavailable = disabled || loading;
   const [focused, setFocused] = useState(false);
@@ -159,7 +161,8 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', sty
       {...pressableProps}
       accessibilityLabel={pressableProps.accessibilityLabel ?? label}
       accessibilityRole="button"
-      accessibilityState={{ busy: loading, disabled: unavailable }}
+      accessibilityState={{ busy: loading, disabled: unavailable, ...(expanded === undefined ? {} : { expanded }) }}
+      {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
       disabled={unavailable}
       onBlur={(event) => {
         setFocused(false);

@@ -274,7 +274,8 @@ test.describe('Tasks API', () => {
     await page.getByLabel('任务标题', { exact: true }).fill('B共同修改');
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await expect(page.getByRole('button', { name: '编辑任务', exact: true })).toBeVisible();
-    await expect(page.getByText('B共同修改', { exact: true })).toBeVisible();
+    // The list behind the window shows the new title too; check the detail window itself.
+    await expect(page.getByRole('dialog', { name: '任务详情' }).getByText('B共同修改', { exact: true })).toBeVisible();
     const saved = await apiCall(memberA.accessToken, 'GET', `/api/v1/households/${householdId}/tasks/${taskId}`);
     expect(saved.body.title).toBe('B共同修改');
     expect(saved.body.createdBy).toBe(memberA.userId);

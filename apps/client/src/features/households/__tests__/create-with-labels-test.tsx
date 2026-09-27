@@ -1,3 +1,4 @@
+import { ApiClientError } from '@muchakucha/api-client';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useState } from 'react';
 import { Button, MuchakuchaThemeProvider, Text } from '../../../ui/primitives';
@@ -26,4 +27,21 @@ test('label retry after leaving and reopening never creates a second resource', 
   expect(create).toHaveBeenCalledTimes(1);
   expect(tag).toHaveBeenCalledTimes(2);
   expect(tag).toHaveBeenLastCalledWith('created-once', ['label-a']);
+});
+
+test('a refused repeat rule goes back to the form; other failures stay a generic message', async () => {
+  const refused = new ApiClientError(400, { error: { code: 'VALIDATION_FAILED', details: [{ field: 'recurrence.endsOn' }] } });
+  const create = jest.fn().mockRejectedValueOnce(refused).mockRejectedValueOnce(new Error('offline'));
+  const outcomes: unknown[] = [];
+  function Editor() {
+    const flow = useCreateWithLabels<string>({ key: 'draft:family:event:new:created', create, tag: jest.fn(), onComplete: jest.fn() });
+    return <>{flow.error ? <Text>{flow.error}</Text> : null}<Button label="创建" onPress={() => { flow.submit('title', []).then(() => outcomes.push('ok'), (failure: unknown) => outcomes.push(failure)); }} /></>;
+  }
+  const view = await render(<MuchakuchaThemeProvider><WorkspaceStateProvider><Editor /></WorkspaceStateProvider></MuchakuchaThemeProvider>);
+  await fireEvent.press(view.getByRole('button', { name: '创建' }));
+  await waitFor(() => expect(outcomes).toEqual([refused]));
+  expect(view.queryByText('创建失败，请检查网络后重试。')).toBeNull();
+  await fireEvent.press(view.getByRole('button', { name: '创建' }));
+  await view.findByText('创建失败，请检查网络后重试。');
+  expect(outcomes).toEqual([refused, 'ok']);
 });

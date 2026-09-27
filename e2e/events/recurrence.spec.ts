@@ -297,7 +297,8 @@ test.describe('recurring event and task journeys', () => {
       before.map((event) => [event.id, event.occurrenceDate]),
     );
 
-    await dialog.getByLabel('此后所有').click();
+    await expect(dialog.getByRole('radio', { name: '此后所有' })).toBeChecked();
+    await dialog.getByRole('button', { name: '保存', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/households/${householdId}/events`));
     await expect.poll(async () => {
       const events = (await listEvents(account.accessToken, householdId, rangeStart, rangeEnd))
@@ -372,7 +373,8 @@ test.describe('recurring event and task journeys', () => {
     const deleteDialog = page.getByRole('dialog', { name: '删除任务' });
     await expect(deleteDialog).toBeVisible();
     await expect(deleteDialog.getByRole('button', { name: '关闭删除任务' })).toBeFocused();
-    await deleteDialog.getByLabel('仅此一次').click();
+    await deleteDialog.getByRole('radio', { name: '仅此一次' }).click();
+    await deleteDialog.getByRole('button', { name: '确认删除任务', exact: true }).click();
     await expect(deleteDialog).toHaveCount(0);
 
     const afterCancel = (await listTasks(account.accessToken, householdId))

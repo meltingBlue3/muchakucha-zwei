@@ -7,7 +7,7 @@ import { formatDate } from '../../../../src/ui/date-values';
 import { HouseholdNavigation } from '../../../../src/ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import Calendar from 'lucide-react-native/icons/calendar';
@@ -347,7 +347,7 @@ export default function TodayRoute() {
                     />
                   ))}
                 </Stack>
-                {overdueTasks.length > 3 ? <Button label={allOverdue ? '收起逾期任务' : `查看全部逾期任务（${overdueTasks.length}）`} tone="secondary" onPress={() => setAllOverdue(value => !value)} /> : null}
+                {overdueTasks.length > 3 ? <Button label={allOverdue ? '收起逾期任务' : `查看全部逾期任务（${overdueTasks.length}）`} tone="secondary" expanded={allOverdue} style={{ marginTop: activeTheme.spacing[2] }} onPress={() => setAllOverdue(value => !value)} /> : null}
               </View>
             )}
 
@@ -376,22 +376,17 @@ export default function TodayRoute() {
                     />
                   ))}
                 </Stack>
-                {unscheduledTasks.length > 3 ? <Button label={allUnscheduled ? '收起待安排' : `查看全部待安排（${unscheduledTasks.length}）`} tone="secondary" onPress={() => setAllUnscheduled(value => !value)} /> : null}
+                {unscheduledTasks.length > 3 ? <Button label={allUnscheduled ? '收起待安排' : `查看全部待安排（${unscheduledTasks.length}）`} tone="secondary" expanded={allUnscheduled} style={{ marginTop: activeTheme.spacing[2] }} onPress={() => setAllUnscheduled(value => !value)} /> : null}
               </View>
             )}
 
             {/* Hidden when nothing is coming up: a toggle that reveals zero items is noise. */}
-            {approachingTasks.length + otherUpcomingTasks.length > 0 ? <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showUpcoming }}
-              aria-expanded={showUpcoming}
+            {approachingTasks.length + otherUpcomingTasks.length > 0 ? <Button
+              label={showUpcoming ? '收起后续安排' : `查看后续安排（${approachingTasks.length + otherUpcomingTasks.length}）`}
+              tone="secondary"
+              expanded={showUpcoming}
               onPress={() => setShowUpcoming((value) => !value)}
-              style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}
-            >
-              <Text variant="label" color="link">
-                {showUpcoming ? '收起后续安排' : `查看后续安排（${approachingTasks.length + otherUpcomingTasks.length}）`}
-              </Text>
-            </Pressable> : null}
+            /> : null}
             {showUpcoming && approachingTasks.length + otherUpcomingTasks.length > 0 ? <>
             {/* Upcoming work is secondary to today's actions. */}
             <View>

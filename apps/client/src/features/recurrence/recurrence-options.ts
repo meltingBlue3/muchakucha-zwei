@@ -186,3 +186,8 @@ export function recurrenceErrorsFromApi(error: unknown): Record<string, string> 
   }
   return messages;
 }
+
+/** Whether a failed write names repeat-rule fields the form can point at. */
+export function hasRecurrenceFieldErrors(error: unknown): boolean {
+  return Object.keys(recurrenceErrorsFromApi(error)).length > 0;
+}

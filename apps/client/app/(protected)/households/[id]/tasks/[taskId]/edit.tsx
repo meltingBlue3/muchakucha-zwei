@@ -1,3 +1,4 @@
+import { hasRecurrenceFieldErrors } from '../../../../../../src/features/recurrence/recurrence-options';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
 import { TaskWindow } from '../../../../../../src/features/tasks/task-window';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
@@ -152,6 +153,11 @@ export default function EditTaskRoute() {
       exitAllowed.current = true;
       exitEdit();
     } catch (error: unknown) {
+      if (hasRecurrenceFieldErrors(error)) {
+        // The form shows these next to the repeat settings it owns.
+        setSubmitting(false);
+        throw error;
+      }
       if (conflict.handle(error)) {
         setSubmitError(null);
       } else if (error instanceof ApiClientError) {

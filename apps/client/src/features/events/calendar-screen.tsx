@@ -15,6 +15,7 @@ import type { EventResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useHouseholdContext } from '../households/household-context';
+import { mergeLabels, useHouseholdLabels } from '../labels/use-household-labels';
 import { CalendarMonth } from './calendar-month';
 import { EventCard } from './event-card';
 import { toDateIso, toDateRangeIso } from './calendar-utils';
@@ -125,7 +126,7 @@ export default function CalendarScreen() {
   );
 
   // Extract unique labels from loaded events
-  const availableLabels = useMemo(() => {
+  const seenLabels = useMemo(() => {
     const seen = new Map<string, { id: string; name: string; color: string }>();
     for (const e of events) {
       for (const l of e.labels ?? []) {
@@ -136,6 +137,8 @@ export default function CalendarScreen() {
     }
     return [...seen.values()];
   }, [events]);
+  const householdLabels = useHouseholdLabels(householdId);
+  const availableLabels = useMemo(() => mergeLabels(householdLabels, seenLabels), [householdLabels, seenLabels]);
 
   const filteredEvents = useMemo(() => applyRecurringFilter(events.filter(event =>
     labelFilter === 'all' || (event.labels ?? []).some(label => label.id === labelFilter),
@@ -228,7 +231,7 @@ export default function CalendarScreen() {
         {filtersOpen ? <AppDialog title="筛选日程" busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<Button label="完成" onPress={() => setFiltersOpen(false)} />}>
           <Stack gap={4}>
             <FilterOptions label={RECURRING_FILTER_GROUP_LABEL} options={RECURRING_FILTERS.map(f => ({ value: f.key, label: f.label, name: recurringFilterAccessibilityLabel(f.key) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
-            <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(label => ({ value: label.id, label: label.name, name: `筛选标签：${label.name}` }))]} value={labelFilter} onChange={setLabelFilter} />
+            {availableLabels.length ? <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(label => ({ value: label.id, label: label.name, name: `筛选标签：${label.name}` }))]} value={labelFilter} onChange={setLabelFilter} /> : null}
           </Stack>
         </AppDialog> : null}
         <View style={{ flexDirection: wide ? 'row' : 'column', gap: activeTheme.spacing[5], alignItems: wide ? 'flex-start' : 'stretch' }}>

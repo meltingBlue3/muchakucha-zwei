@@ -5,6 +5,7 @@ import { sessionApiClient, sessionTransport } from '../../src/features/auth/sess
 import { useHouseholdContext } from '../../src/features/households/household-context';
 import { useInbox } from '../../src/features/inbox/use-inbox';
 import { InboxList } from '../../src/features/inbox/inbox-list';
+import { PageIntro } from '../../src/ui/page-intro';
 import { AppShell } from '../../src/ui/household-components';
 import { Stack } from '../../src/ui/primitives';
 import { theme } from '../../src/ui/theme';
@@ -20,6 +21,7 @@ export default function InboxRoute() {
   const inbox = useInbox({ api: sessionApiClient, getAccessToken, onAccepted });
   return <AppShell refreshing={inbox.loading} onRefresh={() => { void inbox.reload(); }} title="收件箱" accessibilityLabel="收件箱" showBack showProfile showInbox={false} onBack={() => router.canGoBack() ? router.back() : router.replace('/household-handoff')}>
     <Stack style={{ width: '100%', maxWidth: theme.layout.householdMaxWidth, alignSelf: 'center' }}>
+      <PageIntro title="收件箱" />
       <InboxList {...inbox} />
     </Stack>
   </AppShell>;

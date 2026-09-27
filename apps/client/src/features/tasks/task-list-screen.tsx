@@ -16,6 +16,7 @@ import ListFilter from 'lucide-react-native/icons/list-filter';
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useTaskCompletion } from './use-task-completion';
 import { useHouseholdContext } from '../households/household-context';
+import { mergeLabels, useHouseholdLabels } from '../labels/use-household-labels';
 import {
   applyRecurringFilter,
   classifyGenerationWindow,
@@ -98,7 +99,7 @@ export default function TaskListScreen() {
   }, [members]);
 
   // Extract unique labels from loaded tasks
-  const availableLabels = useMemo(() => {
+  const seenLabels = useMemo(() => {
     const seen = new Map<string, { id: string; name: string; color: string }>();
     for (const t of tasks) {
       for (const l of t.labels ?? []) {
@@ -109,6 +110,8 @@ export default function TaskListScreen() {
     }
     return [...seen.values()];
   }, [tasks]);
+  const householdLabels = useHouseholdLabels(householdId);
+  const availableLabels = useMemo(() => mergeLabels(householdLabels, seenLabels), [householdLabels, seenLabels]);
 
   const filteredTasks = useMemo(() => {
     let result = tasks;
