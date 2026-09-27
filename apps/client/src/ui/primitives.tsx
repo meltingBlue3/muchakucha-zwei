@@ -19,8 +19,8 @@ import CircleCheck from 'lucide-react-native/icons/circle-check';
 import Eye from 'lucide-react-native/icons/eye';
 import EyeOff from 'lucide-react-native/icons/eye-off';
 import Info from 'lucide-react-native/icons/info';
-import House from 'lucide-react-native/icons/house';
 
+import { BrandLogo } from './brand-logo';
 import { SheetActionSlot } from './sheet-action';
 import { theme, type Space, type TextVariant, type Theme } from './theme';
 
@@ -532,16 +532,7 @@ export const EmptyState = ({ title, message, action }: { title?: string; message
 
 export const BrandMark = () => (
   <Inline accessibilityLabel="Muchakucha Zwei" gap={2}>
-    <Box
-      accessibilityElementsHidden
-      backgroundColor="coral"
-      borderRadius="md"
-      height={theme.spacing[8]}
-      importantForAccessibility="no-hide-descendants"
-      width={theme.spacing[8]}
-      alignItems="center"
-      justifyContent="center"
-    ><House color={theme.colors.surface} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} /></Box>
+    <BrandLogo />
     <Text variant="body" style={{ fontWeight: '600', flexShrink: 1 }}>Muchakucha Zwei</Text>
   </Inline>
 );
