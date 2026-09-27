@@ -25,6 +25,21 @@ function weekdayLabel(day: number): string {
   return `星期${['日', '一', '二', '三', '四', '五', '六'][day]}`;
 }
 
+/** Chooses a date through the Material-style dialog's keyboard entry. */
+async function pickDate(page: Page, name: string, value: string) {
+  await page.getByRole('button', { name: new RegExp(`^${name}，`) }).click();
+  const dialog = page.getByRole('dialog', { name: '请选择日期' });
+  await dialog.getByRole('button', { name: '切换到键盘输入' }).click();
+  await dialog.getByLabel('输入日期').fill(value);
+  await dialog.getByRole('button', { name: '确定', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
+async function pickTime(page: Page, name: string, value: string) {
+  await page.getByRole('button', { name: new RegExp(`^${name}，`) }).click();
+  await page.getByRole('dialog', { name: '选择时间' }).getByRole('button', { name: `选择 ${value}`, exact: true }).click();
+}
+
 async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> {
   const database = new Client({ connectionString: DATABASE_URL });
   await database.connect();
@@ -161,32 +176,34 @@ test.describe('recurring event and task journeys', () => {
     await page.getByLabel('创建事件').click();
     await expect(page.getByRole('dialog', { name: '创建日程' })).toBeVisible();
     await page.getByLabel('事件标题').fill(title);
-    const startDateInput = page.getByLabel('开始日期');
-    await startDateInput.fill(startDate);
-    await startDateInput.press('Tab');
-    await page.getByLabel('结束日期').fill(startDate);
-    await page.getByLabel('结束日期').press('Tab');
-    await page.getByLabel('开始时间').fill('09:00');
-    await page.getByLabel('结束时间').fill('10:00');
+    await pickDate(page, '开始日期', startDate);
+    await pickDate(page, '结束日期', startDate);
+    await pickTime(page, '开始时间', '09:00');
+    await pickTime(page, '结束时间', '10:00');
 
-    await page.getByRole('button', { name: '更多日程选项' }).click();
-    await page.getByLabel('每天', { exact: true }).click();
-    await expect(page.getByLabel('每天', { exact: true })).toBeChecked();
-    await page.getByLabel('每周', { exact: true }).click();
-    await expect(page.getByLabel('每周', { exact: true })).toBeChecked();
+    const repeat = page.getByRole('button', { name: /^日程重复设置/ });
+    await expect(repeat).toHaveAccessibleName('日程重复设置，不重复');
+    await repeat.click();
+    await page.getByRole('dialog', { name: '重复' }).getByRole('radio', { name: '每天' }).click();
+    await expect(repeat).toHaveAccessibleName('日程重复设置，每天重复');
+    await repeat.click();
+    await page.getByRole('dialog', { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
+    const custom = page.getByRole('dialog', { name: '自定义重复' });
+    await custom.getByRole('radio', { name: '周', exact: true }).click();
     const defaultWeekday = await page.evaluate((value) => new Date(`${value}T12:00:00`).getDay(), startDate);
     const selectedWeekdays = [defaultWeekday, (defaultWeekday + 1) % 7, (defaultWeekday + 2) % 7];
-    const checkedWeekdays = await page.getByRole('checkbox').evaluateAll((checkboxes) =>
+    const checkedWeekdays = await custom.getByRole('checkbox').evaluateAll((checkboxes) =>
       checkboxes
         .filter((checkbox) => checkbox.getAttribute('aria-checked') === 'true')
         .map((checkbox) => checkbox.getAttribute('aria-label')),
     );
     expect(checkedWeekdays).toEqual([weekdayLabel(selectedWeekdays[0]!)]);
-    await page.getByLabel(weekdayLabel(selectedWeekdays[1]!)).click();
-    await page.getByLabel(weekdayLabel(selectedWeekdays[2]!)).click();
-    await page.getByLabel('重复次数', { exact: true }).first().click();
-    await page.getByLabel('重复次数', { exact: true }).last().fill('4');
-    await expect(page.getByLabel(/每周.*重复，共 4 次/)).toBeVisible();
+    await custom.getByLabel(weekdayLabel(selectedWeekdays[1]!)).click();
+    await custom.getByLabel(weekdayLabel(selectedWeekdays[2]!)).click();
+    await custom.getByRole('radio', { name: '重复次数', exact: true }).click();
+    await custom.getByLabel('重复次数值', { exact: true }).fill('4');
+    await custom.getByRole('button', { name: '完成', exact: true }).click();
+    await expect(repeat).toHaveAccessibleName(/^日程重复设置，每周.*重复，共 4 次$/);
 
     await page.getByLabel('创建', { exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/households/${householdId}/events$`));

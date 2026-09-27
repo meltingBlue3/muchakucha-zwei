@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { OverlayFocusOptions } from './overlay-focus.types';
 
+// Open overlays in stacking order; only the top one handles keys, so a window
+// opened above another does not close or steal focus from both.
+const openOverlays: object[] = [];
+
 const selector = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"]):not([aria-disabled="true"])';
 
 export function useOverlayFocus({ mode, panel, initial, trigger, onClose }: OverlayFocusOptions) {
@@ -13,7 +17,10 @@ export function useOverlayFocus({ mode, panel, initial, trigger, onClose }: Over
   useEffect(() => {
     if (mode === 'closed') return;
     const frame = requestAnimationFrame(focusInitial);
+    const token = {};
+    openOverlays.push(token);
     const onKeyDown = (event: KeyboardEvent) => {
+      if (openOverlays[openOverlays.length - 1] !== token) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -43,6 +50,7 @@ export function useOverlayFocus({ mode, panel, initial, trigger, onClose }: Over
     document.addEventListener('keydown', onKeyDown, true);
     return () => {
       cancelAnimationFrame(frame);
+      openOverlays.splice(openOverlays.indexOf(token), 1);
       document.removeEventListener('keydown', onKeyDown, true);
       (trigger.current as unknown as HTMLElement | null)?.focus();
     };

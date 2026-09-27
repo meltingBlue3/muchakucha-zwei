@@ -75,7 +75,14 @@ async function openNewEvent(page: Page) {
   await openCalendar(page);
   await page.getByLabel('创建事件').click();
   await expect(page.getByRole('dialog', { name: '创建日程' })).toBeVisible();
-  await page.getByRole('button', { name: '更多日程选项' }).click();
+}
+
+async function openCustomWeekly(page: Page) {
+  await page.getByRole('button', { name: /^日程重复设置/ }).click();
+  await page.getByRole('dialog', { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
+  const custom = page.getByRole('dialog', { name: '自定义重复' });
+  await custom.getByRole('radio', { name: '周', exact: true }).click();
+  return custom;
 }
 
 async function openEventDetail(page: Page, fixture: Fixture) {
@@ -118,34 +125,43 @@ test.describe('event recurrence accessibility', () => {
     await expectNoSeriousAxeViolations(page);
   });
 
-  test('supports keyboard traversal and directional radio selection', async ({ page }) => {
+  test('supports keyboard traversal and a Google-style repeat list', async ({ page }) => {
     await loginFixture(page, fixture.username);
     await openNewEvent(page);
     await page.getByLabel('事件标题').focus();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('switch')).toBeFocused();
-    await page.getByLabel('不重复', { exact: true }).focus();
-    await page.keyboard.press('ArrowRight');
-    await expect(page.getByLabel('每天', { exact: true })).toBeChecked();
-    await expect(page.getByLabel('每天', { exact: true })).toBeFocused();
-    await page.keyboard.press('ArrowRight');
-    await expect(page.getByLabel('每周', { exact: true })).toBeChecked();
-    await expect(page.getByLabel('每周', { exact: true })).toBeFocused();
-    await expect(page.getByRole('radiogroup', { name: '重复频率' })).toBeVisible();
-    await expect(page.getByRole('checkbox')).toHaveCount(7);
+    const repeat = page.getByRole('button', { name: /^日程重复设置/ });
+    await expect(repeat).toHaveAccessibleName('日程重复设置，不重复');
+    await repeat.focus();
+    await page.keyboard.press('Enter');
+    const options = page.getByRole('dialog', { name: '重复' });
+    await expect(options.getByRole('radiogroup', { name: '重复频率' })).toBeVisible();
+    await expect(options.getByRole('radio', { name: '不重复' })).toBeChecked();
+    await options.getByRole('radio', { name: '不重复' }).focus();
+    // Arrow keys only move focus: choosing an option closes the list.
+    await page.keyboard.press('ArrowDown');
+    await expect(options.getByRole('radio', { name: '每天' })).toBeFocused();
+    await expect(options.getByRole('radio', { name: '不重复' })).toBeChecked();
+    await page.keyboard.press('Enter');
+    await expect(options).toHaveCount(0);
+    await expect(repeat).toHaveAccessibleName('日程重复设置，每天重复');
+    await expect(repeat).toBeFocused();
   });
 
-  test('keeps the last weekday selected and announces the constraint', async ({ page }) => {
+  test('a custom weekly rule keeps at least one weekday', async ({ page }) => {
     await loginFixture(page, fixture.username);
     await openNewEvent(page);
-    await page.getByLabel('每周', { exact: true }).click();
-    const selectedLabel = await page.getByRole('checkbox').evaluateAll((nodes) =>
+    const custom = await openCustomWeekly(page);
+    await expect(custom.getByRole('checkbox')).toHaveCount(7);
+    const selectedLabel = await custom.getByRole('checkbox').evaluateAll((nodes) =>
       nodes.find((node) => node.getAttribute('aria-checked') === 'true')?.getAttribute('aria-label'),
     );
     expect(selectedLabel).toBeTruthy();
-    await page.getByLabel(selectedLabel!).click();
-    await expect(page.getByLabel(selectedLabel!)).toBeChecked();
-    await expect(page.getByText('至少需要选择一天。')).toHaveAttribute('aria-live', 'polite');
+    await custom.getByLabel(selectedLabel!).click();
+    await custom.getByRole('button', { name: '完成', exact: true }).click();
+    await expect(custom.getByText('至少需要选择一天。')).toBeVisible();
+    await expect(custom).toBeVisible();
   });
 
   test('card deletion scope stays in one window and Escape returns to the card', async ({ page }) => {
@@ -169,13 +185,13 @@ test.describe('event recurrence accessibility', () => {
     await page.setViewportSize({ width: 390, height: 900 });
     await loginFixture(page, fixture.username);
     await openNewEvent(page);
-    await page.getByLabel('每周', { exact: true }).click();
+    const custom = await openCustomWeekly(page);
     await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-    const uncheckedLabel = await page.getByRole('checkbox').evaluateAll((nodes) =>
+    const uncheckedLabel = await custom.getByRole('checkbox').evaluateAll((nodes) =>
       nodes.find((node) => node.getAttribute('aria-checked') !== 'true')?.getAttribute('aria-label'),
     );
-    const weekday = page.getByLabel(uncheckedLabel!);
+    const weekday = custom.getByLabel(uncheckedLabel!);
     await expect(weekday).toBeVisible();
     const before = await weekday.getAttribute('aria-checked');
     await weekday.click();

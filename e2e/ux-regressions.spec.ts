@@ -216,7 +216,7 @@ for (const kind of ['tasks', 'events'] as const) {
       await expect(page.getByText('保存到：家庭 A', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: /当前家庭/ })).toHaveCount(0);
     }
-    await page.getByRole('button', { name: kind === 'tasks' ? '更多任务选项' : '更多日程选项' }).click();
+    if (kind === 'tasks') await page.getByRole('button', { name: '更多任务选项' }).click();
     await page.getByLabel('选择标签 家务', { exact: true }).click();
     await page.getByLabel(kind === 'tasks' ? '创建任务' : '创建', { exact: true }).filter({ visible: true }).last().click();
     await expect(page.getByText('内容已创建，但标签未保存。重试只会保存标签，不会重复创建。')).toBeVisible();
@@ -233,7 +233,7 @@ test('a note draft survives cancel and is cleared only after successful save', a
   await page.getByLabel('创建笔记', { exact: true }).click();
   await page.getByLabel('笔记标题').fill('还没写完');
   await page.getByLabel('笔记内容').fill('第一行内容');
-  await page.getByLabel('取消', { exact: true }).click();
+  await page.getByRole('button', { name: '关闭创建笔记', exact: true }).click();
   await page.getByLabel('创建笔记', { exact: true }).click();
   await expect(page.getByLabel('笔记标题')).toHaveValue('还没写完');
   await expect(page.getByLabel('笔记内容')).toHaveValue('第一行内容');
@@ -305,7 +305,15 @@ for (const width of [320, 390, 1440]) {
     const previewBox = await previewButton.boundingBox();
     const closeBox = await closeButton.boundingBox();
     expect(Math.abs(previewBox!.y - closeBox!.y)).toBeLessThan(2);
-    expect(previewBox!.x + previewBox!.width).toBeLessThanOrEqual(closeBox!.x);
+    // Compact editors are full-screen sheets: close leads the header, actions trail it.
+    if (width < 600) {
+      const submitBox = await dialog.getByRole('button', { name: '创建', exact: true }).boundingBox();
+      expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(previewBox!.x);
+      expect(previewBox!.x + previewBox!.width).toBeLessThanOrEqual(submitBox!.x);
+      expect(submitBox!.x + submitBox!.width).toBeLessThanOrEqual(width);
+    } else {
+      expect(previewBox!.x + previewBox!.width).toBeLessThanOrEqual(closeBox!.x);
+    }
     await expect(previewButton).toHaveText('');
 
     await input.fill('日语学习');

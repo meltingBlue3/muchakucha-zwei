@@ -88,6 +88,10 @@
 
 新增或修改居中表单、账户面板和确认窗口时，使用 [AppDialog](../apps/client/src/ui/app-dialog.tsx)。调用方提供标题、内容、提交状态、关闭回调和触发按钮引用；可通过 `size="editor"` 使用任务、日程、笔记等阅读/编辑窗口，通过 `footer` 提供正文滚动区域之外的操作区。路由窗口复用 `RouteWindow`，草稿丢弃等确认在同一窗口内切换内容，避免叠加遮罩。标准窗口维持原尺寸，编辑窗口宽度由 `theme.layout.editorDialogMaxWidth` 定义；容器样式不向调用方开放覆盖。需要改变共同外观时修改基础组件，并验证所有使用场景。
 
+窄于 `theme.layout.editorSheetBreakpoint` 时，`editor` 窗口改为参考谷歌日历移动端的全屏面板：左上角关闭，右上角放主操作。表单里的 `FormActions` 会自动把提交按钮交给面板标题栏，取消统一走关闭按钮，调用方不需要分别适配。日程表单采用“图标列 + 无边框内容行”的分组布局，各组之间用 `separator` 分隔。
+
+窗口内的选择控件通过 `useWindowStep`（[window-step.ts](../apps/client/src/ui/window-step.ts)）在同一窗口里打开步骤窗口，编辑内容保持挂载，关闭后焦点回到触发行。日期和时间参考谷歌日历，各平台用各自的方案：Android 用系统 Material 3 对话框（需要 `plugins/with-material3-theme.js` 把应用主题设成 Material3）；iOS 在步骤窗口里显示原生日历或滚轮；Web 用 [picker-panels.tsx](../apps/client/src/ui/picker-panels.tsx) 里的日历面板和按 15 分钟排列的时间列表。步骤窗口内部不能再嵌套步骤；其中的日期字段（如自定义重复的截止日期）改为在上层叠加一个标准 `AppDialog`，不挤占当前窗口的空间。这是“不叠加遮罩”规则的唯一例外。Web 端只有最上层的弹窗响应 Esc 和 Tab。
+
 `AppDialog` 统一拥有背景模糊与遮罩、最大宽度、圆角与边框、内边距、标题层级、关闭按钮、键盘避让和内容滚动；同时处理初始聚焦、Tab 循环、Esc／外部点击关闭、忙碌时禁止关闭，以及关闭后恢复焦点。背景采样由 `AppShell` 的 `DialogBackground` 提供。业务组件不再复制这些结构或独立实现另一套外壳。
 
 锚定下拉菜单、底部选择面板和系统原生提示属于不同交互类型，不强行套用居中弹窗。确需新增类型时，先定义共享组件与适用边界，再在页面使用。

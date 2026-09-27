@@ -68,8 +68,8 @@ for (const width of [320, 390, 1440]) {
     await page.getByRole('button', { name: /^2030-06-20/ }).click();
     await page.getByRole('button', { name: '创建事件', exact: true }).click();
     const create = page.getByRole('dialog', { name: '创建日程', exact: true });
-    await expect(create.getByLabel('开始日期', { exact: true })).toHaveValue('2030-06-20');
-    await expect(create.getByLabel('结束日期', { exact: true })).toHaveValue('2030-06-20');
+    await expect(create.getByRole('button', { name: '开始日期，2030年6月20日周四', exact: true })).toBeVisible();
+    await expect(create.getByRole('button', { name: '结束日期，2030年6月20日周四', exact: true })).toBeVisible();
     await create.getByLabel('事件标题', { exact: true }).fill('选中日期的新日程');
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     const panel = await create.getByTestId('app-dialog-panel').boundingBox();
@@ -195,3 +195,99 @@ test('Today floating creation menu offers three destinations', async ({ page }) 
   await page.getByRole('menuitem', { name: '新增日历', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '创建日程', exact: true })).toBeVisible();
 });
+
+for (const width of [390, 1440]) {
+  test(`Google-style pickers and repeat choices create the requested event at ${width}px`, async ({ page }, testInfo) => {
+    const events = await setup(page);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${base}/events/new`);
+    const create = page.getByRole('dialog', { name: '创建日程', exact: true });
+    await create.getByLabel('事件标题', { exact: true }).fill('游泳课');
+
+    await create.getByRole('button', { name: /^开始日期，/ }).click();
+    const date = page.getByRole('dialog', { name: '请选择日期', exact: true });
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(date.getByText('2030年6月15日', { exact: true })).toBeVisible();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`date-picker-${width}.png`) });
+    await date.getByRole('button', { name: '2030年6月18日', exact: true }).click();
+    await date.getByRole('button', { name: '确定', exact: true }).click();
+    const startDate = create.getByRole('button', { name: '开始日期，2030年6月18日周二', exact: true });
+    await expect(startDate).toBeFocused();
+
+    await create.getByRole('button', { name: /^结束日期，/ }).click();
+    await date.getByRole('button', { name: '切换到键盘输入', exact: true }).click();
+    await date.getByLabel('输入日期').fill('2030/6/18');
+    await date.getByRole('button', { name: '确定', exact: true }).click();
+    await expect(create.getByRole('button', { name: '结束日期，2030年6月18日周二', exact: true })).toBeVisible();
+
+    await create.getByRole('button', { name: /^开始时间，/ }).click();
+    const time = page.getByRole('dialog', { name: '选择时间', exact: true });
+    await expect(time.getByRole('button', { name: '选择 09:00', exact: true })).toBeInViewport();
+    await page.screenshot({ path: testInfo.outputPath(`time-picker-${width}.png`) });
+    await time.getByRole('button', { name: '选择 14:30', exact: true }).click();
+    await create.getByRole('button', { name: /^结束时间，/ }).click();
+    await time.getByLabel('输入时间').fill('15:45');
+    await time.getByRole('button', { name: '确定', exact: true }).click();
+    await expect(create.getByRole('button', { name: '开始时间，14:30', exact: true })).toBeVisible();
+    await expect(create.getByRole('button', { name: '结束时间，15:45', exact: true })).toBeVisible();
+
+    const repeat = create.getByRole('button', { name: /^日程重复设置/ });
+    await repeat.click();
+    const options = page.getByRole('dialog', { name: '重复', exact: true });
+    await expect(options.getByRole('radio')).toHaveText(['不重复', '每天', '每周', '每月', '每年', '自定义…']);
+    await expect(options.getByRole('radio', { name: '不重复' })).toBeChecked();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`repeat-options-${width}.png`) });
+    await options.getByRole('radio', { name: '每周' }).click();
+    await expect(repeat).toHaveAccessibleName('日程重复设置，每周二重复');
+
+    await repeat.click();
+    await options.getByRole('radio', { name: '自定义…' }).click();
+    const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
+    await expect(custom.getByRole('radio', { name: '周', exact: true })).toBeChecked();
+    await custom.getByLabel('重复间隔', { exact: true }).fill('2');
+    await custom.getByRole('checkbox', { name: '星期四' }).click();
+    await custom.getByRole('radio', { name: '截止日期' }).click();
+    const endsOn = custom.getByRole('button', { name: /^重复截止日期，/ });
+    const panels = page.getByTestId('app-dialog-panel');
+    const customBox = await panels.first().boundingBox();
+    // The end date picker stacks above the custom page instead of expanding inside it;
+    // the page underneath keeps its size and leaves the accessibility tree while covered.
+    await endsOn.click();
+    const endsOnPicker = page.getByRole('dialog', { name: '请选择日期', exact: true });
+    await expect(endsOnPicker).toBeVisible();
+    // An empty end date opens at the start date (2030-06-18), not today (2030-06-15).
+    await expect(endsOnPicker.getByText('2030年6月18日', { exact: true })).toBeVisible();
+    await expect(endsOnPicker.getByText('2030年6月', { exact: true })).toBeVisible();
+    await expect(panels).toHaveCount(2);
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    expect(await panels.first().boundingBox()).toEqual(customBox);
+    await page.screenshot({ path: testInfo.outputPath(`repeat-ends-on-${width}.png`) });
+    await page.keyboard.press('Escape');
+    await expect(endsOnPicker).toHaveCount(0);
+    await expect(custom).toBeVisible();
+    await expect(endsOn).toBeFocused();
+    await endsOn.click();
+    await endsOnPicker.getByRole('button', { name: '切换到键盘输入', exact: true }).click();
+    await endsOnPicker.getByLabel('输入日期').fill('2030-08-31');
+    await endsOnPicker.getByRole('button', { name: '确定', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(custom.getByRole('button', { name: '重复截止日期，2030年8月31日周六', exact: true })).toBeFocused();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`repeat-custom-${width}.png`), fullPage: true });
+    await custom.getByRole('button', { name: '完成', exact: true }).click();
+    await expect(repeat).toHaveAccessibleName('日程重复设置，每 2 周的周二、四重复，到 2030-08-31 为止');
+
+    await create.getByRole('button', { name: '创建', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/events`);
+    const [startTime, endTime] = await page.evaluate(() => [new Date('2030-06-18T14:30:00').toISOString(), new Date('2030-06-18T15:45:00').toISOString()]);
+    expect(events.get('44444444-4444-4444-8444-444444444444')).toMatchObject({
+      title: '游泳课',
+      startTime,
+      endTime,
+      recurrence: { freq: 'weekly', interval: 2, byWeekday: [2, 4], startsOn: '2030-06-18', endsOn: '2030-08-31' },
+    });
+  });
+}

@@ -25,21 +25,22 @@ function dateParts(date: string): { month: number; day: number } {
 
 function frequencySummary(rule: RecurrenceDto): string {
   const { month, day } = dateParts(rule.startsOn);
+  const interval = rule.interval ?? 1;
 
   switch (rule.freq) {
     case 'daily':
-      return '每天重复';
+      return interval > 1 ? `每 ${interval} 天重复` : '每天重复';
     case 'weekly': {
       const weekdays = [...new Set(rule.byWeekday ?? [])]
         .filter((weekday) => weekday >= 0 && weekday < DAY_NAMES.length)
         .sort((left, right) => left - right)
         .map((weekday) => DAY_NAMES[weekday]);
-      return `每周${weekdays.join('、')}重复`;
+      return interval > 1 ? `每 ${interval} 周的周${weekdays.join('、')}重复` : `每周${weekdays.join('、')}重复`;
     }
     case 'monthly':
-      return `每月 ${day} 日重复`;
+      return interval > 1 ? `每 ${interval} 个月的 ${day} 日重复` : `每月 ${day} 日重复`;
     case 'yearly':
-      return `每年 ${month} 月 ${day} 日重复`;
+      return interval > 1 ? `每 ${interval} 年的 ${month} 月 ${day} 日重复` : `每年 ${month} 月 ${day} 日重复`;
     default:
       return '重复';
   }
@@ -117,4 +118,12 @@ export function RecurrenceSummary({ rule, deviceTimeZone }: RecurrenceSummaryPro
       )}
     </View>
   );
+}
+
+/** The clamp and time-zone caveats alone, for places that already show the summary line. */
+export function RecurrenceNotes({ rule, deviceTimeZone }: RecurrenceSummaryProps) {
+  const formatted = formatRecurrenceSummary(rule, deviceTimeZone);
+  const notes = [formatted.clampNote, formatted.timeZoneNote].filter((note): note is string => note !== null);
+  if (notes.length === 0) return null;
+  return <>{notes.map(note => <Text key={note} variant="caption" color="inkMuted">{note}</Text>)}</>;
 }

@@ -1,6 +1,6 @@
 import { ThemeProvider, createBox, createText, useTheme } from '@shopify/restyle';
 import type { PropsWithChildren, ReactElement, ReactNode } from 'react';
-import React, { forwardRef, useEffect, useId, useRef, useState } from 'react';
+import React, { forwardRef, useContext, useEffect, useId, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,6 +21,7 @@ import EyeOff from 'lucide-react-native/icons/eye-off';
 import Info from 'lucide-react-native/icons/info';
 import House from 'lucide-react-native/icons/house';
 
+import { SheetActionSlot } from './sheet-action';
 import { theme, type Space, type TextVariant, type Theme } from './theme';
 
 const Box = createBox<Theme>();
@@ -183,6 +184,16 @@ export function FormActions({ onCancel, onSubmit, submitting, submitLabel }: {
   submitting: boolean;
   submitLabel: string;
 }) {
+  const sheet = useContext(SheetActionSlot);
+  const submit = useRef(onSubmit);
+  submit.current = onSubmit;
+  useEffect(() => {
+    if (!sheet) return;
+    sheet({ label: submitLabel, submitting, onPress: () => submit.current() });
+    return () => sheet(null);
+  }, [sheet, submitLabel, submitting]);
+  // A compact editor sheet shows the submit in its header and cancels through its close button.
+  if (sheet) return null;
   return (
     <Inline gap={3} style={{ marginTop: theme.spacing[4] }}>
       <Button label="取消" tone="secondary" disabled={submitting} onPress={onCancel} style={{ flex: 1 }} />

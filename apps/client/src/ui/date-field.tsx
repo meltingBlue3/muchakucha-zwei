@@ -1,45 +1,15 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Text } from './primitives';
 import type { Theme } from './theme';
+import { formatDateLabel, parseDateValue, parseTimeValue, toDateValue, toTimeValue } from './date-values';
+import { AppDialog } from './app-dialog';
+import { DatePickerPanel, PickerActions, TimePickerPanel } from './picker-panels';
+import { useWindowStep, type RouteWindowStep } from './window-step';
 
-/**
- * Parse a "YYYY-MM-DD" or "HH:mm" string into a local Date.
- * Returns a safe fallback Date when parsing fails.
- */
-function parseValue(value: string, mode: 'date' | 'time'): Date {
-  if (mode === 'date') {
-    if (value !== '' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      const [y, m, d] = value.split('-').map((s) => Number(s));
-      const date = new Date(y!, m! - 1, d!);
-      if (!isNaN(date.getTime())) return date;
-    }
-    return new Date();
-  }
-  // mode === 'time'
-  if (value !== '' && /^\d{2}:\d{2}$/.test(value)) {
-    const [h, minute] = value.split(':').map((s) => Number(s));
-    const d = new Date();
-    d.setHours(h!, minute!, 0, 0);
-    return d;
-  }
-  return new Date();
-}
-
-/** Format a local Date back to "YYYY-MM-DD" or "HH:mm". */
-function formatValue(date: Date, mode: 'date' | 'time'): string {
-  if (mode === 'date') {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-  const h = String(date.getHours()).padStart(2, '0');
-  const minute = String(date.getMinutes()).padStart(2, '0');
-  return `${h}:${minute}`;
-}
+export { formatDateLabel } from './date-values';
 
 type DateFieldProps = {
   /** Current value: "YYYY-MM-DD" for date, "HH:mm" for time. */
@@ -52,31 +22,86 @@ type DateFieldProps = {
   label?: string;
   /** Placeholder text shown when value is empty. */
   placeholder?: string;
+  /** Where the picker opens while the value is empty; defaults to today / now. */
+  pickerDefault?: string;
   /** Accessibility label for the pressable field. */
   accessibilityLabel?: string;
   /** Prevents opening or changing the picker while a parent form is submitting. */
   disabled?: boolean;
+  /** `plain` renders borderless row text, as in a calendar compose sheet. */
+  appearance?: 'field' | 'plain';
+  /** Horizontal alignment of a `plain` value; an end-aligned value keeps its natural width. */
+  align?: 'start' | 'end';
 };
 
+const PICKER_TITLES = { date: '请选择日期', time: '选择时间' } as const;
+
+/**
+ * Pickers follow Google Calendar on each platform: Android opens the system
+ * Material 3 dialogs, iOS shows the native calendar or wheel in a window
+ * step, and Web shows a Material-style calendar or a quarter-hour list.
+ * Inside a step, where the window cannot host another step, the picker opens
+ * in a dialog stacked above it instead of taking space from that step.
+ */
 export function DateField({
   value,
   onChange,
   mode,
   label,
   placeholder,
+  pickerDefault,
   accessibilityLabel,
   disabled = false,
+  appearance = 'field',
+  align = 'start',
 }: DateFieldProps) {
   const activeTheme = useTheme<Theme>();
-  const [show, setShow] = useState(false);
-
-  const dateValue = parseValue(value, mode);
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<View>(null);
+  const plain = appearance === 'plain';
   const isEmpty = value === '';
   const displayValue = isEmpty
     ? (placeholder ?? (mode === 'date' ? '选择日期' : '选择时间'))
-    : value;
+    : mode === 'date' ? formatDateLabel(value) : value;
+  const name = accessibilityLabel ?? label ?? (mode === 'date' ? '日期' : '时间');
 
-  const fieldStyle = {
+  const close = useCallback(() => setOpen(false), []);
+  const apply = useCallback((next: string) => { setOpen(false); onChange(next); }, [onChange]);
+  const pickerValue = value === '' && pickerDefault !== undefined ? pickerDefault : value;
+  const panel = open ? <PickerPanel mode={mode} value={pickerValue} onConfirm={apply} onCancel={close} /> : null;
+  const step = useMemo<RouteWindowStep | null>(() => open && Platform.OS !== 'android' ? {
+    title: PICKER_TITLES[mode],
+    content: panel,
+    onClose: close,
+    onReturn: () => (trigger.current as unknown as { focus?(): void } | null)?.focus?.(),
+  } : null, [open, mode, panel, close]);
+  const inWindow = useWindowStep(step);
+
+  const press = () => {
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: mode === 'date' ? parseDateValue(pickerValue) : parseTimeValue(pickerValue),
+        mode,
+        design: 'material',
+        title: PICKER_TITLES[mode],
+        is24Hour: true,
+        firstDayOfWeek: 1,
+        positiveButton: { label: '确定' },
+        negativeButton: { label: '取消' },
+        onChange: (event: DateTimePickerEvent, selected?: Date) => {
+          if (event.type === 'set' && selected !== undefined) onChange(mode === 'date' ? toDateValue(selected) : toTimeValue(selected));
+        },
+      });
+      return;
+    }
+    setOpen(current => !current);
+  };
+
+  const fieldStyle = plain ? {
+    minHeight: activeTheme.controlSizes.touchTarget,
+    justifyContent: 'center' as const,
+    alignItems: align === 'end' ? 'flex-end' as const : 'flex-start' as const,
+  } : {
     backgroundColor: activeTheme.colors.surface,
     borderWidth: 1,
     borderColor: activeTheme.colors.border,
@@ -87,86 +112,47 @@ export function DateField({
     justifyContent: 'center' as const,
   };
 
-  const handleChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
-    // On Android the native dialog auto-dismisses; on iOS the picker
-    // stays visible inline so the user can keep adjusting.
-    if (Platform.OS === 'android') {
-      setShow(false);
-    }
-    if (selectedDate !== undefined) {
-      onChange(formatValue(selectedDate, mode));
-    }
-  };
-
-  // ---- Web fallback: native HTML <input type="date|time"> ----
-  if (Platform.OS === 'web') {
-    // Map RN-only style keys to CSS-compatible equivalents for the raw <input>.
-    const webFieldStyle: React.CSSProperties = {
-      backgroundColor: activeTheme.colors.surface,
-      border: `1px solid ${activeTheme.colors.border}`,
-      borderRadius: activeTheme.borderRadii.sm,
-      paddingTop: activeTheme.spacing[3],
-      paddingBottom: activeTheme.spacing[3],
-      paddingLeft: activeTheme.spacing[4],
-      paddingRight: activeTheme.spacing[4],
-      fontSize: activeTheme.typography.body.fontSize,
-      color: isEmpty ? activeTheme.colors.inkMuted : activeTheme.colors.ink,
-      minHeight: activeTheme.controlSizes.field,
-      fontFamily: 'inherit',
-      width: '100%',
-      boxSizing: 'border-box',
-    };
-    return (
-      <View style={{ flex: 1 }}>
-        {label !== undefined ? <Text variant="label">{label}</Text> : null}
-        <input
-          disabled={disabled}
-          type={mode}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          style={webFieldStyle}
-          placeholder={placeholder}
-          aria-label={accessibilityLabel ?? label}
-        />
-      </View>
-    );
-  }
-
-  // ---- Native (iOS / Android) ----
   return (
-    <View style={{ flex: 1 }}>
+    <View style={plain && align === 'end' ? undefined : { flex: 1 }}>
       {label !== undefined ? (
-        <Text variant="label" style={{ marginBottom: activeTheme.spacing[1] }}>
-          {label}
-        </Text>
+        <Text variant="label" style={{ marginBottom: activeTheme.spacing[1] }}>{label}</Text>
       ) : null}
       <Pressable
-        onPress={() => setShow((prev) => !prev)}
+        ref={trigger}
+        onPress={press}
         disabled={disabled}
-        accessibilityLabel={accessibilityLabel ?? label ?? (mode === 'date' ? '日期' : '时间')}
+        accessibilityLabel={`${name}，${displayValue}`}
         accessibilityRole="button"
-        accessibilityState={{ disabled }}
-        style={[fieldStyle, { flex: 1 }]}
+        accessibilityState={{ disabled, expanded: open }}
+        style={({ pressed }) => [fieldStyle, { opacity: pressed ? 0.7 : 1 }]}
       >
-        <Text
-          style={{
-            color: isEmpty ? activeTheme.colors.inkMuted : activeTheme.colors.ink,
-            fontSize: activeTheme.typography.body.fontSize,
-          }}
-        >
-          {displayValue}
-        </Text>
+        <Text color={isEmpty ? 'inkMuted' : 'ink'}>{displayValue}</Text>
       </Pressable>
-      {show && (
-        <View style={{ marginTop: activeTheme.spacing[2] }}>
-          <DateTimePicker
-            value={dateValue}
-            mode={mode}
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            onChange={handleChange}
-          />
-        </View>
-      )}
+      {!inWindow && open ? <AppDialog title={PICKER_TITLES[mode]} busy={false} onClose={close} trigger={trigger}>{panel}</AppDialog> : null}
+    </View>
+  );
+}
+
+function PickerPanel({ mode, value, onConfirm, onCancel }: { mode: 'date' | 'time'; value: string; onConfirm(value: string): void; onCancel(): void }) {
+  if (Platform.OS === 'ios') return <IosPickerPanel mode={mode} value={value} onConfirm={onConfirm} onCancel={onCancel} />;
+  return mode === 'date'
+    ? <DatePickerPanel value={value} onConfirm={onConfirm} onCancel={onCancel} />
+    : <TimePickerPanel value={value} onConfirm={onConfirm} onCancel={onCancel} />;
+}
+
+/** Native iOS calendar or wheel, confirmed explicitly like the other platforms. */
+function IosPickerPanel({ mode, value, onConfirm, onCancel }: { mode: 'date' | 'time'; value: string; onConfirm(value: string): void; onCancel(): void }) {
+  const [draft, setDraft] = useState(() => mode === 'date' ? parseDateValue(value) : parseTimeValue(value));
+  return (
+    <View>
+      <DateTimePicker
+        value={draft}
+        mode={mode}
+        display={mode === 'date' ? 'inline' : 'spinner'}
+        locale="zh-Hans-CN"
+        onChange={(_event, selected) => { if (selected !== undefined) setDraft(selected); }}
+      />
+      <PickerActions onCancel={onCancel} onConfirm={() => onConfirm(mode === 'date' ? toDateValue(draft) : toTimeValue(draft))} />
     </View>
   );
 }

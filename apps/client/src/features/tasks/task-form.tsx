@@ -330,6 +330,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
       {/* Keep the picker mounted so collapsed validation and draft fields survive. */}
       <View style={{ display: recurrenceOpen ? 'flex' : 'none' }}>
         <RecurrencePicker
+          hideSummary
           disabled={isSubmitting}
           disableTurnOff={isExistingRecurring}
           errors={recurrenceErrors}

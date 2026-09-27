@@ -1,11 +1,15 @@
 import { WindowConfirmation, type WindowConfirmationRequest } from './window-confirmation';
 import { Button, Stack, Text } from './primitives';
 import { useIsFocused, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useCallback, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { View } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
 import { AppDialog } from './app-dialog';
 import { DialogBackground } from './dialog-background';
+import { SuspendSheetAction } from './sheet-action';
+import { WindowStepContext, type RouteWindowStep, type WindowStepHost } from './window-step';
+
+export type { RouteWindowStep };
 import { getRouteTrigger } from '../platform/overlays/route-trigger';
 
 export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'households' | 'settings') {
@@ -27,13 +31,6 @@ export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 're
 
 /** A route owns the URL; the dialog owns presentation and focus. Previous
  * transparent routes stay mounted, but only the focused route opens a modal. */
-export interface RouteWindowStep {
-  title: string;
-  content: ReactNode;
-  onClose(): void;
-  onReturn?(): void;
-}
-
 export interface RouteWindowProps {
   title: string;
   busy?: boolean;
@@ -48,8 +45,15 @@ export interface RouteWindowProps {
   fallback: ReactNode;
 }
 
-export function RouteWindow({ title, busy = false, children, footer, headerActions, step, onClose, onBackStep, exitAllowed, resource, fallback }: RouteWindowProps) {
+export function RouteWindow({ title, busy = false, children, footer, headerActions, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback }: RouteWindowProps) {
   const focused = useIsFocused();
+  // Controls inside the content (pickers, option lists) open their own steps.
+  const [ownedStep, setOwnedStep] = useState<{ owner: object; step: RouteWindowStep } | null>(null);
+  const stepHost = useMemo<WindowStepHost>(() => ({
+    show: (owner, next) => setOwnedStep({ owner, step: next }),
+    hide: owner => setOwnedStep(current => current?.owner === owner ? null : current),
+  }), []);
+  const step = routeStep ?? ownedStep?.step ?? null;
   const previousStep = useRef(step);
   useEffect(() => {
     const previous = previousStep.current;
@@ -99,11 +103,13 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
             <Text>{confirmation.message}</Text>
             <Button label="继续编辑" tone="secondary" disabled={busy} onPress={() => setConfirmation(null)} />
             <Button label={confirmation.confirmLabel} disabled={busy} onPress={() => { const request = confirmation; confirmationRef.current = null; setConfirmation(null); request.onConfirm(); }} />
-          </Stack> : step !== undefined ? <>
-            {/* Keep the editor mounted while a format window owns focus. */}
-            <View style={step ? { display: 'none' } : undefined} aria-hidden={Boolean(step)} importantForAccessibility={step ? 'no-hide-descendants' : 'auto'}>{children}</View>
-            {step?.content}
-          </> : children}
+          </Stack> : <>
+            {/* Keep the editor mounted while a step owns focus. */}
+            <View style={step ? { display: 'none' } : undefined} aria-hidden={Boolean(step)} importantForAccessibility={step ? 'no-hide-descendants' : 'auto'}>
+              <WindowStepContext.Provider value={stepHost}><SuspendSheetAction suspended={Boolean(step)}>{children}</SuspendSheetAction></WindowStepContext.Provider>
+            </View>
+            <WindowStepContext.Provider value={null}>{step?.content}</WindowStepContext.Provider>
+          </>}
         </WindowConfirmation.Provider>
       </AppDialog> : null}
     </DialogBackground.Provider>

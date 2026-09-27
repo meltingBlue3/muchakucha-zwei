@@ -7,10 +7,12 @@
     "orientation": "portrait",
     "scheme": "muchakucha-zwei",
     "userInterfaceStyle": "automatic",
+    "primaryColor": "#B94736",
     "plugins": [
       "expo-router",
       "expo-secure-store",
       "@react-native-community/datetimepicker",
+      "./plugins/with-material3-theme",
       [
         "expo-build-properties",
         {
