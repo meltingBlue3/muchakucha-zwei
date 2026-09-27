@@ -8,17 +8,11 @@ import type { EventResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { LabelChip } from '../../../../../../src/features/labels/label-chip';
-import { formatTime } from '../../../../../../src/features/events/calendar-utils';
+import { formatDateRange } from '../../../../../../src/features/events/calendar-utils';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
 import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
-
-function formatFullDateTime(iso: string, allDay: boolean): string {
-  const d = new Date(iso);
-  const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return allDay ? dateStr : `${dateStr} ${formatTime(iso)}`;
-}
 
 function currentTimeZone(fallback: string): string {
   try {
@@ -83,15 +77,12 @@ export default function EventDetailRoute() {
       : formatRecurrenceSummary(recurrence, currentTimeZone(recurrence.timezone));
   const cancelled = event.cancelledAt != null;
 
-  const sameDay = new Date(event.startTime).toDateString() === new Date(event.endTime).toDateString();
-  const when = sameDay
-    ? `${formatFullDateTime(event.startTime, event.allDay)}${event.allDay ? ' · 全天' : ` – ${formatTime(event.endTime)}`}`
-    : `${formatFullDateTime(event.startTime, event.allDay)} 至 ${formatFullDateTime(event.endTime, event.allDay)}${event.allDay ? ' · 全天' : ''}`;
+  const when = formatDateRange(event.startTime, event.endTime, event.allDay, { weekday: true });
   return (
     <EventWindow title="日程详情" footer={<Button label="编辑日程" onPress={handleEdit} />}>
       <Stack gap={5}>
         <Stack gap={2}>
-          <Heading>{event.title}</Heading>
+          <Heading level={2}>{event.title}</Heading>
           {cancelled ? <Text variant="label" color="inkMuted">已取消</Text> : null}
         </Stack>
         <Stack gap={3} style={{ backgroundColor: activeTheme.colors.surfaceSubtle, padding: activeTheme.spacing[4], borderRadius: activeTheme.borderRadii.lg }}>

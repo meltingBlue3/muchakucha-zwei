@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Modal, Platform, Pressable, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Plus from 'lucide-react-native/icons/plus';
 import X from 'lucide-react-native/icons/x';
@@ -7,6 +7,7 @@ import Calendar from 'lucide-react-native/icons/calendar';
 import ListTodo from 'lucide-react-native/icons/list-todo';
 import FileText from 'lucide-react-native/icons/file-text';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
+import { DialogBackdrop } from './dialog-backdrop';
 import { Text } from './primitives';
 import { theme } from './theme';
 
@@ -35,7 +36,7 @@ export function FloatingCreateButton(props: Props) {
     </Pressable>
     {open && props.actions ? <Modal {...(Platform.OS === 'web' ? { 'aria-label': '创建选项' } : {})} transparent visible animationType="none" onShow={focus} onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
       <View style={{ flex: 1 }}>
-        <Pressable testID="create-menu-dismiss" accessible={false} tabIndex={-1} onPress={close} style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.canvas, opacity: 0.94 }]} />
+        <DialogBackdrop testID="create-menu" onPress={close} />
         <View ref={panel} accessibilityRole="menu" accessibilityLabel="创建内容" accessibilityViewIsModal style={{ position: 'absolute', right: anchor.right, bottom: anchor.bottom, gap: theme.spacing[3], alignItems: 'flex-end', maxWidth: width - theme.layout.mobileInset * 2 }}>
           {props.actions.map(({ kind, label, onPress }, index) => {
             const Icon = icons[kind];

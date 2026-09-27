@@ -1,5 +1,7 @@
 /** Pure date helpers for the calendar month grid. No React dependency. */
 
+import { formatDate } from '../../ui/date-values';
+
 const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'] as const;
 
 export interface CalendarDay {
@@ -85,19 +87,19 @@ export function formatTime(iso: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export function formatDateRange(startIso: string, endIso: string, allDay: boolean): string {
+/**
+ * "6月20日 09:00 – 10:00", "6月20日 全天", or both dates when the event
+ * spans days, so a multi-day timed event never shows only its start date.
+ */
+export function formatDateRange(startIso: string, endIso: string, allDay: boolean, options: { weekday?: boolean } = {}): string {
   const start = new Date(startIso);
   const end = new Date(endIso);
-  const dateStr = `${start.getMonth() + 1}/${start.getDate()}`;
-
-  if (allDay) {
-    if (toDateIso(start) === toDateIso(end)) return `${dateStr} 全天`;
-    const endStr = `${end.getMonth() + 1}/${end.getDate()}`;
-    return `${dateStr} – ${endStr} 全天`;
-  }
-
-  const timeStr = `${formatTime(startIso)} – ${formatTime(endIso)}`;
-  return `${dateStr} ${timeStr}`;
+  const startDate = formatDate(start, options);
+  const sameDay = toDateIso(start) === toDateIso(end);
+  if (allDay) return sameDay ? `${startDate} 全天` : `${startDate} – ${formatDate(end, options)} 全天`;
+  return sameDay
+    ? `${startDate} ${formatTime(startIso)} – ${formatTime(endIso)}`
+    : `${startDate} ${formatTime(startIso)} – ${formatDate(end, options)} ${formatTime(endIso)}`;
 }
 
 export function today(): Date {

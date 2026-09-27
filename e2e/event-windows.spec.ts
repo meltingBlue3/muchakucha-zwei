@@ -64,8 +64,8 @@ for (const width of [320, 390, 1440]) {
     expect(events.get(eventId)!.title).toBe('已修改的日程');
     await page.keyboard.press('Escape');
     await expect(page).toHaveURL(`${base}/events`);
-    await expect(page.getByRole('button', { name: /^2030-06-15/ })).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: /^2030-06-20/ }).click();
+    await expect(page.getByRole('button', { name: /^2030年6月15日/ })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: /^2030年6月20日/ }).click();
     await page.getByRole('button', { name: '创建日程', exact: true }).click();
     const create = page.getByRole('dialog', { name: '创建日程', exact: true });
     await expect(create.getByRole('button', { name: '开始日期，2030年6月20日周四', exact: true })).toBeVisible();
@@ -87,7 +87,7 @@ test('calendar filters have visible summaries and Today restores the current mon
   await page.getByRole('button', { name: '下一个月' }).click();
   await expect(page.getByText('2030年7月', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '回到今天' }).click();
-  await expect(page.getByRole('button', { name: /^2030-06-15/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: /^2030年6月15日/ })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '筛选日程', exact: true }).click();
   const filter = page.getByRole('dialog', { name: '筛选日程', exact: true });
   await filter.getByRole('radio', { name: '重复筛选：仅看重复', exact: true }).click();
@@ -95,7 +95,7 @@ test('calendar filters have visible summaries and Today restores the current mon
   await filter.getByRole('button', { name: '查看结果', exact: true }).click();
   await expect(page.getByText('仅重复', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^日程：/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^2030-06-15/ })).not.toHaveAttribute('aria-label', /个日程/);
+  await expect(page.getByRole('button', { name: /^2030年6月15日/ })).not.toHaveAttribute('aria-label', /个日程/);
   await page.getByRole('button', { name: '清除日程筛选', exact: true }).click();
   await expect(page.getByRole('button', { name: /^日程：/ })).toBeVisible();
 });
@@ -148,7 +148,7 @@ test('a late response from the previous month cannot replace the selected month'
   await page.getByRole('button', { name: '筛选日程', exact: true }).click();
   await page.getByRole('button', { name: '查看结果', exact: true }).click();
   await expect(july).toBeVisible();
-  await expect(page.getByRole('button', { name: /^2030-07-01/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: /^2030年7月1日/ })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('card deletion confirms, removes the event, and returns to Today', async ({ page }) => {

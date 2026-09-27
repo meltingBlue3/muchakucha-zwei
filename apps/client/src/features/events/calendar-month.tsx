@@ -5,6 +5,7 @@ import type { Theme } from '../../ui/theme';
 import { Text } from '../../ui/primitives';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import { formatDayLabel, parseDateValue } from '../../ui/date-values';
 import { getCalendarMonth, getDayNames, formatMonthLabel, type CalendarDay } from './calendar-utils';
 
 const DAY_CELL_SIZE = 36;
@@ -67,7 +68,7 @@ export function CalendarMonth({
             justifyContent: 'center',
           })}
         >
-          <ChevronLeft color={activeTheme.colors.coral} size={activeTheme.controlSizes.icon} />
+          <ChevronLeft color={activeTheme.colors.ink} size={activeTheme.controlSizes.icon} />
         </Pressable>
         <View style={{ alignItems: 'center', flexShrink: 1 }}>
           <Text variant="body" style={{ fontWeight: '600' }}>{formatMonthLabel(year, month)}</Text>
@@ -87,7 +88,7 @@ export function CalendarMonth({
             justifyContent: 'center',
           })}
         >
-          <ChevronRight color={activeTheme.colors.coral} size={activeTheme.controlSizes.icon} />
+          <ChevronRight color={activeTheme.colors.ink} size={activeTheme.controlSizes.icon} />
         </Pressable>
       </View>
 
@@ -126,17 +127,13 @@ export function CalendarMonth({
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
                 aria-pressed={isSelected}
-                accessibilityLabel={`${day.iso}${day.isToday ? '，今天' : ''}${eventCount > 0 ? `，${eventCount}个日程` : ''}`}
+                accessibilityLabel={`${formatDayLabel(parseDateValue(day.iso))}${day.isToday ? '，今天' : ''}${eventCount > 0 ? `，${eventCount}个日程` : ''}`}
                 style={({ pressed }) => ({
                   flex: 1,
                   minHeight: activeTheme.controlSizes.touchTarget + activeTheme.spacing[2],
                   alignItems: 'center',
                   paddingVertical: activeTheme.spacing[1],
                   opacity: pressed ? 0.7 : 1,
-                  backgroundColor: isSelected
-                    ? activeTheme.colors.coralSoft
-                    : 'transparent',
-                  borderRadius: activeTheme.borderRadii.sm,
                 })}
               >
                 <View
@@ -146,9 +143,12 @@ export function CalendarMonth({
                     borderRadius: DAY_CELL_SIZE / 2,
                     alignItems: 'center',
                     justifyContent: 'center',
+                    // Same marks as the date picker: a filled circle selects, a ring marks today.
                     backgroundColor: isSelected
                       ? activeTheme.colors.coral
                       : 'transparent',
+                    borderWidth: day.isToday && !isSelected ? activeTheme.borderWidths.default : 0,
+                    borderColor: activeTheme.colors.coral,
                   }}
                 >
                   <Text

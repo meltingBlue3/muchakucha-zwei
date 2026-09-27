@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { AppDialog } from '../../ui/app-dialog';
 import { Banner, EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
+import { formatDate } from '../../ui/date-values';
 
 export interface InboxAction {
   id: string;
@@ -61,7 +62,7 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
             disabled={busy} onPress={() => { trigger.current = rowTriggers.current.get(message.id) ?? null; setSelectedId(message.id); }}
             style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[4], backgroundColor: pressed ? theme.colors.surfaceSubtle : theme.colors.transparent })}>
             <Text variant="bodySm" color="ink" numberOfLines={2}>{message.summary}</Text>
-            <Text variant="caption" style={{ marginTop: theme.spacing[1] }}>{new Date(message.createdAt).toLocaleDateString('zh-CN')}</Text>
+            <Text variant="caption" style={{ marginTop: theme.spacing[1] }}>{formatDate(new Date(message.createdAt))}</Text>
           </Pressable>
           <View style={{ flexDirection: 'row', flexShrink: 0 }}>{actions(message)}</View>
         </View>)}

@@ -4,6 +4,7 @@ import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { AppDialog } from '../../ui/app-dialog';
 import { FilterOptions } from '../../ui/filter-options';
 import { PageIntro } from '../../ui/page-intro';
+import { formatDate } from '../../ui/date-values';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { HouseholdNavigation } from '../../ui/household-navigation';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -162,7 +163,7 @@ export default function CalendarScreen() {
     const next = new Date(year, month + offset, 1);
     handleSelectDate(toDateIso(next));
   };
-  const dateLabel = selectedDateIso ? new Date(`${selectedDateIso}T12:00:00`).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }) : '当天日程';
+  const dateLabel = selectedDateIso ? formatDate(new Date(`${selectedDateIso}T12:00:00`), { weekday: true }) : '当天日程';
   const filterSummary = [recurringFilter === 'recurring' ? '仅重复' : '', labelFilter !== 'all' ? availableLabels.find(label => label.id === labelFilter)?.name ?? '已选标签' : ''].filter(Boolean).join(' · ');
 
   const handleEventPress = useCallback(

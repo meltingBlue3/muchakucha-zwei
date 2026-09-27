@@ -88,7 +88,7 @@ async function openCustomWeekly(page: Page) {
 async function openEventDetail(page: Page, fixture: Fixture) {
   await openCalendar(page);
   const day = Number(new Date().toISOString().slice(8, 10));
-  await page.getByLabel(new RegExp(`^\\d{4}-\\d{2}-${String(day).padStart(2, '0')}(?:，今天)?，\\d+个日程$`)).click();
+  await page.getByLabel(new RegExp(`^\\d{4}年\\d{1,2}月${day}日(?:，今天)?，\\d+个日程$`)).click();
   await page.getByLabel(`日程：${fixture.title}，重复`).click();
   await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
 }
@@ -118,7 +118,7 @@ test.describe('event recurrence accessibility', () => {
     await expectNoSeriousAxeViolations(page);
     await page.getByLabel('取消').click();
     const day = Number(new Date().toISOString().slice(8, 10));
-    await page.getByLabel(new RegExp(`^\\d{4}-\\d{2}-${String(day).padStart(2, '0')}(?:，今天)?，\\d+个日程$`)).click();
+    await page.getByLabel(new RegExp(`^\\d{4}年\\d{1,2}月${day}日(?:，今天)?，\\d+个日程$`)).click();
     await page.getByLabel(`日程：${fixture.title}，重复`).click();
     await expectNoSeriousAxeViolations(page);
     await page.getByLabel('编辑日程').click();

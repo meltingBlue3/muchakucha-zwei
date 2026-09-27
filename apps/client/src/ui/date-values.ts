@@ -49,6 +49,22 @@ export function formatDayLabel(date: Date): string {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+/**
+ * The date shown in lists, details and messages: "9月27日", or "2027年1月3日"
+ * outside the current year, optionally followed by the weekday ("9月27日周日").
+ * Pickers keep the full year through `formatDateLabel`, since there the user
+ * is choosing an exact date.
+ */
+export function formatDate(date: Date, { weekday = false }: { weekday?: boolean } = {}, now: Date = new Date()): string {
+  const year = date.getFullYear() === now.getFullYear() ? '' : `${date.getFullYear()}年`;
+  return `${year}${date.getMonth() + 1}月${date.getDate()}日${weekday ? `周${WEEKDAY_NAMES[date.getDay()]}` : ''}`;
+}
+
+/** "9月27日 14:30", following `formatDate`. */
+export function formatDateTime(date: Date, options: { weekday?: boolean } = {}, now: Date = new Date()): string {
+  return `${formatDate(date, options, now)} ${toTimeValue(date)}`;
+}
+
 /** Normalizes loose keyboard input such as "2026/9/7" or "2026-9-7"; null when it is not a real date. */
 export function normalizeDateInput(text: string): string | null {
   const match = /^\s*(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*日?\s*$/.exec(text);

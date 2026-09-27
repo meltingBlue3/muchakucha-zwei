@@ -5,15 +5,9 @@ import type { NoteResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { NoteWindow } from '../../../../../../src/features/notes/note-window';
+import { formatDateTime } from '../../../../../../src/ui/date-values';
 import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
 import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  return `${date} ${time}`;
-}
 
 export default function NoteDetailRoute() {
   const { id, noteId } = useLocalSearchParams<{ id: string; noteId: string }>();
@@ -67,8 +61,8 @@ export default function NoteDetailRoute() {
   return (
     <NoteWindow title="笔记详情" footer={<Button label="编辑笔记" onPress={handleEdit} />}>
       <Stack gap={4}>
-        <Heading>{note.title}</Heading>
-        <Text variant="caption" color="inkMuted">最后更新于 {formatDateTime(note.updatedAt)}</Text>
+        <Heading level={2}>{note.title}</Heading>
+        <Text variant="caption" color="inkMuted">最后更新于 {formatDateTime(new Date(note.updatedAt))}</Text>
         <MarkdownBody source={body} />
       </Stack>
     </NoteWindow>

@@ -70,6 +70,7 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
       <IconButton label="表格" disabled={disabled} icon={<Table size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => { setError(''); setPanel('table'); }} />
     </View>,
     headerActions: <IconButton
+      appearance="plain"
       label={preview ? '编辑' : '预览'}
       accessibilityHint={preview ? '返回笔记编辑' : '预览 Markdown 排版'}
       disabled={disabled}
