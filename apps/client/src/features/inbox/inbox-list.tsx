@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { AppDialog } from '../../ui/app-dialog';
-import { Banner, EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
+import { Banner, Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 import { formatDate } from '../../ui/date-values';
 
@@ -43,12 +43,21 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
     trigger.current = container.current;
     void action.run();
   };
-  const actions = (message: InboxMessage) => message.actions.map(action => (
-    <Pressable key={action.id} accessibilityRole="button" accessibilityLabel={action.accessibilityLabel}
-      disabled={busy || loading} accessibilityState={{ disabled: busy || loading, busy }} onPress={() => run(action)}
-      style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing[1], borderRadius: theme.borderRadii.sm, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
-      <Text variant="label" color={busy ? 'inkMuted' : action.primary ? 'coral' : 'inkMuted'}>{action.label}</Text>
-    </Pressable>
+  // In a row: the primary answer is a compact filled pill, the other plain text.
+  const actions = (message: InboxMessage) => message.actions.map(action => {
+    const unavailable = busy || loading;
+    const filled = action.primary && !unavailable;
+    return (
+      <Pressable key={action.id} accessibilityRole="button" accessibilityLabel={action.accessibilityLabel}
+        disabled={unavailable} accessibilityState={{ disabled: unavailable, busy }} onPress={() => run(action)}
+        style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing[4], borderRadius: theme.borderRadii.full, backgroundColor: filled ? (pressed ? theme.colors.coralPressed : theme.colors.coral) : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
+        <Text variant="label" color={unavailable ? 'inkMuted' : filled ? 'surface' : 'link'}>{action.label}</Text>
+      </Pressable>
+    );
+  });
+  // In the message window: the app's standard buttons, secondary first.
+  const windowActions = (message: InboxMessage) => [...message.actions].sort((a, b) => Number(Boolean(a.primary)) - Number(Boolean(b.primary))).map(action => (
+    <Button key={action.id} label={action.label} accessibilityLabel={action.accessibilityLabel} tone={action.primary ? 'primary' : 'secondary'} disabled={busy || loading} onPress={() => run(action)} style={{ flexGrow: 1, flexBasis: theme.controlSizes.touchTarget * 3 }} />
   ));
   return <View ref={container} tabIndex={-1} accessibilityLabel="消息列表">
     <Stack gap={3}>
@@ -74,7 +83,7 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
         <Text variant="section">{selected.summary}</Text>
         {selected.details.map(detail => <Stack gap={1} key={detail.label}><Text variant="caption">{detail.label}</Text><Text>{detail.value}</Text></Stack>)}
         {error ? <Banner>{error}</Banner> : null}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: theme.spacing[3] }}>{actions(selected)}</View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[3] }}>{windowActions(selected)}</View>
       </Stack>
     </AppDialog> : null}
   </View>;

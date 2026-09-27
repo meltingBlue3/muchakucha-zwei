@@ -18,7 +18,7 @@ export default function InboxRoute() {
     router.replace(`/households/${household.id}`);
   }, [refreshHouseholds, switchHousehold]);
   const inbox = useInbox({ api: sessionApiClient, getAccessToken, onAccepted });
-  return <AppShell refreshing={inbox.loading} onRefresh={() => { void inbox.reload(); }} title="收件箱" accessibilityLabel="收件箱" showBack showProfile onBack={() => router.canGoBack() ? router.back() : router.replace('/household-handoff')}>
+  return <AppShell refreshing={inbox.loading} onRefresh={() => { void inbox.reload(); }} title="收件箱" accessibilityLabel="收件箱" showBack showProfile showInbox={false} onBack={() => router.canGoBack() ? router.back() : router.replace('/household-handoff')}>
     <Stack style={{ width: '100%', maxWidth: theme.layout.householdMaxWidth, alignSelf: 'center' }}>
       <InboxList {...inbox} />
     </Stack>

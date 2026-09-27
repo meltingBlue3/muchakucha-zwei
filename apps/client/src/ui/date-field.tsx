@@ -103,9 +103,9 @@ export function DateField({
     alignItems: align === 'end' ? 'flex-end' as const : 'flex-start' as const,
   } : {
     backgroundColor: activeTheme.colors.surface,
-    borderWidth: 1,
+    borderWidth: activeTheme.borderWidths.default,
     borderColor: activeTheme.colors.border,
-    borderRadius: activeTheme.borderRadii.sm,
+    borderRadius: activeTheme.borderRadii.md,
     paddingHorizontal: activeTheme.spacing[4],
     paddingVertical: activeTheme.spacing[3],
     minHeight: activeTheme.controlSizes.field,
@@ -124,7 +124,7 @@ export function DateField({
         accessibilityLabel={`${name}，${displayValue}`}
         accessibilityRole="button"
         accessibilityState={{ disabled, expanded: open }}
-        style={({ pressed }) => [fieldStyle, { opacity: pressed ? 0.7 : 1 }]}
+        style={({ pressed }) => [fieldStyle, { borderRadius: plain ? activeTheme.borderRadii.sm : activeTheme.borderRadii.md, backgroundColor: pressed ? activeTheme.colors.surfaceMuted : plain ? activeTheme.colors.transparent : activeTheme.colors.surface }]}
       >
         <Text color={isEmpty ? 'inkMuted' : 'ink'}>{displayValue}</Text>
       </Pressable>

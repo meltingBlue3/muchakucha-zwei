@@ -168,8 +168,7 @@ export function TimePickerPanel({ value, onConfirm, onCancel }: { value: string;
         onSubmitEditing={() => { if (typed) onConfirm(typed); }}
         {...(text !== '' && !typed ? { error: '请输入有效的时间，例如 14:30。' } : {})}
       />
-      <PickerActions onCancel={onCancel} onConfirm={() => { if (typed) onConfirm(typed); }} confirmDisabled={!typed} />
-      {/* Only the list scrolls, so keyboard entry and actions stay in view. */}
+      {/* Only the list scrolls (five rows at most), so the entry above and the actions below stay in view. */}
       <ScrollView
         ref={list}
         accessibilityRole="list"
@@ -194,6 +193,7 @@ export function TimePickerPanel({ value, onConfirm, onCancel }: { value: string;
           );
         })}
       </ScrollView>
+      <PickerActions onCancel={onCancel} onConfirm={() => { if (typed) onConfirm(typed); }} confirmDisabled={!typed} />
     </Stack>
   );
 }

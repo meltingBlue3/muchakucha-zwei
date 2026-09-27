@@ -1,3 +1,5 @@
+import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
+import { HouseholdContextNote } from '../../../../../../src/ui/household-components';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore } from '../../../../../../src/ui/workspace-state';
@@ -13,6 +15,8 @@ import type { CreateNoteDto } from '@muchakucha/api-client';
 
 export default function EditNoteRoute() {
   const { id, noteId } = useLocalSearchParams<{ id: string; noteId: string }>();
+  const { households } = useHouseholdContext();
+  const householdName = households.find(household => household.id === id)?.name ?? '';
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:notes:${noteId}:`;
   const router = useRouter();
@@ -85,6 +89,7 @@ export default function EditNoteRoute() {
       {loading ? <LoadingState label="正在加载笔记" /> : note === null ? <Stack gap={3}>
         <LoadError message={error ?? '笔记未找到或已被删除。'} onRetry={() => void fetchNote()} />
       </Stack> : <Stack gap={4}>
+        <HouseholdContextNote householdName={householdName} />
         {error ? <Banner>{error}</Banner> : null}
         {conflict.panel}
         <NoteForm draftKey={draftPrefix + 'form'} initial={note} onSubmit={handleSubmit} onCancel={close} submitLabel="保存" isSubmitting={isSubmitting} />

@@ -7,7 +7,6 @@ import { Pressable, View, useWindowDimensions } from 'react-native';
 import { AppDialog } from '../../ui/app-dialog';
 import House from 'lucide-react-native/icons/house';
 import Users from 'lucide-react-native/icons/users';
-import UserPlus from 'lucide-react-native/icons/user-plus';
 import Mail from 'lucide-react-native/icons/mail';
 import LogOut from 'lucide-react-native/icons/log-out';
 import { SettingsSection } from '../../ui/settings-section';
@@ -458,11 +457,13 @@ export function HouseholdSettings({
 
   const editButton = actorIsOwner ? (
     <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel="编辑家庭名称" onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
-      <Text variant="label" color="coral">编辑</Text>
+      <Text variant="label" color="link">编辑</Text>
     </Pressable>
   ) : null;
 
-  const leaveEntry = !actorIsOwner || canTransferBeforeLeaving ? (
+  // One invite action in both layouts: the overview panel on wide screens, the top of 成员 otherwise.
+  const inviteButton = <Button ref={inviteTrigger} label="邀请家人" onPress={() => setActiveForm('invite')} />;
+    const leaveEntry = !actorIsOwner || canTransferBeforeLeaving ? (
     <Pressable ref={leaveTrigger} accessibilityRole="button" accessibilityLabel="离开家庭" onPress={() => {
       if (actorIsOwner) { setSuccessorId(null); setLeaveOpen(true); }
       else { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/leave?householdName=${encodeURIComponent(authoritativeName)}`); }
@@ -510,11 +511,7 @@ export function HouseholdSettings({
                     </Inline>
                   ) : null}
                 </Stack>
-                {showInvite && canManage ? (
-                  <Pressable ref={inviteTrigger} accessibilityRole="button" accessibilityLabel="邀请家人" onPress={() => setActiveForm('invite')} style={({ pressed }) => ({ minHeight: theme.controlSizes.primary, flexDirection: 'row', gap: theme.spacing[2], paddingHorizontal: theme.spacing[4], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.coralPressed : theme.colors.coral })}>
-                    <UserPlus size={theme.controlSizes.icon} color={theme.colors.surface} /><Text variant="button" color="surface">邀请家人</Text>
-                  </Pressable>
-                ) : null}
+                {showInvite && canManage ? inviteButton : null}
               </Stack>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], minHeight: theme.controlSizes.touchTarget }}>
@@ -528,11 +525,8 @@ export function HouseholdSettings({
         {wide ? leaveEntry : null}
         </Stack>
         <Stack gap={4} style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', minWidth: 0 }}>
-        <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.teal} />} action={showInvite && canManage && !inviteInOverview ? (
-          <Pressable ref={inviteTrigger} accessibilityRole="button" accessibilityLabel="邀请家人" onPress={() => setActiveForm('invite')} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', gap: theme.spacing[2], paddingHorizontal: theme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.tealSoft : theme.colors.surfaceSubtle })}>
-            <UserPlus size={theme.controlSizes.icon} color={theme.colors.teal} /><Text variant="label" color="teal">邀请</Text>
-          </Pressable>
-        ) : null}>
+        <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.teal} />}>
+          {showInvite && canManage && !inviteInOverview ? inviteButton : null}
         <Stack gap={0}>
           {data.members.map((member) => {
             const targetIsOwner = member.membershipId === data.ownerMembershipId;
@@ -556,7 +550,7 @@ export function HouseholdSettings({
                 onRemove={() => governance.remove?.(member.membershipId, member.displayName, member.role)}
                 canTransferTo={transferable}
                 onTransfer={() => governance.transfer?.(member.membershipId, member.displayName)}
-                labeledActions={wide}
+                labeledActions
               />
             );
           })}
@@ -585,7 +579,7 @@ export function HouseholdSettings({
                     onResend={handleResend}
                     onRevoke={handleRevoke}
                     resendBusy={resendingId === inv.id}
-                    labeledActions={wide}
+                    labeledActions
                   />
                 ))}
               </Stack>

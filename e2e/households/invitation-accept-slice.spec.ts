@@ -30,9 +30,8 @@ for (const width of [320, 390, 1440]) {
     await expect(accept).toBeVisible();
     await expect(inbox.getByRole('button', { name: /^查看消息：/ })).toHaveCount(3);
     await expect(page.getByRole('button', { name: /刷新收件箱/ })).toHaveCount(0);
-    const inboxIcon = await inbox.getByRole('button', { name: '收件箱', exact: true }).boundingBox();
-    const profileIcon = await inbox.getByRole('button', { name: '个人中心', exact: true }).boundingBox();
-    expect(inboxIcon!.x + inboxIcon!.width).toBeLessThanOrEqual(profileIcon!.x + 1);
+    // The inbox header does not link to itself.
+    await expect(inbox.getByRole('button', { name: '收件箱', exact: true })).toHaveCount(0);
     const reject = await inbox.getByRole('button', { name: '拒绝「周末一起做饭的温暖家庭」的邀请' }).boundingBox();
     const acceptBox = await accept.boundingBox();
     expect(Math.abs(reject!.y - acceptBox!.y)).toBeLessThan(1);
@@ -58,7 +57,10 @@ for (const width of [320, 390, 1440]) {
     const roster = await request.get(`${api}/api/v1/households/${household.id}`, { headers: { authorization: `Bearer ${recipient.accessToken}` } });
     expect(roster.status()).toBe(200);
     expect((await roster.json()).members).toEqual(expect.arrayContaining([expect.objectContaining({ username: recipient.username, role: 'MEMBER' })]));
-    // Global inbox entry remains available after joining a household.
+    // Global inbox entry remains available after joining a household, directly before the account menu.
+    const inboxIcon = await page.getByRole('button', { name: '收件箱', exact: true }).boundingBox();
+    const profileIcon = await page.getByRole('button', { name: '个人中心', exact: true }).boundingBox();
+    expect(inboxIcon!.x + inboxIcon!.width).toBeLessThanOrEqual(profileIcon!.x + 1);
     await page.getByRole('button', { name: '收件箱', exact: true }).click();
     await expect(page.getByRole('button', { name: /^查看消息：/ })).toHaveCount(2);
   });

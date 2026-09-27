@@ -60,7 +60,8 @@ export function CalendarMonth({
           accessibilityRole="button"
           hitSlop={activeTheme.spacing[3]}
           style={({ pressed }) => ({
-            opacity: pressed ? 0.6 : 1,
+            backgroundColor: pressed ? activeTheme.colors.surfaceMuted : 'transparent',
+            borderRadius: activeTheme.borderRadii.full,
             padding: activeTheme.spacing[2],
             minHeight: activeTheme.controlSizes.touchTarget,
             minWidth: activeTheme.controlSizes.touchTarget,
@@ -80,7 +81,8 @@ export function CalendarMonth({
           accessibilityRole="button"
           hitSlop={activeTheme.spacing[3]}
           style={({ pressed }) => ({
-            opacity: pressed ? 0.6 : 1,
+            backgroundColor: pressed ? activeTheme.colors.surfaceMuted : 'transparent',
+            borderRadius: activeTheme.borderRadii.full,
             padding: activeTheme.spacing[2],
             minHeight: activeTheme.controlSizes.touchTarget,
             minWidth: activeTheme.controlSizes.touchTarget,
@@ -128,14 +130,14 @@ export function CalendarMonth({
                 accessibilityState={{ selected: isSelected }}
                 aria-pressed={isSelected}
                 accessibilityLabel={`${formatDayLabel(parseDateValue(day.iso))}${day.isToday ? '，今天' : ''}${eventCount > 0 ? `，${eventCount}个日程` : ''}`}
-                style={({ pressed }) => ({
+                style={{
                   flex: 1,
                   minHeight: activeTheme.controlSizes.touchTarget + activeTheme.spacing[2],
                   alignItems: 'center',
                   paddingVertical: activeTheme.spacing[1],
-                  opacity: pressed ? 0.7 : 1,
-                })}
+                }}
               >
+                {({ pressed }) => <>
                 <View
                   style={{
                     minWidth: DAY_CELL_SIZE,
@@ -146,7 +148,7 @@ export function CalendarMonth({
                     // Same marks as the date picker: a filled circle selects, a ring marks today.
                     backgroundColor: isSelected
                       ? activeTheme.colors.coral
-                      : 'transparent',
+                      : pressed ? activeTheme.colors.surfaceMuted : 'transparent',
                     borderWidth: day.isToday && !isSelected ? activeTheme.borderWidths.default : 0,
                     borderColor: activeTheme.colors.coral,
                   }}
@@ -169,6 +171,7 @@ export function CalendarMonth({
                     }}
                   />
                 )}
+                </>}
               </Pressable>
             );
           })}

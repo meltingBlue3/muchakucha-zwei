@@ -269,7 +269,7 @@ export default function TaskListScreen() {
 
           <PageIntro title="任务" />
 
-        <FilterOptions label="任务状态" options={FILTERS.map(f => ({ value: f.key, label: f.label, name: `筛选：${f.label}` }))} value={filter} onChange={value => setFilter(value as FilterKey)} />
+        <FilterOptions label="任务状态" hideLabel options={FILTERS.map(f => ({ value: f.key, label: f.label, name: `筛选：${f.label}` }))} value={filter} onChange={value => setFilter(value as FilterKey)} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}>
           <Pressable ref={filterTrigger} accessibilityRole="button" accessibilityLabel={`筛选任务${activeFilterCount ? `，已选择 ${activeFilterCount} 项` : ''}`} onPress={() => setFiltersOpen(true)} style={{ minHeight: activeTheme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}>
             <ListFilter size={activeTheme.controlSizes.icon} color={activeTheme.colors.ink} />
