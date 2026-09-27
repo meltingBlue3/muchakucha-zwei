@@ -1,5 +1,6 @@
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { PageIntro } from '../../ui/page-intro';
 import { useCallback, useRef, useState } from 'react';
 import type { RecurrenceRuleListItemDto } from '@muchakucha/api-client';
 
@@ -9,10 +10,8 @@ import { RecurrenceRuleRow } from '../recurrence/recurrence-rule-row';
 import {
   AccessChangedPanel,
   AppShell,
-  HouseholdHeader,
-  HouseholdSwitcher,
 } from '../../ui/household-components';
-import { EmptyState, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
+import { EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 
 const LOAD_ERROR = '无法加载重复安排，请检查网络连接后重试。';
 // Straight quotes match the published sibling copy in `recurring-filter.ts`.
@@ -35,7 +34,6 @@ export default function RecurrenceRulesIndexRoute() {
     currentHouseholdId,
     accessChangedHouseholdName,
     refreshHouseholds,
-    switchHousehold,
   } = useHouseholdContext();
 
   const [rules, setRules] = useState<RecurrenceRuleListItemDto[]>([]);
@@ -46,10 +44,8 @@ export default function RecurrenceRulesIndexRoute() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
   const deviceTimeZone = resolveDeviceTimeZone();
 
   const fetchRules = useCallback(async () => {
@@ -93,18 +89,6 @@ export default function RecurrenceRulesIndexRoute() {
     setRefreshing(false);
   }, [fetchRules]);
 
-  const handleSwitch = useCallback(async (nextHouseholdId: string) => {
-    if (nextHouseholdId === currentHouseholdId) {
-      setSwitcherOpen(false);
-      return;
-    }
-    const success = await switchHousehold(nextHouseholdId);
-    if (success) {
-      void router.replace(`/households/${encodeURIComponent(nextHouseholdId)}/recurrence-rules`);
-    }
-    setSwitcherOpen(false);
-  }, [id, currentHouseholdId, switchHousehold, router]);
-
   const handleOpenRule = useCallback((ruleId: string) => {
     if (householdId === undefined || householdId === '') return;
     rememberRouteTrigger();
@@ -138,9 +122,9 @@ export default function RecurrenceRulesIndexRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="重复安排" refreshing={refreshing} onRefresh={handleRefresh} title="重复安排" showBack showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />}>
+      <AppShell accessibilityLabel="重复安排" refreshing={refreshing} onRefresh={handleRefresh} title="重复安排" showBack showProfile>
         <Stack gap={4}>
-          <Heading>重复安排</Heading>
+          <PageIntro title="重复安排" />
 
           {loading && <LoadingState label="正在加载重复安排" />}
 
@@ -163,18 +147,6 @@ export default function RecurrenceRulesIndexRoute() {
           ))}
         </Stack>
       </AppShell>
-
-      <HouseholdSwitcher
-        currentHouseholdId={id ?? currentHouseholdId}
-        households={households}
-        onCreateNew={() => {
-          void router.push('/households/new');
-          setSwitcherOpen(false);
-        }}
-        onClose={() => setSwitcherOpen(false)}
-        onSelect={(hid) => { void handleSwitch(hid); }}
-        visible={switcherOpen}
-      />
     </>
   );
 }

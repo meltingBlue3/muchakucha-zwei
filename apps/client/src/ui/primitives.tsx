@@ -134,6 +134,8 @@ export const Spinner = ({ label = '正在处理', inverse = false }: { label?: s
 type ButtonTone = 'primary' | 'secondary' | 'destructive';
 
 type ButtonProps = Omit<PressableProps, 'children'> & {
+  /** Lets a dialog return focus to the button that opened it. */
+  ref?: React.Ref<View>;
   label: string;
   loading?: boolean;
   /** `destructive` commits an irreversible or access-removing change. */
@@ -173,7 +175,8 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', sty
           backgroundColor: tone === 'secondary' && !unavailable
             ? state.pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.surface
             : getButtonFill({ disabled: unavailable, pressed: state.pressed }, tone === 'destructive' ? 'destructive' : 'primary'),
-          borderColor: focused ? activeTheme.colors.focusRing : activeTheme.colors.transparent,
+          // A secondary button on a white surface needs an edge to read as a button; focus still wins.
+          borderColor: focused ? activeTheme.colors.focusRing : tone === 'secondary' && !unavailable ? activeTheme.colors.separator : activeTheme.colors.transparent,
           borderRadius: activeTheme.borderRadii.lg,
           borderWidth: activeTheme.borderWidths.focus,
           flexDirection: 'row',

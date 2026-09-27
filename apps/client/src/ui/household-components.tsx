@@ -59,6 +59,8 @@ interface AppShellProps {
   showBack?: boolean;
   onBack?: () => void;
   showProfile?: boolean;
+  /** Off on the inbox itself, so the header never links to the page you are on. */
+  showInbox?: boolean;
   footer?: React.ReactNode;
   headerContent?: React.ReactNode;
   floatingAction?: React.ReactNode;
@@ -73,6 +75,7 @@ export const AppShell = ({
   showBack = false,
   onBack,
   showProfile = false,
+  showInbox = true,
   footer,
   headerContent,
   floatingAction,
@@ -150,7 +153,7 @@ export const AppShell = ({
 
           {/* Global destinations: inbox directly precedes the account menu. */}
           <View style={{ minWidth: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center' }}>
-            {showProfile ? <><IconButton appearance="plain" label="收件箱" icon={<Inbox color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} /><AccountMenu /></> : null}
+            {showProfile ? <>{showInbox ?  <IconButton appearance="plain" label="收件箱" icon={<Inbox color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} /> : null}<AccountMenu /></> : null}
           </View>
         </View>
       ) : null}
@@ -265,7 +268,7 @@ export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryA
   return (
     <View style={{
       backgroundColor: theme.colors.surface,
-      borderColor: isCurrent ? theme.colors.coral : theme.colors.border,
+      borderColor: isCurrent ? theme.colors.coral : theme.colors.separator,
       borderRadius: theme.borderRadii.xl,
       borderWidth: theme.borderWidths.default,
       overflow: 'hidden',
@@ -275,7 +278,7 @@ export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryA
         <Pressable
           accessibilityRole={onSelect !== undefined ? 'button' : 'none'}
           onPress={onSelect !== undefined ? () => onSelect(household.id) : undefined}
-          style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+          style={({ pressed }) => ({ borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceSubtle : theme.colors.transparent })}
         >
         <Inline gap={2} style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <Stack gap={1} style={{ flex: 1 }}>

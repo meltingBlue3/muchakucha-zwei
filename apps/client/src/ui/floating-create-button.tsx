@@ -31,7 +31,7 @@ export function FloatingCreateButton(props: Props) {
       if (!props.actions) { props.onPress(); return; }
       trigger.current?.measureInWindow((x, y, w, h) => setAnchor({ right: Math.max(theme.spacing[4], width - x - w), bottom: Math.max(insets.bottom + theme.spacing[4], height - y - h) }));
       setOpen(true);
-    }} style={({ pressed }) => [buttonStyle, { opacity: pressed ? 0.8 : 1 }]}>
+    }} style={({ pressed }) => [buttonStyle, { backgroundColor: pressed ? theme.colors.coralPressed : theme.colors.coral }]}>
       <Plus size={theme.spacing[8]} color={theme.colors.surface} />
     </Pressable>
     {open && props.actions ? <Modal {...(Platform.OS === 'web' ? { 'aria-label': '创建选项' } : {})} transparent visible animationType="none" onShow={focus} onRequestClose={close} statusBarTranslucent navigationBarTranslucent>

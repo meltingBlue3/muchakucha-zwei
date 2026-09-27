@@ -5,6 +5,8 @@ import { DraftNotice } from '../../../../../src/ui/draft-notice';
 import { useCreateWithLabels } from '../../../../../src/features/households/use-create-with-labels';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams } from 'expo-router';
+import { useHouseholdContext } from '../../../../../src/features/households/household-context';
+import { HouseholdContextNote } from '../../../../../src/ui/household-components';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { EventForm } from '../../../../../src/features/events/event-form';
@@ -13,6 +15,8 @@ import type { CreateEventDto } from '@muchakucha/api-client';
 
 export default function CreateEventRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { households } = useHouseholdContext();
+  const householdName = households.find(household => household.id === id)?.name ?? '';
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:events:new:`;
   const { close } = useEventWindowClose();
@@ -40,6 +44,7 @@ export default function CreateEventRoute() {
     <EventWindow title="创建日程" busy={isSubmitting} exitAllowed={exitAllowed}>
 
         <Stack gap={4}>
+          <HouseholdContextNote householdName={householdName} />
           {error !== null && created === null ? <Banner>{error}</Banner> : null}
           {created !== null ? <Stack gap={4}><DraftNotice /><LoadError title="日程已创建" message={error ?? '内容已创建，标签尚未保存。'} retryLabel="重试保存标签" retrying={isSubmitting} onRetry={() => void retry()} /></Stack> : <EventForm
             draftKey={draftPrefix + 'form'}

@@ -1,3 +1,5 @@
+import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
+import { HouseholdContextNote } from '../../../../../../src/ui/household-components';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
 import { EventWindow } from '../../../../../../src/features/events/event-window';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
@@ -49,6 +51,8 @@ function eventSeriesUpdate(data: CreateEventDto, labelIds: string[]): Omit<Updat
 
 export default function EditEventRoute() {
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
+  const { households } = useHouseholdContext();
+  const householdName = households.find(household => household.id === id)?.name ?? '';
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:events:${eventId}:`;
   const router = useRouter();
@@ -184,6 +188,7 @@ export default function EditEventRoute() {
         : loading ? <LoadingState label="正在加载日程" /> : event === null ? <Stack gap={3}>
           <LoadError message={error ?? '日程未找到或已被删除。'} onRetry={() => void fetchEvent()} />
         </Stack> : <Stack gap={4}>
+          <HouseholdContextNote householdName={householdName} />
           {error ? <Banner>{error}</Banner> : null}
           {conflict.panel}
           <EventForm draftKey={draftPrefix + 'form'} initial={event} onSubmit={handleSubmit} onCancel={handleCancel} submitLabel="保存" isSubmitting={isSubmitting} householdId={id} selectedLabelIds={selectedLabelIds} onLabelChange={setSelectedLabelIds} />

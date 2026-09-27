@@ -212,10 +212,8 @@ for (const kind of ['tasks', 'events'] as const) {
     await page.goto(`/households/${a}/${kind}`);
     await page.getByLabel(kind === 'tasks' ? '创建任务' : '创建日程', { exact: true }).click();
     await page.getByLabel(kind === 'tasks' ? '任务标题' : '日程标题', { exact: true }).fill('只创建一次');
-    if (kind === 'tasks') {
-      await expect(page.getByText('保存到：家庭 A', { exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: /当前家庭/ })).toHaveCount(0);
-    }
+    await expect(page.getByText('保存到：家庭 A', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /当前家庭/ })).toHaveCount(0);
     await page.getByLabel('选择标签 家务', { exact: true }).click();
     await page.getByLabel('创建', { exact: true }).filter({ visible: true }).last().click();
     await expect(page.getByText('内容已创建，但标签未保存。重试只会保存标签，不会重复创建。')).toBeVisible();

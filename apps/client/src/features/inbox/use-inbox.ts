@@ -78,7 +78,7 @@ export function useInbox({ api, getAccessToken, onAccepted }: {
     createdAt: invitation.createdAt,
     details: [
       { label: '发送时间', value: formatDateTime(new Date(invitation.createdAt)) },
-      { label: '状态', value: '待处理' },
+      { label: '状态', value: '待接受' },
       { label: '加入后的身份', value: '普通成员，可以查看和编辑家庭共享的日程、任务和笔记。' },
       { label: '有效期至', value: formatDateTime(new Date(invitation.expiresAt)) },
     ],

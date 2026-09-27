@@ -85,7 +85,7 @@ export function SummaryRow({ name, summary, icon, open, disabled = false, onPres
         aria-haspopup="dialog"
         disabled={disabled}
         onPress={onPress}
-        style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], minHeight: theme.controlSizes.touchTarget, opacity: pressed ? 0.7 : 1 })}
+        style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], minHeight: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], marginLeft: -theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
       >
         <Text color={muted ? 'inkMuted' : 'ink'} style={{ flex: 1 }}>{summary}</Text>
         <ChevronDown size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
