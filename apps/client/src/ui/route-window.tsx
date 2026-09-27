@@ -29,6 +29,21 @@ export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 're
   return { close, hasBackground };
 }
 
+/**
+ * Leaves an edit window for wherever it was opened from — the item's detail
+ * window or the list whose card menu opened it. A direct link has nothing
+ * behind it, so it lands on the item's detail window instead.
+ */
+export function useEditWindowExit(resource: 'tasks' | 'events' | 'notes', itemId: string | undefined) {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const { hasBackground } = useRouteWindowClose(resource);
+  return useCallback(() => {
+    if (hasBackground) router.back();
+    else router.replace(`/households/${encodeURIComponent(id)}/${resource}/${encodeURIComponent(itemId ?? '')}`);
+  }, [hasBackground, router, id, resource, itemId]);
+}
+
 /** A route owns the URL; the dialog owns presentation and focus. Previous
  * transparent routes stay mounted, but only the focused route opens a modal. */
 export interface RouteWindowProps {

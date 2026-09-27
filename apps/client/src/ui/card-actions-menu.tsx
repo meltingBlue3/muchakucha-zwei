@@ -1,13 +1,34 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ComponentType } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
+import Pencil from 'lucide-react-native/icons/pencil';
 import Trash2 from 'lucide-react-native/icons/trash-2';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { Text } from './primitives';
 import { theme } from './theme';
 
-export function CardActionsMenu({ label, onPress, disabled = false }: { label: string; onPress(): void; disabled?: boolean }) {
+export interface CardAction {
+  kind: 'edit' | 'delete';
+  /** Full name for assistive technology, such as "删除任务：买菜". */
+  accessibilityLabel: string;
+  onPress(): void;
+}
+
+const ACTION_LOOK: Record<CardAction['kind'], { label: string; icon: ComponentType<{ size?: number; color?: string }>; destructive: boolean }> = {
+  edit: { label: '编辑', icon: Pencil, destructive: false },
+  delete: { label: '删除', icon: Trash2, destructive: true },
+};
+
+/**
+ * The "…" menu on a card or list row. `subject` names the item ("任务：买菜")
+ * and titles the trigger "更多操作：任务：买菜". Renders nothing without actions.
+ */
+export function CardActionsMenu(props: { subject: string; actions: CardAction[]; disabled?: boolean }) {
+  return props.actions.length === 0 ? null : <ActionsMenu {...props} />;
+}
+
+function ActionsMenu({ subject, actions, disabled = false }: { subject: string; actions: CardAction[]; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState({ top: 0, right: theme.layout.mobileInset });
   const { width, height } = useWindowDimensions();
@@ -17,7 +38,8 @@ export function CardActionsMenu({ label, onPress, disabled = false }: { label: s
   const initial = useRef<View>(null);
   const close = useCallback(() => setOpen(false), []);
   const focus = useOverlayFocus({ mode: open ? 'menu' : 'closed', panel, initial, trigger, onClose: close });
-  const menuLabel = label.replace(/^删除/, '更多操作：');
+  const menuLabel = `更多操作：${subject}`;
+  const panelHeight = actions.length * theme.controlSizes.touchTarget + theme.spacing[4];
   return <>
     <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel={menuLabel} accessibilityState={{ disabled, expanded: open }} aria-expanded={open} aria-haspopup="menu" disabled={disabled} onPress={() => {
       trigger.current?.measureInWindow((x, y, w, h) => setAnchor({ top: y + h, right: Math.max(theme.layout.mobileInset, width - x - w) }));
@@ -28,10 +50,16 @@ export function CardActionsMenu({ label, onPress, disabled = false }: { label: s
     {open ? <Modal {...(Platform.OS === 'web' ? { 'aria-label': menuLabel } : {})} transparent visible animationType="none" onShow={focus} onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
       <View style={{ flex: 1 }}>
         <Pressable accessible={false} tabIndex={-1} testID="card-menu-dismiss" onPress={close} style={StyleSheet.absoluteFill} />
-        <View ref={panel} accessibilityRole="menu" accessibilityLabel={menuLabel} accessibilityViewIsModal style={{ position: 'absolute', top: Math.max(insets.top, Math.min(anchor.top, height - insets.bottom - theme.controlSizes.touchTarget - theme.spacing[6])), right: anchor.right, minWidth: theme.controlSizes.touchTarget * 3, backgroundColor: theme.colors.surface, padding: theme.spacing[2], borderRadius: theme.borderRadii.md, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, boxShadow: theme.shadow.soft }}>
-          <Pressable ref={initial} accessibilityRole="menuitem" accessibilityLabel={label} onPress={() => { close(); requestAnimationFrame(onPress); }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.sm, backgroundColor: pressed ? theme.colors.destructiveSoft : theme.colors.surface })}>
-            <Trash2 size={theme.controlSizes.icon} color={theme.colors.destructive} /><Text variant="label" color="destructive">删除</Text>
-          </Pressable>
+        <View ref={panel} accessibilityRole="menu" accessibilityLabel={menuLabel} accessibilityViewIsModal style={{ position: 'absolute', top: Math.max(insets.top, Math.min(anchor.top, height - insets.bottom - panelHeight - theme.spacing[2])), right: anchor.right, minWidth: theme.controlSizes.touchTarget * 3, backgroundColor: theme.colors.surface, padding: theme.spacing[2], borderRadius: theme.borderRadii.lg, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, boxShadow: theme.shadow.soft }}>
+          {actions.map((action, index) => {
+            const { label, icon: Icon, destructive } = ACTION_LOOK[action.kind];
+            return (
+              <Pressable key={action.kind} ref={index === 0 ? initial : undefined} accessibilityRole="menuitem" accessibilityLabel={action.accessibilityLabel} onPress={() => { close(); requestAnimationFrame(action.onPress); }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? (destructive ? theme.colors.destructiveSoft : theme.colors.surfaceMuted) : theme.colors.surface })}>
+                <Icon size={theme.controlSizes.icon} color={destructive ? theme.colors.destructive : theme.colors.ink} />
+                <Text variant="label" color={destructive ? 'destructive' : 'ink'}>{label}</Text>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
     </Modal> : null}

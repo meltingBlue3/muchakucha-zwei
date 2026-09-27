@@ -1,3 +1,4 @@
+import { useEditWindowExit } from '../../../../../../src/ui/route-window';
 import { EventWindow } from '../../../../../../src/features/events/event-window';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
@@ -51,6 +52,7 @@ export default function EditEventRoute() {
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:events:${eventId}:`;
   const router = useRouter();
+  const exitEdit = useEditWindowExit('events', eventId);
   const exitAllowed = useRef(false);
   const [event, setEvent] = useState<EventResponseDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,14 +116,14 @@ export default function EditEventRoute() {
         await sessionApiClient.updateEvent(token, id!, eventId!, { ...data, ...conflict.precondition, labelIds: selectedLabelIds });
         workspace.clear(draftPrefix);
         exitAllowed.current = true;
-        router.dismissTo(`/households/${encodeURIComponent(id!)}/events/${encodeURIComponent(eventId!)}`);
+        exitEdit();
       } catch (err: unknown) {
         if (!conflict.handle(err)) setError('保存失败，请重试。');
       } finally {
         setIsSubmitting(false);
       }
     },
-    [event, id, eventId, router, selectedLabelIds, workspace, draftPrefix, conflict],
+    [event, id, eventId, router, selectedLabelIds, workspace, draftPrefix, conflict, exitEdit],
   );
 
   const handleSeriesSelect = useCallback(async (scope: SeriesScope) => {
@@ -149,7 +151,7 @@ export default function EditEventRoute() {
       workspace.clear(draftPrefix);
       if (scope === 'this_only') {
         exitAllowed.current = true;
-        router.dismissTo(`/households/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}`);
+        exitEdit();
       } else {
         exitAllowed.current = true;
         router.dismissTo(`/households/${encodeURIComponent(id)}/events`);
@@ -169,11 +171,11 @@ export default function EditEventRoute() {
     } finally {
       setSeriesSubmitting(null);
     }
-  }, [eventId, fetchEvent, id, pendingSeriesAction, router, selectedLabelIds, workspace, draftPrefix, conflict]);
+  }, [eventId, fetchEvent, id, pendingSeriesAction, router, selectedLabelIds, workspace, draftPrefix, conflict, exitEdit]);
 
   const handleCancel = () => {
     if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
-    else router.dismissTo(`/households/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}`);
+    else exitEdit();
   };
 
   return (

@@ -86,8 +86,7 @@ describe('labels screen offers only the actions the API will accept', () => {
     const { getByLabelText } = await renderAs(actorRole);
 
     expect(getByLabelText('创建标签')).toBeTruthy();
-    await waitFor(() => expect(getByLabelText('编辑标签 采购')).toBeTruthy());
-    expect(getByLabelText('更多操作：标签 采购')).toBeTruthy();
+    await waitFor(() => expect(getByLabelText('更多操作：标签 采购')).toBeTruthy());
   });
 
   test('MEMBER sees the labels but no mutation entry point', async () => {
@@ -98,7 +97,7 @@ describe('labels screen offers only the actions the API will accept', () => {
     await waitFor(() => expect(queryByText('采购')).not.toBeNull());
 
     expect(queryByLabelText('创建标签')).toBeNull();
-    expect(queryByLabelText('编辑标签 采购')).toBeNull();
+    expect(queryByLabelText('更多操作：标签 采购')).toBeNull();
     expect(queryByLabelText('删除标签 采购')).toBeNull();
   });
 

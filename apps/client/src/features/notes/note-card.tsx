@@ -6,12 +6,13 @@ import type { NoteResponseDto } from '@muchakucha/api-client';
 import { Stack, Text } from '../../ui/primitives';
 
 interface NoteCardProps {
+  onEdit?: (() => void) | undefined;
   onDelete?: (() => void) | undefined;
   note: NoteResponseDto;
   onPress: (note: NoteResponseDto) => void;
 }
 
-export function NoteCard({ note, onPress, onDelete }: NoteCardProps) {
+export function NoteCard({ note, onPress, onEdit, onDelete }: NoteCardProps) {
 
   const dateLabel = formatDate(new Date(note.updatedAt));
 
@@ -22,7 +23,10 @@ export function NoteCard({ note, onPress, onDelete }: NoteCardProps) {
     <ContentCard
       accessibilityLabel={`笔记：${note.title}`}
       onPress={() => onPress(note)}
-      trailing={onDelete ? <CardActionsMenu label={`删除笔记：${note.title}`} onPress={onDelete} /> : null}
+      trailing={<CardActionsMenu subject={`笔记：${note.title}`} actions={[
+        ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: `编辑笔记：${note.title}`, onPress: onEdit }] : []),
+        ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除笔记：${note.title}`, onPress: onDelete }] : []),
+      ]} />}
     >
       <Stack gap={1}>
         <Text variant="body" style={{ fontWeight: '600' }} numberOfLines={2}>

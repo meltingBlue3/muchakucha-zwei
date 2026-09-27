@@ -101,7 +101,7 @@ test('filter summaries remain visible after closing the filter window', async ({
   await filter.getByRole('radio', { name: '优先级筛选：高', exact: true }).click();
   await filter.getByRole('radio', { name: '筛选：小林', exact: true }).click();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await filter.getByRole('button', { name: '查看结果', exact: true }).click();
+  await filter.getByRole('button', { name: '完成', exact: true }).click();
   await expect(page.getByText('高优先级 · 小林', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('task-list-390.png') });
   await page.getByRole('button', { name: '清除任务筛选', exact: true }).click();
@@ -144,6 +144,25 @@ test('card menu opens deletion and Escape restores the card action', async ({ pa
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(`${base}/tasks`);
   await expect(more).toBeFocused();
+});
+
+test('editing from the card menu returns to the list, while editing from detail returns to detail', async ({ page }) => {
+  await setup(page);
+  await page.goto(`${base}/tasks`);
+  const more = page.getByRole('button', { name: /^更多操作：任务：/ });
+  await more.click();
+  await page.getByRole('menuitem', { name: /^编辑任务：/ }).click();
+  const edit = page.getByRole('dialog', { name: '编辑任务', exact: true });
+  await expect(edit).toBeVisible();
+  await edit.getByRole('button', { name: '关闭编辑任务' }).click();
+  await expect(page).toHaveURL(`${base}/tasks`);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(more).toBeFocused();
+
+  await page.getByRole('button', { name: /^任务：/ }).click();
+  await page.getByRole('button', { name: '编辑任务', exact: true }).click();
+  await page.getByRole('dialog', { name: '编辑任务', exact: true }).getByRole('button', { name: '关闭编辑任务' }).click();
+  await expect(page.getByRole('dialog', { name: '任务详情', exact: true })).toBeVisible();
 });
 
 test('browser history moves one window level at a time', async ({ page }) => {

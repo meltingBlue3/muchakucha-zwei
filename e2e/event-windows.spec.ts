@@ -92,7 +92,7 @@ test('calendar filters have visible summaries and Today restores the current mon
   const filter = page.getByRole('dialog', { name: '筛选日程', exact: true });
   await filter.getByRole('radio', { name: '重复筛选：仅看重复', exact: true }).click();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await filter.getByRole('button', { name: '查看结果', exact: true }).click();
+  await filter.getByRole('button', { name: '完成', exact: true }).click();
   await expect(page.getByText('仅重复', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^日程：/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^2030年6月15日/ })).not.toHaveAttribute('aria-label', /个日程/);
@@ -146,7 +146,7 @@ test('a late response from the previous month cannot replace the selected month'
   releaseJune();
   await (await juneResponse).finished();
   await page.getByRole('button', { name: '筛选日程', exact: true }).click();
-  await page.getByRole('button', { name: '查看结果', exact: true }).click();
+  await page.getByRole('button', { name: '完成', exact: true }).click();
   await expect(july).toBeVisible();
   await expect(page.getByRole('button', { name: /^2030年7月1日/ })).toHaveAttribute('aria-pressed', 'true');
 });

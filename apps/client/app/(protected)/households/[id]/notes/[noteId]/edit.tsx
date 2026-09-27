@@ -1,3 +1,4 @@
+import { useEditWindowExit } from '../../../../../../src/ui/route-window';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,6 +16,7 @@ export default function EditNoteRoute() {
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:notes:${noteId}:`;
   const router = useRouter();
+  const exitEdit = useEditWindowExit('notes', noteId);
   const exitAllowed = useRef(false);
   const [note, setNote] = useState<NoteResponseDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,18 +66,18 @@ export default function EditNoteRoute() {
         await sessionApiClient.updateNote(token, id!, noteId!, { ...data, expectedUpdatedAt: conflict.precondition.expectedUpdatedAt });
         workspace.clear(draftPrefix);
         exitAllowed.current = true;
-        router.dismissTo(`/households/${encodeURIComponent(id!)}/notes/${encodeURIComponent(noteId!)}`);
+        exitEdit();
       } catch (caught: unknown) {
         if (!conflict.handle(caught)) setError('保存失败，请重试。');
       } finally {
         setIsSubmitting(false);
       }
     },
-    [id, noteId, router, workspace, draftPrefix, conflict],
+    [id, noteId, router, workspace, draftPrefix, conflict, exitEdit],
   );
 
   const close = () => {
-    router.dismissTo(`/households/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`);
+    exitEdit();
   };
 
   return (

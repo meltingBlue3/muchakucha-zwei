@@ -11,6 +11,7 @@ import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { formatDateRange } from '../../../../../../src/features/events/calendar-utils';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
+import { DetailField, DetailPanel } from '../../../../../../src/ui/detail-fields';
 import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
@@ -85,16 +86,15 @@ export default function EventDetailRoute() {
           <Heading level={2}>{event.title}</Heading>
           {cancelled ? <Text variant="label" color="inkMuted">已取消</Text> : null}
         </Stack>
-        <Stack gap={3} style={{ backgroundColor: activeTheme.colors.surfaceSubtle, padding: activeTheme.spacing[4], borderRadius: activeTheme.borderRadii.lg }}>
-          <Stack gap={1}><Text variant="label" color="inkMuted">时间</Text><Text>{when}</Text></Stack>
-          {event.location ? <Stack gap={1}><Text variant="label" color="inkMuted">地点</Text><Text>{event.location}</Text></Stack> : null}
-          {recurrenceSummary ? <Stack gap={1}>
-            <Text variant="label" color="inkMuted">重复安排</Text><Text>{recurrenceSummary.summary}</Text>
-            {recurrenceSummary.clampNote ? <Text variant="caption" color="inkMuted">{recurrenceSummary.clampNote}</Text> : null}
-            {recurrenceSummary.timeZoneNote ? <Text variant="caption" color="inkMuted">{recurrenceSummary.timeZoneNote}</Text> : null}
-            <Text variant="caption" color="inkMuted">{cancelled ? '这次重复已取消。' : '当前查看这一次日程，编辑时可选择影响范围。'}</Text>
-          </Stack> : null}
-        </Stack>
+        <DetailPanel>
+          <DetailField label="时间" value={when} />
+          {event.location ? <DetailField label="地点" value={event.location} /> : null}
+          {recurrenceSummary ? <DetailField label="重复安排" value={recurrenceSummary.summary} notes={[
+            recurrenceSummary.clampNote,
+            recurrenceSummary.timeZoneNote,
+            cancelled ? '这次重复已取消。' : '当前查看这一次日程，编辑时可选择影响范围。',
+          ]} /> : null}
+        </DetailPanel>
         {event.description ? <Stack gap={2}><Text variant="label" color="inkMuted">描述</Text><Text>{event.description}</Text></Stack> : null}
         {(event.labels ?? []).length ? <Stack gap={2}>
           <Text variant="label" color="inkMuted">标签</Text>

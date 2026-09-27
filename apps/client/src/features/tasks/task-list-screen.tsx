@@ -1,5 +1,5 @@
 import { FloatingCreateButton } from '../../ui/floating-create-button';
-import { useContentDelete } from '../content/use-content-delete';
+import { useContentDelete, useContentEdit } from '../content/use-content-delete';
 import { FilterOptions } from '../../ui/filter-options';
 import { AppDialog } from '../../ui/app-dialog';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
@@ -59,6 +59,7 @@ export default function TaskListScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const deleteTask = useContentDelete('tasks');
+  const editTask = useContentEdit('tasks');
   const activeTheme = useTheme<Theme>();
   const {
     viewState,
@@ -282,7 +283,7 @@ export default function TaskListScreen() {
           ].filter(Boolean).join(' · ')}</Text>
           {activeFilterCount ? <Pressable accessibilityRole="button" accessibilityLabel="清除任务筛选" onPress={clearFilters} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center' }}><Text variant="label" color="link">清除</Text></Pressable> : null}
         </View>
-        {filtersOpen ? <AppDialog title="筛选任务" trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<Button label="查看结果" onPress={() => setFiltersOpen(false)} />}>
+        {filtersOpen ? <AppDialog title="筛选任务" trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<Button label="完成" onPress={() => setFiltersOpen(false)} />}>
           <Stack gap={4}>
             <FilterOptions label="优先级" options={PRIORITY_FILTERS.map(p => ({ value: p.key, label: p.label, name: `优先级筛选：${p.label}` }))} value={priorityFilter} onChange={value => setPriorityFilter(value as PriorityFilterKey)} />
             <FilterOptions label="负责人" options={[{ value: 'all', label: '全部成员', name: '全部成员' }, ...assigneeOptions.map(m => ({ value: m.userId, label: m.displayName, name: `筛选：${m.displayName}` }))]} value={assigneeFilter} onChange={setAssigneeFilter} />
@@ -327,7 +328,7 @@ export default function TaskListScreen() {
             key={task.id}
             task={task}
             assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-            onPress={handleTaskPress} onDelete={deleteTask(task)}
+            onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
             {...completion.cardProps(task)}
           />
         ))}

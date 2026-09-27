@@ -92,9 +92,8 @@ test('undated tasks appear under 待安排 instead of inflating 今日待办', a
   await expect(page.getByRole('button', { name: /^任务：整理阳台/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /^任务：今天要买菜/ })).toBeVisible();
 
-  // 待安排 sits between today's work and the collapsed upcoming section, so it
-  // is reachable without expanding anything.
-  await expect(page.getByRole('button', { name: /^查看后续安排/ })).toBeVisible();
+  // Nothing is due later, so there is no upcoming toggle that would reveal zero items.
+  await expect(page.getByRole('button', { name: /^查看后续安排/ })).toHaveCount(0);
 });
 
 for (const recurring of [false, true]) {
@@ -161,7 +160,6 @@ test(`the detail page carries 进行中 as its own action${recurring ? ' (recurr
     `/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`,
   );
 
-  await page.getByRole('button', { name: '更多任务操作' }).click();
   await page.getByRole('button', { name: '标记为进行中' }).click();
 
   await expect(page.getByRole('button', { name: '退回待办' })).toBeVisible();

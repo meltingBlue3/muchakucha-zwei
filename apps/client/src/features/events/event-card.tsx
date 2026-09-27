@@ -11,19 +11,23 @@ import { formatDateRange } from './calendar-utils';
 import MapPin from 'lucide-react-native/icons/map-pin';
 
 interface EventCardProps {
+  onEdit?: (() => void) | undefined;
   onDelete?: (() => void) | undefined;
   event: EventResponseDto;
   onPress: (event: EventResponseDto) => void;
 }
 
-export function EventCard({ event, onPress, onDelete }: EventCardProps) {
+export function EventCard({ event, onPress, onEdit, onDelete }: EventCardProps) {
   const activeTheme = useTheme<Theme>();
 
   return (
     <ContentCard
       accessibilityLabel={`日程：${event.title}${event.recurrenceRuleId == null ? '' : '，重复'}`}
       onPress={() => onPress(event)}
-      trailing={onDelete ? <CardActionsMenu label={`删除日程：${event.title}`} onPress={onDelete} /> : null}
+      trailing={<CardActionsMenu subject={`日程：${event.title}`} actions={[
+        ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: `编辑日程：${event.title}`, onPress: onEdit }] : []),
+        ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除日程：${event.title}`, onPress: onDelete }] : []),
+      ]} />}
     >
       <Stack gap={1}>
         <Text variant="body" style={{ fontWeight: '600' }} numberOfLines={2}>

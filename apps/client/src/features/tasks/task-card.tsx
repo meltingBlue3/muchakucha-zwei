@@ -14,6 +14,7 @@ import { statusLabel, priorityLabel, formatDueDate, isOverdue } from './task-uti
 import { completionActionLabel } from './task-completion';
 
 interface TaskCardProps {
+  onEdit?: (() => void) | undefined;
   onDelete?: (() => void) | undefined;
   task: TaskResponseDto;
   assigneeNames?: string[];
@@ -31,6 +32,7 @@ export function TaskCard({
   task,
   assigneeNames,
   onPress,
+  onEdit,
   onDelete,
   onToggleComplete,
   statusChanging = false,
@@ -66,7 +68,10 @@ export function TaskCard({
           <StatusIcon size={activeTheme.spacing[6]} color={completed ? activeTheme.colors.teal : activeTheme.colors.border} strokeWidth={activeTheme.controlSizes.iconStroke} />
         </Pressable>
       ) : null}
-      trailing={onDelete ? <CardActionsMenu label={`删除任务：${task.title}`} onPress={onDelete} disabled={statusChanging} /> : null}
+      trailing={<CardActionsMenu subject={`任务：${task.title}`} disabled={statusChanging} actions={[
+        ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: `编辑任务：${task.title}`, onPress: onEdit }] : []),
+        ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除任务：${task.title}`, onPress: onDelete }] : []),
+      ]} />}
       footer={feedback ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[3], marginTop: activeTheme.spacing[2], paddingHorizontal: activeTheme.spacing[2] }}>
           {statusError !== null ? (
