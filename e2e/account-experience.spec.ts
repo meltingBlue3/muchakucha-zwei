@@ -81,6 +81,32 @@ test('profile only enables saving changed input and announces success', async ({
   await page.screenshot({ path: 'test-results/account-profile-mobile.png', fullPage: true });
 });
 
+test('blur validation leaves focus where the pointer sent it; only a submit moves it', async ({ page }) => {
+  await mockApi(page, false);
+  await page.goto('/register');
+  await page.getByRole('heading', { name: '创建你的账户' }).waitFor();
+  const username = page.locator('input[aria-label="用户名"]:visible');
+  const password = page.locator('input[aria-label="密码"]:visible');
+  // An empty field left behind is not flagged yet.
+  await username.click();
+  await password.click();
+  await expect(username).toHaveAttribute('aria-invalid', 'false');
+  await username.fill('ab');
+  await password.click();
+  await expect(page.getByText('用户名至少需要 3 个字符。')).toBeVisible();
+  // Typing after the error appeared still lands in the field the user clicked.
+  await page.keyboard.type('password-for-ui');
+  await expect(password).toHaveValue('password-for-ui');
+  await expect(username).toHaveValue('ab');
+  await expect(password).toBeFocused();
+  // The shown error follows the correction as the user types.
+  await username.fill('abc');
+  await expect(page.getByText('用户名至少需要 3 个字符。')).toHaveCount(0);
+  await username.fill('ab');
+  await page.getByRole('button', { name: '创建账户', exact: true }).click();
+  await expect(username).toBeFocused();
+});
+
 test('authentication layouts fit small phones and desktop', async ({ page }) => {
   await mockApi(page, false);
   for (const width of [320, 1440]) {

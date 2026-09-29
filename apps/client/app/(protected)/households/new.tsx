@@ -37,6 +37,7 @@ export default function NewHouseholdRoute() {
     clearErrors,
     control,
     formState,
+    getFieldState,
     getValues,
     handleSubmit,
     setError,
@@ -147,9 +148,13 @@ export default function NewHouseholdRoute() {
               onSubmitEditing={() => { if (!isSubmitting) void submit(); }}
               onBlur={() => {
                 onBlur();
-                validateName();
+                // An empty name is reported only on submit.
+                if (getValues('name').trim() !== '' || getFieldState('name').error !== undefined) validateName();
               }}
-              onChangeText={onChange}
+              onChangeText={(text) => {
+                onChange(text);
+                if (getFieldState('name').error !== undefined) validateName();
+              }}
               ref={ref}
               textContentType="none"
               value={value}

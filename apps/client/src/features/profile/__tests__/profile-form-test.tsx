@@ -80,9 +80,14 @@ describe('profile nickname form contract', () => {
     const nickname = view.getByLabelText('昵称');
     await fireEvent.changeText(nickname, '   ');
     await fireEvent(nickname, 'blur');
+    // Leaving an empty field is not yet a mistake; saving it is.
+    expect(view.queryByText('请输入昵称。')).toBeNull();
+    await fireEvent.press(view.getByRole('button', { name: '保存昵称' }));
     expect(await view.findByText('请输入昵称。')).toBeTruthy();
 
     await fireEvent.changeText(nickname, '  新昵称  ');
+    // The shown error follows the correction without waiting for blur.
+    expect(view.queryByText('请输入昵称。')).toBeNull();
     await fireEvent.press(view.getByRole('button', { name: '保存昵称' }));
     await waitFor(() =>
       expect(apiClient.updateMe).toHaveBeenCalledWith(

@@ -51,6 +51,17 @@ describe('username login form', () => {
     expect(onRegister).toHaveBeenCalledTimes(1);
   });
 
+  test('flags an empty field only on submit and clears the error as the user types', async () => {
+    const { view } = await renderLogin();
+    await fireEvent(view.getByLabelText('用户名'), 'blur');
+    expect(view.queryByText('请输入用户名。')).toBeNull();
+    await fireEvent.press(view.getByRole('button', { name: '登录' }));
+    expect(await view.findByText('请输入用户名。')).toBeTruthy();
+    await fireEvent.changeText(view.getByLabelText('用户名'), '家庭成员');
+    expect(view.queryByText('请输入用户名。')).toBeNull();
+    expect(view.getByText('请输入密码。')).toBeTruthy();
+  });
+
   test('normalizes the username, preserves the password, and enters the authenticated flow', async () => {
     const { onAuthenticated, sessionStateStore, sessionTransport, view } = await renderLogin();
     await fillLogin(view, '  Cafe\u0301.家庭  ');

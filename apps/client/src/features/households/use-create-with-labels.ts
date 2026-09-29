@@ -1,3 +1,4 @@
+import { ApiClientError } from '@muchakucha/api-client';
 import { hasRecurrenceFieldErrors } from '../recurrence/recurrence-options';
 import { useRef, useState } from 'react';
 import { useWorkspaceState } from '../../ui/workspace-state';
@@ -32,7 +33,12 @@ export function useCreateWithLabels<T>({ key, create, tag, onComplete }: {
       // Nothing was created and the repeat settings were refused: let the form
       // show which field, instead of a generic network message.
       if (record === null && hasRecurrenceFieldErrors(failure)) throw failure;
-      setError(record === null ? '创建失败，请检查网络后重试。' : '内容已创建，但标签未保存。重试只会保存标签，不会重复创建。');
+      // A server answer is not a network problem; only a request that never got one is.
+      const createFailure = !(failure instanceof ApiClientError) ? '创建失败，请检查网络后重试。'
+        : failure.status === 400 ? '创建失败，请检查填写的内容后重试。'
+          : failure.status === 403 ? '你没有权限在这个家庭创建内容。'
+            : '创建失败，请稍后重试。';
+      setError(record === null ? createFailure : '内容已创建，但标签未保存。重试只会保存标签，不会重复创建。');
     } finally {
       inFlight.current = false;
       setPending(false);

@@ -45,3 +45,18 @@ test('a refused repeat rule goes back to the form; other failures stay a generic
   await view.findByText('创建失败，请检查网络后重试。');
   expect(outcomes).toEqual([refused, 'ok']);
 });
+
+test.each([
+  [new ApiClientError(400, { error: { code: 'VALIDATION_FAILED', details: [{ field: 'title' }] } }), '创建失败，请检查填写的内容后重试。'],
+  [new ApiClientError(403, {}), '你没有权限在这个家庭创建内容。'],
+  [new ApiClientError(500, {}), '创建失败，请稍后重试。'],
+])('a server answer is not reported as a network problem (%#)', async (failure, message) => {
+  const create = jest.fn().mockRejectedValue(failure);
+  function Editor() {
+    const flow = useCreateWithLabels<string>({ key: 'draft:family:task:new:created', create, tag: jest.fn(), onComplete: jest.fn() });
+    return <>{flow.error ? <Text>{flow.error}</Text> : null}<Button label="创建" onPress={() => void flow.submit('title', [])} /></>;
+  }
+  const view = await render(<MuchakuchaThemeProvider><WorkspaceStateProvider><Editor /></WorkspaceStateProvider></MuchakuchaThemeProvider>);
+  await fireEvent.press(view.getByRole('button', { name: '创建' }));
+  await view.findByText(message);
+});

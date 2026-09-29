@@ -93,6 +93,7 @@ export const RegisterForm = ({
     clearErrors,
     control,
     formState: { errors, isSubmitting, submitCount },
+    getFieldState,
     getValues,
     handleSubmit,
     setError,
@@ -106,6 +107,15 @@ export const RegisterForm = ({
     const issue = result.success ? undefined : result.error.issues.find((entry) => entry.path[0] === field);
     if (issue === undefined) clearErrors(field);
     else setError(field, { message: issue.message });
+  };
+  // A filled field is checked when the user leaves it and an empty one only on
+  // submit; an error already shown follows the input as the user corrects it.
+  const validateOnBlur = (field: keyof RegistrationValues) => {
+    if (getValues(field).trim() === '' && getFieldState(field).error === undefined) return;
+    validateField(field);
+  };
+  const revalidateOnChange = (field: keyof RegistrationValues) => {
+    if (getFieldState(field).error !== undefined) validateField(field);
   };
 
   const submitRegistration = handleSubmit(async (values) => {
@@ -166,8 +176,8 @@ export const RegisterForm = ({
             {...(errors.username?.message === undefined ? {} : { error: errors.username.message })}
             label="用户名"
             hint="3–32 个字符，可使用字母、数字、点、下划线和短横线，不区分大小写。"
-            onBlur={() => { onBlur(); validateField('username'); }}
-            onChangeText={onChange}
+            onBlur={() => { onBlur(); validateOnBlur('username'); }}
+            onChangeText={(text) => { onChange(text); revalidateOnChange('username'); }}
             ref={ref}
             textContentType="username"
             value={value}
@@ -188,10 +198,14 @@ export const RegisterForm = ({
             hint="8–128 个字符，建议使用不容易猜到的组合。"
             onBlur={() => {
               onBlur();
-              validateField('password');
+              validateOnBlur('password');
               if (getValues('confirmPassword')) validateField('confirmPassword');
             }}
-            onChangeText={onChange}
+            onChangeText={(text) => {
+              onChange(text);
+              revalidateOnChange('password');
+              revalidateOnChange('confirmPassword');
+            }}
             ref={ref}
             textContentType="newPassword"
             value={value}
@@ -209,8 +223,8 @@ export const RegisterForm = ({
             autoComplete="new-password"
             {...(errors.confirmPassword?.message === undefined ? {} : { error: errors.confirmPassword.message })}
             label="确认密码"
-            onBlur={() => { onBlur(); validateField('confirmPassword'); }}
-            onChangeText={onChange}
+            onBlur={() => { onBlur(); validateOnBlur('confirmPassword'); }}
+            onChangeText={(text) => { onChange(text); revalidateOnChange('confirmPassword'); }}
             onSubmitEditing={() => void submitRegistration()}
             ref={ref}
             textContentType="newPassword"

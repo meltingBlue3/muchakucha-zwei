@@ -1,7 +1,7 @@
 import { CardActionsMenu } from '../../../../../src/ui/card-actions-menu';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { LabelResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
@@ -34,6 +34,8 @@ export default function LabelsIndexRoute() {
   const [color, setColor] = useState(labelColorPresets[0]!);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const nameInput = useRef<TextInput>(null);
   const trigger = useRef(getRouteTrigger());
 
   const fetchLabels = useCallback(async () => {
@@ -56,6 +58,7 @@ export default function LabelsIndexRoute() {
     rememberRouteTrigger();
     trigger.current = getRouteTrigger();
     setActionError(null);
+    setNameError(null);
     setName(next.kind === 'create' ? '' : next.label.name);
     setColor(next.kind === 'create' ? labelColorPresets[0]! : next.label.color);
     setAction(next);
@@ -63,7 +66,7 @@ export default function LabelsIndexRoute() {
   const close = () => { if (!busy) setAction(null); };
   const submit = async () => {
     if (!householdId || !action || !canManage || busy) return;
-    if (action.kind !== 'delete' && !name.trim()) { setActionError('请输入标签名称。'); return; }
+    if (action.kind !== 'delete' && !name.trim()) { setNameError('请输入标签名称。'); nameInput.current?.focus(); return; }
     setBusy(true); setActionError(null);
     try {
       const token = await sessionTransport.getAccessToken();
@@ -110,7 +113,7 @@ export default function LabelsIndexRoute() {
     {action && canManage ? <AppDialog title={action.kind === 'create' ? '创建标签' : action.kind === 'edit' ? '编辑标签' : '删除标签'} busy={busy} onClose={close} trigger={trigger}>
       <Stack gap={4}>
         {action.kind === 'delete' ? <Text>删除“{action.label.name}”后，它会从所有日程和任务中移除，日程和任务本身会保留。</Text> : <>
-          <TextField label={action.kind === 'create' ? '标签名称' : '编辑标签名称'} value={name} onChangeText={setName} maxLength={30} editable={!busy} />
+          <TextField ref={nameInput} label={action.kind === 'create' ? '标签名称' : '编辑标签名称'} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameError(null); }} maxLength={30} disabled={busy} {...(nameError === null ? {} : { error: nameError })} returnKeyType="done" onSubmitEditing={() => void submit()} />
           <Stack gap={2}>
             <Text variant="label">颜色</Text>
             <View accessibilityRole="radiogroup" accessibilityLabel="标签颜色" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] }}>

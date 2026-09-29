@@ -661,6 +661,8 @@ export function HouseholdSettings({
             <Stack gap={2}>
               <TextField
                 label="家庭名称"
+                returnKeyType="done"
+                onSubmitEditing={() => { if (!renameSubmitting) void handleRename(); }}
                 value={renameValue}
                 onChangeText={(text) => {
                   setRenameValue(text);
@@ -706,6 +708,8 @@ export function HouseholdSettings({
                 label="用户名"
                 autoComplete="username"
                 autoCapitalize="none"
+                returnKeyType="send"
+                onSubmitEditing={() => { if (!inviteSubmitting) void handleInvite(); }}
                 value={inviteUsername}
                 onChangeText={(text) => {
                   setInviteUsername(text);

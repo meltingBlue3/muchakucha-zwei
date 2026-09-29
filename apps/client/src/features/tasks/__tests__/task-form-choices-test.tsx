@@ -57,6 +57,20 @@ describe('task form choice rows', () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ assigneeIds: ['u2'] }));
   });
 
+  test('a missing title is reported on the title itself until the title is filled', async () => {
+    const { onSubmit, view } = await renderForm();
+    await fireEvent.press(view.getByLabelText('创建'));
+    expect(view.getByText('请输入任务标题。')).toBeTruthy();
+    expect(view.getByLabelText('任务标题').props['aria-invalid']).toBe(true);
+    // Changing another field does not hide a mistake that is still there.
+    await fireEvent.press(view.getByRole('button', { name: '任务优先级，中优先级' }));
+    await fireEvent.press(view.getByRole('radio', { name: '紧急' }));
+    expect(view.getByText('请输入任务标题。')).toBeTruthy();
+    await fireEvent.changeText(view.getByLabelText('任务标题'), '买菜');
+    expect(view.queryByText('请输入任务标题。')).toBeNull();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   test('an empty due date shows its placeholder without a clear button', async () => {
     const { view } = await renderForm();
     expect(view.queryByRole('button', { name: '清除截止日期' })).toBeNull();

@@ -1,6 +1,6 @@
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import { Switch, TextInput, View } from 'react-native';
 import Clock from 'lucide-react-native/icons/clock';
 import MapPin from 'lucide-react-native/icons/map-pin';
@@ -11,7 +11,7 @@ import { useTheme } from '@shopify/restyle';
 import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text, FormActions } from '../../ui/primitives';
-import { FormRow, FormSection, rowIcon, rowInputStyle, titleInputStyle } from '../../ui/compose-rows';
+import { FormRow, FormSection, RowMessage, rowIcon, rowInputStyle, titleInputStyle } from '../../ui/compose-rows';
 import { DateField } from '../../ui/date-field';
 import { LabelPicker } from '../labels/label-picker';
 import {
@@ -110,11 +110,18 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
     return { ...EMPTY_INPUT, startDate: date, endDate: date };
   });
   const [error, setError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | null>(null);
+  // Start and end checks, shown under the end row.
+  const [timeError, setTimeError] = useState<string | null>(null);
+  const titleInput = useRef<TextInput>(null);
+  const titleErrorId = `event-title-error-${useId()}`;
   const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, string>>({});
 
   const updateField = useCallback(<K extends keyof EventInput>(key: K, value: EventInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
+    if (key === 'title' && typeof value === 'string' && value.trim() !== '') setTitleError(null);
+    if (key === 'endDate' || key === 'endTime' || key === 'allDay' || key === 'recurrence') setTimeError(null);
     if (key === 'recurrence') setRecurrenceErrors({});
   }, [setForm]);
 
@@ -122,15 +129,19 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
   const moveStart = useCallback((next: Partial<Pick<EventSpan, 'startDate' | 'startTime'>>) => {
     setForm((prev) => ({ ...prev, ...moveEventStart(prev, next) }));
     setError(null);
+    setTimeError(null);
+    // The start date is what the repeat's end date is checked against.
+    setRecurrenceErrors({});
   }, [setForm]);
 
   const handleSubmit = useCallback(async () => {
     if (form.title.trim().length === 0) {
-      setError('请输入日程标题。');
+      setTitleError('请输入日程标题。');
+      titleInput.current?.focus();
       return;
     }
     if (form.recurrence?.endsOn !== undefined && form.recurrence.endsOn <= form.startDate) {
-      setError('重复的截止日期必须晚于开始日期。');
+      setRecurrenceErrors({ 'recurrence.endsOn': '重复的截止日期必须晚于开始日期。' });
       return;
     }
 
@@ -146,11 +157,11 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
         : `${form.endDate}T${form.endTime}:00`,
     );
     if (!Number.isFinite(startDateTime.getTime()) || !Number.isFinite(endDateTime.getTime())) {
-      setError('请填写有效的开始和结束日期、时间。');
+      setTimeError('请填写有效的开始和结束日期、时间。');
       return;
     }
     if (endDateTime <= startDateTime) {
-      setError('结束时间必须晚于开始时间。');
+      setTimeError('结束时间必须晚于开始时间。');
       return;
     }
     // Mirrors the server's recurring_duration_too_long check (a recurring
@@ -159,7 +170,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
     // non-recurring event has no such cap — only the recurring branch
     // derives a per-occurrence duration from this span.
     if (form.recurrence !== null && endDateTime.getTime() - startDateTime.getTime() > 24 * 60 * 60 * 1000) {
-      setError('重复日程的单次时长不能超过 24 小时。');
+      setTimeError('重复日程的单次时长不能超过 24 小时。');
       return;
     }
 
@@ -199,6 +210,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
       {draftKey ? <DraftNotice /> : null}
       <FormRow>
         <TextInput
+          ref={titleInput}
           editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}
@@ -207,8 +219,11 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
           style={titleInputStyle}
           maxLength={200}
           accessibilityLabel="日程标题"
+          aria-invalid={titleError !== null}
+          {...(titleError === null ? {} : { 'aria-describedby': titleErrorId, accessibilityHint: titleError })}
         />
       </FormRow>
+      {titleError !== null ? <RowMessage id={titleErrorId}>{titleError}</RowMessage> : null}
 
       <FormSection>
         <FormRow icon={rowIcon(Clock)}>
@@ -236,6 +251,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
             <DateField appearance="plain" align="end" disabled={isSubmitting} value={form.endTime} onChange={(v) => updateField('endTime', v)} mode="time" placeholder="结束时间" accessibilityLabel="结束时间" />
           )}
         </FormRow>
+        {timeError !== null ? <RowMessage>{timeError}</RowMessage> : null}
         <RecurrenceField
           name="日程重复设置"
           icon={rowIcon(Repeat)}

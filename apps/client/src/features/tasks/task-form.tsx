@@ -1,6 +1,6 @@
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import Calendar from 'lucide-react-native/icons/calendar';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
@@ -14,7 +14,7 @@ import { useTheme } from '@shopify/restyle';
 import type { CreateTaskDto, TaskResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text, FormActions } from '../../ui/primitives';
-import { ChoiceField, FormRow, FormSection, ROW_CONTENT_INSET, rowIcon, rowInputStyle, titleInputStyle } from '../../ui/compose-rows';
+import { ChoiceField, FormRow, FormSection, ROW_CONTENT_INSET, RowMessage, rowIcon, rowInputStyle, titleInputStyle } from '../../ui/compose-rows';
 import { DateField } from '../../ui/date-field';
 import { toDateValue, toTimeValue } from '../../ui/date-values';
 import { LabelPicker } from '../labels/label-picker';
@@ -134,6 +134,9 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
     return { ...EMPTY_TASK };
   });
   const [error, setError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const titleInput = useRef<TextInput>(null);
+  const titleErrorId = `task-title-error-${useId()}`;
   const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, string>>({});
 
   // WR-07: an empty due date must never become the rule's startsOn — the
@@ -145,18 +148,21 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
   const updateField = useCallback(<K extends keyof TaskInput>(key: K, value: TaskInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
-    if (key === 'recurrence') setRecurrenceErrors({});
+    if (key === 'title' && typeof value === 'string' && value.trim() !== '') setTitleError(null);
+    // The due date is the start the repeat's end date is checked against.
+    if (key === 'recurrence' || key === 'dueDate') setRecurrenceErrors({});
   }, [setForm]);
 
   const handleSubmit = useCallback(async () => {
     if (form.title.trim().length === 0) {
-      setError('请输入任务标题。');
+      setTitleError('请输入任务标题。');
+      titleInput.current?.focus();
       return;
     }
     // A new task's rule carries its own start, chosen on the custom repeat page.
     const ruleStart = isCreate && form.recurrence !== null ? form.recurrence.startsOn : recurrenceStart;
     if (form.recurrence?.endsOn !== undefined && form.recurrence.endsOn <= ruleStart) {
-      setError('重复的截止日期必须晚于开始日期。');
+      setRecurrenceErrors({ 'recurrence.endsOn': '重复的截止日期必须晚于开始日期。' });
       return;
     }
 
@@ -222,6 +228,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
       {draftKey ? <DraftNotice /> : null}
       <FormRow>
         <TextInput
+          ref={titleInput}
           editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}
@@ -230,8 +237,11 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
           style={titleInputStyle}
           maxLength={200}
           accessibilityLabel="任务标题"
+          aria-invalid={titleError !== null}
+          {...(titleError === null ? {} : { 'aria-describedby': titleErrorId, accessibilityHint: titleError })}
         />
       </FormRow>
+      {titleError !== null ? <RowMessage id={titleErrorId}>{titleError}</RowMessage> : null}
 
       <FormSection>
         {/* One date-and-time row for every task. A new recurring task has no

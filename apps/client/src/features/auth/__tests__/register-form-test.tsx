@@ -59,6 +59,27 @@ describe('username registration form', () => {
     expect(apiClient.register).not.toHaveBeenCalled();
   });
 
+  test('leaves an empty field unflagged on blur and clears a shown error as the user corrects it', async () => {
+    const { view } = await renderForm();
+    await fireEvent(view.getByLabelText('用户名'), 'blur');
+    await fireEvent(view.getByLabelText('密码'), 'blur');
+    expect(view.queryByText('用户名至少需要 3 个字符。')).toBeNull();
+    expect(view.queryByText('密码至少需要 8 个字符。')).toBeNull();
+
+    await fireEvent.changeText(view.getByLabelText('用户名'), 'ab');
+    await fireEvent(view.getByLabelText('用户名'), 'blur');
+    expect(await view.findByText('用户名至少需要 3 个字符。')).toBeTruthy();
+    await fireEvent.changeText(view.getByLabelText('用户名'), 'abc');
+    expect(view.queryByText('用户名至少需要 3 个字符。')).toBeNull();
+
+    await fireEvent.changeText(view.getByLabelText('密码'), validValues.password);
+    await fireEvent.changeText(view.getByLabelText('确认密码'), 'different');
+    await fireEvent(view.getByLabelText('确认密码'), 'blur');
+    expect(await view.findByText('两次输入的密码不一致。')).toBeTruthy();
+    await fireEvent.changeText(view.getByLabelText('密码'), 'different');
+    expect(view.queryByText('两次输入的密码不一致。')).toBeNull();
+  });
+
   test.each([
     ['family member', '用户名只能包含字母、数字、点、下划线和短横线。'],
     ['family@example.test', '用户名只能包含字母、数字、点、下划线和短横线。'],

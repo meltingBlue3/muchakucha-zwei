@@ -53,7 +53,8 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, sh
   const {
     clearErrors,
     control,
-    formState: { errors, isSubmitting, isDirty },
+    formState: { errors, isSubmitting, isDirty, submitCount },
+    getFieldState,
     getValues,
     handleSubmit,
     reset,
@@ -171,11 +172,19 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, sh
               ? {}
               : { error: errors.displayName.message })}
             label="昵称"
+            submitAttempt={submitCount}
+            returnKeyType="done"
+            onSubmitEditing={() => { if (isDirty && !isSubmitting) void submit(); }}
             onBlur={() => {
               onBlur();
-              validateNickname();
+              // An empty nickname is reported only on submit.
+              if (getValues('displayName').trim() !== '' || getFieldState('displayName').error !== undefined) validateNickname();
             }}
-            onChangeText={(value) => { setSuccess(undefined); onChange(value); }}
+            onChangeText={(value) => {
+              setSuccess(undefined);
+              onChange(value);
+              if (getFieldState('displayName').error !== undefined) validateNickname();
+            }}
             ref={ref}
             textContentType="name"
             value={value}

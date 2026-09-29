@@ -4,7 +4,7 @@ import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Check from 'lucide-react-native/icons/check';
 
 import { PickerActions } from './picker-panels';
-import { Stack, Text } from './primitives';
+import { FormMessage, Stack, Text } from './primitives';
 import { theme } from './theme';
 import { useWindowStep, type RouteWindowStep } from './window-step';
 
@@ -37,6 +37,15 @@ export function FormRow({ icon, align = 'center', children }: { icon?: ReactNode
 
 /** Left edge of row content, for messages and inline panels under a row. */
 export const ROW_CONTENT_INSET = theme.controlSizes.touchTarget + theme.spacing[2];
+
+/** A validation message under a row, aligned with the row's content. */
+export function RowMessage({ id, children }: { id?: string; children: ReactNode }) {
+  return (
+    <View style={{ paddingLeft: ROW_CONTENT_INSET }}>
+      <FormMessage {...(id === undefined ? {} : { id })}>{children}</FormMessage>
+    </View>
+  );
+}
 
 /** Row icons share one size, stroke and muted color. */
 export function rowIcon(Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>) {

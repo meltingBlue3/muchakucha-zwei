@@ -311,13 +311,6 @@ export const IconButton = ({ icon, label, style, visibleLabel = false, appearanc
   );
 };
 
-// Tracks whether the latest web interaction was a Tab key press rather than a pointer or other key.
-const webFocusIntent = { tabbing: false };
-if (Platform.OS === 'web' && typeof document !== 'undefined') {
-  document.addEventListener('keydown', (event) => { webFocusIntent.tabbing = event.key === 'Tab'; }, true);
-  document.addEventListener('pointerdown', () => { webFocusIntent.tabbing = false; }, true);
-}
-
 type FieldProps = TextInputProps & {
   disabled?: boolean;
   error?: string;
@@ -336,11 +329,14 @@ export const TextField = forwardRef<NativeTextInput, FieldProps>(
     const inputId = nativeID ?? `field-${generatedId}`;
     const errorId = `${inputId}-error`;
     const [focused, setFocused] = useState(false);
+    const seenSubmitAttempt = useRef(submitAttempt);
     useEffect(() => {
+      // Only a submit moves focus to the first invalid field. react-hook-form raises
+      // submitCount together with that submission's errors, server errors included.
+      // Blur validation leaves focus wherever Tab, a pointer, or a tap sent it.
+      if (submitAttempt === seenSubmitAttempt.current) return undefined;
+      seenSubmitAttempt.current = submitAttempt;
       if (!error || Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
-      // Blur validation must not pull focus back while the user tabs through the form;
-      // only errors raised by a submit (click or Enter) move focus to the invalid field.
-      if (webFocusIntent.tabbing) return undefined;
       const timeout = setTimeout(() => {
         document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
       }, 0);

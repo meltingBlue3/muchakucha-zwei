@@ -51,6 +51,7 @@ export const LoginForm = ({
     clearErrors,
     control,
     formState: { errors, isSubmitting, submitCount },
+    getFieldState,
     getValues,
     handleSubmit,
     setError,
@@ -80,10 +81,12 @@ export const LoginForm = ({
     clearErrors();
     const parsed = loginSchema.safeParse(values);
     if (!parsed.success) {
+      let focused = false;
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
         if (field === 'username' || field === 'password') {
-          setError(field, { message: issue.message });
+          setError(field, { message: issue.message }, { shouldFocus: !focused });
+          focused = true;
         }
       }
       return;
@@ -104,6 +107,15 @@ export const LoginForm = ({
     const result = loginSchema.shape[field].safeParse(getValues(field));
     if (result.success) clearErrors(field);
     else setError(field, { message: result.error.issues[0]?.message ?? '请检查输入。' });
+  };
+  // An empty field is reported only on submit; an error already shown follows
+  // the input as the user corrects it.
+  const validateOnBlur = (field: keyof LoginValues) => {
+    if (getValues(field).trim() === '' && getFieldState(field).error === undefined) return;
+    validateField(field);
+  };
+  const revalidateOnChange = (field: keyof LoginValues) => {
+    if (getFieldState(field).error !== undefined) validateField(field);
   };
 
   const formError = errors.root?.server?.message;
@@ -133,9 +145,9 @@ export const LoginForm = ({
             label="用户名"
             onBlur={() => {
               onBlur();
-              validateField('username');
+              validateOnBlur('username');
             }}
-            onChangeText={onChange}
+            onChangeText={(text) => { onChange(text); revalidateOnChange('username'); }}
             ref={ref}
             textContentType="username"
             value={value}
@@ -155,9 +167,9 @@ export const LoginForm = ({
             label="密码"
             onBlur={() => {
               onBlur();
-              validateField('password');
+              validateOnBlur('password');
             }}
-            onChangeText={onChange}
+            onChangeText={(text) => { onChange(text); revalidateOnChange('password'); }}
             onSubmitEditing={() => void submit()}
             ref={ref}
             textContentType="password"

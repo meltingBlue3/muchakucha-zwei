@@ -34,7 +34,8 @@ Changing the dialog shell means re-running the account and household settings jo
 
 ## Focus
 
-- Validation raised on blur leaves focus where the user sent it. Only a submit moves focus to the first invalid field: `TextField` takes `submitAttempt={submitCount}` from `react-hook-form`, and `src/ui/primitives.tsx` tracks whether the last interaction was a Tab press. A form that pulls focus back on blur traps the user in the first empty field.
+- Validation raised on blur leaves focus where the user sent it — by Tab, pointer, or tap. Only a submit moves focus to the first invalid field: `TextField` takes `submitAttempt={submitCount}` from `react-hook-form` and moves focus only when that count rises, which `react-hook-form` does together with the submission's errors. A form that pulls focus back on blur traps the user in the first empty field; `e2e/account-experience.spec.ts` guards the pointer case.
+- Blur flags a filled field, never an empty one; an empty required field is reported on submit. Once an error shows, it is re-checked on every change so it clears as soon as the input is corrected.
 - `AppDialog` owns initial focus, Tab cycling, Escape and outside-click close, close suppression while busy, and focus restoration to the trigger. A dialog consumer passes the trigger ref and adds no focus handling of its own.
 - Tab order follows document order, so a page header button precedes form fields. A tab-order assertion states the whole expected sequence rather than a single hop.
 
