@@ -1,5 +1,6 @@
 import type { CurrentUserDto } from '@muchakucha/api-client';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { LogoutAction } from '../../auth/logout-action';
 import { createSessionStateStore } from '../../auth/session-state';
@@ -151,6 +152,8 @@ describe('profile nickname form contract', () => {
   });
 });
 
+const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } };
+
 describe('current-device logout contract', () => {
   test('confirms, calls generated logout, then clears only local transport state', async () => {
     const order: string[] = [];
@@ -160,24 +163,22 @@ describe('current-device logout contract', () => {
     const sessionStateStore = createSessionStateStore();
     const onLoggedOut = jest.fn(() => order.push('route'));
     const view = await render(
-      <MuchakuchaThemeProvider>
-        <LogoutAction
-          apiClient={apiClient}
-          onLoggedOut={onLoggedOut}
-          sessionStateStore={sessionStateStore}
-          sessionTransport={sessionTransport}
-        />
-      </MuchakuchaThemeProvider>,
+      <SafeAreaProvider initialMetrics={metrics}>
+        <MuchakuchaThemeProvider>
+          <LogoutAction
+            apiClient={apiClient}
+            onLoggedOut={onLoggedOut}
+            sessionStateStore={sessionStateStore}
+            sessionTransport={sessionTransport}
+          />
+        </MuchakuchaThemeProvider>
+      </SafeAreaProvider>,
     );
 
     await fireEvent.press(view.getByRole('button', { name: '退出登录' }));
+    // The confirmation opens as a window rather than replacing the button in place.
+    expect(view.getByTestId('app-dialog-panel')).toBeTruthy();
     expect(view.getByText('退出这台设备？')).toBeTruthy();
-    // The trigger button is unmounted once the confirm step is showing —
-    // it must not still be reachable, and there must be exactly one
-    // confirm affordance (previously both stayed mounted with the same
-    // "退出登录" label, which was ambiguous for screen readers and easy to
-    // misclick).
-    expect(view.queryByRole('button', { name: '退出登录' })).toBeNull();
     await fireEvent.press(view.getByRole('button', { name: '确认退出登录' }));
     await waitFor(() => expect(onLoggedOut).toHaveBeenCalledTimes(1));
     expect(apiClient.logout).toHaveBeenCalledWith('current-access-token', expect.any(AbortSignal));
@@ -189,14 +190,16 @@ describe('current-device logout contract', () => {
     const apiClient = { logout: jest.fn().mockRejectedValue(new Error('network detail')) };
     const sessionTransport = createTransport();
     const view = await render(
-      <MuchakuchaThemeProvider>
-        <LogoutAction
-          apiClient={apiClient}
-          onLoggedOut={jest.fn()}
-          sessionStateStore={createSessionStateStore()}
-          sessionTransport={sessionTransport}
-        />
-      </MuchakuchaThemeProvider>,
+      <SafeAreaProvider initialMetrics={metrics}>
+        <MuchakuchaThemeProvider>
+          <LogoutAction
+            apiClient={apiClient}
+            onLoggedOut={jest.fn()}
+            sessionStateStore={createSessionStateStore()}
+            sessionTransport={sessionTransport}
+          />
+        </MuchakuchaThemeProvider>
+      </SafeAreaProvider>,
     );
     await fireEvent.press(view.getByRole('button', { name: '退出登录' }));
     await fireEvent.press(view.getByRole('button', { name: '确认退出登录' }));
