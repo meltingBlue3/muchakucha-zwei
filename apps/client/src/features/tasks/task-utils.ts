@@ -1,4 +1,4 @@
-import { formatDate } from '../../ui/date-values';
+import { formatDate, formatDateTime } from '../../ui/date-values';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: '待办',
@@ -25,7 +25,9 @@ export function formatDueDate(iso: string | null): string {
   if (iso === null || iso === '') return '';
   const date = new Date(iso);
   if (isNaN(date.getTime())) return '';
-  return formatDate(date);
+  // A due date without a time is stored as local midnight; a repeat with a
+  // set time (for example 12:00) shows it.
+  return date.getHours() === 0 && date.getMinutes() === 0 ? formatDate(date) : formatDateTime(date);
 }
 
 export function isOverdue(dueDateIso: string | null): boolean {

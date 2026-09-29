@@ -7,16 +7,19 @@ import { DateField } from '../../ui/date-field';
 import { PickerActions } from '../../ui/picker-panels';
 import { FormMessage, Inline, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
+import { formatDate } from '../../ui/date-values';
 import { useWindowStep, type RouteWindowStep } from '../../ui/window-step';
 import {
   PRESET_OPTIONS,
   deviceTimeZone,
   draftFromRule,
   followStartDate,
+  moveDraftStart,
   presetOf,
   presetRule,
   ruleFromDraft,
   validateDraft,
+  withDraftStart,
   type CustomDraft,
   type CustomEnding,
   type CustomErrors,
@@ -50,6 +53,12 @@ interface RecurrenceFieldProps {
   turnOffHint?: string;
   /** Server validation messages keyed by `recurrence.<field>`. */
   errors?: Record<string, string>;
+  /**
+   * The rule owns its start date and time, set on the custom page as in
+   * Google Calendar. A new recurring task has no other start to follow;
+   * `startDate` is then only the default.
+   */
+  ownStart?: boolean;
 }
 
 type Stage = 'closed' | 'options' | 'custom';
@@ -59,7 +68,9 @@ type Stage = 'closed' | 'options' | 'custom';
  * list (不重复, 每天, 每周, 每月, 每年, 自定义…), and a custom page for
  * intervals, weekdays and an end condition.
  */
-export function RecurrenceField({ value, onChange, startDate, name, icon, disabled = false, disableTurnOff = false, turnOffHint = TURN_OFF_DISABLED_HINT, errors = {} }: RecurrenceFieldProps) {
+export function RecurrenceField({ value, onChange, startDate: formStart, name, icon, disabled = false, disableTurnOff = false, turnOffHint = TURN_OFF_DISABLED_HINT, errors = {}, ownStart = false }: RecurrenceFieldProps) {
+  // Where the rule is anchored: its own start when it owns one, else the form's.
+  const startDate = ownStart && value ? value.startsOn : formStart;
   const [stage, setStage] = useState<Stage>('closed');
   const [draft, setDraft] = useState<CustomDraft>(() => draftFromRule(value, startDate));
   const [draftErrors, setDraftErrors] = useState<CustomErrors>({});
@@ -73,10 +84,10 @@ export function RecurrenceField({ value, onChange, startDate, name, icon, disabl
   useEffect(() => {
     const moved = previousStart.current !== startDate;
     previousStart.current = startDate;
-    if (value === null) return;
+    if (value === null || ownStart) return;
     const next = followStartDate(value, startDate, moved);
     if (next !== value) onChange(next);
-  }, [onChange, startDate, value]);
+  }, [onChange, ownStart, startDate, value]);
 
   const preset = presetOf(value, startDate);
   const summary = value ? formatRecurrenceSummary(value, value.timezone).summary : '不重复';
@@ -107,14 +118,15 @@ export function RecurrenceField({ value, onChange, startDate, name, icon, disabl
   }, [startDate, value]);
 
   const finishCustom = useCallback(() => {
-    const found = validateDraft(draft, startDate);
+    const found = validateDraft(draft, ownStart ? draft.startsOn : startDate);
     setDraftErrors(found);
     if (Object.keys(found).length > 0) return;
     const zone = timezone();
     if (zone === null) return;
-    onChange(ruleFromDraft(draft, startDate, zone, value));
+    const rule = ruleFromDraft(draft, ownStart ? draft.startsOn : startDate, zone, value);
+    onChange(ownStart ? withDraftStart(rule, draft) : rule);
     close();
-  }, [close, draft, onChange, startDate, timezone, value]);
+  }, [close, draft, onChange, ownStart, startDate, timezone, value]);
 
   const step = useMemo<RouteWindowStep | null>(() => {
     const onReturn = () => (trigger.current as unknown as { focus?(): void } | null)?.focus?.();
@@ -131,11 +143,11 @@ export function RecurrenceField({ value, onChange, startDate, name, icon, disabl
         title: '自定义重复',
         onClose: close,
         onReturn,
-        content: <CustomEditor draft={draft} errors={draftErrors} timeZoneError={timeZoneError} startDate={startDate} onChange={next => { setDraft(next); setDraftErrors({}); }} onCancel={close} onDone={finishCustom} />,
+        content: <CustomEditor draft={draft} errors={draftErrors} timeZoneError={timeZoneError} startDate={ownStart ? draft.startsOn : startDate} ownStart={ownStart} onChange={next => { setDraft(next); setDraftErrors({}); }} onCancel={close} onDone={finishCustom} />,
       };
     }
     return null;
-  }, [choose, close, disableTurnOff, turnOffHint, draft, draftErrors, finishCustom, openCustom, preset, stage, startDate, summary, timeZoneError]);
+  }, [choose, close, disableTurnOff, turnOffHint, draft, draftErrors, finishCustom, openCustom, ownStart, preset, stage, startDate, summary, timeZoneError]);
   const inWindow = useWindowStep(step);
 
   const serverErrors = [...new Set(Object.entries(errors).filter(([field]) => field === 'recurrence' || field.startsWith('recurrence.')).map(([, message]) => message))];
@@ -143,6 +155,7 @@ export function RecurrenceField({ value, onChange, startDate, name, icon, disabl
   return (
     <Stack gap={0}>
       <SummaryRow name={name} summary={summary} icon={icon} open={stage !== 'closed'} disabled={disabled} trigger={trigger} onPress={() => setStage(current => current === 'closed' ? 'options' : 'closed')} />
+      {ownStart && value ? <View style={{ paddingLeft: ROW_CONTENT_INSET }}><Text variant="caption">{`从${formatDate(new Date(`${value.startsOn}T00:00:00`))}开始${value.startTimeLocal ? `，每次 ${value.startTimeLocal}` : ''}`}</Text></View> : null}
       {value ? <View style={{ paddingLeft: ROW_CONTENT_INSET }}><RecurrenceNotes rule={value} deviceTimeZone={deviceTimeZone() ?? value.timezone} /></View> : null}
       {!inWindow && step ? <View style={{ paddingLeft: ROW_CONTENT_INSET, paddingBottom: theme.spacing[3] }}>{step.content}</View> : null}
       {serverErrors.map(message => <View key={message} style={{ paddingLeft: ROW_CONTENT_INSET }}><FormMessage>{message}</FormMessage></View>)}
@@ -204,11 +217,12 @@ function NumberInput({ value, onChange, label }: { value: string; onChange(value
   );
 }
 
-function CustomEditor({ draft, errors, timeZoneError, startDate, onChange, onCancel, onDone }: {
+function CustomEditor({ draft, errors, timeZoneError, startDate, ownStart, onChange, onCancel, onDone }: {
   draft: CustomDraft;
   errors: CustomErrors;
   timeZoneError: boolean;
   startDate: string;
+  ownStart: boolean;
   onChange(next: CustomDraft): void;
   onCancel(): void;
   onDone(): void;
@@ -249,6 +263,26 @@ function CustomEditor({ draft, errors, timeZoneError, startDate, onChange, onCan
       ) : draft.freq === 'yearly' ? (
         <Text variant="bodySm">{`在每年的 ${Number(month)} 月 ${Number(day)} 日重复`}</Text>
       ) : null}
+
+      {ownStart ? <>
+        <Stack gap={2}>
+          <Text variant="label">时间</Text>
+          <Inline gap={2}>
+            <View style={{ flex: 1 }}>
+              <DateField value={draft.startTime} onChange={startTime => set({ startTime })} mode="time" placeholder="设置时间" pickerDefault="09:00" accessibilityLabel="重复时间" />
+            </View>
+            {draft.startTime !== '' ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="清除重复时间" onPress={() => set({ startTime: '' })} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2], opacity: pressed ? 0.6 : 1 })}>
+                <Text variant="label" color="link">清除</Text>
+              </Pressable>
+            ) : null}
+          </Inline>
+        </Stack>
+        <Stack gap={2}>
+          <Text variant="label">开始日期</Text>
+          <DateField value={draft.startsOn} onChange={startsOn => { if (startsOn !== '') onChange(moveDraftStart(draft, startsOn)); }} mode="date" accessibilityLabel="重复开始日期" />
+        </Stack>
+      </> : null}
 
       <Stack gap={1}>
         <Text variant="label">结束</Text>

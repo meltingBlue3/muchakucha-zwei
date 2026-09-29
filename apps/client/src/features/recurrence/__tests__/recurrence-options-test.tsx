@@ -1,6 +1,6 @@
 import type { RecurrenceDto } from '@muchakucha/api-client';
 
-import { draftFromRule, followStartDate, presetOf, presetRule, ruleFromDraft, validateDraft } from '../recurrence-options';
+import { draftFromRule, followStartDate, moveDraftStart, presetOf, presetRule, ruleFromDraft, validateDraft, withDraftStart } from '../recurrence-options';
 import { formatRecurrenceSummary } from '../recurrence-summary';
 
 // 2026-09-27 is a Sunday (weekday 0).
@@ -68,5 +68,26 @@ describe('custom repeat drafts', () => {
     expect(formatRecurrenceSummary(rule({ interval: 3 }), tz).summary).toBe('每 3 天重复');
     expect(formatRecurrenceSummary(rule({ freq: 'weekly', interval: 2, byWeekday: [1, 3] }), tz).summary).toBe('每 2 周的周一、三重复');
     expect(formatRecurrenceSummary(rule({ freq: 'monthly', interval: 2, count: 4 }), tz).summary).toBe('每 2 个月的 27 日重复，共 4 次');
+  });
+});
+
+describe('a rule that owns its start', () => {
+  test('the draft starts from the rule, else the default date, with no time', () => {
+    expect(draftFromRule(null, '2026-09-29')).toMatchObject({ startsOn: '2026-09-29', startTime: '', byWeekday: [2] });
+    const rule: RecurrenceDto = { freq: 'daily', startsOn: '2026-10-05', startTimeLocal: '12:00', timezone: 'Asia/Shanghai' };
+    expect(draftFromRule(rule, '2026-09-29')).toMatchObject({ startsOn: '2026-10-05', startTime: '12:00' });
+  });
+
+  test('moving the start carries a single start-weekday rule along, not a chosen set', () => {
+    const draft = draftFromRule(null, '2026-09-29');
+    expect(moveDraftStart(draft, '2026-10-01').byWeekday).toEqual([4]);
+    expect(moveDraftStart({ ...draft, byWeekday: [1, 3] }, '2026-10-01').byWeekday).toEqual([1, 3]);
+  });
+
+  test('applies the chosen start date and time, and clears a removed time', () => {
+    const draft = { ...draftFromRule(null, '2026-09-29'), startsOn: '2026-10-05', startTime: '12:00' };
+    const rule = withDraftStart(ruleFromDraft(draft, draft.startsOn, 'Asia/Shanghai', null), draft);
+    expect(rule).toMatchObject({ startsOn: '2026-10-05', startTimeLocal: '12:00' });
+    expect(withDraftStart(rule, { ...draft, startTime: '' })).not.toHaveProperty('startTimeLocal');
   });
 });

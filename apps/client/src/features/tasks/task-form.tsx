@@ -16,9 +16,11 @@ import type { Theme } from '../../ui/theme';
 import { Stack, Text, FormActions } from '../../ui/primitives';
 import { ChoiceField, FormRow, FormSection, ROW_CONTENT_INSET, rowIcon, rowInputStyle, titleInputStyle } from '../../ui/compose-rows';
 import { DateField } from '../../ui/date-field';
+import { toDateValue, toTimeValue } from '../../ui/date-values';
 import { LabelPicker } from '../labels/label-picker';
 import { RecurrenceField } from '../recurrence/recurrence-field';
 import {
+  followStartDate,
   recurrenceErrorsFromApi,
   recurrenceInputFromResponse,
   type RecurrenceInput,
@@ -51,6 +53,8 @@ export interface TaskInput {
   priority: string;
   assigneeIds: string[];
   dueDate: string;
+  /** Local "HH:MM" on the due date, or '' for a date without a time. */
+  dueTime: string;
   recurrence: RecurrenceInput | null;
 }
 
@@ -61,6 +65,7 @@ const EMPTY_TASK: TaskInput = {
   priority: 'medium',
   assigneeIds: [],
   dueDate: '',
+  dueTime: '',
   recurrence: null,
 };
 
@@ -75,6 +80,14 @@ interface TaskFormProps {
   householdId?: string;
   selectedLabelIds?: string[];
   onLabelChange?: (labelIds: string[]) => void;
+}
+
+/** Splits a stored due instant into the local date and, unless it is midnight, time. */
+function dueFields(iso: string | null | undefined): Pick<TaskInput, 'dueDate' | 'dueTime'> {
+  const date = iso ? new Date(iso) : null;
+  if (date === null || Number.isNaN(date.getTime())) return { dueDate: '', dueTime: '' };
+  const time = toTimeValue(date);
+  return { dueDate: toDateValue(date), dueTime: time === '00:00' ? '' : time };
 }
 
 export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: TaskFormProps) {
@@ -114,7 +127,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
         status: initial.status,
         priority: initial.priority,
         assigneeIds: (initial.assigneeIds ?? []).filter((uid) => currentMemberIds.has(uid)),
-        dueDate: initial.dueDate?.split('T')[0] ?? '',
+        ...dueFields(initial.dueDate),
         recurrence: recurrenceInputFromResponse(initial.recurrence),
       };
     }
@@ -140,7 +153,9 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
       setError('请输入任务标题。');
       return;
     }
-    if (form.recurrence?.endsOn !== undefined && form.recurrence.endsOn <= recurrenceStart) {
+    // A new task's rule carries its own start, chosen on the custom repeat page.
+    const ruleStart = isCreate && form.recurrence !== null ? form.recurrence.startsOn : recurrenceStart;
+    if (form.recurrence?.endsOn !== undefined && form.recurrence.endsOn <= ruleStart) {
       setError('重复的截止日期必须晚于开始日期。');
       return;
     }
@@ -157,9 +172,9 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
     data.description = (form.description ?? '').trim();
     data.assigneeIds = form.assigneeIds;
     if (form.dueDate !== '') {
-      // Convert through new Date() so local midnight is mapped to UTC —
-      // never hardcode Z, which would treat the local date as UTC midnight.
-      data.dueDate = new Date(form.dueDate + 'T00:00:00').toISOString();
+      // Convert through new Date() so the local date and time map to UTC —
+      // never hardcode Z, which would treat them as UTC. No time is midnight.
+      data.dueDate = new Date(`${form.dueDate}T${form.dueTime || '00:00'}:00`).toISOString();
     } else {
       data.dueDate = ''; // clears the due date
     }
@@ -174,9 +189,29 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
         setError('保存失败，请检查网络后重试。');
       }
     }
-  }, [form, onSubmit, recurrenceStart]);
+  }, [form, isCreate, onSubmit, recurrenceStart]);
 
   const setRecurrence = useCallback((next: RecurrenceInput | null) => updateField('recurrence', next), [updateField]);
+  const recurringCreate = isCreate && form.recurrence !== null;
+  const dueRow = recurringCreate && form.recurrence !== null ? {
+    recurring: true,
+    date: form.recurrence.startsOn,
+    time: form.recurrence.startTimeLocal ?? '',
+    setDate: (date: string) => { if (date !== '' && form.recurrence) setRecurrence(followStartDate(form.recurrence, date)); },
+    setTime: (time: string) => { if (form.recurrence) setRecurrence({ ...form.recurrence, startTimeLocal: time }); },
+    // The first day is required; only the time can be cleared.
+    clearable: Boolean(form.recurrence.startTimeLocal),
+    clear: () => { if (form.recurrence) { const { startTimeLocal: _cleared, ...rest } = form.recurrence; setRecurrence(rest); } },
+  } : {
+    recurring: false,
+    date: form.dueDate,
+    time: form.dueTime ?? '',
+    setDate: (date: string) => updateField('dueDate', date),
+    // A time alone means today, as in Google Tasks.
+    setTime: (time: string) => setForm((prev) => ({ ...prev, dueTime: time, dueDate: prev.dueDate || todayIso })),
+    clearable: form.dueDate !== '' || Boolean(form.dueTime),
+    clear: () => setForm((prev) => ({ ...prev, dueDate: '', dueTime: '' })),
+  };
   const memberNames = new Map(members.map(member => [member.userId, member.displayName]));
   const assigneeSummary = form.assigneeIds.map(id => memberNames.get(id)).filter(Boolean).join('、');
   const statusLabel = form.status === 'cancelled' ? '已取消' : STATUSES.find(status => status.value === form.status)?.label ?? form.status;
@@ -199,35 +234,41 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
       </FormRow>
 
       <FormSection>
-        {/* A new recurring task has no single due date: the server ignores it
-            once `recurrence` is set and derives each occurrence's own. */}
+        {/* One date-and-time row for every task. A new recurring task has no
+            single due date (the server derives each occurrence's), so there the
+            row sets the rule's first day and its time, the same values as the
+            custom repeat page. */}
         <FormRow icon={rowIcon(Calendar)}>
-          {isCreate && form.recurrence !== null ? (
-            <Text color="inkMuted" style={{ flex: 1 }}>每次的截止日期按重复规则安排</Text>
-          ) : (
-            <>
-              <DateField
-                appearance="plain"
-                disabled={isSubmitting}
-                value={form.dueDate}
-                onChange={(v) => updateField('dueDate', v)}
-                mode="date"
-                placeholder="添加截止日期"
-                accessibilityLabel="截止日期"
-              />
-              {form.dueDate !== '' ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="清除截止日期"
-                  disabled={isSubmitting}
-                  onPress={() => updateField('dueDate', '')}
-                  style={({ pressed }) => ({ width: activeTheme.controlSizes.touchTarget, height: activeTheme.controlSizes.touchTarget, borderRadius: activeTheme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.transparent })}
-                >
-                  <X size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} />
-                </Pressable>
-              ) : null}
-            </>
-          )}
+          <DateField
+            appearance="plain"
+            disabled={isSubmitting}
+            value={dueRow.date}
+            onChange={dueRow.setDate}
+            mode="date"
+            placeholder="添加截止日期"
+            accessibilityLabel={dueRow.recurring ? '首次截止日期' : '截止日期'}
+          />
+          <DateField
+            appearance="plain"
+            disabled={isSubmitting}
+            value={dueRow.time}
+            onChange={dueRow.setTime}
+            mode="time"
+            placeholder="添加时间"
+            pickerDefault="09:00"
+            accessibilityLabel={dueRow.recurring ? '每次的截止时间' : '截止时间'}
+          />
+          {dueRow.clearable ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={dueRow.recurring ? '清除每次的截止时间' : '清除截止日期'}
+              disabled={isSubmitting}
+              onPress={dueRow.clear}
+              style={({ pressed }) => ({ width: activeTheme.controlSizes.touchTarget, height: activeTheme.controlSizes.touchTarget, borderRadius: activeTheme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.transparent })}
+            >
+              <X size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} />
+            </Pressable>
+          ) : null}
         </FormRow>
         <RecurrenceField
           name="任务重复设置"
@@ -237,6 +278,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
           errors={recurrenceErrors}
           onChange={setRecurrence}
           startDate={recurrenceStart}
+          ownStart={isCreate}
           value={form.recurrence}
         />
       </FormSection>

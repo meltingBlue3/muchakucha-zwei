@@ -85,14 +85,21 @@ export interface CustomDraft {
   ending: CustomEnding;
   endsOn: string;
   countText: string;
+  /** First day of the series; only editable where the rule owns its start. */
+  startsOn: string;
+  /** Local "HH:MM" of each occurrence, or '' for none. */
+  startTime: string;
 }
 
 export function draftFromRule(rule: RecurrenceDto | null, startDate: string): CustomDraft {
   const freq = rule && FREQUENCIES.includes(rule.freq) ? rule.freq as Frequency : 'weekly';
+  const startsOn = rule?.startsOn || startDate;
   return {
     freq,
+    startsOn,
+    startTime: rule?.startTimeLocal ?? '',
     intervalText: String(rule?.interval ?? 1),
-    byWeekday: rule?.byWeekday?.length ? [...rule.byWeekday] : [weekdayOf(startDate)],
+    byWeekday: rule?.byWeekday?.length ? [...rule.byWeekday] : [weekdayOf(startsOn)],
     ending: rule?.endsOn !== undefined ? 'date' : rule?.count !== undefined ? 'count' : 'never',
     endsOn: rule?.endsOn ?? '',
     countText: String(rule?.count ?? 13),
@@ -115,6 +122,21 @@ export function validateDraft(draft: CustomDraft, startDate: string): CustomErro
     if (!Number.isInteger(count) || count < 1 || count > MAX_COUNT) errors.count = `重复次数需要在 1 到 ${MAX_COUNT} 之间。`;
   }
   return errors;
+}
+
+/** Moves the draft's start date; a weekly rule on the old start weekday moves with it. */
+export function moveDraftStart(draft: CustomDraft, startsOn: string): CustomDraft {
+  const days = draft.byWeekday;
+  const byWeekday = draft.freq === 'weekly' && days.length === 1 && days[0] === weekdayOf(draft.startsOn) ? [weekdayOf(startsOn)] : days;
+  return { ...draft, startsOn, byWeekday };
+}
+
+/** Applies the draft's own start date and time, for a rule that owns its start. */
+export function withDraftStart(rule: RecurrenceDto, draft: CustomDraft): RecurrenceDto {
+  const next: RecurrenceDto = { ...rule, startsOn: draft.startsOn };
+  if (draft.startTime === '') delete next.startTimeLocal;
+  else next.startTimeLocal = draft.startTime;
+  return next;
 }
 
 export function ruleFromDraft(draft: CustomDraft, startDate: string, timezone: string, previous: RecurrenceDto | null): RecurrenceDto {

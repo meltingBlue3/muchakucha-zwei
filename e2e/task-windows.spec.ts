@@ -255,8 +255,9 @@ test('a custom task recurrence validates before applying and survives reload', a
   await custom.getByRole('button', { name: '完成', exact: true }).click();
   await expect(recurrence).toHaveAccessibleName('任务重复设置，每天重复，共 4 次');
   await expect(recurrence).toBeFocused();
-  // A new recurring task takes its due dates from the rule.
-  await expect(page.getByText('每次的截止日期按重复规则安排', { exact: true })).toBeVisible();
+  // A new recurring task's date row sets the rule's first day and time.
+  await expect(page.getByRole('button', { name: /^首次截止日期，/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: '每次的截止时间，添加时间', exact: true })).toBeVisible();
   expect(state.getWrites()).toBe(0);
   await page.reload();
   await expect(recurrence).toHaveAccessibleName('任务重复设置，每天重复，共 4 次');
