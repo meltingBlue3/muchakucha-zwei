@@ -24,7 +24,6 @@ import UserMinus from 'lucide-react-native/icons/user-minus';
 import { useRouter } from 'expo-router';
 import React, { forwardRef, useCallback, useRef } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -46,6 +45,7 @@ import {
   Text,
 } from './primitives';
 import { theme } from './theme';
+import { KeyboardArea } from './keyboard-area';
 import { PageCreateActionContext } from './page-intro';
 import { ActionNotice, useActionNoticeDismissal, type ActionNoticeProps } from './action-notice';
 import { formatDateTime } from './date-values';
@@ -88,6 +88,7 @@ export const AppShell = ({
   const router = useRouter();
   const blurTarget = useRef<View>(null);
   const noticeDismissal = useActionNoticeDismissal(notice);
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const desktopActions = Platform.OS === 'web' && width >= theme.layout.navigationBreakpoint;
   const wideNavigation = width >= theme.layout.navigationBreakpoint && footer !== undefined;
@@ -165,10 +166,8 @@ export const AppShell = ({
           </View>
         </View>
       ) : null}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
+      {/* Its parent starts below the status bar, which the keyboard view cannot see. */}
+      <KeyboardArea style={{ flex: 1 }} windowOffset={insets.top}>
         <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
@@ -195,7 +194,7 @@ export const AppShell = ({
         </ScrollView>
         {floatingAction && !desktopActions ? <View pointerEvents="box-none" style={{ position: 'absolute', right: theme.layout.mobileInset, bottom: theme.spacing[4] }}>{floatingAction}</View> : null}
         {notice ? <View pointerEvents="box-none" style={{ position: 'absolute', top: theme.spacing[2], left: theme.layout.mobileInset, right: theme.layout.mobileInset, alignItems: 'center' }}><ActionNotice {...notice} onTouchCapture={noticeDismissal.noticeCapture} /></View> : null}
-      </KeyboardAvoidingView>
+      </KeyboardArea>
       </View>
       {!wideNavigation ? footer : null}
     </SafeAreaView>

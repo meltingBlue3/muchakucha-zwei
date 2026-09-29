@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { DialogBackdrop } from './dialog-backdrop';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import X from 'lucide-react-native/icons/x';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
+import { KeyboardArea } from './keyboard-area';
 import { Button, Heading, Inline } from './primitives';
 import { SheetActionSlot, type SheetAction } from './sheet-action';
 import { theme } from './theme';
@@ -46,7 +47,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
     <Modal {...webDialogName(title)} transparent visible animationType="none" onShow={focus} onRequestClose={Platform.OS === 'web' ? undefined : close} statusBarTranslucent navigationBarTranslucent>
       <View style={{ flex: 1 }}>
         <DialogBackdrop onPress={close} />
-        <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={sheet
+        <KeyboardArea pointerEvents="box-none" style={sheet
           ? { flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + theme.spacing[2] }
           : { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing[5], paddingTop: insets.top + theme.spacing[5], paddingBottom: insets.bottom + theme.spacing[5] }}>
           <View ref={panel} testID="app-dialog-panel" {...(Platform.OS === 'web' ? {} : { accessibilityViewIsModal: true, accessibilityLabel: title })} style={sheet
@@ -71,7 +72,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
             </SheetActionSlot.Provider>
             {footer ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], ...(sheet ? { paddingHorizontal: theme.spacing[3] } : {}) }}>{footer}</View> : null}
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardArea>
       </View>
     </Modal>
   );

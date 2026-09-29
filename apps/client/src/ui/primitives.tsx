@@ -3,7 +3,6 @@ import type { PropsWithChildren, ReactElement, ReactNode } from 'react';
 import React, { forwardRef, useContext, useEffect, useId, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -21,6 +20,7 @@ import EyeOff from 'lucide-react-native/icons/eye-off';
 import Info from 'lucide-react-native/icons/info';
 
 import { BrandLogo } from './brand-logo';
+import { KeyboardArea } from './keyboard-area';
 import { SheetActionSlot } from './sheet-action';
 import { theme, type Space, type TextVariant, type Theme } from './theme';
 
@@ -45,10 +45,7 @@ export const Screen = ({ accessibilityLabel, children, testID }: ScreenProps) =>
       style={{ backgroundColor: activeTheme.colors.canvas, flex: 1 }}
       testID={testID}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
+      <KeyboardArea style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
@@ -59,7 +56,7 @@ export const Screen = ({ accessibilityLabel, children, testID }: ScreenProps) =>
         >
           {children}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardArea>
     </SafeAreaView>
   );
 };
