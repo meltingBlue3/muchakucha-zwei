@@ -384,20 +384,20 @@ sudo -u postgres dropdb muchakucha_restore_drill
 
 ### 局域网联调
 
-开发阶段用 `preview` profile 直连局域网内的开发机：
+开发阶段在手机上用 Expo Go 直连局域网内的开发机。`apps/client/.env` 里的 `localhost` 在手机上指向手机自己，启动时用开发机的局域网地址覆盖它（命令行变量优先于 `.env`）：
 
 ```bash
-export HOST=0.0.0.0   # 开发环境默认只监听 127.0.0.1，手机无法连接
-pnpm dev
+HOST=0.0.0.0 PORT=3100 pnpm --filter api dev   # 开发环境默认只监听 127.0.0.1，手机无法连接
+EXPO_PUBLIC_API_ORIGIN=http://<开发机局域网 IP>:3100 pnpm --filter client exec expo start --lan
 ```
 
-`apps/client/eas.json` 的 preview profile 指向 `http://192.168.1.7:3000`，换成开发机实际的局域网地址即可。此阶段走明文 HTTP：`NODE_ENV` 非 production 时不强制 HTTPS 来源，Android 已开启 `usesCleartextTraffic`。**iOS 无 ATS 例外，连不上明文地址**，局域网联调只能用 Android 或 Web。
+手机上的 Expo Go 打开 `exp://<开发机局域网 IP>:8081`；连不上时检查 Windows 防火墙是否放行这两个端口。此阶段走明文 HTTP：`NODE_ENV` 非 production 时不强制 HTTPS 来源，Android 已开启 `usesCleartextTraffic`。**iOS 无 ATS 例外，连不上明文地址**，局域网联调只能用 Android 或 Web。
 
 ### 移动端
 
 使用 EAS Build（`apps/client/eas.json`）：`development`（开发客户端）、`preview`（内部分发）、`production`。构建时通过各 profile 的 `EXPO_PUBLIC_API_ORIGIN` 指定 API 地址。Android 包名与 iOS Bundle ID 均为 `app.muchakucha.zwei`。
 
-`production` 指向 `https://47.117.148.16`，证书已就绪，可直接构建；`preview` 直连局域网开发机的明文地址，仅 Android 与 Web 可用。
+`preview` 与 `production` 都指向 `https://47.117.148.16`，证书已就绪，可直接构建：`preview` 是内部分发的安装包，装上即连线上数据，不依赖开发机。
 
 ```bash
 cd apps/client
