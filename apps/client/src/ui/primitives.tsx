@@ -248,7 +248,9 @@ export function ConfirmActions({
   destructive?: boolean;
   confirmDisabled?: boolean;
 }) {
-  const actionStyle = { flexGrow: 1, flexBasis: theme.controlSizes.touchTarget * 3 };
+  // Each answer starts at its label's width and shares the rest, so the pair
+  // wraps only when the labels themselves do not fit side by side.
+  const actionStyle = { flexGrow: 1 };
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[3] }}>
       <Button

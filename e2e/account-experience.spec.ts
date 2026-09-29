@@ -161,6 +161,19 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
+test('logout answers sit side by side on a 360px phone', async ({ page }) => {
+  await mockApi(page, true);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/household-handoff');
+  await page.getByRole('button', { name: '个人中心', exact: true }).click();
+  await page.getByRole('menuitem', { name: '退出登录' }).click();
+  const dialog = page.getByRole('dialog', { name: '退出登录', exact: true });
+  const cancel = (await dialog.getByRole('button', { name: '取消退出登录' }).boundingBox())!;
+  const confirm = (await dialog.getByRole('button', { name: '确认退出登录' }).boundingBox())!;
+  expect(Math.abs(cancel.y - confirm.y)).toBeLessThan(2);
+  expect(confirm.x).toBeGreaterThan(cancel.x + cancel.width);
+});
+
 test('logout dialog cancels, retains failed sessions, and only exits after confirmation', async ({ page }) => {
   await mockApi(page, true);
   let logoutCalls = 0;

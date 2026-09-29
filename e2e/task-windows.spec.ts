@@ -237,6 +237,32 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
+test('the due row and the repeat interval each stay on one line on a 360px phone', async ({ page }) => {
+  await setup(page);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto(`${base}/tasks/new`);
+  // As on the event rows, the date fills the row and the time keeps its own width at the end.
+  const date = await page.getByRole('button', { name: /^截止日期，/ }).boundingBox();
+  const time = await page.getByRole('button', { name: /^截止时间，/ }).boundingBox();
+  expect(Math.abs(date!.y - time!.y)).toBeLessThan(2);
+  expect(time!.width).toBeLessThan(date!.width / 2);
+  // A chosen date without a time still fits on one line beside the time and the clear button.
+  await page.getByRole('button', { name: /^截止日期，/ }).click();
+  await page.getByRole('dialog', { name: '选择日期' }).getByRole('button', { name: '确定', exact: true }).click();
+  const chosen = (await page.getByRole('button', { name: /^截止日期，\d{4}年/ }).boundingBox())!;
+  const lineHeight = (await page.getByRole('button', { name: '截止时间，时间', exact: true }).boundingBox())!.height;
+  expect(chosen.height).toBeLessThanOrEqual(lineHeight);
+  const recurrence = page.getByRole('button', { name: /^任务重复设置，/ });
+  await recurrence.click();
+  await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
+  const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
+  const rows = await Promise.all([
+    custom.getByLabel('重复间隔', { exact: true }),
+    ...['天', '周', '个月', '年'].map((unit) => custom.getByRole('radio', { name: unit, exact: true })),
+  ].map(async (control) => { const box = (await control.boundingBox())!; return box.y + box.height / 2; }));
+  expect(Math.max(...rows) - Math.min(...rows)).toBeLessThan(4);
+});
+
 test('a custom task recurrence validates before applying and survives reload', async ({ page }) => {
   const state = await setup(page);
   await page.goto(`${base}/tasks/new`);
@@ -257,7 +283,7 @@ test('a custom task recurrence validates before applying and survives reload', a
   await expect(recurrence).toBeFocused();
   // A new recurring task's date row sets the rule's first day and time.
   await expect(page.getByRole('button', { name: /^首次截止日期，/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: '每次的截止时间，添加时间', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '每次的截止时间，时间', exact: true })).toBeVisible();
   expect(state.getWrites()).toBe(0);
   await page.reload();
   await expect(recurrence).toHaveAccessibleName('任务重复设置，每天重复，共 4 次');

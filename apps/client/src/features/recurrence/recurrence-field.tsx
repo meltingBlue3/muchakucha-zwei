@@ -186,7 +186,7 @@ function OptionList({ preset, summary, disableTurnOff, turnOffHint, timeZoneErro
   );
 }
 
-function Choice({ label, selected, onPress, role = 'radio', circle = false }: { label: string; selected: boolean; onPress(): void; role?: 'radio' | 'checkbox'; circle?: boolean }) {
+function Choice({ label, selected, onPress, role = 'radio', circle = false, fill = false }: { label: string; selected: boolean; onPress(): void; role?: 'radio' | 'checkbox'; circle?: boolean; /** Shares its row's width with its siblings instead of keeping its own. */ fill?: boolean }) {
   return (
     <Pressable
       accessibilityRole={role}
@@ -196,7 +196,9 @@ function Choice({ label, selected, onPress, role = 'radio', circle = false }: { 
       onPress={onPress}
       style={({ pressed }) => ({ ...(circle
         ? { width: '100%', maxWidth: theme.controlSizes.touchTarget - theme.spacing[1], aspectRatio: 1 }
-        : { minHeight: theme.controlSizes.touchTarget - theme.spacing[1], minWidth: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[3] }), borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? theme.colors.coral : pressed ? theme.colors.surfaceMuted : theme.colors.surfaceSubtle, borderWidth: theme.borderWidths.default, borderColor: selected ? theme.colors.coral : theme.colors.separator })}
+        : fill
+          ? { flex: 1, minHeight: theme.controlSizes.touchTarget - theme.spacing[1], paddingHorizontal: theme.spacing[1] }
+          : { minHeight: theme.controlSizes.touchTarget - theme.spacing[1], minWidth: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[3] }), borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? theme.colors.coral : pressed ? theme.colors.surfaceMuted : theme.colors.surfaceSubtle, borderWidth: theme.borderWidths.default, borderColor: selected ? theme.colors.coral : theme.colors.separator })}
     >
       <Text variant="bodySm" color={selected ? 'surface' : 'ink'}>{label.startsWith('星期') ? label.slice(2) : label}</Text>
     </Pressable>
@@ -212,7 +214,7 @@ function NumberInput({ value, onChange, label }: { value: string; onChange(value
       maxLength={4}
       selectTextOnFocus
       accessibilityLabel={label}
-      style={{ width: theme.spacing[16], minHeight: theme.controlSizes.touchTarget - theme.spacing[1], textAlign: 'center', borderBottomWidth: theme.borderWidths.focus, borderBottomColor: theme.colors.border, fontSize: theme.typography.body.fontSize, fontFamily: theme.fontFamilies.regular, color: theme.colors.ink }}
+      style={{ width: theme.spacing[12], minHeight: theme.controlSizes.touchTarget - theme.spacing[1], textAlign: 'center', borderBottomWidth: theme.borderWidths.focus, borderBottomColor: theme.colors.border, fontSize: theme.typography.body.fontSize, fontFamily: theme.fontFamilies.regular, color: theme.colors.ink }}
     />
   );
 }
@@ -237,11 +239,12 @@ function CustomEditor({ draft, errors, timeZoneError, startDate, ownStart, onCha
     <Stack gap={4}>
       <Stack gap={2}>
         <Text variant="label">重复间隔</Text>
-        <Inline gap={2} style={{ flexWrap: 'wrap' }}>
+        {/* One line: the units share what 每 and the count leave. */}
+        <Inline gap={2}>
           <Text>每</Text>
           <NumberInput label="重复间隔" value={draft.intervalText} onChange={intervalText => set({ intervalText })} />
-          <View accessibilityRole="radiogroup" accessibilityLabel="重复单位" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] }}>
-            {UNITS.map(unit => <Choice key={unit.value} label={unit.label} selected={draft.freq === unit.value} onPress={() => set({ freq: unit.value })} />)}
+          <View accessibilityRole="radiogroup" accessibilityLabel="重复单位" style={{ flex: 1, flexDirection: 'row', gap: theme.spacing[1] }}>
+            {UNITS.map(unit => <Choice key={unit.value} label={unit.label} selected={draft.freq === unit.value} onPress={() => set({ freq: unit.value })} fill />)}
           </View>
         </Inline>
         {errors.interval ? <FormMessage>{errors.interval}</FormMessage> : null}

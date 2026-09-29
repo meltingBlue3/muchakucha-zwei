@@ -262,11 +262,14 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
           />
           <DateField
             appearance="plain"
+            align="end"
             disabled={isSubmitting}
             value={dueRow.time}
             onChange={dueRow.setTime}
             mode="time"
-            placeholder="添加时间"
+            // Beside a full date and the clear button a phone has room for two
+            // characters, so a chosen date shortens the prompt.
+            placeholder={dueRow.date === '' ? '添加时间' : '时间'}
             pickerDefault="09:00"
             accessibilityLabel={dueRow.recurring ? '每次的截止时间' : '截止时间'}
           />
