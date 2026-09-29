@@ -5,6 +5,7 @@ import { TaskCard } from '../task-card';
 import { completionActionLabel, completionToggleTarget } from '../task-completion';
 import { useTaskCompletion } from '../use-task-completion';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
+import { ActionNotice } from '../../../ui/action-notice';
 
 const mockUpdateTask = jest.fn();
 
@@ -37,7 +38,10 @@ function task(overrides: Partial<TaskResponseDto> = {}): TaskResponseDto {
 /** Drives one card through the real hook, as a list page does. */
 function Harness({ item, refresh = jest.fn() }: { item: TaskResponseDto; refresh?: () => void }) {
   const completion = useTaskCompletion('household-1', refresh);
-  return <TaskCard task={item} onPress={jest.fn()} {...completion.cardProps(item)} />;
+  return <>
+    {completion.undoNotice ? <ActionNotice {...completion.undoNotice} /> : null}
+    <TaskCard task={item} onPress={jest.fn()} {...completion.cardProps(item)} />
+  </>;
 }
 
 async function renderCard(item: TaskResponseDto, refresh?: () => void) {
@@ -120,6 +124,18 @@ describe('undo after completing', () => {
 
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledTimes(2));
     expect(statusOf(mockUpdateTask.mock.calls[1])).toBe('pending');
+  });
+
+  test('the notice names the task and 忽略 closes it without writing', async () => {
+    const { getByLabelText, getByRole, getByText, queryByText } = await renderCard(task({ status: 'pending' }));
+
+    fireEvent.press(getByLabelText('完成任务'));
+    await waitFor(() => expect(getByText('已完成「倒垃圾」')).toBeTruthy());
+    await waitFor(() => expect(getByRole('button', { name: '忽略' })).toBeEnabled());
+    await fireEvent.press(getByRole('button', { name: '忽略' }));
+
+    expect(queryByText('已完成「倒垃圾」')).toBeNull();
+    expect(mockUpdateTask).toHaveBeenCalledTimes(1);
   });
 
   test('un-completing offers no undo of its own', async () => {

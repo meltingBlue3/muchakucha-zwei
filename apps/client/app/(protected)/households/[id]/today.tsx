@@ -42,9 +42,9 @@ function isToday(iso: string | null): boolean {
 }
 
 /**
- * `retainCompletedId` keeps one just-completed task in its bucket so the undo
- * offered on its card survives the refetch that follows the write. Without it
- * the card vanishes the instant it is completed, taking the undo with it.
+ * `retainCompletedId` keeps one just-completed task in its bucket while the
+ * top undo notice is open, so the card the person just checked stays in place
+ * until they undo or dismiss it instead of vanishing with the refetch.
  */
 export function partitionTodayTasks(tasks: TaskResponseDto[], retainCompletedId: string | null = null) {
   const overdueTasks: TaskResponseDto[] = [];
@@ -186,6 +186,10 @@ export default function TodayRoute() {
   // Refetch whenever this screen regains focus (e.g. returning from a
   // task/event action elsewhere), not just on first mount — otherwise
   // Today shows stale data after a mutation elsewhere in the stack.
+  // Leaving the page (a detail window, another tab) closes the undo notice.
+  const { dismissUndo } = completion;
+  useFocusEffect(useCallback(() => dismissUndo, [dismissUndo]));
+
   useFocusEffect(
     useCallback(() => {
       void fetchData();
@@ -253,7 +257,7 @@ export default function TodayRoute() {
 
   return (
     <>
-      <AppShell accessibilityLabel="今日视图" refreshing={refreshing} onRefresh={handleRefresh} title="今日视图" showProfile headerContent={<HouseholdHeader
+      <AppShell accessibilityLabel="今日视图" notice={completion.undoNotice} refreshing={refreshing} onRefresh={handleRefresh} title="今日视图" showProfile headerContent={<HouseholdHeader
           householdName={currentHousehold?.name ?? ''}
           onOpenSwitcher={() => setSwitcherOpen(true)}
         />} footer={<HouseholdNavigation householdId={householdId} active="today" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton actions={[

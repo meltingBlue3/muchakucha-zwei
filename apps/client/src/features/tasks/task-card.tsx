@@ -24,8 +24,6 @@ interface TaskCardProps {
   /** Failure from the last completion write on this card, shown beside it. */
   statusError?: string | null;
   onRetryStatus?: () => void;
-  canUndoComplete?: boolean;
-  onUndoComplete?: () => void;
 }
 
 export function TaskCard({
@@ -38,8 +36,6 @@ export function TaskCard({
   statusChanging = false,
   statusError = null,
   onRetryStatus,
-  canUndoComplete = false,
-  onUndoComplete,
 }: TaskCardProps) {
   const activeTheme = useTheme<Theme>();
   const cancelled = task.status === 'cancelled';
@@ -50,7 +46,6 @@ export function TaskCard({
   // an otherwise identical circle.
   const StatusIcon = cancelled ? Ban : completed ? CircleCheckBig : Circle;
   const actionLabel = completionActionLabel(task.status);
-  const feedback = statusError !== null || canUndoComplete;
 
   return (
     <ContentCard
@@ -72,37 +67,19 @@ export function TaskCard({
         ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: `编辑任务：${task.title}`, onPress: onEdit }] : []),
         ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除任务：${task.title}`, onPress: onDelete }] : []),
       ]} />}
-      footer={feedback ? (
+      footer={statusError !== null ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[3], marginTop: activeTheme.spacing[2], paddingHorizontal: activeTheme.spacing[2] }}>
-          {statusError !== null ? (
-            <>
-              <Text variant="caption" color="destructive" accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ flexShrink: 1 }}>{statusError}</Text>
-              {onRetryStatus ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`重试：${task.title}`}
-                  onPress={onRetryStatus}
-                  hitSlop={activeTheme.spacing[3]}
-                  style={({ pressed }) => ({ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}
-                >
-                  <Text variant="label" color="link">重试</Text>
-                </Pressable>
-              ) : null}
-            </>
-          ) : null}
-          {statusError === null && canUndoComplete && onUndoComplete ? (
-            <>
-              <Text variant="caption" color="inkMuted" accessibilityLiveRegion="polite" style={{ flexShrink: 1 }}>已完成。</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`撤销完成：${task.title}`}
-                onPress={onUndoComplete}
-                hitSlop={activeTheme.spacing[3]}
-                style={({ pressed }) => ({ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}
-              >
-                <Text variant="label" color="link">撤销</Text>
-              </Pressable>
-            </>
+          <Text variant="caption" color="destructive" accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ flexShrink: 1 }}>{statusError}</Text>
+          {onRetryStatus ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`重试：${task.title}`}
+              onPress={onRetryStatus}
+              hitSlop={activeTheme.spacing[3]}
+              style={({ pressed }) => ({ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}
+            >
+              <Text variant="label" color="link">重试</Text>
+            </Pressable>
           ) : null}
         </View>
       ) : null}

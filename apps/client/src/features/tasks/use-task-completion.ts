@@ -4,6 +4,7 @@ import { ApiClientError, type TaskResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { completionToggleTarget, type TaskStatus } from './task-completion';
+import type { ActionNoticeProps } from '../../ui/action-notice';
 
 interface Attempt {
   task: TaskResponseDto;
@@ -17,13 +18,12 @@ export interface TaskCardCompletionProps {
   statusChanging: boolean;
   statusError: string | null;
   onRetryStatus?: () => void;
-  canUndoComplete: boolean;
-  onUndoComplete: () => void;
 }
 
 /**
  * Owns the completion control's state for a list of tasks: which row is
- * writing, which row failed, and which row can still be undone.
+ * writing, which row failed, and which completion can still be undone. The
+ * undo is offered in a notice at the top of the page, not on the card.
  *
  * It lives here because the today view and the tasks list both drive the same
  * control, and previously each kept its own copy — the tasks list had even
@@ -57,11 +57,7 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
         ...(attempt.task.recurrence ? { expectedRuleUpdatedAt: attempt.task.recurrence.updatedAt } : {}),
       });
       // Only a completion is undoable, and only until the next write.
-      setUndoable(
-        attempt.target === 'completed'
-          ? { task: saved ?? attempt.task, previousStatus: attempt.previousStatus }
-          : null,
-      );
+      setUndoable(attempt.target === 'completed' ? { task: saved ?? attempt.task, previousStatus: attempt.previousStatus } : null);
       refresh();
     } catch (caught: unknown) {
       if (isEditConflict(caught)) { setLastAttempt(null); setUndoable(null); }
@@ -105,17 +101,30 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
     statusChanging: changingTaskId === task.id,
     statusError: failure !== null && failure.taskId === task.id ? failure.message : null,
     ...(lastAttempt === null ? {} : { onRetryStatus: retryStatus }),
-    canUndoComplete: undoable !== null && undoable.task.id === task.id,
-    onUndoComplete: undoCompletion,
-  }), [toggleCompletion, changingTaskId, failure, retryStatus, undoable, undoCompletion, lastAttempt]);
+  }), [toggleCompletion, changingTaskId, failure, retryStatus, lastAttempt]);
+
+  /** Closes the notice; the completed card then leaves the list with it. */
+  const dismissUndo = useCallback((): void => setUndoable(null), []);
+
+  /** Props for the page's ActionNotice while a completion can be undone. */
+  const undoNotice: ActionNoticeProps | null = undoable === null ? null : {
+    message: `已完成「${undoable.task.title}」`,
+    actionLabel: '撤销',
+    actionAccessibilityLabel: `撤销完成：${undoable.task.title}`,
+    onAction: undoCompletion,
+    onDismiss: dismissUndo,
+    busy: changingTaskId === undoable.task.id,
+  };
 
   return {
     cardProps,
     toggleCompletion,
     undoCompletion,
+    dismissUndo,
+    undoNotice,
     retryStatus,
     changingTaskId,
-    /** The task a list must keep visible so its undo stays reachable. */
+    /** The just-completed task a list keeps visible while its undo notice is open. */
     undoTaskId: undoable?.task.id ?? null,
   };
 }

@@ -203,6 +203,9 @@ export default function TaskListScreen() {
   );
 
   const completion = useTaskCompletion(householdId, fetchData);
+  // Leaving the page (a detail window, another tab) closes the undo notice.
+  const { dismissUndo } = completion;
+  useFocusEffect(useCallback(() => dismissUndo, [dismissUndo]));
 
   const handleCreateTask = useCallback(() => {
     rememberRouteTrigger();
@@ -262,7 +265,7 @@ export default function TaskListScreen() {
 
   return (
   <>
-    <AppShell accessibilityLabel="家庭任务" refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="tasks" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton label="创建任务" onPress={handleCreateTask} /> : null}>
+    <AppShell accessibilityLabel="家庭任务" notice={completion.undoNotice} refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="tasks" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton label="创建任务" onPress={handleCreateTask} /> : null}>
       <Stack gap={4}>
 
         <PageIntro title="任务" action={<FilterButton ref={filterTrigger} label="筛选任务" count={activeFilterCount} onPress={() => setFiltersOpen(true)} />} />

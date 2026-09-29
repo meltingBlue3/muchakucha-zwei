@@ -47,6 +47,7 @@ import {
 } from './primitives';
 import { theme } from './theme';
 import { PageCreateActionContext } from './page-intro';
+import { ActionNotice, useActionNoticeDismissal, type ActionNoticeProps } from './action-notice';
 import { formatDateTime } from './date-values';
 
 // ---- AppShell ----
@@ -65,6 +66,8 @@ interface AppShellProps {
   footer?: React.ReactNode;
   headerContent?: React.ReactNode;
   floatingAction?: React.ReactNode;
+  /** A notice floating at the top of the content; a touch anywhere else dismisses it. */
+  notice?: ActionNoticeProps | null;
 }
 
 export const AppShell = ({
@@ -80,9 +83,11 @@ export const AppShell = ({
   footer,
   headerContent,
   floatingAction,
+  notice,
 }: AppShellProps) => {
   const router = useRouter();
   const blurTarget = useRef<View>(null);
+  const noticeDismissal = useActionNoticeDismissal(notice);
   const { width } = useWindowDimensions();
   const desktopActions = Platform.OS === 'web' && width >= theme.layout.navigationBreakpoint;
   const wideNavigation = width >= theme.layout.navigationBreakpoint && footer !== undefined;
@@ -103,6 +108,7 @@ export const AppShell = ({
     <SafeAreaView
       accessibilityLabel={accessibilityLabel}
       role={Platform.OS === 'web' ? 'main' : undefined}
+      {...(notice ? { onStartShouldSetResponderCapture: noticeDismissal.pageCapture, ...(noticeDismissal.pageTouchEnd ? { onTouchEnd: noticeDismissal.pageTouchEnd, onTouchCancel: noticeDismissal.pageTouchEnd } : {}) } : {})}
       style={{ backgroundColor: theme.colors.canvas, flex: 1, flexDirection: wideNavigation ? 'row' : 'column' }}
     >
       {wideNavigation ? footer : null}
@@ -188,6 +194,7 @@ export const AppShell = ({
           <PageCreateActionContext.Provider value={desktopActions ? floatingAction : null}>{children}</PageCreateActionContext.Provider>
         </ScrollView>
         {floatingAction && !desktopActions ? <View pointerEvents="box-none" style={{ position: 'absolute', right: theme.layout.mobileInset, bottom: theme.spacing[4] }}>{floatingAction}</View> : null}
+        {notice ? <View pointerEvents="box-none" style={{ position: 'absolute', top: theme.spacing[2], left: theme.layout.mobileInset, right: theme.layout.mobileInset, alignItems: 'center' }}><ActionNotice {...notice} onTouchCapture={noticeDismissal.noticeCapture} /></View> : null}
       </KeyboardAvoidingView>
       </View>
       {!wideNavigation ? footer : null}

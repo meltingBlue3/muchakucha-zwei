@@ -129,7 +129,7 @@ test(`completing a task is one tap and stays undoable on the card${recurring ? '
   const afterComplete = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/tasks/${taskId}`);
   expect(afterComplete.body.status).toBe('completed');
 
-  // Undo restores 进行中, not 待办: the card must still be on screen to offer it.
+  // Undo from the top notice restores 进行中, not 待办.
   await page.getByRole('button', { name: '撤销完成：洗碗' }).click();
   await expect(page.getByText('进行中')).toBeVisible();
 
