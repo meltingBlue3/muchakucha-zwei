@@ -20,7 +20,7 @@ import EyeOff from 'lucide-react-native/icons/eye-off';
 import Info from 'lucide-react-native/icons/info';
 
 import { BrandLogo } from './brand-logo';
-import { KeyboardArea } from './keyboard-area';
+import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
 import { SheetActionSlot } from './sheet-action';
 import { theme, type Space, type TextVariant, type Theme } from './theme';
 
@@ -52,6 +52,7 @@ export const Screen = ({ accessibilityLabel, children, testID }: ScreenProps) =>
             paddingHorizontal: activeTheme.layout.mobileInset,
             paddingVertical: activeTheme.spacing[6],
           }}
+          keyboardDismissMode={scrollKeyboardDismissMode}
           keyboardShouldPersistTaps="handled"
         >
           {children}

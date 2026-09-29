@@ -18,6 +18,7 @@ import { ChoiceField, FormRow, FormSection, ROW_CONTENT_INSET, RowMessage, rowIc
 import { DateField } from '../../ui/date-field';
 import { toDateValue, toTimeValue } from '../../ui/date-values';
 import { LabelPicker } from '../labels/label-picker';
+import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 import { RecurrenceField } from '../recurrence/recurrence-field';
 import {
   followStartDate,
@@ -229,6 +230,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
       <FormRow>
         <TextInput
           ref={titleInput}
+          autoFocus={focusFieldOnOpen && initial === undefined}
           editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}

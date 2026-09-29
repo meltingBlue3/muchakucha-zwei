@@ -45,7 +45,7 @@ import {
   Text,
 } from './primitives';
 import { theme } from './theme';
-import { KeyboardArea } from './keyboard-area';
+import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
 import { PageCreateActionContext } from './page-intro';
 import { ActionNotice, useActionNoticeDismissal, type ActionNoticeProps } from './action-notice';
 import { formatDateTime } from './date-values';
@@ -178,6 +178,7 @@ export const AppShell = ({
             alignSelf: Platform.OS === 'web' ? 'center' : undefined,
             width: '100%',
           }}
+          keyboardDismissMode={scrollKeyboardDismissMode}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             onRefresh !== undefined ? (

@@ -97,6 +97,7 @@ export const RegisterForm = ({
     getValues,
     handleSubmit,
     setError,
+    setFocus,
   } = useForm<RegistrationValues>({
     defaultValues: { username: '', password: '', confirmPassword: '' },
   });
@@ -176,6 +177,9 @@ export const RegisterForm = ({
             {...(errors.username?.message === undefined ? {} : { error: errors.username.message })}
             label="用户名"
             hint="3–32 个字符，可使用字母、数字、点、下划线和短横线，不区分大小写。"
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => setFocus('password')}
             onBlur={() => { onBlur(); validateOnBlur('username'); }}
             onChangeText={(text) => { onChange(text); revalidateOnChange('username'); }}
             ref={ref}
@@ -196,6 +200,9 @@ export const RegisterForm = ({
             {...(errors.password?.message === undefined ? {} : { error: errors.password.message })}
             label="密码"
             hint="8–128 个字符，建议使用不容易猜到的组合。"
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => setFocus('confirmPassword')}
             onBlur={() => {
               onBlur();
               validateOnBlur('password');
@@ -225,6 +232,7 @@ export const RegisterForm = ({
             label="确认密码"
             onBlur={() => { onBlur(); validateOnBlur('confirmPassword'); }}
             onChangeText={(text) => { onChange(text); revalidateOnChange('confirmPassword'); }}
+            returnKeyType="go"
             onSubmitEditing={() => void submitRegistration()}
             ref={ref}
             textContentType="newPassword"

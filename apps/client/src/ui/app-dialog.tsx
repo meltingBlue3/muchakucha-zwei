@@ -4,7 +4,7 @@ import { Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import X from 'lucide-react-native/icons/x';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
-import { KeyboardArea } from './keyboard-area';
+import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
 import { Button, Heading, Inline } from './primitives';
 import { SheetActionSlot, type SheetAction } from './sheet-action';
 import { theme } from './theme';
@@ -68,7 +68,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
               </Inline>
             )}
             <SheetActionSlot.Provider value={sheet ? setSheetAction : null}>
-              <ScrollView {...(Platform.OS === 'web' && size === 'editor' ? { tabIndex: 0 } : {})} keyboardShouldPersistTaps="handled" style={{ flexShrink: 1 }} contentContainerStyle={sheet ? { paddingHorizontal: theme.spacing[3], paddingBottom: theme.spacing[6] } : undefined}>{children}</ScrollView>
+              <ScrollView {...(Platform.OS === 'web' && size === 'editor' ? { tabIndex: 0 } : {})} keyboardDismissMode={scrollKeyboardDismissMode} keyboardShouldPersistTaps="handled" style={{ flexShrink: 1 }} contentContainerStyle={sheet ? { paddingHorizontal: theme.spacing[3], paddingBottom: theme.spacing[6] } : undefined}>{children}</ScrollView>
             </SheetActionSlot.Provider>
             {footer ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], ...(sheet ? { paddingHorizontal: theme.spacing[3] } : {}) }}>{footer}</View> : null}
           </View>

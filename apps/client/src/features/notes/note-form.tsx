@@ -1,4 +1,5 @@
 import { MarkdownEditor } from './markdown-editor';
+import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useId, useRef, useState } from 'react';
@@ -73,6 +74,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
       <View>
         <TextInput
           ref={titleInput}
+          autoFocus={focusFieldOnOpen && initial === undefined}
           editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}

@@ -26,6 +26,7 @@ import {
 } from '../../ui/household-components';
 import { Banner, Button, ConfirmActions, EmptyState, Inline, LoadError, LoadingState, Stack, Text, TextField } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
+import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 
 const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
 const PERMISSION_DENIED = '你没有重命名此家庭的权限。';
@@ -661,6 +662,7 @@ export function HouseholdSettings({
             <Stack gap={2}>
               <TextField
                 label="家庭名称"
+                autoFocus={focusFieldOnOpen}
                 returnKeyType="done"
                 onSubmitEditing={() => { if (!renameSubmitting) void handleRename(); }}
                 value={renameValue}
@@ -706,8 +708,10 @@ export function HouseholdSettings({
             <Stack gap={2}>
               <TextField
                 label="用户名"
-                autoComplete="username"
+                autoComplete="off"
                 autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus={focusFieldOnOpen}
                 returnKeyType="send"
                 onSubmitEditing={() => { if (!inviteSubmitting) void handleInvite(); }}
                 value={inviteUsername}

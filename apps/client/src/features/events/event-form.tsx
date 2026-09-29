@@ -14,6 +14,7 @@ import { Stack, Text, FormActions } from '../../ui/primitives';
 import { FormRow, FormSection, RowMessage, rowIcon, rowInputStyle, titleInputStyle } from '../../ui/compose-rows';
 import { DateField } from '../../ui/date-field';
 import { LabelPicker } from '../labels/label-picker';
+import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 import {
   recurrenceErrorsFromApi,
   recurrenceInputFromResponse,
@@ -211,6 +212,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
       <FormRow>
         <TextInput
           ref={titleInput}
+          autoFocus={focusFieldOnOpen && initial === undefined}
           editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}

@@ -55,6 +55,7 @@ export const LoginForm = ({
     getValues,
     handleSubmit,
     setError,
+    setFocus,
   } = useForm<LoginValues>({ defaultValues: { username: '', password: '' } });
 
   const applyOutcome = async (outcome: RestoreOutcome): Promise<void> => {
@@ -143,6 +144,9 @@ export const LoginForm = ({
             autoCorrect={false}
             {...(errors.username?.message === undefined ? {} : { error: errors.username.message })}
             label="用户名"
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => setFocus('password')}
             onBlur={() => {
               onBlur();
               validateOnBlur('username');
@@ -170,6 +174,7 @@ export const LoginForm = ({
               validateOnBlur('password');
             }}
             onChangeText={(text) => { onChange(text); revalidateOnChange('password'); }}
+            returnKeyType="go"
             onSubmitEditing={() => void submit()}
             ref={ref}
             textContentType="password"

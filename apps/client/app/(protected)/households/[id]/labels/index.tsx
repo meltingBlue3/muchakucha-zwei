@@ -13,6 +13,7 @@ import { PageIntro } from '../../../../../src/ui/page-intro';
 import { Button, ConfirmActions, EmptyState, FormActions, LoadError, LoadingState, Stack, Text, TextField } from '../../../../../src/ui/primitives';
 import { labelColorPresets, type Theme } from '../../../../../src/ui/theme';
 import { getRouteTrigger, rememberRouteTrigger } from '../../../../../src/platform/overlays/route-trigger';
+import { focusFieldOnOpen } from '../../../../../src/platform/keyboard/focus-on-open';
 
 type LabelAction = { kind: 'create' } | { kind: 'edit' | 'delete'; label: LabelResponseDto };
 
@@ -113,7 +114,7 @@ export default function LabelsIndexRoute() {
     {action && canManage ? <AppDialog title={action.kind === 'create' ? '创建标签' : action.kind === 'edit' ? '编辑标签' : '删除标签'} busy={busy} onClose={close} trigger={trigger}>
       <Stack gap={4}>
         {action.kind === 'delete' ? <Text>删除“{action.label.name}”后，它会从所有日程和任务中移除，日程和任务本身会保留。</Text> : <>
-          <TextField ref={nameInput} label={action.kind === 'create' ? '标签名称' : '编辑标签名称'} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameError(null); }} maxLength={30} disabled={busy} {...(nameError === null ? {} : { error: nameError })} returnKeyType="done" onSubmitEditing={() => void submit()} />
+          <TextField ref={nameInput} autoFocus={focusFieldOnOpen} label={action.kind === 'create' ? '标签名称' : '编辑标签名称'} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameError(null); }} maxLength={30} disabled={busy} {...(nameError === null ? {} : { error: nameError })} returnKeyType="done" onSubmitEditing={() => void submit()} />
           <Stack gap={2}>
             <Text variant="label">颜色</Text>
             <View accessibilityRole="radiogroup" accessibilityLabel="标签颜色" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] }}>
