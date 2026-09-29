@@ -137,9 +137,9 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   await page.getByRole('button', { name: '关闭笔记详情' }).click();
   await page.getByRole('button', { name: '更多操作：笔记：暑假安排' }).click();
   await page.getByRole('menuitem', { name: '删除笔记：暑假安排' }).click();
-  await expect(page.getByText('确定要删除这条笔记吗？此操作不可撤销。')).toBeVisible();
+  await expect(page.getByText('确定要删除「暑假安排」吗？此操作不可撤销。')).toBeVisible();
   await page.getByRole('button', { name: '取消删除' }).click();
-  await expect(page.getByText('确定要删除这条笔记吗？此操作不可撤销。')).toBeHidden();
+  await expect(page.getByText('确定要删除「暑假安排」吗？此操作不可撤销。')).toBeHidden();
 
   await page.getByRole('button', { name: '更多操作：笔记：暑假安排' }).click();
   await page.getByRole('menuitem', { name: '删除笔记：暑假安排' }).click();

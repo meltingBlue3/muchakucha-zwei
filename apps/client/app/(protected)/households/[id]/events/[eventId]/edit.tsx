@@ -186,7 +186,7 @@ export default function EditEventRoute() {
   };
 
   return (
-    <EventWindow title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : '编辑日程'} busy={isSubmitting || seriesSubmitting !== null} onClose={handleCancel} onBackStep={pendingSeriesAction ? handleCancel : undefined} exitAllowed={exitAllowed}>
+    <EventWindow size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : '编辑日程'} busy={isSubmitting || seriesSubmitting !== null} onClose={handleCancel} onBackStep={pendingSeriesAction ? handleCancel : undefined} exitAllowed={exitAllowed}>
       {pendingSeriesAction ? <SeriesScopeContent mode={pendingSeriesAction.mode} error={seriesError} submitting={seriesSubmitting} onClose={handleCancel} onSelect={scope => void handleSeriesSelect(scope)} />
         : loading ? <LoadingState label="正在加载日程" /> : event === null ? <Stack gap={3}>
           <LoadError message={error ?? '日程未找到或已被删除。'} onRetry={() => void fetchEvent()} />

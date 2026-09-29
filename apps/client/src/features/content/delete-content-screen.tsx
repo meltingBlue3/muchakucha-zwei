@@ -75,11 +75,10 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
     } finally { setSubmitting(null); }
   };
 
-  return <Window title={`删除${name}`} busy={submitting !== null} onClose={close} exitAllowed={exitAllowed}>
-    {loading ? <LoadingState label={`正在加载${name}`} /> : target === null ? <LoadError message={error ?? `无法加载${name}。`} onRetry={() => void load()} /> : !target.allowed ? <Text accessibilityRole="alert">你没有删除这条{name}的权限。</Text> : <Stack gap={3}>
-      <Text variant="section">{target.title}</Text>
+  return <Window size="standard" title={`删除${name}`} busy={submitting !== null} onClose={close} exitAllowed={exitAllowed}>
+    {loading ? <LoadingState label={`正在加载${name}`} /> : target === null ? <LoadError message={error ?? `无法加载${name}。`} onRetry={() => void load()} /> : !target.allowed ? <Text accessibilityRole="alert">你没有删除这条{name}的权限。</Text> : <Stack gap={4}>
       {target.recurring ? <SeriesScopeContent mode="delete" confirmLabel={`确认删除${name}`} error={error} submitting={submitting === 'single' ? null : submitting} onClose={close} onSelect={scope => void remove(scope)} /> : <>
-        <Text>确定要删除这条{name}吗？此操作不可撤销。</Text>
+        <Text>确定要删除「{target.title}」吗？此操作不可撤销。</Text>
         {error ? <Banner>{error}</Banner> : null}
         <ConfirmActions cancelLabel="取消删除" confirmLabel={`确认删除${name}`} destructive busy={submitting !== null} onCancel={close} onConfirm={() => void remove()} />
       </>}

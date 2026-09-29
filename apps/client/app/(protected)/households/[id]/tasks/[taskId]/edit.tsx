@@ -250,9 +250,9 @@ export default function EditTaskRoute() {
   }
 
   return (
-    <TaskWindow title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : "编辑任务"} busy={submitting || seriesSubmitting !== null} onClose={closeEdit} onBackStep={pendingSeriesAction ? closeEdit : undefined} exitAllowed={exitAllowed}>
+    <TaskWindow size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : "编辑任务"} busy={submitting || seriesSubmitting !== null} onClose={closeEdit} onBackStep={pendingSeriesAction ? closeEdit : undefined} exitAllowed={exitAllowed}>
       <Stack gap={4}>
-        <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
+        {pendingSeriesAction ? null : <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />}
 
         {pendingSeriesAction ? <SeriesScopeContent
           error={seriesError} mode={pendingSeriesAction.mode} onClose={closeEdit}

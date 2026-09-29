@@ -3,5 +3,5 @@ import HouseholdSettingsScreen from './household-settings-screen';
 
 export function useHouseholdActionClose() { return useRouteWindowClose('settings').close; }
 export function HouseholdActionWindow(props: Omit<RouteWindowProps, 'resource' | 'fallback'>) {
-  return <RouteWindow {...props} resource="settings" fallback={<HouseholdSettingsScreen />} />;
+  return <RouteWindow size="standard" {...props} resource="settings" fallback={<HouseholdSettingsScreen />} />;
 }

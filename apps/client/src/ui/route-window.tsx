@@ -58,9 +58,11 @@ export interface RouteWindowProps {
   exitAllowed?: RefObject<boolean>;
   resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'households' | 'settings';
   fallback: ReactNode;
+  /** Confirmation-only routes use the compact centered window on every width. */
+  size?: 'standard' | 'editor';
 }
 
-export function RouteWindow({ title, busy = false, children, footer, headerActions, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback }: RouteWindowProps) {
+export function RouteWindow({ title, busy = false, children, footer, headerActions, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor' }: RouteWindowProps) {
   const focused = useIsFocused();
   // Controls inside the content (pickers, option lists) open their own steps.
   const [ownedStep, setOwnedStep] = useState<{ owner: object; step: RouteWindowStep } | null>(null);
@@ -112,7 +114,7 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
       <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={focused ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
-      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step ? 'standard' : 'editor'} headerActions={confirmation || step ? null : headerActions} {...(footer === undefined || confirmation || step ? {} : { footer })}>
+      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} headerActions={confirmation || step ? null : headerActions} {...(footer === undefined || confirmation || step ? {} : { footer })}>
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>

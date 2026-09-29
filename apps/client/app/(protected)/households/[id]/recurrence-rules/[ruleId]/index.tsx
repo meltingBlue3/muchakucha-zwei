@@ -231,7 +231,7 @@ export default function RecurrenceRuleDetailRoute() {
     else dismiss();
   };
   return (
-      <RouteWindow resource="recurrence-rules" title={saveConfirmOpen ? '确认保存重复安排' : endConfirmOpen ? '结束重复安排' : '重复安排'} busy={busy} onClose={close} onBackStep={saveConfirmOpen || endConfirmOpen ? close : undefined} exitAllowed={exitAllowed} fallback={<RecurrenceListScreen />}>
+      <RouteWindow resource="recurrence-rules" size={saveConfirmOpen || endConfirmOpen ? 'standard' : 'editor'} title={saveConfirmOpen ? '确认保存重复安排' : endConfirmOpen ? '结束重复安排' : '重复安排'} busy={busy} onClose={close} onBackStep={saveConfirmOpen || endConfirmOpen ? close : undefined} exitAllowed={exitAllowed} fallback={<RecurrenceListScreen />}>
         {saveConfirmOpen || endConfirmOpen ? <Stack gap={3}>
           <Text>{saveConfirmOpen ? SAVE_CONFIRM_PROMPT : END_CONFIRM_PROMPT}</Text>
           {writeError ? <Banner>{writeError}</Banner> : null}
