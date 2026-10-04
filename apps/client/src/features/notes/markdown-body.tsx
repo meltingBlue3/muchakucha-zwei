@@ -6,7 +6,7 @@ import { Stack, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
 import { parseMarkdown, safeLink, type MarkdownNode } from './markdown';
 
-export function MarkdownBody({ source }: { source: string }) {
+export function MarkdownBody({ source, tableLabel = '笔记表格，可横向滚动', headingOffset = 0 }: { source: string; tableLabel?: string; headingOffset?: number }) {
   const theme = useTheme<Theme>();
   const nodes = useMemo(() => parseMarkdown(source), [source]);
   const [linkError, setLinkError] = useState(false);
@@ -40,9 +40,9 @@ export function MarkdownBody({ source }: { source: string }) {
     if (token.type === 'heading_open') {
       const level = Number(token.tag.slice(1));
       const typography = level === 1 ? theme.typography.heading : level === 2 ? theme.typography.section : level === 3 ? theme.typography.body : level === 4 ? theme.typography.label : theme.typography.bodySm;
-      return <Text key={index} selectable accessibilityRole="header" aria-level={level} style={{ ...typography, fontWeight: level >= 5 ? '600' : '700', marginTop: theme.spacing[level <= 2 ? 4 : 2], ...(level === 6 ? { color: theme.colors.inkMuted } : {}) }}>{inline(children[0]?.token.children ?? [])}</Text>;
+      return <Text key={index} selectable accessibilityRole="header" aria-level={Math.min(6, level + headingOffset)} style={{ ...typography, fontWeight: level >= 5 ? '600' : '700', marginTop: theme.spacing[level <= 2 ? 4 : 2], ...(level === 6 ? { color: theme.colors.inkMuted } : {}) }}>{inline(children[0]?.token.children ?? [])}</Text>;
     }
-    if (token.type === 'table_open') return <ScrollView key={index} tabIndex={0} horizontal accessibilityLabel="笔记表格，可横向滚动" style={{ maxWidth: '100%' }}><View role="table">{render(children)}</View></ScrollView>;
+    if (token.type === 'table_open') return <ScrollView key={index} tabIndex={0} horizontal accessibilityLabel={tableLabel} style={{ maxWidth: '100%' }}><View role="table">{render(children)}</View></ScrollView>;
     if (token.type === 'tr_open') return <View key={index} role="row" style={{ flexDirection: 'row' }}>{render(children)}</View>;
     if (token.type === 'th_open' || token.type === 'td_open') {
       const align = token.attrGet('style')?.split(':')[1];

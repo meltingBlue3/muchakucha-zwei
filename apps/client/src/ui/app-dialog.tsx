@@ -21,7 +21,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   onClose(): void;
   trigger: RefObject<View | null>;
   children: ReactNode;
-  size?: 'standard' | 'editor';
+  size?: 'standard' | 'editor' | 'sheet';
   footer?: ReactNode;
   headerActions?: ReactNode;
 }) {
@@ -32,6 +32,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   // On phones an editor fills the screen like a native compose sheet: close on
   // the left, the form's primary action on the right.
   const sheet = size === 'editor' && width < theme.layout.editorSheetBreakpoint;
+  const bottomSheet = size === 'sheet' && width < theme.layout.editorSheetBreakpoint;
   const [sheetAction, setSheetAction] = useState<SheetAction | null>(null);
   const close = useCallback(() => { if (!busy) onClose(); }, [busy, onClose]);
   const focus = useOverlayFocus({ mode: 'dialog', panel, initial, trigger, onClose: close });
@@ -47,10 +48,14 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
     <Modal {...webDialogName(title)} transparent visible animationType="none" onShow={focus} onRequestClose={Platform.OS === 'web' ? undefined : close} statusBarTranslucent navigationBarTranslucent>
       <View style={{ flex: 1 }}>
         <DialogBackdrop onPress={close} />
-        <KeyboardArea pointerEvents="box-none" style={sheet
+        <KeyboardArea pointerEvents="box-none" style={bottomSheet
+          ? { flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + theme.spacing[6] }
+          : sheet
           ? { flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + theme.spacing[2] }
           : { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing[5], paddingTop: insets.top + theme.spacing[5], paddingBottom: insets.bottom + theme.spacing[5] }}>
-          <View ref={panel} testID="app-dialog-panel" {...(Platform.OS === 'web' ? {} : { accessibilityViewIsModal: true, accessibilityLabel: title })} style={sheet
+          <View ref={panel} testID="app-dialog-panel" {...(Platform.OS === 'web' ? {} : { accessibilityViewIsModal: true, accessibilityLabel: title })} style={bottomSheet
+            ? { width: '100%', maxHeight: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, padding: theme.spacing[5], paddingBottom: insets.bottom + theme.spacing[5], gap: theme.spacing[4] }
+            : sheet
             ? { flex: 1, width: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, paddingTop: theme.spacing[2], paddingHorizontal: theme.spacing[2], paddingBottom: insets.bottom + theme.spacing[2], gap: theme.spacing[2] }
             : { width: '100%', maxWidth: size === 'editor' ? theme.layout.editorDialogMaxWidth : theme.layout.dialogMaxWidth, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, borderColor: theme.colors.separator, borderWidth: theme.borderWidths.default, padding: theme.spacing[6], gap: theme.spacing[4] }}>
             {sheet ? (

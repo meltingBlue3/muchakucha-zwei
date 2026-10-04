@@ -167,9 +167,23 @@ async function enterAssistant(page: Page) {
 
 async function openExistingConversation(page: Page) {
   await enterAssistant(page);
+  await openHistory(page);
   await page.getByRole('button', { name: '打开对话：周末准备清单', exact: true }).click();
   await expect(page.getByRole('main', { name: '助手对话', exact: true })).toBeVisible();
   await expect(page.getByText('根据家庭旅行清单，记得带野餐垫和水。', { exact: true })).toBeVisible();
+}
+
+async function openHistory(page: Page) {
+  if ((page.viewportSize()?.width ?? 390) < 1024) await page.getByRole('button', { name: '我的对话', exact: true }).click();
+}
+
+async function openModelSettings(page: Page) {
+  await page.getByRole('button', { name: '助手选项', exact: true }).click();
+  await page.getByRole('button', { name: '模型配置', exact: true }).click();
+}
+
+async function openProposal(page: Page) {
+  if ((page.viewportSize()?.width ?? 390) < 1280) await page.getByRole('button', { name: '查看待确认操作', exact: true }).click();
 }
 
 async function send(page: Page, message: string) {
@@ -189,6 +203,77 @@ async function checkLayout(page: Page, region: Locator) {
 }
 
 for (const width of [320, 390, 1440]) {
+  test(`assistant workspace keeps the composer visible and uses contextual confirmation at ${width}px`, async ({ page }) => {
+    const state = await mockAssistant(page);
+    await page.setViewportSize({ width, height: 900 });
+    await openExistingConversation(page);
+    await send(page, '看看家庭旅行清单');
+    const source = page.getByRole('button', { name: /^查看查询依据：/ });
+    await source.click();
+    const evidence = page.getByRole('dialog', { name: '查询依据', exact: true });
+    await expect(evidence.getByText('家庭旅行清单', { exact: true })).toBeVisible();
+    await expect(evidence.getByText('野餐垫、水和水果。', { exact: true })).toBeVisible();
+    await checkLayout(page, evidence);
+    await page.keyboard.press('Escape');
+    await expect(evidence).toHaveCount(0);
+    await expect(source).toBeFocused();
+    await send(page, '新增一个准备周末野餐的任务');
+    expect(state.businessWrites).toBe(0);
+    await openProposal(page);
+    const preview = width >= 1280 ? page.getByTestId('assistant-inspector') : page.getByRole('dialog', { name: '操作预览', exact: true });
+    await expect(preview.getByRole('button', { name: '确认执行', exact: true })).toBeEnabled();
+    await checkLayout(page, preview);
+    if (width < 600) {
+      const bounds = await preview.getByTestId('app-dialog-panel').boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(Math.abs(bounds!.y + bounds!.height - 900)).toBeLessThan(2);
+    } else {
+      await expect(page.getByRole('tab', { name: '助手', exact: true })).toHaveAttribute('aria-selected', 'true');
+      const transcript = await page.getByTestId('assistant-transcript').boundingBox();
+      const pane = await preview.boundingBox();
+      expect(pane!.x).toBeGreaterThanOrEqual(transcript!.x + transcript!.width - 1);
+    }
+    await page.screenshot({ path: `test-results/assistant-preview-${width}.png`, fullPage: true });
+    await preview.getByRole('button', { name: '调整方案', exact: true }).click();
+    await expect(page.getByLabel('发送给助手', { exact: true })).toHaveValue('请调整刚才的建议：');
+    expect(state.decisions).toMatchObject([{ approve: false }]);
+    expect(state.businessWrites).toBe(0);
+    const selected = state.families.get(householdId)!.conversations[0]!;
+    selected.messages.push({ role: 'assistant', content: '# 出行准备\n\n' + Array.from({ length: 35 }, (_, index) => `${index + 1}. 核对第 ${index + 1} 项家庭出行安排`).join('\n') });
+    await page.getByRole('button', { name: '助手选项', exact: true }).click();
+    await page.getByRole('button', { name: '刷新对话列表和状态', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '出行准备', exact: true })).toHaveCount(1);
+    const sendButton = page.getByRole('button', { name: '发送', exact: true });
+    await expect(sendButton).toBeInViewport();
+    await page.getByTestId('assistant-transcript').evaluate(element => { element.scrollTop = 0; });
+    await expect(sendButton).toBeInViewport();
+    await checkLayout(page, page.getByRole('main', { name: '助手对话', exact: true }));
+    state.nextSend = 'fail';
+    await send(page, '重新检查出行安排');
+    const failure = page.getByRole('alert').filter({ hasText: '已尝试同步对话' });
+    await expect(failure).toBeInViewport();
+    await expect(page.getByLabel('发送给助手', { exact: true })).toHaveValue('重新检查出行安排');
+  });
+}
+
+test('changing models creates a separate conversation and preserves the old history', async ({ page }) => {
+  const state = await mockAssistant(page);
+  const family = state.families.get(householdId)!;
+  const secondId = '77777777-7777-4777-8777-777777777777';
+  family.providers.push({ ...family.providers[0]!, id: secondId, name: '个人备用模型' });
+  await openExistingConversation(page);
+  await page.getByRole('button', { name: '选择模型：我的日常助手', exact: true }).click();
+  await expect(page.getByText('切换模型会开启新对话，当前记录保留。', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '选择 个人备用模型', exact: true }).click();
+  await expect(page.getByRole('button', { name: '选择模型：个人备用模型', exact: true })).toBeVisible();
+  await expect(page.getByRole('main', { name: '助手对话', exact: true }).getByLabel('发送给助手', { exact: true })).toHaveValue('');
+  expect(family.conversations).toHaveLength(2);
+  expect(family.conversations[1]!.providerId).toBe(secondId);
+  expect(family.conversations[1]!.messages).toEqual([]);
+  expect(family.conversations[0]!.messages).toHaveLength(2);
+});
+
+for (const width of [320, 390, 1440]) {
   test(`assistant model setup and a continued conversation fit ${width}px without exposing saved credentials`, async ({ page }) => {
     const state = await mockAssistant(page, { empty: true });
     await page.setViewportSize({ width, height: 900 });
@@ -204,7 +289,7 @@ for (const width of [320, 390, 1440]) {
     await checkLayout(page, dialog);
     await dialog.getByRole('button', { name: '创建', exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    await page.getByRole('button', { name: '模型配置', exact: true }).click();
+    await openModelSettings(page);
     const providers = page.getByRole('main', { name: '助手模型配置', exact: true });
     await expect(providers.getByText('仅自己可用 · 已配置密钥', { exact: true })).toBeVisible();
     await providers.getByRole('button', { name: '添加模型配置', exact: true }).click();
@@ -256,8 +341,9 @@ test('assistant proposals show readable targets and only explicit confirmation c
   const state = await mockAssistant(page);
   await openExistingConversation(page);
   await send(page, '新增一个准备周末野餐的任务，交给小林');
+  await openProposal(page);
   await expect(page.getByRole('heading', { name: '请确认：创建任务', exact: true })).toBeVisible();
-  await expect(page.getByText('准备周末野餐', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '操作预览', exact: true }).getByText('准备周末野餐', { exact: true })).toBeVisible();
   await expect(page.getByText('小林', { exact: true })).toBeVisible();
   await expect(page.getByLabel('发送给助手', { exact: true })).toHaveAttribute('readonly', '');
   await expect(page.getByRole('button', { name: '发送', exact: true })).toBeDisabled();
@@ -266,6 +352,7 @@ test('assistant proposals show readable targets and only explicit confirmation c
   await expect(page.getByText('已取消这次操作，家庭内容没有改变。', { exact: true })).toBeVisible();
   expect(state.businessWrites).toBe(0);
   await send(page, '新增一个准备周末野餐的任务');
+  await openProposal(page);
   await expect(page.getByRole('button', { name: '确认执行', exact: true })).toBeEnabled();
   const gate = deferred();
   state.decisionGate = gate.promise;
@@ -280,6 +367,7 @@ test('assistant proposals show readable targets and only explicit confirmation c
   expect(state.businessWrites).toBe(1);
   expect(state.families.get(householdId)!.tasks).toMatchObject([{ title: '准备周末野餐', assigneeIds: [userId] }]);
   await send(page, '删除家庭旅行清单笔记');
+  await openProposal(page);
   await expect(page.getByRole('heading', { name: '请确认：删除笔记', exact: true })).toBeVisible();
   await expect(page.getByText('家庭旅行清单', { exact: true })).toBeVisible();
   await expect(page.getByText('野餐垫、水和水果。', { exact: true })).toBeVisible();
@@ -303,6 +391,7 @@ test('assistant loading and provider failures recover persisted work without sen
   state.providerGate = null;
   await expect(page.getByRole('alert')).toContainText('模型服务暂时不可用');
   await page.getByRole('button', { name: '重试', exact: true }).click();
+  await openHistory(page);
   await page.getByRole('button', { name: '打开对话：周末准备清单', exact: true }).click();
   state.nextSend = 'fail';
   await send(page, '检查本周出行安排');
@@ -337,14 +426,17 @@ test('switching households separates private history, composer state and shared-
   await expect(page).toHaveURL(`/households/${secondHouseholdId}/more`);
   const requestsBeforeSecondHousehold = state.requests.length;
   await page.getByRole('button', { name: '打开家庭助手', exact: true }).click();
+  await openHistory(page);
   await expect(page.getByRole('button', { name: '打开对话：探望安排', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '打开对话：周末准备清单', exact: true })).toHaveCount(0);
   await expect(page.getByText('我的日常助手', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: '模型配置', exact: true }).click();
+  await page.getByRole('button', { name: '关闭我的对话', exact: true }).click();
+  await openModelSettings(page);
   const providers = page.getByRole('main', { name: '助手模型配置', exact: true });
   await expect(providers.getByText('父母共享模型', { exact: true })).toBeVisible();
   await expect(providers.getByRole('button', { name: /^编辑模型配置：|^删除模型配置：/ })).toHaveCount(0);
   await providers.getByRole('button', { name: '返回', exact: true }).click();
+  await openHistory(page);
   await page.getByRole('button', { name: '打开对话：探望安排', exact: true }).click();
   await expect(page.getByText('周日一起去公园散步。', { exact: true })).toBeVisible();
   await expect(page.getByLabel('发送给助手', { exact: true })).toHaveValue('');

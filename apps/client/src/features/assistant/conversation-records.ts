@@ -4,6 +4,7 @@ export interface AssistantConversationRecord {
   kind: 'user' | 'assistant' | 'query' | 'operation';
   content: string;
   failed?: boolean;
+  sources?: Array<{ title: string; excerpt: string }>;
 }
 
 const resources: Record<string, string> = { event: '日程', events: '日程', task: '任务', tasks: '任务', note: '笔记', notes: '笔记', label: '标签', labels: '标签' };
@@ -34,6 +35,16 @@ function rememberTitle(value: unknown, titles: Map<string, string>): void {
   if (title !== null) titles.set(row.id, title);
 }
 
+function source(value: unknown): Array<{ title: string; excerpt: string }> {
+  const row = object(value);
+  if (!row) return [];
+  const title = typeof row.title === 'string' ? row.title : typeof row.name === 'string' ? row.name : null;
+  if (!title) return [];
+  const excerpt = typeof row.body === 'string' ? row.body : typeof row.description === 'string' ? row.description : '';
+  const partial = excerpt.length > 1600 || row.contentTruncated === true || Array.isArray(row.truncatedFields) && row.truncatedFields.length > 0;
+  return [{ title, excerpt: partial ? `${excerpt.slice(0, 1600)}…（节选）` : excerpt }];
+}
+
 /** Show persisted observations separately from model prose, without exposing tool JSON. */
 export function assistantConversationRecords(messages: AssistantConversationResponseDto['messages']): AssistantConversationRecord[] {
   const titles = new Map<string, string>();
@@ -59,10 +70,10 @@ export function assistantConversationRecords(messages: AssistantConversationResp
     if (Array.isArray(data?.items)) {
       data.items.forEach(item => rememberTitle(item, titles));
       const more = data.truncated === true || data.nextOffset !== null && data.nextOffset !== undefined;
-      return [{ kind, content: `${title}：本次返回 ${data.items.length} 项${typeof data.total === 'number' ? `，共 ${data.total} 项` : ''}${more ? '（结果仅含部分内容）' : ''}。` }];
+      return [{ kind, content: `${title}：本次返回 ${data.items.length} 项${typeof data.total === 'number' ? `，共 ${data.total} 项` : ''}${more ? '（结果仅含部分内容）' : ''}。`, ...(querying ? { sources: data.items.flatMap(source) } : {}) }];
     }
     const target = data && typeof data.id === 'string' ? titles.get(data.id) : undefined;
     const scope = data?.scope === 'this_only' ? '（仅此次安排）' : '';
-    return [{ kind, content: `${title}成功${target ? `：${target}` : ''}${scope}。` }];
+    return [{ kind, content: `${title}成功${target ? `：${target}` : ''}${scope}。`, ...(querying ? { sources: source(data) } : {}) }];
   });
 }

@@ -275,6 +275,7 @@ export function ConfirmActions({
 }
 
 type IconButtonProps = Omit<PressableProps, 'children'> & {
+  ref?: React.Ref<View>;
   icon: ReactElement;
   label: string;
   visibleLabel?: boolean;

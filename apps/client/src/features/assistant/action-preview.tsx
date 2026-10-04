@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import type { AssistantConversationResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient } from '../auth/session-runtime';
-import { Banner, ConfirmActions, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
-import { DetailField, DetailPanel } from '../../ui/detail-fields';
+import { Banner, Button, ConfirmActions, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
+import { DetailField } from '../../ui/detail-fields';
 import { formatDate, formatDateTime } from '../../ui/date-values';
 import { useAssistantQuery } from './assistant-runtime';
 
@@ -61,8 +61,8 @@ export function assistantActionDetails(action: PendingAction, context: ActionPre
   return { title: supported ? `${verbs[verb]}${names[resource]}` : '待确认操作', destructive: verb === 'delete', supported, stale, unresolved, fields };
 }
 
-export function AssistantActionPreview({ householdId, action, busy, disabled = false, onDecide }: {
-  householdId: string; action: PendingAction; busy: boolean; disabled?: boolean; onDecide: (approve: boolean) => void;
+export function AssistantActionPreview({ householdId, action, busy, disabled = false, onDecide, onAdjust }: {
+  householdId: string; action: PendingAction; busy: boolean; disabled?: boolean; onDecide: (approve: boolean) => void; onAdjust?: () => void;
 }) {
   const load = useCallback(async (token: string): Promise<ActionPreviewContext> => {
     const [verb, resource] = action.name.split('_');
@@ -90,9 +90,9 @@ export function AssistantActionPreview({ householdId, action, busy, disabled = f
   }, [householdId, action]);
   const query = useAssistantQuery(load);
   const details = assistantActionDetails(action, query.data ?? { target: null, labels: {}, members: {} });
-  return <DetailPanel>
+  return <Stack gap={4}>
     <Heading variant="section">请确认：{details.title}</Heading>
-    <Text variant="bodySm">确认后，助手将把以下操作应用到当前家庭。请核对内容和时间。</Text>
+    <Text variant="bodySm">核对后再执行，家人可看到修改后的内容。</Text>
     <Text variant="caption">时间按本机时区显示：{Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}</Text>
     {query.loading && !query.data ? <LoadingState label="正在核对操作内容" /> : null}
     {query.error ? <LoadError message="无法核对操作对象，请重试，或取消这次操作。" retrying={query.loading} disabled={busy} onRetry={() => { void query.reload(); }} /> : null}
@@ -113,5 +113,6 @@ export function AssistantActionPreview({ householdId, action, busy, disabled = f
     <ConfirmActions cancelLabel="取消操作" confirmLabel={details.destructive ? '确认删除' : '确认执行'} destructive={details.destructive} busy={busy}
       confirmDisabled={disabled || query.loading || query.data === null || query.error !== null || details.stale || details.unresolved || !details.supported}
       onCancel={() => onDecide(false)} onConfirm={() => onDecide(true)} />
-  </DetailPanel>;
+    {onAdjust ? <><Button label="调整方案" tone="secondary" disabled={busy || disabled} onPress={onAdjust} /><Text variant="caption">取消当前草稿，回到对话描述你的修改。</Text></> : null}
+  </Stack>;
 }
