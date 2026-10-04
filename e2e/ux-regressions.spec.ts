@@ -274,7 +274,8 @@ for (const width of [320, 390, 1440]) {
       else await page.getByRole('tab', { name: title, exact: true }).click();
       await expect(page.getByRole('heading', { name: title, exact: true, level: 1 })).toBeVisible();
       const navigation = page.getByRole('tablist', { name: '家庭主导航' });
-      await expect(navigation.getByRole('tab')).toHaveCount(5);
+      await expect(navigation.getByRole('tab')).toHaveCount(width >= 1024 ? 6 : 5);
+      if (width >= 1024) await expect(navigation.getByRole('tab', { name: '助手', exact: true })).toBeVisible();
       const navBounds = await navigation.boundingBox();
       expect(navBounds).not.toBeNull();
       expect(navBounds!.y + navBounds!.height).toBeLessThanOrEqual(901);

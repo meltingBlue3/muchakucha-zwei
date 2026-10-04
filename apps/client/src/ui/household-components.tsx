@@ -68,6 +68,8 @@ interface AppShellProps {
   floatingAction?: React.ReactNode;
   /** A notice floating at the top of the content; a touch anywhere else dismisses it. */
   notice?: ActionNoticeProps | null;
+  /** A workspace owns its scrolling areas and persistent composer. */
+  layout?: 'document' | 'workspace';
 }
 
 export const AppShell = ({
@@ -84,6 +86,7 @@ export const AppShell = ({
   headerContent,
   floatingAction,
   notice,
+  layout = 'document',
 }: AppShellProps) => {
   const router = useRouter();
   const blurTarget = useRef<View>(null);
@@ -168,7 +171,7 @@ export const AppShell = ({
       ) : null}
       {/* Its parent starts below the status bar, which the keyboard view cannot see. */}
       <KeyboardArea style={{ flex: 1 }} windowOffset={insets.top}>
-        <ScrollView
+        {layout === 'workspace' ? children : <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
             paddingHorizontal: width < theme.breakpoints.mobile ? theme.layout.compactInset : theme.layout.mobileInset,
@@ -192,7 +195,7 @@ export const AppShell = ({
           }
         >
           <PageCreateActionContext.Provider value={desktopActions ? floatingAction : null}>{children}</PageCreateActionContext.Provider>
-        </ScrollView>
+        </ScrollView>}
         {floatingAction && !desktopActions ? <View pointerEvents="box-none" style={{ position: 'absolute', right: theme.layout.mobileInset, bottom: theme.spacing[4] }}>{floatingAction}</View> : null}
         {notice ? <View pointerEvents="box-none" style={{ position: 'absolute', top: theme.spacing[2], left: theme.layout.mobileInset, right: theme.layout.mobileInset, alignItems: 'center' }}><ActionNotice {...notice} onTouchCapture={noticeDismissal.noticeCapture} /></View> : null}
       </KeyboardArea>

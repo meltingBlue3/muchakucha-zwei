@@ -3,6 +3,8 @@ import FileText from 'lucide-react-native/icons/file-text';
 import ListTodo from 'lucide-react-native/icons/list-todo';
 import House from 'lucide-react-native/icons/house';
 import Sunrise from 'lucide-react-native/icons/sunrise';
+import Sparkles from 'lucide-react-native/icons/sparkles';
+import type { ReactNode } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 
@@ -17,17 +19,18 @@ const destinations = [
   { key: 'more', label: '家庭', icon: House },
 ] as const;
 
-export type HouseholdTab = typeof destinations[number]['key'];
+export type HouseholdTab = typeof destinations[number]['key'] | 'assistant';
 
-export function HouseholdNavigation({ householdId, active }: { householdId: string; active: HouseholdTab }) {
+export function HouseholdNavigation({ householdId, active, children }: { householdId: string; active: HouseholdTab; children?: ReactNode }) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const wide = width >= theme.layout.navigationBreakpoint;
+  const visibleDestinations = wide ? [...destinations.slice(0, 4), { key: 'assistant' as const, label: '助手', icon: Sparkles }, destinations[4]] : destinations;
   return (
     <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: wide ? 0 : theme.borderWidths.default, borderTopColor: theme.colors.separator, borderRightWidth: wide ? theme.borderWidths.default : 0, borderRightColor: theme.colors.separator, width: wide ? theme.layout.navigationWidth : '100%', padding: wide ? theme.spacing[5] : theme.spacing[2], gap: theme.spacing[10] }}>
       {wide ? <View style={{ paddingTop: theme.spacing[4] }}><BrandMark /></View> : null}
       <View accessibilityRole="tablist" accessibilityLabel="家庭主导航" style={{ flexDirection: wide ? 'column' : 'row', width: '100%', maxWidth: theme.layout.householdMaxWidth, alignSelf: 'center', gap: theme.spacing[1] }}>
-        {destinations.map(({ key, label, icon: Icon }) => (
+        {visibleDestinations.map(({ key, label, icon: Icon }) => (
           <Pressable
             key={key}
             accessibilityRole="tab"
@@ -44,6 +47,7 @@ export function HouseholdNavigation({ householdId, active }: { householdId: stri
           </Pressable>
         ))}
       </View>
+      {wide ? children : null}
     </View>
   );
 }

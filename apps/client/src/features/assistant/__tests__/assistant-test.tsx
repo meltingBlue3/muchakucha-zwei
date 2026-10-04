@@ -5,6 +5,7 @@ import { AssistantProviderForm } from '../provider-form';
 import { AssistantConversationPanel } from '../conversation-panel';
 import { AssistantActionPreview, assistantActionDetails } from '../action-preview';
 import { useAssistantQuery } from '../assistant-runtime';
+import { assistantConversationRecords } from '../conversation-records';
 import { sessionApiClient } from '../../auth/session-runtime';
 
 jest.mock('expo-router', () => ({ useFocusEffect: (effect: () => void | (() => void)) => {
@@ -14,6 +15,19 @@ jest.mock('../../auth/session-runtime', () => ({ sessionTransport: { getAccessTo
 
 const provider: AssistantProviderResponseDto = { id: 'provider', name: '我的模型', protocol: 'openai-compatible', baseUrl: 'https://api.example.com/v1', model: 'family-model', visibility: 'private', ownedByMe: true, hasCredential: true, updatedAt: '2026-10-04T00:00:00.000Z' };
 const conversation: AssistantConversationResponseDto = { id: 'chat', title: '家庭安排', providerId: 'provider', version: 1, state: 'idle', messages: [], pendingAction: null, updatedAt: '2026-10-04T00:00:00.000Z' };
+
+test('query evidence uses saved tool data, marks partial content and excludes model claims and write results', () => {
+  const records = assistantConversationRecords([
+    { role: 'assistant', content: '声称读过但没有查询过的笔记' },
+    { role: 'tool', content: JSON.stringify({ ok: true, tool: 'list_notes', data: { items: [{ title: '已查询的笔记', body: '查询时的原文', truncatedFields: ['body'] }], total: 1, nextOffset: null } }) },
+    { role: 'tool', content: JSON.stringify({ ok: true, tool: 'get_note', data: { id: 'note', title: '分段读取', body: '第二段', contentTruncated: true } }) },
+    { role: 'tool', content: JSON.stringify({ ok: true, tool: 'create_note', data: { id: 'created', title: '刚创建的笔记', body: '不是查询依据' } }) },
+  ]);
+  expect(records[0]?.sources).toBeUndefined();
+  expect(records[1]?.sources).toEqual([{ title: '已查询的笔记', excerpt: '查询时的原文…（节选）' }]);
+  expect(records[2]?.sources).toEqual([{ title: '分段读取', excerpt: '第二段…（节选）' }]);
+  expect(records[3]?.sources).toBeUndefined();
+});
 
 test('editing a provider retains its secret by omitting a blank credential', async () => {
   const submit = jest.fn().mockResolvedValue(undefined);

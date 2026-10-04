@@ -1,27 +1,38 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
+import ListChecks from 'lucide-react-native/icons/list-checks';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { sessionApiClient } from '../auth/session-runtime';
-import { AppShell } from '../../ui/household-components';
-import { PageIntro } from '../../ui/page-intro';
+import { AppDialog } from '../../ui/app-dialog';
+import { theme } from '../../ui/theme';
 import { Banner, Button, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { AssistantBoundary, assistantPath, type AssistantHouseholdProps } from './assistant-boundary';
 import { useAssistantOperation, useAssistantQuery } from './assistant-runtime';
 import { AssistantConversationPanel } from './conversation-panel';
 import { AssistantActionPreview } from './action-preview';
+import { AssistantWorkspace } from './assistant-workspace';
+import { AssistantModelPicker } from './model-picker';
 
 function Conversation({ householdId, householdName, writable, conversationId }: AssistantHouseholdProps & { conversationId: string }) {
   const router = useRouter();
+  const inspector = useWindowDimensions().width >= theme.layout.assistantInspectorBreakpoint;
+  const trigger = useRef<View>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [draft, setDraft] = useState<{ value: string; revision: number }>();
   const load = useCallback(async (token: string) => {
-    const [conversation, providers] = await Promise.all([
+    const [conversation, providers, history] = await Promise.all([
       sessionApiClient.getAssistantConversation(token, householdId, conversationId),
       sessionApiClient.listAssistantProviders(token, householdId),
+      sessionApiClient.listAssistantConversations(token, householdId),
     ]);
-    return { conversation, providers: providers.providers };
+    return { conversation, providers: providers.providers, history: history.conversations };
   }, [householdId, conversationId]);
   const query = useAssistantQuery(load);
   const operation = useAssistantOperation();
   const conversation = query.data?.conversation;
   const provider = query.data?.providers.find(item => item.id === conversation?.providerId);
+  const history = query.data?.history.map(item => item.id === conversation?.id ? { ...item, title: conversation.title, updatedAt: conversation.updatedAt } : item) ?? [];
   const send = async (message: string): Promise<boolean> => {
     if (!conversation || !writable || !provider || conversation.state === 'running') return false;
     const result = await operation.run(token => sessionApiClient.sendAssistantMessage(token, householdId, conversationId, {
@@ -35,17 +46,23 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
     await query.reload();
     return false;
   };
-  const decide = async (approve: boolean) => {
-    if (!conversation || !writable || conversation.state === 'running') return;
+  const decide = async (approve: boolean): Promise<boolean> => {
+    if (!conversation || !writable || conversation.state === 'running') return false;
     const result = await operation.run(token => sessionApiClient.decideAssistantAction(token, householdId, conversationId, { approve, expectedVersion: conversation.version }));
-    if (result) query.setData(current => current ? { ...current, conversation: result.value } : current);
-    else await query.reload();
+    if (result) {
+      query.setData(current => current ? { ...current, conversation: result.value } : current);
+      setPreviewOpen(false);
+      return true;
+    }
+    await query.reload();
+    return false;
   };
-  return <AppShell title="助手对话" showBack accessibilityLabel="助手对话" refreshing={query.loading && query.data !== null} onRefresh={() => { if (!operation.busy) void query.reload(); }}>
-    <Stack gap={4}>
-      <PageIntro title="助手" action={conversation ? <Button label="删除对话" tone="secondary" disabled={operation.busy || conversation.state === 'running' || !writable} onPress={() => router.push(`${assistantPath(householdId)}/conversations/${encodeURIComponent(conversationId)}/delete`)} /> : null} />
-      <Text variant="bodySm" color="inkMuted">{householdName} · {provider?.name ?? '模型配置不可用'} · 对话仅自己可见</Text>
-      {provider ? <Text variant="caption">本次对话和查询到的家庭数据将发送至 {provider.baseUrl}。{provider.ownedByMe ? '' : '使用家人共享的模型额度。'}</Text> : null}
+  const start = async (providerId: string) => {
+    if (!writable || operation.busy || conversation?.pendingAction || conversation?.state === 'running') return;
+    const result = await operation.run(token => sessionApiClient.createAssistantConversation(token, householdId, { providerId }));
+    if (result) router.push(`${assistantPath(householdId)}/conversations/${encodeURIComponent(result.value.id)}`);
+  };
+  const feedback = <Stack gap={3}>
       {query.error ? <LoadError message={query.error} retrying={query.loading} disabled={operation.busy} onRetry={() => { void query.reload(); }} /> : null}
       {operation.error ? <Banner>{operation.error} 已尝试同步对话，请查看最新结果。</Banner> : null}
       {!writable ? <Banner>当前离线，请恢复连接后继续对话。</Banner> : null}
@@ -53,11 +70,26 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
       {conversation ? <>
         {!provider ? <Banner>这段对话的模型配置已删除或不再共享。历史内容仍可查看，请返回助手首页选择可用模型开始对话。</Banner> : null}
         {conversation.state === 'running' ? <Button label="刷新处理结果" tone="secondary" loading={query.loading} disabled={operation.busy} onPress={() => { void query.reload(); }} /> : null}
-        {conversation.pendingAction ? <AssistantActionPreview key={`${conversation.id}:${conversation.version}`} householdId={householdId} action={conversation.pendingAction} busy={operation.busy || !writable || conversation.state === 'running'} disabled={!provider || !writable || query.loading || query.error !== null} onDecide={approve => { void decide(approve); }} /> : null}
-        <AssistantConversationPanel conversation={conversation} busy={operation.busy} disabled={!writable || !provider || query.loading} onSend={send} />
       </> : null}
-    </Stack>
-  </AppShell>;
+    </Stack>;
+  const pending = conversation?.pendingAction;
+  const preview = pending && conversation ? <AssistantActionPreview key={`${conversation.id}:${conversation.version}`} householdId={householdId} action={pending} busy={operation.busy || !writable || conversation.state === 'running'} disabled={!provider || !writable || query.loading || query.error !== null}
+    onDecide={approve => { void decide(approve); }} onAdjust={() => { void decide(false).then(success => { if (success) setDraft(current => ({ value: '请调整刚才的建议：', revision: (current?.revision ?? 0) + 1 })); }); }} /> : null;
+  const previewLink = pending ? <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="查看待确认操作" accessibilityState={{ disabled: operation.busy }} disabled={operation.busy}
+    onPress={() => setPreviewOpen(true)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], padding: theme.spacing[4], backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface, borderRadius: theme.borderRadii.lg, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator })}>
+    <ListChecks color={theme.colors.teal} size={theme.controlSizes.icon} /><Stack gap={1} style={{ flex: 1 }}><Text variant="label">{typeof pending.arguments.title === 'string' ? pending.arguments.title : '有一项操作需要你确认'}</Text><Text variant="caption">查看内容 · 确认后才会执行</Text></Stack><ChevronRight color={theme.colors.inkMuted} size={theme.controlSizes.icon} />
+  </Pressable> : null;
+  return <AssistantWorkspace householdId={householdId} householdName={householdName} title={conversation?.title ?? '家庭助手'} conversationId={conversationId} conversations={history}
+    busy={operation.busy} onRefresh={() => { if (!operation.busy) void query.reload(); }}
+    {...(conversation && conversation.state !== 'running' && writable ? { onDelete: () => router.push(`${assistantPath(householdId)}/conversations/${encodeURIComponent(conversationId)}/delete`) } : {})}>
+    <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}>
+      {conversation ? <AssistantConversationPanel conversation={conversation} busy={operation.busy} disabled={!writable || !provider || query.loading} onSend={send} feedback={feedback}
+        {...(draft ? { draft } : {})} pendingPreview={inspector ? null : previewLink}
+        modelControl={<AssistantModelPicker householdId={householdId} providers={query.data?.providers ?? []} selectedId={conversation.providerId} busy={operation.busy || !writable || Boolean(pending) || conversation.state === 'running'} newConversation onSelect={id => { void start(id); }} />} /> : <ScrollView contentContainerStyle={{ padding: theme.spacing[5] }}>{feedback}</ScrollView>}
+      {inspector && preview ? <ScrollView testID="assistant-inspector" style={{ width: theme.layout.assistantInspectorWidth, flexGrow: 0, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator, backgroundColor: theme.colors.surface }} contentContainerStyle={{ padding: theme.spacing[5] }}>{preview}</ScrollView> : null}
+    </View>
+    {!inspector && previewOpen && preview ? <AppDialog title="操作预览" size="sheet" trigger={trigger} busy={operation.busy} onClose={() => setPreviewOpen(false)}>{operation.error ? <Banner>{operation.error} 已尝试同步对话，请查看最新结果。</Banner> : null}{preview}</AppDialog> : null}
+  </AssistantWorkspace>;
 }
 
 export default function AssistantConversationScreen() {
