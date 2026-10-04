@@ -456,6 +456,7 @@ export class EventsService {
     actorId: string,
     householdId: string,
     eventId: string,
+    expected?: { expectedUpdatedAt: string; expectedRuleUpdatedAt?: string },
   ): Promise<void> {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
@@ -473,7 +474,7 @@ export class EventsService {
     // dedupes on the row itself, so a missing row reads as "not yet
     // generated" and the occurrence would come back on the next tick (D-07).
     await this.prisma.$transaction(async (tx) => {
-      const updatedAt = await lockContent(tx, 'event', householdId, eventId);
+      const updatedAt = await lockContent(tx, 'event', householdId, eventId, expected);
       if (event.recurrenceRuleId !== null) {
         await tx.event.update({ where: { id: eventId }, data: { cancelledAt: new Date(), updatedAt } });
       } else {

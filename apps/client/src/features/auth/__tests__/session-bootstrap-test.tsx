@@ -29,6 +29,9 @@ const householdPageSuffixes = [
   '/ownership/transfer', '/ownership/leave',
   `/members/${resourceId}/role`, `/members/${resourceId}/remove`,
   `/invitations/${resourceId}/revoke`,
+  '/assistant', '/assistant/providers', '/assistant/providers/new',
+  `/assistant/providers/${resourceId}/edit`, `/assistant/providers/${resourceId}/delete`,
+  `/assistant/conversations/${resourceId}`, `/assistant/conversations/${resourceId}/delete`,
 ];
 
 function deferred<T>() {
@@ -162,6 +165,14 @@ describe('session bootstrap contract', () => {
   test.each([
     `${householdRoute}/calendar`,
     `${householdRoute}/tasks/archive`,
+    `${householdRoute}/assistant/unknown`,
+    `${householdRoute}/assistant/providers/${resourceId}`,
+    `${householdRoute}/assistant/providers/new/edit`,
+    `${householdRoute}/assistant/providers/${resourceId}/edit/extra`,
+    `${householdRoute}/assistant/conversations`,
+    `${householdRoute}/assistant/conversations/not-a-uuid`,
+    `${householdRoute}/assistant/conversations/${resourceId}/edit`,
+    `${householdRoute}/assistant/conversations/${resourceId}/delete/extra`,
     `${householdRoute}/tasks/${resourceId}/unsupported`,
     `${householdRoute}/events/new/edit`,
     `${householdRoute}/labels/${resourceId}`,

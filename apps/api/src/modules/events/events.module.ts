@@ -7,5 +7,6 @@ import { RecurrenceModule } from '../recurrence/recurrence.module.js';
   imports: [RecurrenceModule],
   controllers: [EventsController],
   providers: [EventsService],
+  exports: [EventsService],
 })
 export class EventsModule {}

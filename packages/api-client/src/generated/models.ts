@@ -398,3 +398,41 @@ export interface LabelListResponseDto {
 export interface TagEntitiesDto {
   labelIds: string[];
 }
+
+export interface CreateAssistantProviderDto {
+  name: string;
+  protocol: 'openai-compatible' | 'anthropic';
+  baseUrl: string;
+  model: string;
+  visibility: 'private' | 'household';
+  apiKey: string;
+}
+export interface UpdateAssistantProviderDto extends Partial<CreateAssistantProviderDto> {
+  expectedUpdatedAt: string;
+}
+export interface AssistantProviderResponseDto {
+  id: string;
+  name: string;
+  protocol: 'openai-compatible' | 'anthropic';
+  baseUrl: string;
+  model: string;
+  visibility: 'private' | 'household';
+  ownedByMe: boolean;
+  hasCredential: boolean;
+  updatedAt: string;
+}
+export interface AssistantProviderListResponseDto { providers: AssistantProviderResponseDto[] }
+export interface CreateAssistantConversationDto { providerId: string }
+export interface SendAssistantMessageDto { message: string; timeZone: string; expectedVersion: number }
+export interface DecideAssistantActionDto { approve: boolean; expectedVersion: number }
+export interface AssistantVisibleMessageDto { role: 'user' | 'assistant' | 'tool'; content: string }
+export interface AssistantPendingActionDto { name: string; arguments: Record<string, unknown> }
+export interface AssistantConversationSummaryDto { id: string; title: string; updatedAt: string }
+export interface AssistantConversationListResponseDto { conversations: AssistantConversationSummaryDto[] }
+export interface AssistantConversationResponseDto extends AssistantConversationSummaryDto {
+  providerId: string | null;
+  version: number;
+  state: 'idle' | 'running';
+  messages: AssistantVisibleMessageDto[];
+  pendingAction: AssistantPendingActionDto | null;
+}

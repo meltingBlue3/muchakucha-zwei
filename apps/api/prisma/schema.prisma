@@ -57,6 +57,8 @@ model Membership {
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   household    Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
   ownedHousehold Household? @relation("HouseholdOwner")
+  assistantProviders AssistantProvider[]
+  assistantConversations AssistantConversation[]
   sentInvitations  Invitation[]
 
   @@unique([userId, householdId], map: "Membership_user_id_household_id_key")
@@ -270,4 +272,44 @@ model TaskAssignee {
   @@id([taskId, userId])
   @@index([userId], map: "TaskAssignee_user_idx")
   @@map("task_assignees")
+}
+
+model AssistantProvider {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId String @map("household_id") @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+  name String @db.VarChar(80)
+  protocol String @db.VarChar(24)
+  baseUrl String @map("base_url") @db.VarChar(500)
+  model String @db.VarChar(120)
+  visibility String @default("private") @db.VarChar(16)
+  encryptedApiKey String @map("encrypted_api_key") @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  ownerMembership Membership @relation(fields: [ownerId, householdId], references: [userId, householdId], onDelete: Cascade, map: "assistant_providers_owner_fkey")
+  conversations AssistantConversation[]
+
+  @@index([householdId, visibility], map: "AssistantProvider_household_visibility_idx")
+  @@map("assistant_providers")
+}
+
+model AssistantConversation {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId String @map("household_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  providerId String? @map("provider_id") @db.Uuid
+  providerVersion DateTime @map("provider_version") @db.Timestamptz(3)
+  title String @default("新对话") @db.VarChar(100)
+  messages Json @default("[]")
+  pendingAction Json? @map("pending_action")
+  version Int @default(0)
+  state String @default("idle") @db.VarChar(16)
+  timeZone String @default("Asia/Shanghai") @map("time_zone") @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  ownerMembership Membership @relation(fields: [userId, householdId], references: [userId, householdId], onDelete: Cascade, map: "assistant_conversations_owner_fkey")
+  provider AssistantProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull, map: "assistant_conversations_provider_fkey")
+
+  @@index([householdId, userId, updatedAt], map: "AssistantConversation_owner_updated_idx")
+  @@map("assistant_conversations")
 }
