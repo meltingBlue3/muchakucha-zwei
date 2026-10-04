@@ -19,6 +19,7 @@ Read this index only when the owning module or entry point of a request is uncle
 | Tasks, filters, status transitions | `src/features/tasks/` |
 | Recurrence pickers, summaries, series scope | `src/features/recurrence/` |
 | Notes and labels | `src/features/notes/`, `src/features/labels/` |
+| Assistant conversations, model settings, action previews | `src/features/assistant/`; routes under `app/(protected)/households/[id]/assistant/` |
 | Shared UI, theme tokens, dialogs | `src/ui/` — see [../design.md](../design.md) |
 | Native/Web differences | `src/platform/` — one file per platform suffix (`.native.ts`, `.web.ts`) behind a shared type |
 
@@ -30,6 +31,7 @@ Read this index only when the owning module or entry point of a request is uncle
 | Current user and profile | `src/modules/users/` |
 | Households, invitations, roles, ownership | `src/modules/households/`; pure governance decisions in `household-policy.ts` |
 | Events, tasks, notes, labels | `src/modules/events/`, `tasks/`, `notes/`, `labels/` |
+| Assistant providers, encrypted credentials, tool registry, confirmation loop | `src/modules/assistant/`; architecture and extension points in `docs/ai-assistant-research.md` |
 | Recurrence rules, materialization, scheduling | `src/modules/recurrence/` |
 | Prisma client lifecycle | `src/infrastructure/prisma/` |
 

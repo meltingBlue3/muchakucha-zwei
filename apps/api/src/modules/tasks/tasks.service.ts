@@ -443,6 +443,7 @@ export class TasksService {
     actorId: string,
     householdId: string,
     taskId: string,
+    expected?: { expectedUpdatedAt: string; expectedRuleUpdatedAt?: string },
   ): Promise<void> {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
@@ -464,7 +465,7 @@ export class TasksService {
     // generated" and the occurrence would come back on the next tick (D-07).
     await this.prisma.$transaction(async (tx) => {
       await lockTaskAssignments(tx, householdId);
-      const updatedAt = await lockContent(tx, 'task', householdId, taskId);
+      const updatedAt = await lockContent(tx, 'task', householdId, taskId, expected);
       if (task.recurrenceRuleId !== null) {
         await tx.task.update({ where: { id: taskId }, data: { status: 'cancelled', updatedAt } });
       } else {

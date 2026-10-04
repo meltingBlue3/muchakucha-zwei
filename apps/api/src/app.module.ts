@@ -10,6 +10,7 @@ import { NotesModule } from './modules/notes/notes.module.js';
 import { LabelsModule } from './modules/labels/labels.module.js';
 import { HouseholdsModule } from './modules/households/households.module.js';
 import { UsersModule } from './modules/users/users.module.js';
+import { AssistantModule } from './modules/assistant/assistant.module.js';
 
 @Module({})
 export class AppModule {
@@ -39,6 +40,7 @@ export class AppModule {
         TasksModule,
         NotesModule,
         LabelsModule,
+        AssistantModule.register(environment),
       ],
       providers: [
         {

@@ -151,6 +151,7 @@ export class NotesService {
     actorId: string,
     householdId: string,
     noteId: string,
+    expected?: { expectedUpdatedAt: string },
   ): Promise<void> {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
@@ -167,7 +168,10 @@ export class NotesService {
       });
     }
 
-    await this.prisma.note.delete({ where: { id: noteId } });
+    await this.prisma.$transaction(async tx => {
+      await lockContent(tx, 'note', householdId, noteId, expected);
+      await tx.note.delete({ where: { id: noteId } });
+    });
   }
 
   private toResponse(row: NoteRow): NoteResponseDto {

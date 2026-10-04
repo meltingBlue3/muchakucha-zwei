@@ -20,6 +20,19 @@ function isHouseholdPage(value: string): boolean {
   if (prefix !== '' || root !== 'households' || !isUuid(householdId)) return false;
   const [section, resourceId, action] = segments;
   if (section === undefined) return true;
+  if (section === 'assistant') {
+    const [, collection, itemId, itemAction] = segments;
+    if (segments.length === 1) return true;
+    if (collection === 'providers') {
+      return (segments.length === 2)
+        || (segments.length === 3 && itemId === 'new')
+        || (segments.length === 4 && isUuid(itemId) && (itemAction === 'edit' || itemAction === 'delete'));
+    }
+    if (collection === 'conversations' && isUuid(itemId)) {
+      return segments.length === 3 || (segments.length === 4 && itemAction === 'delete');
+    }
+    return false;
+  }
   if (segments.length === 1) return HOUSEHOLD_PAGES.has(section);
   if (segments.length === 2) {
     if (section === 'ownership') return resourceId === 'transfer' || resourceId === 'leave';

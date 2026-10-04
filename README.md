@@ -1,6 +1,6 @@
 # Muchakucha Zwei（ムチャクチャ 2号）
 
-共享家庭协作应用 — 让家庭成员在移动优先的体验中管理日程、任务、笔记和标签。Android 与 iOS 为主要平台，Web 为次要平台。
+共享家庭协作应用 — 让家庭成员在移动优先的体验中管理日程、任务、笔记和标签，也可通过自带模型的 AI 助手查询和整理内容。Android 与 iOS 为主要平台，Web 为次要平台。
 
 ## 技术栈
 
@@ -13,6 +13,7 @@
 | **ORM** | Prisma 7 + `@prisma/adapter-pg` |
 | **认证** | Argon2 密码哈希；HS256 Access Token（15 分钟，仅存内存）+ 轮换 Refresh Token（原生 SecureStore / Web HttpOnly Cookie） |
 | **API 契约** | 由 `generate-openapi.ts` 生成 `packages/api-client`（OpenAPI JSON + TypeScript 客户端） |
+| **AI 助手** | 自带 OpenAI 兼容 / Anthropic 模型；服务端工具调用、受限 ReAct 循环、写入确认与加密凭证 |
 | **测试** | Vitest（API 单元 / 集成）、Jest + Testing Library（客户端）、Playwright（Web E2E + 无障碍） |
 | **包管理** | pnpm 10 workspace monorepo（不要使用 npm 安装） |
 
@@ -25,7 +26,7 @@ muchakucha-zwei/
 │   │   ├── prisma/                # schema.prisma 与迁移
 │   │   ├── src/
 │   │   │   ├── infrastructure/    # Prisma 数据库适配器
-│   │   │   ├── modules/           # auth、users、households、events、tasks、recurrence、notes、labels
+│   │   │   ├── modules/           # auth、users、households、events、tasks、recurrence、notes、labels、assistant
 │   │   │   └── openapi/           # OpenAPI 契约与客户端生成器
 │   │   └── test/                  # 集成测试（会清空测试库）
 │   └── client/                    # Expo 跨平台客户端
@@ -33,7 +34,7 @@ muchakucha-zwei/
 │       │   ├── (auth)/            # 登录、注册、离线页
 │       │   └── (protected)/       # 需登录：家庭列表、个人中心、家庭内各页面
 │       └── src/
-│           ├── features/          # auth、households、events、tasks、recurrence、notes、labels、profile
+│           ├── features/          # auth、households、events、tasks、recurrence、notes、labels、profile、assistant
 │           ├── platform/          # 原生 / Web 差异适配（会话、当前家庭、邀请、浮层焦点、字体）
 │           └── ui/                # 共享组件与主题 token
 ├── packages/
@@ -52,6 +53,8 @@ muchakucha-zwei/
 User → AuthSession, RefreshToken
 Household → Membership, Invitation, Event, Task, RecurrenceRule, Note, Label
 Membership → Role (OWNER / ADMIN / MEMBER)
+Membership → AssistantProvider（个人配置，可共享给本家庭）, AssistantConversation（私人对话）
+AssistantProvider → 协议、服务地址、模型、加密凭证；对话绑定创建时的配置版本
 Invitation → 按已注册用户名发出
 RecurrenceRule → 每天 / 每周 / 每月 / 每年，滚动生成 Event 与 Task
 Event → 全天 / 定时，可关联 RecurrenceRule 与多个 Label（EventLabel）
@@ -99,7 +102,9 @@ Compose 中的库是测试库，运行集成测试或 E2E 时会被清空。
 
 ### 3. 配置 API 环境变量
 
-API 和 Prisma CLI 都会读取 `apps/api/.env`（已被 git 忽略），也可以直接 export：
+API 和 Prisma CLI 都会读取 `apps/api/.env`（已被 git 忽略），也可以直接 export。首次配置时，将 [apps/api/.env.example](apps/api/.env.example) 复制为同目录下的 `.env`，再按本机环境填写；已有 `.env` 时只补充缺少的配置，不要覆盖现有值。
+
+开发数据库配置示例：
 
 ```bash
 # apps/api/.env
@@ -115,6 +120,7 @@ DATABASE_URL='postgresql://muchakucha_dev:muchakucha_dev_only@127.0.0.1:5432/muc
 | `HOST` / `PORT` | 监听地址与端口 | `127.0.0.1` / `3000`（生产默认 `0.0.0.0`） |
 | `LOG_LEVEL` | Fastify 日志级别 | `info`（`test` 下为 `silent`） |
 | `JWT_ACCESS_SECRET` | JWT 签名密钥，≥32 字节 | `development-only-access-secret-change-before-production` |
+| `ASSISTANT_ENCRYPTION_KEY` | 助手凭证加密专用密钥：32 个随机字节的标准 Base64 字符串，与 JWT 密钥独立 | 无；未设置时无法保存或解密模型凭证，返回 `503 ASSISTANT_NOT_CONFIGURED` |
 | `WEB_ORIGIN` | 生产 CORS 允许的精确来源（逗号分隔）；第一个值也用于生成邀请分享链接 | 非生产环境 CORS 放行所有来源 |
 
 客户端通过 `EXPO_PUBLIC_API_ORIGIN` 指定 API 地址，默认 `http://localhost:3000`。在真机上调试时要改成电脑的局域网地址，并给 API 设置 `HOST=0.0.0.0`。
@@ -149,12 +155,48 @@ API 的 OpenAPI 文档位于 `http://127.0.0.1:3000/api/v1/openapi.json`（未�
 
 1. 注册只需用户名、密码和确认密码，成功后自动登录。用户名为 3–32 个字母、数字、点、下划线或连字符（支持中文），忽略首尾空白和大小写；密码 8–128 个字符。
 2. 创建家庭，或从收件箱接受家庭邀请。管理员按已注册用户名发送邀请，对方登录后可直接接受或拒绝，无需复制链接。收件箱入口位于个人信息图标左侧；消息以列表展示，点击可查看详情。进入页面或回到前台时自动更新，移动端支持下拉刷新。
-3. 进入家庭后默认打开「今日」。底部导航（宽屏为侧栏）有五个入口：**今日、日历、任务、笔记、家庭**。标签管理、周期规则和家庭设置（成员、邀请、角色、所有权）都在「家庭」页。
+3. 进入家庭后默认打开「今日」。底部导航（宽屏为侧栏）有五个入口：**今日、日历、任务、笔记、家庭**。助手、标签管理、周期规则和家庭设置（成员、邀请、角色、所有权）都在「家庭」页。
 4. 通过账户菜单进入个人中心，可修改昵称、查看我的家庭、退出当前设备。
 
 账户只支持用户名注册和登录，家庭邀请只面向已注册用户名，通过分享链接接受。**暂不提供密码找回或人工重置功能。**
 
 邮箱注册、登录、验证、邀请和密码重置属于第一版开发遗留，没有实际用户依赖，现已删除。用户和邀请响应只提供 `username`，不再提供邮箱字段。历史迁移保留；清理迁移若发现邮箱账号或邮箱邀请会停止，需要先核实数据，不能直接删除账号绕过检查。
+
+### AI 助手
+
+先由服务管理员配置 `ASSISTANT_ENCRYPTION_KEY`，并按上述流程应用数据库迁移。可用以下命令生成加密密钥：
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+pnpm --filter api exec prisma migrate deploy
+```
+
+将生成值作为 `ASSISTANT_ENCRYPTION_KEY` 保存在服务端环境配置中，并重启 API；不要写入客户端或提交到仓库。这是加密用户模型凭证的主密钥，与用户输入的模型 API Key 不同。数据库备份需要配套保管该密钥；丢失后无法解密已有凭证。当前没有自动密钥轮换流程，不能直接重新生成并替换，否则已有配置需要重新输入凭证。生产环境由运维管理现有服务端环境文件，本节不会自动修改部署配置。
+
+进入 **家庭 → 助手 → 模型配置 → 添加**，填写配置名称、协议、服务地址、模型 ID、API 密钥和使用范围，然后返回助手选择模型开始对话。
+
+| 协议 | 服务地址示例 | 应用追加的请求路径 |
+| --- | --- | --- |
+| OpenAI 兼容 | `https://api.openai.com/v1`，或兼容服务的 API 目录 | `/chat/completions` |
+| Anthropic | `https://api.anthropic.com/v1` | `/messages` |
+
+服务地址应填写 **API 基础目录**，通常包含 `/v1`，不要填写聊天网页或完整的 `/chat/completions`、`/messages` 地址。模型 ID 使用供应商实际提供、支持工具调用的模型名称。当前仅接受公网 HTTPS，不能带 URL 用户名、密码、查询参数或片段；不跟随重定向，也不支持环回、局域网或其他私网模型地址。“仅自己”表示配置可见范围，不代表支持私网部署的模型。
+
+配置可设为“仅自己”或“家庭可用”。家庭共享只授予本家庭成员模型调用权，费用使用该配置的凭证承担；完整 API Key 不会回传，只有创建者能编辑或删除配置，每个人的对话仍然仅自己可见。助手以实际使用者的身份访问家庭业务：共享所有者的模型不会获得所有者权限。使用时，对话及回答所需的家庭数据会发送到所选服务地址。
+
+可以请求“明天下午两点到四点添加家庭采购”“把买牛奶任务标记为完成”“查询下周安排，并结合未完成任务列出需要准备的事”。助手可查询日程、任务、笔记、标签与成员，提出新增、编辑、删除操作；**每项写入均先展示预览，确认后才执行**。取消不会执行该项修改，重复确认不会再次执行；目标内容变化时需要重新查询并提出操作。
+
+每段对话绑定开始时的模型配置版本。修改配置的任意字段，包括名称、共享范围、模型或服务地址后，旧对话保留历史，但继续调用模型或确认写入须开始新对话。这样不会将已有对话历史自动发送到编辑后的服务地址；删除配置或撤销共享也会阻止后续调用及待执行操作的确认。
+
+当前实现边界：
+
+- 每轮最多 8 次模型调用、24 次工具调用，运行预算为 120 秒；预算在调用边界检查，已发出的请求可能让总耗时超过 120 秒，单次网络请求另有 45 秒超时。单条消息最多 8,000 字符，上下文预算为序列化消息的 180,000 字符，过长时需新开对话。
+- 当前同步返回整轮结果，没有流式输出或后台任务。中断时不会自动重试写入，先检查实际结果再继续。
+- 可以创建重复日程和任务；通过助手编辑、删除重复内容只作用于单次实例，系列修改请使用现有周期规则界面。
+- 重复内容查询只覆盖已生成的实例，会返回生成范围提示；不能把未生成的远期实例当作没有安排。工具输出有分页及文本截断，但底层仍调用现有业务服务全量读取后过滤，尚未下推数据库分页和搜索。
+- 尚未进行真实模型联调或供应商兼容性矩阵验证；“OpenAI 兼容”不保证所有模型都支持本项目所需的工具调用协议。没有原生 Gemini、Responses API、语义索引或私网地址接入。
+
+扩展时，在 [assistant-provider.ts](apps/api/src/modules/assistant/assistant-provider.ts) 增加协议适配，在 [assistant-tools.service.ts](apps/api/src/modules/assistant/assistant-tools.service.ts) 注册业务工具并复用现有服务；[assistant.service.ts](apps/api/src/modules/assistant/assistant.service.ts) 负责有上限的循环与确认流程。替换供应商协议不需要重写业务权限和 CRUD。架构依据与后续建议见 [AI 助手调研](docs/ai-assistant-research.md)。
 
 ## 测试与检查
 
@@ -190,6 +232,7 @@ pnpm exec playwright test -c playwright.ui.config.ts
 - **笔记**：家庭共享笔记的增删改查；所有成员均可编辑任意笔记，删除限创建者、管理员和所有者
 - **草稿**：日程、任务和笔记草稿按账号及家庭保存在本机，重启后可恢复；保存成功、主动丢弃、退出登录或确认失去家庭访问权时清除，不跨设备同步
 - **标签**：OWNER / ADMIN 可创建、重命名、着色、删除；所有成员都可给事件和任务打标签
+- **AI 助手**：用户自带 OpenAI 兼容或 Anthropic 模型，配置可私有或共享给当前家庭；自然语言查询及跨日程、任务、笔记分析，写入逐项预览确认；凭证加密保存、对话私人、沿用调用者权限。配置和当前限制见上文「AI 助手」
 
 成员主动退出使用 `POST /api/v1/households/{id}/leave`，无需指定其他成员。当前所有者会收到 `OWNER_TRANSFER_REQUIRED`，先完成转让后才能退出。`/ownership/leave` 接口在同一事务内先交接所有权、再退出；两种退出方式都保留共享内容。
 

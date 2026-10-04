@@ -5,7 +5,7 @@ const previewUrl = process.env.UI_BASE_URL;
 // UI-only checks intercept every API request; no database or API server is used.
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['account-experience.spec.ts', 'ux-regressions.spec.ts', 'task-windows.spec.ts', 'event-windows.spec.ts', 'third-batch.spec.ts', 'session-expiry.spec.ts'],
+  testMatch: ['account-experience.spec.ts', 'ux-regressions.spec.ts', 'task-windows.spec.ts', 'event-windows.spec.ts', 'third-batch.spec.ts', 'session-expiry.spec.ts', 'assistant.spec.ts'],
   workers: 1,
   // Metro development bundles make multi-page checks slower than production builds.
   timeout: 60_000,

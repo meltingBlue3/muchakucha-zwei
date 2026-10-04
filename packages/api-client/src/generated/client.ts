@@ -1,5 +1,14 @@
 // Generated from openapi.json. Do not edit.
 import type {
+  CreateAssistantProviderDto,
+  UpdateAssistantProviderDto,
+  AssistantProviderResponseDto,
+  AssistantProviderListResponseDto,
+  CreateAssistantConversationDto,
+  SendAssistantMessageDto,
+  DecideAssistantActionDto,
+  AssistantConversationListResponseDto,
+  AssistantConversationResponseDto,
   RegisterDto,
   RegistrationAcceptedDto,
   CreateHouseholdDto,
@@ -808,6 +817,46 @@ export class ApiClient {
       undefined,
       signal,
     );
+  }
+
+  async listAssistantProviders(accessToken: string, householdId: string, signal?: AbortSignal): Promise<AssistantProviderListResponseDto> {
+    return this.authenticated<AssistantProviderListResponseDto>('GET', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/providers`, accessToken, undefined, signal);
+  }
+
+  async createAssistantProvider(accessToken: string, householdId: string, body: CreateAssistantProviderDto, signal?: AbortSignal): Promise<AssistantProviderResponseDto> {
+    return this.authenticated<AssistantProviderResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/providers`, accessToken, body, signal);
+  }
+
+  async updateAssistantProvider(accessToken: string, householdId: string, providerId: string, body: UpdateAssistantProviderDto, signal?: AbortSignal): Promise<AssistantProviderResponseDto> {
+    return this.authenticated<AssistantProviderResponseDto>('PUT', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/providers/${encodeURIComponent(providerId)}`, accessToken, body, signal);
+  }
+
+  async deleteAssistantProvider(accessToken: string, householdId: string, providerId: string, signal?: AbortSignal): Promise<void> {
+    return this.authenticated<void>('DELETE', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/providers/${encodeURIComponent(providerId)}`, accessToken, undefined, signal);
+  }
+
+  async listAssistantConversations(accessToken: string, householdId: string, signal?: AbortSignal): Promise<AssistantConversationListResponseDto> {
+    return this.authenticated<AssistantConversationListResponseDto>('GET', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations`, accessToken, undefined, signal);
+  }
+
+  async createAssistantConversation(accessToken: string, householdId: string, body: CreateAssistantConversationDto, signal?: AbortSignal): Promise<AssistantConversationResponseDto> {
+    return this.authenticated<AssistantConversationResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations`, accessToken, body, signal);
+  }
+
+  async getAssistantConversation(accessToken: string, householdId: string, conversationId: string, signal?: AbortSignal): Promise<AssistantConversationResponseDto> {
+    return this.authenticated<AssistantConversationResponseDto>('GET', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}`, accessToken, undefined, signal);
+  }
+
+  async deleteAssistantConversation(accessToken: string, householdId: string, conversationId: string, signal?: AbortSignal): Promise<void> {
+    return this.authenticated<void>('DELETE', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}`, accessToken, undefined, signal);
+  }
+
+  async sendAssistantMessage(accessToken: string, householdId: string, conversationId: string, body: SendAssistantMessageDto, signal?: AbortSignal): Promise<AssistantConversationResponseDto> {
+    return this.authenticated<AssistantConversationResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}/messages`, accessToken, body, signal);
+  }
+
+  async decideAssistantAction(accessToken: string, householdId: string, conversationId: string, body: DecideAssistantActionDto, signal?: AbortSignal): Promise<AssistantConversationResponseDto> {
+    return this.authenticated<AssistantConversationResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}/decision`, accessToken, body, signal);
   }
 
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {

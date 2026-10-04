@@ -7,6 +7,7 @@ import { useTheme } from '@shopify/restyle';
 import Repeat from 'lucide-react-native/icons/repeat';
 import Tag from 'lucide-react-native/icons/tag';
 import Settings from 'lucide-react-native/icons/settings';
+import Bot from 'lucide-react-native/icons/bot';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 
 import { useHouseholdContext } from '../../../../src/features/households/household-context';
@@ -109,6 +110,7 @@ export default function HouseholdMoreRoute() {
           <PageIntro title="家庭" />
           <View style={{ backgroundColor: activeTheme.colors.surface, borderRadius: activeTheme.borderRadii.xl, paddingHorizontal: activeTheme.spacing[4] }}>
             {[
+              { name: '助手', label: '打开家庭助手', description: '对话整理日程、任务和笔记', Icon: Bot, onPress: () => router.push(`/households/${encodeURIComponent(id)}/assistant`) },
               { name: '家庭设置', label: '打开家庭设置', description: '成员、邀请和家庭名称', Icon: Settings, onPress: () => router.push(`/households/${encodeURIComponent(id)}/settings`) },
               { name: '标签管理', label: '管理标签', description: '给日程和任务分类', Icon: Tag, onPress: handleOpenLabels },
               { name: '重复安排', label: '管理重复安排', description: '管理重复的日程和任务', Icon: Repeat, onPress: handleOpenRecurrenceRules },

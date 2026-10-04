@@ -1,5 +1,6 @@
 import { lockContent } from '../shared/edit-version.js';
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type { CreateLabelDto, LabelResponseDto, LabelListResponseDto, TagEntitiesDto } from './dto/create-label.dto.js';
 import type { UpdateLabelDto } from './dto/create-label.dto.js';
@@ -117,6 +118,7 @@ export class LabelsService {
     householdId: string,
     labelId: string,
     input: UpdateLabelDto,
+    expected?: Pick<LabelResponseDto, 'name' | 'color'>,
   ): Promise<LabelResponseDto> {
     this.requireAdmin(await this.resolveActorRole(actorId, householdId));
 
@@ -159,7 +161,10 @@ export class LabelsService {
       data.color = input.color;
     }
 
-    const updated = await this.prisma.label.update({ where: { id: labelId }, data });
+    const updated = await this.prisma.$transaction(async tx => {
+      await this.lockLabelSnapshot(tx, householdId, labelId, expected);
+      return tx.label.update({ where: { id: labelId }, data });
+    });
     return this.toResponse(updated);
   }
 
@@ -167,6 +172,7 @@ export class LabelsService {
     actorId: string,
     householdId: string,
     labelId: string,
+    expected?: Pick<LabelResponseDto, 'name' | 'color'>,
   ): Promise<void> {
     this.requireAdmin(await this.resolveActorRole(actorId, householdId));
 
@@ -176,7 +182,28 @@ export class LabelsService {
     }
 
     // Junction rows cascade automatically (onDelete: Cascade on both sides).
-    await this.prisma.label.delete({ where: { id: labelId } });
+    await this.prisma.$transaction(async tx => {
+      await this.lockLabelSnapshot(tx, householdId, labelId, expected);
+      await tx.label.delete({ where: { id: labelId } });
+    });
+  }
+
+  private async lockLabelSnapshot(
+    tx: Prisma.TransactionClient,
+    householdId: string,
+    labelId: string,
+    expected: Pick<LabelResponseDto, 'name' | 'color'> | undefined,
+  ): Promise<void> {
+    const rows = await tx.$queryRaw<Array<{ name: string; color: string }>>`
+      SELECT name, color FROM labels
+      WHERE id = ${labelId}::uuid AND household_id = ${householdId}::uuid
+      FOR UPDATE
+    `;
+    const current = rows[0];
+    if (!current) throw new NotFoundException({ code: 'LABEL_NOT_FOUND', message: 'Label not found.' });
+    if (expected && (current.name !== expected.name || current.color !== expected.color)) {
+      throw new ConflictException({ code: 'EDIT_CONFLICT', message: 'Label has changed. Read it again before saving.' });
+    }
   }
 
   // ---- Tag / Untag ----

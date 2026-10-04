@@ -5,5 +5,6 @@ import { LabelsService } from './labels.service.js';
 @Module({
   controllers: [LabelsController, EventLabelsController, TaskLabelsController],
   providers: [LabelsService],
+  exports: [LabelsService],
 })
 export class LabelsModule {}
