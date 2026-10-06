@@ -2,6 +2,8 @@
 import type {
   CreateAssistantProviderDto,
   UpdateAssistantProviderDto,
+  CheckAssistantProviderDto,
+  AssistantProviderCheckResponseDto,
   AssistantProviderResponseDto,
   AssistantProviderListResponseDto,
   CreateAssistantConversationDto,
@@ -825,6 +827,10 @@ export class ApiClient {
 
   async createAssistantProvider(accessToken: string, householdId: string, body: CreateAssistantProviderDto, signal?: AbortSignal): Promise<AssistantProviderResponseDto> {
     return this.authenticated<AssistantProviderResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/providers`, accessToken, body, signal);
+  }
+
+  async checkAssistantProvider(accessToken: string, householdId: string, body: CheckAssistantProviderDto, signal?: AbortSignal): Promise<AssistantProviderCheckResponseDto> {
+    return this.authenticated<AssistantProviderCheckResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/providers/check`, accessToken, body, signal);
   }
 
   async updateAssistantProvider(accessToken: string, householdId: string, providerId: string, body: UpdateAssistantProviderDto, signal?: AbortSignal): Promise<AssistantProviderResponseDto> {

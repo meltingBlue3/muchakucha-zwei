@@ -2228,6 +2228,53 @@
         ]
       }
     },
+    "/api/v1/households/{householdId}/assistant/providers/check": {
+      "post": {
+        "operationId": "checkAssistantProvider",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckAssistantProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantProviderCheckResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
     "/api/v1/households/{householdId}/assistant/providers/{providerId}": {
       "put": {
         "operationId": "updateAssistantProvider",
@@ -4189,6 +4236,64 @@
           "labelIds"
         ]
       },
+      "AssistantUsageMemberDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "requests": {
+            "type": "number"
+          },
+          "inputTokens": {
+            "type": "number"
+          },
+          "outputTokens": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "userId",
+          "displayName",
+          "requests",
+          "inputTokens",
+          "outputTokens"
+        ]
+      },
+      "AssistantProviderUsageDto": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "description": "UTC calendar month, YYYY-MM."
+          },
+          "requests": {
+            "type": "number"
+          },
+          "inputTokens": {
+            "type": "number"
+          },
+          "outputTokens": {
+            "type": "number"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssistantUsageMemberDto"
+            }
+          }
+        },
+        "required": [
+          "month",
+          "requests",
+          "inputTokens",
+          "outputTokens",
+          "members"
+        ]
+      },
       "AssistantProviderResponseDto": {
         "type": "object",
         "properties": {
@@ -4226,6 +4331,16 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "usage": {
+            "nullable": true,
+            "description": "This month's usage by member, shown to the configuration owner only.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AssistantProviderUsageDto"
+              }
+            ]
           }
         },
         "required": [
@@ -4237,7 +4352,8 @@
           "visibility",
           "ownedByMe",
           "hasCredential",
-          "updatedAt"
+          "updatedAt",
+          "usage"
         ]
       },
       "AssistantProviderListResponseDto": {
@@ -4292,6 +4408,49 @@
           "model",
           "visibility",
           "apiKey"
+        ]
+      },
+      "CheckAssistantProviderDto": {
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "openai-compatible",
+              "anthropic"
+            ]
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "apiKey": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "protocol",
+          "baseUrl",
+          "model"
+        ]
+      },
+      "AssistantProviderCheckResponseDto": {
+        "type": "object",
+        "properties": {
+          "toolCalling": {
+            "type": "boolean",
+            "description": "The model answered the check by calling a tool, as the assistant requires."
+          }
+        },
+        "required": [
+          "toolCalling"
         ]
       },
       "UpdateAssistantProviderDto": {
@@ -4399,6 +4558,9 @@
       "AssistantPendingActionDto": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -4408,6 +4570,7 @@
           }
         },
         "required": [
+          "id",
           "name",
           "arguments"
         ]
@@ -4444,14 +4607,11 @@
               "$ref": "#/components/schemas/AssistantVisibleMessageDto"
             }
           },
-          "pendingAction": {
-            "nullable": true,
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AssistantPendingActionDto"
-              }
-            ]
+          "pendingActions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssistantPendingActionDto"
+            }
           }
         },
         "required": [
@@ -4462,7 +4622,7 @@
           "version",
           "state",
           "messages",
-          "pendingAction"
+          "pendingActions"
         ]
       },
       "SendAssistantMessageDto": {
@@ -4487,15 +4647,19 @@
       "DecideAssistantActionDto": {
         "type": "object",
         "properties": {
-          "approve": {
-            "type": "boolean"
+          "approvedIds": {
+            "description": "Pending actions to execute. Every other pending action is declined; an empty list declines them all.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "expectedVersion": {
             "type": "number"
           }
         },
         "required": [
-          "approve",
+          "approvedIds",
           "expectedVersion"
         ]
       }

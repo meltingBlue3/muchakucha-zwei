@@ -4,8 +4,13 @@ export interface AssistantConversationRecord {
   kind: 'user' | 'assistant' | 'query' | 'operation';
   content: string;
   failed?: boolean;
-  sources?: Array<{ title: string; excerpt: string }>;
+  sources?: AssistantSource[];
 }
+
+/** A record a query read. `link` opens the live record; the excerpt shows it as it was when read. */
+export interface AssistantSource { title: string; excerpt: string; link?: { section: 'events' | 'tasks' | 'notes'; id: string } }
+
+const sections: Record<string, 'events' | 'tasks' | 'notes'> = { event: 'events', events: 'events', task: 'tasks', tasks: 'tasks', note: 'notes', notes: 'notes' };
 
 const resources: Record<string, string> = { event: '日程', events: '日程', task: '任务', tasks: '任务', note: '笔记', notes: '笔记', label: '标签', labels: '标签' };
 const verbs: Record<string, string> = { create: '创建', update: '编辑', delete: '删除', get: '查询', list: '查询' };
@@ -35,14 +40,16 @@ function rememberTitle(value: unknown, titles: Map<string, string>): void {
   if (title !== null) titles.set(row.id, title);
 }
 
-function source(value: unknown): Array<{ title: string; excerpt: string }> {
+function source(value: unknown, resource: string): AssistantSource[] {
   const row = object(value);
   if (!row) return [];
+  const section = Object.hasOwn(sections, resource) ? sections[resource] : undefined;
+  const link = section && typeof row.id === 'string' ? { link: { section, id: row.id } } : {};
   const title = typeof row.title === 'string' ? row.title : typeof row.name === 'string' ? row.name : null;
   if (!title) return [];
   const excerpt = typeof row.body === 'string' ? row.body : typeof row.description === 'string' ? row.description : '';
   const partial = excerpt.length > 1600 || row.contentTruncated === true || Array.isArray(row.truncatedFields) && row.truncatedFields.length > 0;
-  return [{ title, excerpt: partial ? `${excerpt.slice(0, 1600)}…（节选）` : excerpt }];
+  return [{ title, excerpt: partial ? `${excerpt.slice(0, 1600)}…（节选）` : excerpt, ...link }];
 }
 
 /** Show persisted observations separately from model prose, without exposing tool JSON. */
@@ -70,10 +77,10 @@ export function assistantConversationRecords(messages: AssistantConversationResp
     if (Array.isArray(data?.items)) {
       data.items.forEach(item => rememberTitle(item, titles));
       const more = data.truncated === true || data.nextOffset !== null && data.nextOffset !== undefined;
-      return [{ kind, content: `${title}：本次返回 ${data.items.length} 项${typeof data.total === 'number' ? `，共 ${data.total} 项` : ''}${more ? '（结果仅含部分内容）' : ''}。`, ...(querying ? { sources: data.items.flatMap(source) } : {}) }];
+      return [{ kind, content: `${title}：本次返回 ${data.items.length} 项${typeof data.total === 'number' ? `，共 ${data.total} 项` : ''}${more ? '（结果仅含部分内容）' : ''}。`, ...(querying ? { sources: data.items.flatMap(item => source(item, resource)) } : {}) }];
     }
     const target = data && typeof data.id === 'string' ? titles.get(data.id) : undefined;
     const scope = data?.scope === 'this_only' ? '（仅此次安排）' : '';
-    return [{ kind, content: `${title}成功${target ? `：${target}` : ''}${scope}。`, ...(querying ? { sources: source(data) } : {}) }];
+    return [{ kind, content: `${title}成功${target ? `：${target}` : ''}${scope}。`, ...(querying ? { sources: source(data, resource) } : {}) }];
   });
 }

@@ -17,7 +17,7 @@ interface Provider {
 interface Conversation {
   id: string; title: string; updatedAt: string; providerId: string; version: number; state: 'idle' | 'running';
   messages: Array<{ role: 'user' | 'assistant' | 'tool'; content: string }>;
-  pendingAction: { name: string; arguments: Record<string, unknown> } | null;
+  pendingActions: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
 }
 interface RequestRecord { householdId: string | undefined; path: string; method: string; body: Record<string, unknown> }
 
@@ -36,7 +36,7 @@ async function mockAssistant(page: Page, options: { empty?: boolean } = {}) {
   });
   const conversation = (title: string, content: string): Conversation => ({
     id: conversationId, title, updatedAt: version, providerId, version: 2, state: 'idle',
-    messages: [{ role: 'user', content: title }, { role: 'assistant', content }], pendingAction: null,
+    messages: [{ role: 'user', content: title }, { role: 'assistant', content }], pendingActions: [],
   });
   const families = new Map([
     [householdId, {
@@ -101,7 +101,7 @@ async function mockAssistant(page: Page, options: { empty?: boolean } = {}) {
       const selected = family.conversations.find(item => item.id === parts[6]);
       if (parts.length === 6 && method === 'GET') body = { conversations: family.conversations.map(({ id: key, title, updatedAt }) => ({ id: key, title, updatedAt })) };
       else if (parts.length === 6 && method === 'POST') {
-        const created: Conversation = { id: id(), title: '新对话', providerId: String(input.providerId), version: 0, updatedAt: version, state: 'idle', messages: [], pendingAction: null };
+        const created: Conversation = { id: id(), title: '新对话', providerId: String(input.providerId), version: 0, updatedAt: version, state: 'idle', messages: [], pendingActions: [] };
         family.conversations.push(created);
         body = created;
         status = 201;
@@ -121,10 +121,10 @@ async function mockAssistant(page: Page, options: { empty?: boolean } = {}) {
           return;
         }
         if (message.includes('删除')) {
-          selected.pendingAction = { name: 'delete_note', arguments: { id: noteId, expectedUpdatedAt: version } };
+          selected.pendingActions = [{ id: 'call_delete_note', name: 'delete_note', arguments: { id: noteId, expectedUpdatedAt: version } }];
           selected.messages.push({ role: 'assistant', content: '已找到笔记，请核对删除内容。' });
         } else if (message.includes('新增')) {
-          selected.pendingAction = { name: 'create_task', arguments: { title: '准备周末野餐', description: '带水、野餐垫和水果', priority: 'high', assigneeIds: [userId], dueDate: '2030-06-16T04:00:00.000Z' } };
+          selected.pendingActions = [{ id: 'call_create_task', name: 'create_task', arguments: { title: '准备周末野餐', description: '带水、野餐垫和水果', priority: 'high', assigneeIds: [userId], dueDate: '2030-06-16T04:00:00.000Z' } }];
           selected.messages.push({ role: 'assistant', content: '已整理好任务，请确认后保存。' });
         } else {
           selected.messages.push({ role: 'tool', content: JSON.stringify({ tool: 'list_notes', ok: true, data: { items: family.notes, total: family.notes.length, nextOffset: null, truncated: false } }) });
@@ -134,17 +134,20 @@ async function mockAssistant(page: Page, options: { empty?: boolean } = {}) {
       } else if (parts[7] === 'decision' && method === 'POST') {
         if (state.decisionGate) await state.decisionGate;
         if (input.expectedVersion !== selected.version) { await fail(409, 'EDIT_CONFLICT'); return; }
-        state.decisions.push({ approve: Boolean(input.approve), expectedVersion: Number(input.expectedVersion) });
-        if (input.approve === true) {
+        const approvedIds = Array.isArray(input.approvedIds) ? input.approvedIds as string[] : [];
+        const approved = selected.pendingActions.filter(action => approvedIds.includes(action.id));
+        state.decisions.push({ approve: approved.length > 0, expectedVersion: Number(input.expectedVersion) });
+        const proposal = approved[0];
+        if (proposal) {
           state.businessWrites++;
-          if (selected.pendingAction?.name === 'create_task') family.tasks.push({
-            id: id(), householdId: targetHouseholdId, ...selected.pendingAction.arguments,
+          if (proposal.name === 'create_task') family.tasks.push({
+            id: id(), householdId: targetHouseholdId, ...proposal.arguments,
             status: 'pending', labels: [], createdBy: userId, createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null,
           });
-          selected.messages.push({ role: 'tool', content: JSON.stringify({ tool: selected.pendingAction?.name, ok: true, data: family.tasks.at(-1) }) });
+          selected.messages.push({ role: 'tool', content: JSON.stringify({ tool: proposal.name, ok: true, data: family.tasks.at(-1) }) });
           selected.messages.push({ role: 'assistant', content: '已创建任务“准备周末野餐”。' });
         } else selected.messages.push({ role: 'assistant', content: '已取消这次操作，家庭内容没有改变。' });
-        selected.pendingAction = null;
+        selected.pendingActions = [];
         selected.version++;
         body = selected;
       } else throw new Error(`Unexpected conversation request ${method} ${path}`);
@@ -316,8 +319,11 @@ for (const width of [320, 390, 1440]) {
     expect(browserStorage).not.toContain('ui-household-secret');
     await expect(page.getByText(/ui-(?:private|household)-secret/)).toHaveCount(0);
     await providers.getByRole('button', { name: '返回', exact: true }).click();
-    await page.getByRole('button', { name: '使用 我的私人模型 开始对话', exact: true }).click();
-    await send(page, '这周出门前需要准备什么？');
+    // The first message is typed on the assistant home; the conversation is created for it and sends it.
+    const home = page.getByRole('main', { name: '家庭助手', exact: true });
+    await home.getByLabel('开始新对话', { exact: true }).fill('这周出门前需要准备什么？');
+    await home.getByRole('button', { name: '发送', exact: true }).click();
+    await expect(page.getByRole('main', { name: '助手对话', exact: true })).toBeVisible();
     const answer = page.getByText('结合任务与《家庭旅行清单》，建议周六出发前准备野餐垫、水和水果。', { exact: true });
     await expect(answer).toBeVisible();
     const conversationUrl = page.url();
@@ -408,8 +414,9 @@ test('assistant loading and provider failures recover persisted work without sen
   saved.state = 'idle';
   saved.version++;
   saved.messages.push({ role: 'assistant', content: '处理已完成：周六上午出发，提前准备饮水。' });
-  await page.getByRole('button', { name: '刷新处理结果', exact: true }).click();
+  // The screen keeps polling the saved conversation while it runs, so the result arrives without a manual refresh.
   await expect(page.getByText('处理已完成：周六上午出发，提前准备饮水。', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '刷新处理结果', exact: true })).toBeHidden();
   await expect(page.getByLabel('发送给助手', { exact: true })).toBeEditable();
   expect(saved.messages.filter(item => item.content === '检查本周出行安排')).toHaveLength(1);
   expect(state.requests.filter(item => item.method === 'POST' && item.path.endsWith('/messages'))).toHaveLength(2);

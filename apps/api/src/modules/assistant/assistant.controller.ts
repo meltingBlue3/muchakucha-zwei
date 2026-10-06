@@ -6,7 +6,8 @@ import { AssistantSettingsService } from './assistant-settings.service.js';
 import { AssistantService } from './assistant.service.js';
 import {
   AssistantConversationListResponseDto, AssistantConversationParam, AssistantConversationResponseDto, AssistantHouseholdParam,
-  AssistantProviderListResponseDto, AssistantProviderParam, AssistantProviderResponseDto, CreateAssistantConversationDto,
+  AssistantProviderCheckResponseDto, AssistantProviderListResponseDto, AssistantProviderParam, AssistantProviderResponseDto,
+  CheckAssistantProviderDto, CreateAssistantConversationDto,
   CreateAssistantProviderDto, DecideAssistantActionDto, SendAssistantMessageDto, UpdateAssistantProviderDto,
 } from './dto/assistant.dto.js';
 
@@ -31,6 +32,15 @@ export class AssistantController {
   @ApiCreatedResponse({ type: AssistantProviderResponseDto })
   createProvider(@Req() req: AuthenticatedRequest, @Param() params: AssistantHouseholdParam, @Body() input: CreateAssistantProviderDto) {
     return this.settings.create({ userId: req.auth.sub, householdId: params.householdId }, input);
+  }
+
+  @Post('providers/check')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ operationId: 'checkAssistantProvider' })
+  @ApiOkResponse({ type: AssistantProviderCheckResponseDto })
+  checkProvider(@Req() req: AuthenticatedRequest, @Param() params: AssistantHouseholdParam, @Body() input: CheckAssistantProviderDto) {
+    return this.assistant.check({ userId: req.auth.sub, householdId: params.householdId }, input);
   }
 
   @Put('providers/:providerId')

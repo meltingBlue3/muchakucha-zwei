@@ -83,14 +83,49 @@ describe('assistant HTTPS transport', () => {
     expect(httpsRequest).toHaveBeenCalledTimes(1);
   });
 
-  test.each([301, 302, 307, 401, 500])('does not follow redirects or expose upstream error bodies (%i)', async (status) => {
+  test.each([
+    [301, 'ASSISTANT_PROVIDER_FAILED'], [302, 'ASSISTANT_PROVIDER_FAILED'], [307, 'ASSISTANT_PROVIDER_FAILED'],
+    [401, 'ASSISTANT_PROVIDER_AUTH_FAILED'], [500, 'ASSISTANT_PROVIDER_UNAVAILABLE'],
+  ])('does not follow redirects or expose upstream error bodies (%i)', async (status, code) => {
     statusCode = status;
     responseBody = 'secret credentials and personal data';
     const pending = postAssistantJson(new URL('https://provider.example.com/v1/messages'), {}, {});
-    await expect(pending).rejects.toMatchObject({ response: { code: 'ASSISTANT_PROVIDER_FAILED' } });
+    await expect(pending).rejects.toMatchObject({ response: { code } });
     try { await pending; } catch (error) { expect(JSON.stringify(error)).not.toContain(responseBody); }
     expect(httpsRequest).toHaveBeenCalledTimes(1);
     expect(response.destroyed).toBe(true);
+  });
+
+  test.each([
+    [403, '{"error":"forbidden"}', 'ASSISTANT_PROVIDER_AUTH_FAILED'],
+    [400, '{"error":{"message":"API key not valid. Please pass a valid API key."}}', 'ASSISTANT_PROVIDER_AUTH_FAILED'],
+    [402, '{"error":{"message":"Insufficient Balance"}}', 'ASSISTANT_PROVIDER_QUOTA_EXCEEDED'],
+    [429, '{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}', 'ASSISTANT_PROVIDER_QUOTA_EXCEEDED'],
+    [429, '{"error":{"message":"Rate limit reached for requests"}}', 'ASSISTANT_PROVIDER_RATE_LIMITED'],
+    [404, '{"error":{"code":"model_not_found"}}', 'ASSISTANT_PROVIDER_ENDPOINT_NOT_FOUND'],
+    [400, '{"error":{"message":"Model Not Exist"}}', 'ASSISTANT_PROVIDER_ENDPOINT_NOT_FOUND'],
+    [400, '{"error":{"code":"context_length_exceeded"}}', 'ASSISTANT_PROVIDER_CONTEXT_TOO_LONG'],
+    [400, '{"type":"error","error":{"message":"prompt is too long: 210000 tokens > 200000 maximum"}}', 'ASSISTANT_PROVIDER_CONTEXT_TOO_LONG'],
+    [400, '{"error":{"message":"This model does not support tools"}}', 'ASSISTANT_PROVIDER_TOOLS_UNSUPPORTED'],
+    [422, '{"detail":"unknown field"}', 'ASSISTANT_PROVIDER_REJECTED'],
+    [529, '{"type":"error","error":{"type":"overloaded_error"}}', 'ASSISTANT_PROVIDER_UNAVAILABLE'],
+  ])('classifies an upstream %i error into a stable code without keeping its text', async (status, body, code) => {
+    statusCode = status;
+    responseBody = body;
+    const pending = postAssistantJson(new URL('https://provider.example.com/v1/messages'), {}, {});
+    await expect(pending).rejects.toMatchObject({ response: { code }, diagnostic: `status ${status}` });
+    try { await pending; } catch (error) { expect(JSON.stringify(error)).not.toContain(body); }
+  });
+
+  test('a connection failure keeps only the socket error code for logs', async () => {
+    httpsRequest.mockImplementation(() => {
+      requestEmitter = Object.assign(new EventEmitter(), { end: vi.fn(), destroy: vi.fn() });
+      requestEmitter.end.mockImplementation(() => queueMicrotask(() => requestEmitter.emit('error', Object.assign(new Error('connect to 8.8.8.8 secret'), { code: 'ECONNRESET' }))));
+      return requestEmitter;
+    });
+    const pending = postAssistantJson(new URL('https://provider.example.com/v1/messages'), {}, {});
+    await expect(pending).rejects.toMatchObject({ response: { code: 'ASSISTANT_PROVIDER_FAILED' }, diagnostic: 'connection ECONNRESET' });
+    try { await pending; } catch (error) { expect(JSON.stringify(error)).not.toContain('secret'); }
   });
 
   test.each(['{broken json', 'x'.repeat(1_048_577)])('rejects invalid JSON or an oversized response (%#)', async (body) => {

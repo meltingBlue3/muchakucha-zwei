@@ -7,7 +7,8 @@ import { NotesService } from '../notes/notes.service.js';
 import { LabelsService } from '../labels/labels.service.js';
 import { HouseholdsService } from '../households/households.service.js';
 import { assertEditVersion } from '../shared/edit-version.js';
-import type { AssistantActor, AssistantToolCall, AssistantToolDefinition } from './assistant.types.js';
+import { allDayBounds, localDateOf, localMidnight, localStamp, shiftDate } from './assistant-time.js';
+import type { AssistantActor, AssistantToolActor, AssistantToolCall, AssistantToolDefinition } from './assistant.types.js';
 import {
   CreateEventArguments, CreateLabelArguments, CreateNoteArguments, CreateTaskArguments,
   DeleteContentArguments, DeleteLabelArguments, DeleteOccurrenceArguments,
@@ -19,10 +20,11 @@ import {
 } from './assistant-tool-arguments.js';
 
 type Properties = Record<string, Record<string, unknown>>;
+type Arguments = Record<string, unknown>;
 interface ToolRegistration {
   definition: AssistantToolDefinition;
-  prepare: (actor: AssistantActor, value: unknown) => Promise<void>;
-  execute: (actor: AssistantActor, value: unknown) => Promise<unknown>;
+  prepare: (actor: AssistantToolActor, value: unknown) => Promise<Arguments>;
+  execute: (actor: AssistantToolActor, value: unknown) => Promise<unknown>;
 }
 interface ContentVersion {
   id: string;
@@ -116,8 +118,9 @@ function searchable(value: object): string {
 }
 
 function paginate<T extends object>(items: T[], args: ListArguments) {
-  const query = args.query?.trim().normalize('NFKC').toLowerCase();
-  const matches = query ? items.filter(item => searchable(item).includes(query)) : items;
+  // Every space-separated term must appear, in any order: "周末 采购" finds "采购清单（周末）".
+  const terms = args.query?.normalize('NFKC').toLowerCase().split(/\s+/).filter(Boolean) ?? [];
+  const matches = terms.length ? items.filter(item => { const text = searchable(item); return terms.every(term => text.includes(term)); }) : items;
   const offset = args.offset ?? 0;
   const limit = args.limit ?? 20;
   const selected = matches.slice(offset, offset + limit);
@@ -160,6 +163,28 @@ function assertDateRange(from: string | undefined, through: string | undefined):
   if (from !== undefined && through !== undefined && from > through) invalid('dateRange', 'end_before_start');
 }
 
+function withEventTimes<T extends { startTime: string; endTime: string; allDay: boolean }>(event: T, timeZone: string) {
+  const mode = event.allDay ? 'date' : 'datetime';
+  return { ...event, startLocal: localStamp(event.startTime, timeZone, mode), endLocal: localStamp(event.endTime, timeZone, mode) };
+}
+
+function withDueTime<T extends { dueDate?: string | null }>(task: T, timeZone: string) {
+  return { ...task, dueLocal: task.dueDate ? localStamp(task.dueDate, timeZone, 'due') : null };
+}
+
+/** An impossible date such as 2026-02-30 is left as is for validateDueDate to reject. */
+function normalizeDueDate(args: Arguments, timeZone: string): Arguments {
+  return typeof args.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.dueDate) && isISO8601(args.dueDate, { strict: true })
+    ? { ...args, dueDate: localMidnight(args.dueDate, timeZone).toISOString() } : args;
+}
+
+function normalizeAllDay(args: Arguments, timeZone: string): Arguments {
+  if (args.allDay !== true) return args;
+  const start = typeof args.startTime === 'string' ? args.startTime : undefined;
+  const end = typeof args.endTime === 'string' ? args.endTime : undefined;
+  return { ...args, ...allDayBounds(start, end, timeZone) };
+}
+
 function validateDueDate(value: string | undefined): void {
   if (value !== undefined && value !== '' && !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}.*(?:Z|[+-]\d{2}:\d{2}))?$/i.test(value)) {
     invalid('dueDate', 'isDateTimeWithOffset');
@@ -189,13 +214,14 @@ export class AssistantToolsService {
     return structuredClone([...this.registry.values()].map(entry => entry.definition));
   }
 
-  /** Run before displaying a proposal. This never writes business data. */
-  async prepare(actor: AssistantActor, call: AssistantToolCall): Promise<void> {
-    await this.lookup(call.name).prepare(actor, call.arguments);
+  /** Run before displaying a proposal. This never writes business data. The returned call carries the
+   * normalized arguments, so the user confirms exactly what will be written. */
+  async prepare(actor: AssistantToolActor, call: AssistantToolCall): Promise<AssistantToolCall> {
+    return { ...call, arguments: await this.lookup(call.name).prepare(actor, call.arguments) };
   }
 
   /** The caller is responsible for accepting mutations only after explicit confirmation. */
-  async execute(actor: AssistantActor, call: AssistantToolCall): Promise<unknown> {
+  async execute(actor: AssistantToolActor, call: AssistantToolCall): Promise<unknown> {
     return this.lookup(call.name).execute(actor, call.arguments);
   }
 
@@ -207,34 +233,50 @@ export class AssistantToolsService {
 
   private register<T extends object>(
     name: string, description: string, dto: ClassConstructor<T>, properties: Properties, required: string[],
-    mutates: boolean, run: (actor: AssistantActor, args: T) => Promise<unknown>,
-    before: (actor: AssistantActor, args: T) => Promise<void> = async () => {},
+    mutates: boolean, run: (actor: AssistantToolActor, args: T) => Promise<unknown>,
+    before: (actor: AssistantToolActor, args: T) => Promise<void> = async () => {},
+    normalize?: (args: Arguments, timeZone: string) => Arguments,
   ): void {
     if (this.registry.has(name)) throw new Error(`Duplicate assistant tool: ${name}`);
     const parameters = { type: 'object', properties, required, additionalProperties: false };
-    const prepare = async (actor: AssistantActor, value: unknown): Promise<T> => {
-      const args = await parse(dto, value, parameters);
+    const prepare = async (actor: AssistantToolActor, value: unknown): Promise<{ args: T; input: Arguments }> => {
+      let input = value as Arguments;
+      if (normalize) {
+        // Validate what the model sent before converting it, then validate the conversion.
+        await parse(dto, value, parameters);
+        input = normalize(input, actor.timeZone);
+      }
+      const args = await parse(dto, input, parameters);
       await before(actor, args);
-      return args;
+      return { args, input };
     };
     this.registry.set(name, {
       definition: { name, description: `${description} Omit optional fields when unused; null is never accepted.`, parameters, mutates },
-      prepare: async (actor, value) => { await prepare(actor, value); },
-      execute: async (actor, value) => run(actor, await prepare(actor, value)),
+      prepare: async (actor, value) => (await prepare(actor, value)).input,
+      execute: async (actor, value) => run(actor, (await prepare(actor, value)).args),
     });
   }
 
   private registerReadTools(): void {
-    this.register('list_events', 'Search saved calendar events with pagination. Recurring results cover materialized occurrences only; materializedThrough is the generation watermark. Date bounds are calendar dates using the existing calendar API range semantics.',
+    this.register('list_events', 'Search saved calendar events with pagination. startDate and endDate are inclusive calendar dates in the user\'s time zone; results are events overlapping that range. startLocal/endLocal are local times. Recurring results cover materialized occurrences only; materializedThrough is the generation watermark.',
       ListEventsArguments, eventListProperties, [], false, async (actor, args) => {
         assertDateRange(args.startDate, args.endDate);
+        // The service range is in UTC days; widen it so every zone's local days are covered, then cut exactly.
         const result = await this.events.list(actor.userId, actor.householdId, {
-          startDate: args.startDate, endDate: args.endDate,
+          startDate: args.startDate === undefined ? undefined : shiftDate(args.startDate, -1),
+          endDate: args.endDate === undefined ? undefined : shiftDate(args.endDate, 1),
           recurring: args.recurring === undefined ? undefined : String(args.recurring),
         });
-        return { ...paginate(result.events, args), materializedThrough: result.materializedThrough, recurringCoverage: 'materialized_occurrences_only' };
+        const from = args.startDate === undefined ? undefined : localMidnight(args.startDate, actor.timeZone).getTime();
+        const until = args.endDate === undefined ? undefined : localMidnight(shiftDate(args.endDate, 1), actor.timeZone).getTime();
+        const matches = result.events.filter(event => (from === undefined || Date.parse(event.endTime) > from)
+          && (until === undefined || Date.parse(event.startTime) < until));
+        return {
+          ...paginate(matches.map(event => withEventTimes(event, actor.timeZone)), args), timeZone: actor.timeZone,
+          materializedThrough: result.materializedThrough, recurringCoverage: 'materialized_occurrences_only',
+        };
       });
-    this.register('list_tasks', 'Search saved tasks by text, status, priority, assignee user ID and UTC due-date range. Results are paginated; recurring results include materialized occurrences only.',
+    this.register('list_tasks', 'Search saved tasks by text, status, priority, assignee user ID and due-date range. dueFrom and dueThrough are inclusive calendar dates in the user\'s time zone; dueLocal is the local due date, with a time unless due at midnight. Results are paginated; recurring results include materialized occurrences only.',
       ListTasksArguments, taskListProperties, [], false, async (actor, args) => {
         assertDateRange(args.dueFrom, args.dueThrough);
         const result = await this.tasks.list(actor.userId, actor.householdId, {
@@ -243,11 +285,14 @@ export class AssistantToolsService {
         });
         const matches = result.tasks.filter(task => {
           if (args.dueFrom === undefined && args.dueThrough === undefined) return true;
-          const date = task.dueDate?.slice(0, 10);
-          return date !== undefined && (args.dueFrom === undefined || date >= args.dueFrom)
-            && (args.dueThrough === undefined || date <= args.dueThrough);
+          if (!task.dueDate) return false;
+          const date = localDateOf(task.dueDate, actor.timeZone);
+          return (args.dueFrom === undefined || date >= args.dueFrom) && (args.dueThrough === undefined || date <= args.dueThrough);
         });
-        return { ...paginate(matches, args), materializedThrough: result.materializedThrough, recurringCoverage: 'materialized_occurrences_only' };
+        return {
+          ...paginate(matches.map(task => withDueTime(task, actor.timeZone)), args), timeZone: actor.timeZone,
+          materializedThrough: result.materializedThrough, recurringCoverage: 'materialized_occurrences_only',
+        };
       });
     this.register('list_notes', 'Search note titles and full Markdown body; returned previews and rows are bounded. Follow nextOffset and use get_note for full text.',
       ListArguments, listProperties, [], false, async (actor, args) => paginate((await this.notes.list(actor.userId, actor.householdId)).notes, args));
@@ -256,9 +301,9 @@ export class AssistantToolsService {
     this.register('household_members', 'Search household members to resolve names into userId values for task assigneeIds. Never guess IDs.',
       ListArguments, listProperties, [], false, async (actor, args) => paginate((await this.household(actor)).members, args));
     this.register('get_event', 'Read one event and its current updatedAt and recurrence.updatedAt before changing it. Long descriptions support character pagination.',
-      GetContentArguments, getContentProperties, ['id'], false, async (actor, args) => contentPage(await this.events.getById(actor.userId, actor.householdId, args.id), 'description', args));
+      GetContentArguments, getContentProperties, ['id'], false, async (actor, args) => contentPage(withEventTimes(await this.events.getById(actor.userId, actor.householdId, args.id), actor.timeZone), 'description', args));
     this.register('get_task', 'Read one task and its current updatedAt and recurrence.updatedAt before changing it. Long descriptions support character pagination.',
-      GetContentArguments, getContentProperties, ['id'], false, async (actor, args) => contentPage(await this.tasks.getById(actor.userId, actor.householdId, args.id), 'description', args));
+      GetContentArguments, getContentProperties, ['id'], false, async (actor, args) => contentPage(withDueTime(await this.tasks.getById(actor.userId, actor.householdId, args.id), actor.timeZone), 'description', args));
     this.register('get_note', 'Read a note and updatedAt before changing it. Follow nextContentOffset until null to read the full Markdown body.',
       GetContentArguments, getContentProperties, ['id'], false, async (actor, args) => contentPage(await this.notes.getById(actor.userId, actor.householdId, args.id), 'body', args));
     this.register('get_label', 'Read a label before changing it; preserve name and color as the expected snapshot.',
@@ -266,13 +311,13 @@ export class AssistantToolsService {
   }
 
   private registerEventTools(): void {
-    this.register('create_event', 'Propose creating an event. Times must include UTC/offset. Optional recurrence creates a series; do not infer missing times or recurrence scope.',
+    this.register('create_event', 'Propose creating an event. Times must include UTC/offset. With allDay true, times are widened to whole local days in the user\'s time zone. Optional recurrence creates a series; do not infer missing times or recurrence scope.',
       CreateEventArguments, { ...eventProperties, ...recurrenceProperty }, ['title', 'startTime', 'endTime'], true,
       (actor, args) => this.events.create(actor.userId, actor.householdId, args),
       async (actor, args) => {
         await this.household(actor);
         if (Date.parse(args.endTime) <= Date.parse(args.startTime)) invalid('endTime', 'must_be_after_start');
-      });
+      }, normalizeAllDay);
     this.register('update_event', 'Propose updating this event occurrence only; this does not change its series. Copy expectedUpdatedAt from get_event and expectedRuleUpdatedAt from recurrence.updatedAt for recurring occurrences. labelIds replaces labels.',
       UpdateEventArguments, { ...idProperties, ...occurrenceEditProperties, ...eventProperties, ...labelsProperty }, ['id', 'expectedUpdatedAt'], true,
       (actor, { id, ...args }) => this.events.update(actor.userId, actor.householdId, id, args),
@@ -281,7 +326,7 @@ export class AssistantToolsService {
         await this.requireEdit(actor, current, args);
         this.requireChanges(args, ['id', 'expectedUpdatedAt', 'expectedRuleUpdatedAt']);
         if (Date.parse(args.endTime ?? current.endTime) <= Date.parse(args.startTime ?? current.startTime)) invalid('endTime', 'must_be_after_start');
-      });
+      }, normalizeAllDay);
     this.register('delete_event', 'Propose deleting this event occurrence only. A recurring occurrence is cancelled, preserving its series. Read current event/rule versions before proposing.',
       DeleteOccurrenceArguments, { ...idProperties, ...occurrenceEditProperties }, ['id', 'expectedUpdatedAt'], true,
       async (actor, { id, ...version }) => {
@@ -294,7 +339,7 @@ export class AssistantToolsService {
     this.register('create_task', 'Propose creating a task. Resolve assignee user IDs through household_members. Optional recurrence creates a series.',
       CreateTaskArguments, { ...taskProperties, ...recurrenceProperty }, ['title'], true,
       (actor, args) => this.tasks.create(actor.userId, actor.householdId, args),
-      async (actor, args) => { await this.household(actor); validateDueDate(args.dueDate); });
+      async (actor, args) => { await this.household(actor); validateDueDate(args.dueDate); }, normalizeDueDate);
     this.register('update_task', 'Propose updating this task occurrence only, including completion status, assignees or labels. Copy current task/rule versions from get_task. Empty arrays clear assignees/labels; empty dueDate clears the date. This does not change the series.',
       UpdateTaskArguments, { ...idProperties, ...occurrenceEditProperties, ...taskProperties, ...labelsProperty }, ['id', 'expectedUpdatedAt'], true,
       (actor, { id, ...args }) => this.tasks.update(actor.userId, actor.householdId, id, args),
@@ -302,7 +347,7 @@ export class AssistantToolsService {
         await this.requireEdit(actor, await this.tasks.getById(actor.userId, actor.householdId, args.id), args);
         this.requireChanges(args, ['id', 'expectedUpdatedAt', 'expectedRuleUpdatedAt']);
         validateDueDate(args.dueDate);
-      });
+      }, normalizeDueDate);
     this.register('delete_task', 'Propose deleting this task occurrence only; a recurring occurrence becomes cancelled and its series is retained. Read current task/rule versions before proposing.',
       DeleteOccurrenceArguments, { ...idProperties, ...occurrenceEditProperties }, ['id', 'expectedUpdatedAt'], true,
       async (actor, { id, ...version }) => {

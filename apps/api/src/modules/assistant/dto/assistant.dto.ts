@@ -1,5 +1,5 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsIn, IsInt, IsString, IsUUID, Length, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { ArrayMaxSize, IsArray, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min } from 'class-validator';
 
 export class CreateAssistantProviderDto {
   @ApiProperty() @IsString() @Length(1, 80) name!: string;
@@ -14,6 +14,35 @@ export class UpdateAssistantProviderDto extends PartialType(CreateAssistantProvi
   @ApiProperty() @IsDateString() expectedUpdatedAt!: string;
 }
 
+/** Checks unsaved form values. Without apiKey, the owner's saved key for providerId is used. */
+export class CheckAssistantProviderDto {
+  @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID('4') providerId?: string;
+  @ApiProperty({ enum: ['openai-compatible', 'anthropic'] }) @IsIn(['openai-compatible', 'anthropic']) protocol!: 'openai-compatible' | 'anthropic';
+  @ApiProperty() @IsString() @Length(1, 500) baseUrl!: string;
+  @ApiProperty() @IsString() @Length(1, 120) model!: string;
+  @ApiPropertyOptional({ writeOnly: true }) @IsOptional() @IsString() @Length(1, 4096) apiKey?: string;
+}
+
+export class AssistantProviderCheckResponseDto {
+  @ApiProperty({ description: 'The model answered the check by calling a tool, as the assistant requires.' }) toolCalling!: boolean;
+}
+
+export class AssistantUsageMemberDto {
+  @ApiProperty() userId!: string;
+  @ApiProperty() displayName!: string;
+  @ApiProperty() requests!: number;
+  @ApiProperty() inputTokens!: number;
+  @ApiProperty() outputTokens!: number;
+}
+
+export class AssistantProviderUsageDto {
+  @ApiProperty({ description: 'UTC calendar month, YYYY-MM.' }) month!: string;
+  @ApiProperty() requests!: number;
+  @ApiProperty() inputTokens!: number;
+  @ApiProperty() outputTokens!: number;
+  @ApiProperty({ type: [AssistantUsageMemberDto] }) members!: AssistantUsageMemberDto[];
+}
+
 export class AssistantProviderResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() name!: string;
@@ -24,6 +53,8 @@ export class AssistantProviderResponseDto {
   @ApiProperty() ownedByMe!: boolean;
   @ApiProperty() hasCredential!: boolean;
   @ApiProperty() updatedAt!: string;
+  @ApiProperty({ type: AssistantProviderUsageDto, nullable: true, description: 'This month\'s usage by member, shown to the configuration owner only.' })
+  usage!: AssistantProviderUsageDto | null;
 }
 
 export class AssistantProviderListResponseDto {
@@ -41,7 +72,8 @@ export class SendAssistantMessageDto {
 }
 
 export class DecideAssistantActionDto {
-  @ApiProperty() @IsBoolean() approve!: boolean;
+  @ApiProperty({ type: [String], description: 'Pending actions to execute. Every other pending action is declined; an empty list declines them all.' })
+  @IsArray() @ArrayMaxSize(16) @IsString({ each: true }) @Length(1, 200, { each: true }) approvedIds!: string[];
   @ApiProperty() @IsInt() @Min(0) expectedVersion!: number;
 }
 
@@ -51,6 +83,7 @@ export class AssistantVisibleMessageDto {
 }
 
 export class AssistantPendingActionDto {
+  @ApiProperty() id!: string;
   @ApiProperty() name!: string;
   @ApiProperty({ type: 'object', additionalProperties: true }) arguments!: Record<string, unknown>;
 }
@@ -70,7 +103,7 @@ export class AssistantConversationResponseDto extends AssistantConversationSumma
   @ApiProperty() version!: number;
   @ApiProperty({ enum: ['idle', 'running'] }) state!: 'idle' | 'running';
   @ApiProperty({ type: [AssistantVisibleMessageDto] }) messages!: AssistantVisibleMessageDto[];
-  @ApiProperty({ type: AssistantPendingActionDto, nullable: true }) pendingAction!: AssistantPendingActionDto | null;
+  @ApiProperty({ type: [AssistantPendingActionDto] }) pendingActions!: AssistantPendingActionDto[];
 }
 
 export class AssistantHouseholdParam {

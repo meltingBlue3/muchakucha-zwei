@@ -31,8 +31,9 @@ export function AssistantModelPicker({ householdId, providers, selectedId, busy,
         <Inline><Text variant="label" style={{ flex: 1 }}>{provider.name}</Text>{provider.id === selectedId ? <Check size={theme.controlSizes.icon} color={theme.colors.coral} /> : null}</Inline>
         <Text variant="caption">{provider.model} · {provider.visibility === 'private' ? '仅自己可用' : provider.ownedByMe ? '你共享给家庭' : '家人共享'}</Text>
         <Text variant="caption">{provider.baseUrl}</Text>
+        {provider.hasCredential ? null : <Text variant="caption" color="destructive">{provider.ownedByMe ? '密钥无法读取，请在模型配置中重新填写。' : '密钥无法读取，请联系配置创建者重新填写。'}</Text>}
       </Pressable>)}
-      <Text variant="caption">对话和查询到的家庭数据会发送到所选服务。使用共享模型时，费用由配置者承担。</Text>
+      <Text variant="caption">对话和查询到的家庭数据会发送到所选服务，该服务能看到这些内容。共享模型的服务地址由配置者填写，费用也由配置者承担；配置者能看到每位家人的使用次数和用量，看不到对话内容。</Text>
       <Button label="模型配置" tone="secondary" onPress={() => { setOpen(false); router.push(`${assistantPath(householdId)}/providers`); }} />
     </Stack></AppDialog> : null}
   </>;

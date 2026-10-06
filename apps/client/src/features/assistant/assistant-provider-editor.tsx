@@ -6,7 +6,7 @@ import { Banner, LoadError, LoadingState, Stack, Text } from '../../ui/primitive
 import { RouteWindow } from '../../ui/route-window';
 import { AssistantBoundary, assistantPath, type AssistantHouseholdProps } from './assistant-boundary';
 import { AssistantProviderForm, type AssistantProviderInput } from './provider-form';
-import { useAssistantOperation, useAssistantQuery } from './assistant-runtime';
+import { assistantToken, useAssistantOperation, useAssistantQuery } from './assistant-runtime';
 
 function ProviderEditor({ householdId, householdName, writable }: AssistantHouseholdProps) {
   const { providerId } = useLocalSearchParams<{ providerId?: string }>();
@@ -23,6 +23,11 @@ function ProviderEditor({ householdId, householdName, writable }: AssistantHouse
       : sessionApiClient.createAssistantProvider(token, householdId, { ...input, apiKey: input.apiKey ?? '' }));
     if (result) close();
   };
+  // Without a newly typed key, the server checks with the key saved for this configuration.
+  const check = async (input: AssistantProviderInput) => sessionApiClient.checkAssistantProvider(await assistantToken(), householdId, {
+    protocol: input.protocol, baseUrl: input.baseUrl, model: input.model,
+    ...(input.apiKey ? { apiKey: input.apiKey } : provider ? { providerId: provider.id } : {}),
+  });
   return <RouteWindow title={providerId ? '编辑模型配置' : '添加模型配置'} busy={operation.busy} resource="settings" onClose={close} fallback={<AppShell title="助手模型配置"><Text>管理当前家庭的模型配置</Text></AppShell>}>
     <Stack gap={4}>
       <HouseholdContextNote householdName={householdName} />
@@ -32,7 +37,7 @@ function ProviderEditor({ householdId, householdName, writable }: AssistantHouse
       {query.loading && !query.data ? <LoadingState label="正在加载模型配置" /> : null}
       {query.data && providerId && !provider ? <Text>这项配置已删除或不再共享。</Text> : null}
       {provider && !provider.ownedByMe ? <Text>只有配置创建者可以编辑。你可以创建自己的配置。</Text> : null}
-      {writable && query.data && (!providerId || provider?.ownedByMe) ? <AssistantProviderForm key={provider?.updatedAt ?? 'new'} {...(provider ? { initial: provider } : {})} busy={operation.busy} onCancel={close} onSubmit={save} /> : null}
+      {writable && query.data && (!providerId || provider?.ownedByMe) ? <AssistantProviderForm key={provider?.updatedAt ?? 'new'} {...(provider ? { initial: provider } : {})} busy={operation.busy} onCancel={close} onSubmit={save} onCheck={check} /> : null}
     </Stack>
   </RouteWindow>;
 }

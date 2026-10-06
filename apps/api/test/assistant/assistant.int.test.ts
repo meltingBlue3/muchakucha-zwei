@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createApplication } from '../../src/main.js';
 import { AssistantProvider } from '../../src/modules/assistant/assistant-provider.js';
+import { AssistantProviderFailure } from '../../src/modules/assistant/assistant-transport.js';
 import type { AssistantCompletion } from '../../src/modules/assistant/assistant.types.js';
 import type { AssistantConversationResponseDto, AssistantProviderResponseDto } from '../../src/modules/assistant/dto/assistant.dto.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
@@ -91,8 +93,10 @@ function send(actor: ActorFixture, householdId: string, conversation: AssistantC
   });
 }
 
+/** Approves every pending action, or declines them all. */
 function decide(actor: ActorFixture, householdId: string, conversation: AssistantConversationResponseDto, approve = true) {
-  return assistant(actor, householdId, 'POST', `/conversations/${conversation.id}/decision`, { approve, expectedVersion: conversation.version });
+  const approvedIds = approve ? conversation.pendingActions.map(action => action.id) : [];
+  return assistant(actor, householdId, 'POST', `/conversations/${conversation.id}/decision`, { approvedIds, expectedVersion: conversation.version });
 }
 
 function tool(name: string, args: Record<string, unknown>): AssistantCompletion {
@@ -154,6 +158,73 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect(JSON.stringify(complete.mock.calls[0]?.slice(1))).not.toContain(providerSecret);
   });
 
+  test('a connection check sends one harmless tool call and never household data', async () => {
+    const form = { protocol: 'openai-compatible', baseUrl: 'https://api.example.com/v1/', model: 'test-tool-model' };
+    complete.mockResolvedValueOnce(tool('connection_check', {}));
+    const typed = await assistant(member, householdId, 'POST', '/providers/check', { ...form, apiKey: 'sk-typed-into-the-form' });
+    expect(typed.statusCode).toBe(200);
+    expect(typed.json()).toEqual({ toolCalling: true });
+    const [config, , messages, definitions] = complete.mock.calls[0]!;
+    expect(config).toEqual({ protocol: 'openai-compatible', baseUrl: 'https://api.example.com/v1', model: 'test-tool-model', apiKey: 'sk-typed-into-the-form' });
+    expect(messages).toEqual([{ role: 'user', content: 'connection check' }]);
+    expect(definitions.map(definition => definition.name)).toEqual(['connection_check']);
+
+    // A text-only reply connects but cannot drive the assistant's tools.
+    const provider = await createProvider(owner, householdId, 'household');
+    complete.mockResolvedValueOnce({ content: '你好', toolCalls: [] });
+    const saved = await assistant(owner, householdId, 'POST', '/providers/check', { ...form, providerId: provider.id });
+    expect(saved.json()).toEqual({ toolCalling: false });
+    expect(complete.mock.calls[1]?.[0].apiKey).toBe(providerSecret);
+
+    // Sharing a configuration never lends its saved key to another member's check.
+    const borrowed = await assistant(member, householdId, 'POST', '/providers/check', { ...form, baseUrl: 'https://collector.example.com/v1', providerId: provider.id });
+    expect(borrowed.statusCode).toBe(403);
+    expect((await assistant(owner, householdId, 'POST', '/providers/check', form)).statusCode).toBe(400);
+    expect((await assistant(outsider, householdId, 'POST', '/providers/check', { ...form, apiKey: 'sk-outsider' })).statusCode).toBe(404);
+    expect((await assistant(owner, householdId, 'POST', '/providers/check', { ...form, baseUrl: 'https://10.0.0.1/v1', apiKey: 'sk-test' })).json().error.code).toBe('ASSISTANT_ENDPOINT_INVALID');
+    expect(complete).toHaveBeenCalledTimes(2);
+  });
+
+  test('starting a conversation replaces an untouched one and keeps every conversation with messages', async () => {
+    const provider = await createProvider(owner, householdId, 'household');
+    const untouched = await createConversation(owner, householdId, provider.id);
+    const used = await createConversation(owner, householdId, provider.id);
+    expect((await send(owner, householdId, used, '记得买菜')).statusCode).toBe(200);
+    const othersEmpty = await createConversation(member, householdId, provider.id);
+    const latest = await createConversation(owner, householdId, provider.id);
+    const listed = (await assistant(owner, householdId, 'GET', '/conversations')).json().conversations.map((item: { id: string }) => item.id);
+    expect(listed.sort()).toEqual([used.id, latest.id].sort());
+    expect((await assistant(owner, householdId, 'GET', `/conversations/${untouched.id}`)).statusCode).toBe(404);
+    // Cleanup is per member: another member's empty conversation is not touched.
+    expect((await assistant(member, householdId, 'GET', `/conversations/${othersEmpty.id}`)).statusCode).toBe(200);
+  });
+
+  test('the owner of a shared configuration sees this month\'s usage by member; members do not', async () => {
+    const provider = await createProvider(owner, householdId, 'household');
+    complete.mockResolvedValue({ content: '好的。', toolCalls: [], usage: { inputTokens: 1_000, outputTokens: 50 } });
+    await send(member, householdId, await createConversation(member, householdId, provider.id));
+    const memberConversation = (await assistant(member, householdId, 'GET', '/conversations')).json().conversations[0] as { id: string };
+    await send(member, householdId, (await assistant(member, householdId, 'GET', `/conversations/${memberConversation.id}`)).json() as AssistantConversationResponseDto, '再问一次');
+    await send(owner, householdId, await createConversation(owner, householdId, provider.id));
+    const usage = (await assistant(owner, householdId, 'GET', '/providers')).json().providers[0].usage;
+    expect(usage).toMatchObject({ month: new Date().toISOString().slice(0, 7), requests: 3, inputTokens: 3_000, outputTokens: 150 });
+    expect(usage.members).toEqual([
+      { userId: member.userId, displayName: 'assistant-member', requests: 2, inputTokens: 2_000, outputTokens: 100 },
+      { userId: owner.userId, displayName: 'assistant-owner', requests: 1, inputTokens: 1_000, outputTokens: 50 },
+    ]);
+    expect((await assistant(member, householdId, 'GET', '/providers')).json().providers[0].usage).toBeNull();
+  });
+
+  test('a provider failure reaches the check as its stable code', async () => {
+    complete.mockRejectedValueOnce(new AssistantProviderFailure('ASSISTANT_PROVIDER_AUTH_FAILED', 'The model provider rejected the credential.', 'status 401'));
+    const response = await assistant(owner, householdId, 'POST', '/providers/check', {
+      protocol: 'anthropic', baseUrl: 'https://api.example.com/v1', model: 'test-tool-model', apiKey: 'sk-wrong',
+    });
+    expect(response.statusCode).toBe(502);
+    expect(response.json().error.code).toBe('ASSISTANT_PROVIDER_AUTH_FAILED');
+    expect(JSON.stringify(response.json())).not.toContain('status 401');
+  });
+
   test('private configurations are inaccessible to another member; sharing grants use without management', async () => {
     const provider = await createProvider(owner, householdId);
     expect((await assistant(member, householdId, 'GET', '/providers')).json().providers).toEqual([]);
@@ -184,9 +255,19 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     const conversation = await createConversation(member, householdId, provider.id);
     const previous = await send(member, householdId, conversation, '这是发给旧模型的私人问题');
     expect(previous.statusCode).toBe(200);
-    const current = previous.json() as AssistantConversationResponseDto;
+    let current = previous.json() as AssistantConversationResponseDto;
+    // Renaming, choosing another model or replacing the key keeps the destination, so the conversation continues.
+    const renamed = await assistant(owner, householdId, 'PUT', `/providers/${provider.id}`, {
+      name: '换了名字', model: 'newer-tool-model', apiKey: 'sk-rotated-key', baseUrl: 'https://api.example.com/v1/', expectedUpdatedAt: provider.updatedAt,
+    });
+    expect(renamed.statusCode).toBe(200);
+    complete.mockClear();
+    const continued = await send(member, householdId, current, '继续问');
+    expect(continued.statusCode).toBe(200);
+    expect(complete.mock.calls[0]?.[0]).toMatchObject({ model: 'newer-tool-model', apiKey: 'sk-rotated-key' });
+    current = continued.json() as AssistantConversationResponseDto;
     const changed = await assistant(owner, householdId, 'PUT', `/providers/${provider.id}`, {
-      baseUrl: 'https://other.example.com/v1', expectedUpdatedAt: provider.updatedAt,
+      baseUrl: 'https://other.example.com/v1', expectedUpdatedAt: renamed.json().updatedAt,
     });
     expect(changed.statusCode).toBe(200);
     complete.mockClear();
@@ -234,7 +315,7 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     complete.mockResolvedValueOnce(tool('create_note', { title: '撤销共享后的写入' }));
     const proposal = await send(member, householdId, conversation);
     expect(proposal.statusCode).toBe(200);
-    expect(proposal.json().pendingAction?.name).toBe('create_note');
+    expect(proposal.json().pendingActions[0]?.name).toBe('create_note');
     expect((await assistant(owner, householdId, 'PUT', `/providers/${provider.id}`, { visibility: 'private', expectedUpdatedAt: provider.updatedAt })).statusCode).toBe(200);
     expect((await decide(member, householdId, proposal.json() as AssistantConversationResponseDto)).statusCode).toBe(404);
     expect((await notes(owner, householdId)).total).toBe(0);
@@ -270,7 +351,7 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect(modelContext).toContain('本周采购');
     expect(modelContext).not.toContain('外部秘密');
     expect(modelContext).not.toContain('不能出现在查询中');
-    expect(response.json().pendingAction).toBeNull();
+    expect(response.json().pendingActions).toEqual([]);
     expect((await notes(owner, householdId)).total).toBe(1);
   });
 
@@ -281,14 +362,35 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     const proposal = await send(member, householdId, conversation, '记下购物清单：牛奶和鸡蛋');
     expect(proposal.statusCode).toBe(200);
     const pending = proposal.json() as AssistantConversationResponseDto;
-    expect(pending.pendingAction).toMatchObject({ name: 'create_note', arguments: { title: '购物清单' } });
+    expect(pending.pendingActions).toMatchObject([{ name: 'create_note', arguments: { title: '购物清单' } }]);
     expect((await notes(owner, householdId)).total).toBe(0);
     const result = await decide(member, householdId, pending);
     expect(result.statusCode).toBe(200);
-    expect(result.json().pendingAction).toBeNull();
+    expect(result.json().pendingActions).toEqual([]);
     const replay = await decide(member, householdId, pending);
     expect(replay.statusCode).toBe(409);
     expect((await notes(owner, householdId)).notes).toEqual([expect.objectContaining({ title: '购物清单', body: '牛奶\n鸡蛋', createdBy: member.userId })]);
+  });
+
+  test('a batch of proposals writes exactly the approved items, in order, and reports each one', async () => {
+    const provider = await createProvider(owner, householdId);
+    const conversation = await createConversation(owner, householdId, provider.id);
+    const batch = ['周一买菜', '周二倒垃圾', '周三交水费'].map(title => tool('create_note', { title }).toolCalls[0]!);
+    complete.mockResolvedValueOnce({ content: '', toolCalls: batch });
+    const proposal = (await send(owner, householdId, conversation, '记下这三件事')).json() as AssistantConversationResponseDto;
+    expect(proposal.pendingActions.map(action => action.arguments.title)).toEqual(['周一买菜', '周二倒垃圾', '周三交水费']);
+    expect((await notes(owner, householdId)).total).toBe(0);
+    const decision = (approvedIds: string[]) => assistant(owner, householdId, 'POST', `/conversations/${proposal.id}/decision`, { approvedIds, expectedVersion: proposal.version });
+    expect((await decision([batch[0]!.id, 'call_not_proposed'])).statusCode).toBe(400);
+    expect((await notes(owner, householdId)).total).toBe(0);
+    complete.mockResolvedValueOnce({ content: '已记下周一和周三的事项。', toolCalls: [] });
+    const result = await decision([batch[2]!.id, batch[0]!.id]);
+    expect(result.statusCode).toBe(200);
+    expect((await notes(owner, householdId)).notes.map(note => note.title).sort()).toEqual(['周一买菜', '周三交水费']);
+    const results = complete.mock.calls[1]![2].filter(message => message.role === 'tool').map(message => JSON.parse(message.content) as { ok: boolean; code?: string });
+    expect(results).toEqual([expect.objectContaining({ ok: false, code: 'USER_DECLINED' }), expect.objectContaining({ ok: true }), expect.objectContaining({ ok: true })]);
+    expect((await decision([batch[0]!.id])).statusCode).toBe(409);
+    expect((await notes(owner, householdId)).total).toBe(2);
   });
 
   test('rejecting a proposed action leaves business data unchanged', async () => {
@@ -299,7 +401,7 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect(proposal.statusCode).toBe(200);
     const response = await decide(owner, householdId, proposal.json() as AssistantConversationResponseDto, false);
     expect(response.statusCode).toBe(200);
-    expect(response.json().pendingAction).toBeNull();
+    expect(response.json().pendingActions).toEqual([]);
     expect((await notes(owner, householdId)).total).toBe(0);
   });
 
@@ -383,7 +485,7 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     complete.mockResolvedValueOnce(tool('delete_note', { id: created.json().id, expectedUpdatedAt: created.json().updatedAt }));
     const proposed = await send(owner, householdId, conversation);
     expect(proposed.statusCode).toBe(200);
-    expect(proposed.json().pendingAction?.name).toBe('delete_note');
+    expect(proposed.json().pendingActions[0]?.name).toBe('delete_note');
     expect((await request(owner, 'PUT', `/households/${householdId}/notes/${created.json().id}`, { expectedUpdatedAt: created.json().updatedAt, body: '新写入的重要信息' })).statusCode).toBe(200);
     const result = await decide(owner, householdId, proposed.json() as AssistantConversationResponseDto);
     expect(JSON.stringify(result.json())).toContain('EDIT_CONFLICT');
@@ -398,7 +500,7 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     complete.mockResolvedValueOnce(tool('delete_label', { id: created.json().id, expectedName: '采购', expectedColor: '#336699' }));
     const proposed = await send(owner, householdId, conversation);
     expect(proposed.statusCode).toBe(200);
-    expect(proposed.json().pendingAction?.name).toBe('delete_label');
+    expect(proposed.json().pendingActions[0]?.name).toBe('delete_label');
     expect((await request(owner, 'PUT', `/households/${householdId}/labels/${created.json().id}`, { name: '采购与家务' })).statusCode).toBe(200);
     const result = await decide(owner, householdId, proposed.json() as AssistantConversationResponseDto);
     expect(JSON.stringify(result.json())).toContain('EDIT_CONFLICT');
@@ -414,7 +516,7 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     const proposed = await send(member, householdId, conversation, '删除主人笔记');
     expect(proposed.statusCode).toBe(200);
     const pending = proposed.json() as AssistantConversationResponseDto;
-    const result = pending.pendingAction ? await decide(member, householdId, pending) : proposed;
+    const result = pending.pendingActions.length ? await decide(member, householdId, pending) : proposed;
     expect(JSON.stringify(result.json())).toContain('FORBIDDEN');
     expect((await notes(owner, householdId)).notes).toEqual([expect.objectContaining({ id: created.json().id, body: '必须保留' })]);
   });
@@ -426,7 +528,7 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     complete.mockResolvedValueOnce(tool('create_note', { title: '越界笔记', actorId: outsider.userId, householdId: otherHousehold }));
     const response = await send(owner, householdId, conversation);
     expect(response.statusCode).toBe(200);
-    expect(response.json().pendingAction).toBeNull();
+    expect(response.json().pendingActions).toEqual([]);
     expect((await notes(owner, householdId)).total).toBe(0);
     expect((await notes(outsider, otherHousehold)).total).toBe(0);
   });
@@ -446,7 +548,11 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     const provider = await createProvider(owner, householdId);
     const conversation = await createConversation(owner, householdId, provider.id);
     complete.mockRejectedValueOnce(new Error(`Upstream authorization failed: Bearer ${providerSecret}`));
+    const logged = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     const failed = await send(owner, householdId, conversation);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('run failed'), expect.stringMatching(/^Error\n/));
+    expect(JSON.stringify(logged.mock.calls)).not.toContain(providerSecret);
+    logged.mockRestore();
     expect(JSON.stringify(failed.json())).not.toContain(providerSecret);
     const read = await assistant(owner, householdId, 'GET', `/conversations/${conversation.id}`);
     expect(read.statusCode).toBe(200);
@@ -464,7 +570,7 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect(complete.mock.calls.length).toBeGreaterThan(1);
     expect(complete.mock.calls.length).toBeLessThanOrEqual(10);
     expect(response.json().state).toBe('idle');
-    expect(response.json().pendingAction).toBeNull();
+    expect(response.json().pendingActions).toEqual([]);
     expect(JSON.stringify(response.json().messages)).toContain('上限');
     expect((await notes(owner, householdId)).total).toBe(0);
   });
