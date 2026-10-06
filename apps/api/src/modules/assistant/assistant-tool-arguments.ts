@@ -150,7 +150,7 @@ const recurrence: Schema = {
 };
 
 export const listProperties = {
-  query: string(200, 'Case-insensitive substring search across titles, body/description, location and label names.'),
+  query: string(200, 'Case-insensitive search across titles, body/description, location and label names; every space-separated term must appear.'),
   offset: { type: 'integer', minimum: 0, maximum: 100_000, default: 0 },
   limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
 };
@@ -169,7 +169,7 @@ export const taskProperties = {
   status: { type: 'string', enum: TASK_STATUSES },
   priority: { type: 'string', enum: TASK_PRIORITIES },
   assigneeIds: uuidArray,
-  dueDate: string(64, 'ISO date/time with an offset (or YYYY-MM-DD); empty string clears it when updating.'),
+  dueDate: string(64, 'YYYY-MM-DD for a local date without a time, or an ISO date-time with an offset; empty string clears it when updating.'),
 };
 export const noteProperties = { title, body: string(20_000, 'Markdown body. Empty string clears the body.') };
 export const labelProperties = { name: { ...string(40), minLength: 1 }, color: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$' } };

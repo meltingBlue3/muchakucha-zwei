@@ -8,7 +8,7 @@ import type { HouseholdsService } from '../households/households.service.js';
 import { AssistantToolsService } from './assistant-tools.service.js';
 import type { AssistantToolCall } from './assistant.types.js';
 
-const actor = { userId: '10000000-0000-4000-8000-000000000001', householdId: '20000000-0000-4000-8000-000000000001' };
+const actor = { userId: '10000000-0000-4000-8000-000000000001', householdId: '20000000-0000-4000-8000-000000000001', timeZone: 'Asia/Shanghai' };
 const recordId = '30000000-0000-4000-8000-000000000001';
 const otherUserId = '10000000-0000-4000-8000-000000000002';
 const version = '2026-10-04T10:00:00.000Z';
@@ -205,6 +205,12 @@ describe('assistant tool boundary', () => {
     await expect(tools.execute(actor, call('list_notes', { limit: 51 }))).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED' } });
   });
 
+  test('a multi-word search needs every word, in any order', async () => {
+    const { tools, notes } = fixtures();
+    notes.list.mockResolvedValue({ notes: [{ ...note, title: '采购清单（周末）', body: '' }, { ...note, title: '周末出游', body: '' }], total: 2 });
+    await expect(tools.execute(actor, call('list_notes', { query: '周末  采购' }))).resolves.toMatchObject({ total: 1, items: [{ title: '采购清单（周末）' }] });
+  });
+
   test('all chunks of a long note are accessible and include the original edit version', async () => {
     const { tools, notes } = fixtures();
     notes.getById.mockResolvedValue({ ...note, body: 'abcdefgh' });
@@ -219,13 +225,57 @@ describe('assistant tool boundary', () => {
   test('event reads never request materialization and disclose recurrence coverage', async () => {
     const { tools, events } = fixtures();
     await expect(tools.execute(actor, call('list_events', { startDate: '2026-10-04', endDate: '2026-10-10', recurring: true }))).resolves.toMatchObject({ recurringCoverage: 'materialized_occurrences_only', materializedThrough: null });
-    expect(events.list).toHaveBeenCalledWith(actor.userId, actor.householdId, { startDate: '2026-10-04', endDate: '2026-10-10', recurring: 'true' });
+    expect(events.list).toHaveBeenCalledWith(actor.userId, actor.householdId, { startDate: '2026-10-03', endDate: '2026-10-11', recurring: 'true' });
   });
 
-  test('task due-date filtering excludes undated tasks and keeps service-provided filters', async () => {
+  test('event date bounds are local days in the conversation time zone', async () => {
+    const { tools, events } = fixtures();
+    const at = (title: string, startTime: string, endTime: string) => ({ ...event, title, startTime, endTime });
+    events.list.mockResolvedValue({ events: [
+      at('previous-evening', '2026-10-06T12:00:00.000Z', '2026-10-06T13:00:00.000Z'), // 10-06 20:00 local
+      at('early-morning', '2026-10-06T23:00:00.000Z', '2026-10-07T00:00:00.000Z'), // 10-07 07:00 local, 10-06 in UTC
+      at('late-night', '2026-10-07T15:30:00.000Z', '2026-10-07T16:30:00.000Z'), // 10-07 23:30 local, runs into 10-08
+      at('next-day', '2026-10-07T16:00:00.000Z', '2026-10-07T17:00:00.000Z'), // 10-08 00:00 local
+    ], total: 4, materializedThrough: null });
+    await expect(tools.execute(actor, call('list_events', { startDate: '2026-10-07', endDate: '2026-10-07' }))).resolves.toMatchObject({
+      total: 2, timeZone: 'Asia/Shanghai', items: [
+        { title: 'early-morning', startLocal: '2026-10-07 周三 07:00', endLocal: '2026-10-07 周三 08:00' },
+        { title: 'late-night', startLocal: '2026-10-07 周三 23:30', endLocal: '2026-10-08 周四 00:30' },
+      ],
+    });
+  });
+
+  test('task due-date filtering uses local dates, excludes undated tasks and keeps service-provided filters', async () => {
     const { tools, tasks } = fixtures();
-    tasks.list.mockResolvedValue({ tasks: [task, { ...task, dueDate: '2026-10-05T12:00:00.000Z' }], total: 2, materializedThrough: '2026-10-10' });
-    await expect(tools.execute(actor, call('list_tasks', { status: 'pending', dueFrom: '2026-10-05', dueThrough: '2026-10-06' }))).resolves.toMatchObject({ total: 1, materializedThrough: '2026-10-10' });
+    tasks.list.mockResolvedValue({ tasks: [
+      task,
+      { ...task, title: 'utc-same-day', dueDate: '2026-10-05T12:00:00.000Z' }, // 10-05 20:00 local
+      { ...task, title: 'local-next-day', dueDate: '2026-10-06T23:00:00.000Z' }, // 10-07 07:00 local, 10-06 in UTC
+      { ...task, title: 'local-midnight', dueDate: '2026-10-05T16:00:00.000Z' }, // 10-06 without a time
+    ], total: 4, materializedThrough: '2026-10-10' });
+    await expect(tools.execute(actor, call('list_tasks', { status: 'pending', dueFrom: '2026-10-06', dueThrough: '2026-10-07' }))).resolves.toMatchObject({
+      total: 2, materializedThrough: '2026-10-10',
+      items: [{ title: 'local-next-day', dueLocal: '2026-10-07 周三 07:00' }, { title: 'local-midnight', dueLocal: '2026-10-06 周二' }],
+    });
     expect(tasks.list).toHaveBeenCalledWith(actor.userId, actor.householdId, expect.objectContaining({ status: 'pending' }));
+  });
+
+  test('a date-only due date is proposed and written as local midnight', async () => {
+    const { tools, tasks } = fixtures();
+    const request = call('create_task', { title: '交水费', dueDate: '2026-10-07' });
+    await expect(tools.prepare(actor, request)).resolves.toMatchObject({ arguments: { title: '交水费', dueDate: '2026-10-06T16:00:00.000Z' } });
+    await tools.execute(actor, request);
+    expect(tasks.create).toHaveBeenCalledWith(actor.userId, actor.householdId, expect.objectContaining({ dueDate: '2026-10-06T16:00:00.000Z' }));
+    await expect(tools.prepare(actor, call('create_task', { title: '交水费', dueDate: '2026-02-30' }))).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED' } });
+  });
+
+  test('all-day events cover whole local days and read a midnight end as exclusive', async () => {
+    const { tools, events } = fixtures();
+    const prepared = await tools.prepare(actor, call('create_event', {
+      title: '秋游', allDay: true, startTime: '2026-10-07T00:00:00+08:00', endTime: '2026-10-09T00:00:00+08:00',
+    }));
+    expect(prepared.arguments).toMatchObject({ startTime: '2026-10-06T16:00:00.000Z', endTime: '2026-10-08T15:59:59.000Z' });
+    await tools.execute(actor, prepared);
+    expect(events.create).toHaveBeenCalledWith(actor.userId, actor.householdId, expect.objectContaining({ startTime: '2026-10-06T16:00:00.000Z', endTime: '2026-10-08T15:59:59.000Z' }));
   });
 });

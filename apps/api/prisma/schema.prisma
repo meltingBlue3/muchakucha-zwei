@@ -27,6 +27,7 @@ model User {
   taskAssignments     TaskAssignee[]
   createdNotes        Note[]
   createdLabels       Label[]
+  assistantUsage      AssistantUsage[]
 }
 
 model Household {
@@ -284,10 +285,13 @@ model AssistantProvider {
   model String @db.VarChar(120)
   visibility String @default("private") @db.VarChar(16)
   encryptedApiKey String @map("encrypted_api_key") @db.Text
+  /// Changes only with the protocol or base URL; conversations are bound to it.
+  destinationUpdatedAt DateTime @default(now()) @map("destination_updated_at") @db.Timestamptz(3)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   ownerMembership Membership @relation(fields: [ownerId, householdId], references: [userId, householdId], onDelete: Cascade, map: "assistant_providers_owner_fkey")
   conversations AssistantConversation[]
+  usage AssistantUsage[]
 
   @@index([householdId, visibility], map: "AssistantProvider_household_visibility_idx")
   @@map("assistant_providers")
@@ -312,4 +316,20 @@ model AssistantConversation {
 
   @@index([householdId, userId, updatedAt], map: "AssistantConversation_owner_updated_idx")
   @@map("assistant_conversations")
+}
+
+/// Requests and tokens per configuration, member and UTC calendar month. Counts only, never content.
+model AssistantUsage {
+  providerId String @map("provider_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  month DateTime @db.Date
+  requests Int @default(0)
+  inputTokens BigInt @default(0) @map("input_tokens")
+  outputTokens BigInt @default(0) @map("output_tokens")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  provider AssistantProvider @relation(fields: [providerId], references: [id], onDelete: Cascade, map: "assistant_usage_provider_fkey")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, map: "assistant_usage_user_fkey")
+
+  @@id([providerId, userId, month], map: "assistant_usage_pkey")
+  @@map("assistant_usage")
 }

@@ -4,6 +4,7 @@ import { request } from 'node:https';
 import { BlockList, isIP } from 'node:net';
 
 const MAX_BODY_BYTES = 1_048_576;
+const MAX_ERROR_BODY_BYTES = 16_384;
 const REQUEST_TIMEOUT_MS = 45_000;
 const DNS_TIMEOUT_MS = 5_000;
 const blockedV4 = new BlockList();
@@ -37,8 +38,48 @@ function unsafeEndpoint(): BadRequestException {
   });
 }
 
-export function assistantProviderFailure(): BadGatewayException {
-  return new BadGatewayException({ code: 'ASSISTANT_PROVIDER_FAILED', message: 'The model provider request failed. Check the endpoint, model and credentials.' });
+/** `diagnostic` is a short structural note for server logs, such as a status or socket error code.
+ * Upstream text and credentials never leave this module; clients receive only the stable code. */
+export class AssistantProviderFailure extends BadGatewayException {
+  constructor(code: string, message: string, readonly diagnostic: string) {
+    super({ code, message });
+  }
+}
+
+export function assistantProviderFailure(diagnostic = 'transport'): AssistantProviderFailure {
+  return new AssistantProviderFailure('ASSISTANT_PROVIDER_FAILED', 'The model provider request failed. Check the endpoint, model and credentials.', diagnostic);
+}
+
+const upstreamFailures = {
+  AUTH_FAILED: 'The model provider rejected the credential.',
+  QUOTA_EXCEEDED: 'The model provider account has no remaining quota.',
+  RATE_LIMITED: 'The model provider is limiting requests.',
+  ENDPOINT_NOT_FOUND: 'The model provider does not know this endpoint or model.',
+  CONTEXT_TOO_LONG: 'The conversation exceeds the model context window.',
+  TOOLS_UNSUPPORTED: 'The model does not support tool calls.',
+  UNAVAILABLE: 'The model provider is unavailable.',
+  REJECTED: 'The model provider rejected the request.',
+} as const;
+
+function classifyUpstream(status: number, text: string): keyof typeof upstreamFailures {
+  if (status === 401 || status === 403 || /api[_ -]?key|unauthori[sz]ed|authentication/.test(text)) return 'AUTH_FAILED';
+  if (status === 402 || /insufficient[_ ]?(quota|balance|funds)|exceeded your current quota|credit balance|billing|arrearage|余额不足|欠费/.test(text)) return 'QUOTA_EXCEEDED';
+  if (status === 429) return 'RATE_LIMITED';
+  if (status === 404 || /model.{0,40}(not[ _]?(found|exist)|does not exist)|(unknown|invalid) model/.test(text)) return 'ENDPOINT_NOT_FOUND';
+  if (status === 413 || /context[_ ]?(length|window)|maximum context|too many tokens|prompt is too long|input is too long|token limit/.test(text)) return 'CONTEXT_TOO_LONG';
+  if (/(tools?|function[_ ]?call(ing)?|tool[_ ]choice).{0,60}(not supported|unsupported|does not support|not support)|(not supported|unsupported|does not support).{0,60}(tools?\b|function)/.test(text)) return 'TOOLS_UNSUPPORTED';
+  return status >= 500 ? 'UNAVAILABLE' : 'REJECTED';
+}
+
+/** Classified from the status and a bounded error body read on the server; the body is then discarded. */
+export function upstreamFailure(status: number, body: string): AssistantProviderFailure {
+  const kind = classifyUpstream(status, body.toLowerCase());
+  return new AssistantProviderFailure(`ASSISTANT_PROVIDER_${kind}`, upstreamFailures[kind], `status ${status}`);
+}
+
+function connectionFailure(error: unknown): AssistantProviderFailure {
+  const code = typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string' && /^[A-Z_]{1,40}$/.test(error.code) ? error.code : 'unknown';
+  return assistantProviderFailure(`connection ${code}`);
 }
 
 function providerTimeout(): GatewayTimeoutException {
@@ -80,7 +121,7 @@ async function resolvePublicAddress(hostname: string): Promise<{ address: string
     return { address: selected.address, family: selected.family };
   } catch (error) {
     if (error instanceof BadRequestException || error instanceof GatewayTimeoutException) throw error;
-    throw assistantProviderFailure();
+    throw assistantProviderFailure('dns');
   } finally { clearTimeout(timer); }
 }
 
@@ -106,9 +147,28 @@ export const postAssistantJson: AssistantTransport = async (url, headers, body) 
       headers: { ...headers, 'content-type': 'application/json', accept: 'application/json', 'content-length': Buffer.byteLength(payload) },
     }, (response) => {
       // Never forward Location, response bodies or raw transport errors to clients.
-      if (response.statusCode === undefined || response.statusCode < 200 || response.statusCode >= 300) {
-        response.destroy();
-        reject(assistantProviderFailure());
+      const status = response.statusCode;
+      if (status === undefined || status < 200 || status >= 300) {
+        if (status === undefined || status < 400) {
+          response.destroy();
+          reject(assistantProviderFailure(`status ${status ?? 'missing'}`));
+          return;
+        }
+        // An error body is read only far enough to tell a bad key from a full context window.
+        const errorChunks: Buffer[] = [];
+        let errorSize = 0;
+        const settle = () => {
+          response.destroy();
+          reject(upstreamFailure(status, Buffer.concat(errorChunks).toString('utf8')));
+        };
+        response.on('data', (chunk: Buffer) => {
+          errorChunks.push(chunk);
+          errorSize += chunk.length;
+          if (errorSize >= MAX_ERROR_BODY_BYTES) settle();
+        });
+        response.on('end', settle);
+        response.on('error', () => reject(signal.aborted ? providerTimeout() : upstreamFailure(status, '')));
+        response.on('aborted', () => reject(signal.aborted ? providerTimeout() : upstreamFailure(status, '')));
         return;
       }
       const chunks: Buffer[] = [];
@@ -118,19 +178,19 @@ export const postAssistantJson: AssistantTransport = async (url, headers, body) 
         if (size > MAX_BODY_BYTES) {
           response.destroy();
           req.destroy();
-          reject(assistantProviderFailure());
+          reject(assistantProviderFailure('response too large'));
           return;
         }
         chunks.push(chunk);
       });
-      response.on('error', () => reject(signal.aborted ? providerTimeout() : assistantProviderFailure()));
-      response.on('aborted', () => reject(signal.aborted ? providerTimeout() : assistantProviderFailure()));
+      response.on('error', (error) => reject(signal.aborted ? providerTimeout() : connectionFailure(error)));
+      response.on('aborted', () => reject(signal.aborted ? providerTimeout() : assistantProviderFailure('response aborted')));
       response.on('end', () => {
         try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown); }
-        catch { reject(assistantProviderFailure()); }
+        catch { reject(assistantProviderFailure('response not json')); }
       });
     });
-    req.on('error', () => reject(signal.aborted ? providerTimeout() : assistantProviderFailure()));
+    req.on('error', (error) => reject(signal.aborted ? providerTimeout() : connectionFailure(error)));
     req.end(payload);
   });
 };

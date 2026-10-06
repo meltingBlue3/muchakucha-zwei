@@ -1,10 +1,11 @@
-import { NotFoundException } from '@nestjs/common';
+import { Logger, NotFoundException } from '@nestjs/common';
 import { describe, expect, test, vi } from 'vitest';
 import { Prisma, type AssistantConversation } from '../../generated/prisma/client.js';
 import type { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type { AssistantProvider } from './assistant-provider.js';
 import type { AssistantSettingsService } from './assistant-settings.service.js';
 import type { AssistantToolsService } from './assistant-tools.service.js';
+import { AssistantProviderFailure } from './assistant-transport.js';
 import { AssistantService } from './assistant.service.js';
 import type { AssistantActor, AssistantCompletion, AssistantMessage, AssistantToolCall } from './assistant.types.js';
 
@@ -17,7 +18,7 @@ function fixture() {
     createdAt: new Date(), updatedAt: new Date(),
   };
   const requireProvider = vi.fn().mockResolvedValue({ id: 'provider-1' });
-  const settings = { requireMember: vi.fn().mockResolvedValue(undefined), requireProvider,
+  const settings = { requireMember: vi.fn().mockResolvedValue(undefined), requireProvider, recordUsage: vi.fn().mockResolvedValue(undefined),
     resolve: vi.fn().mockImplementation(async () => {
       await requireProvider();
       return { protocol: 'openai-compatible', baseUrl: 'https://api.example.com/v1', model: 'test', apiKey: 'test-credential' };
@@ -30,7 +31,7 @@ function fixture() {
       { name: 'list_notes', description: 'Read notes', parameters: {}, mutates: false },
       { name: 'create_note', description: 'Create note', parameters: {}, mutates: true },
     ],
-    prepare: vi.fn<AssistantToolsService['prepare']>().mockResolvedValue(undefined), execute,
+    prepare: vi.fn<AssistantToolsService['prepare']>().mockImplementation(async (_actor, request) => request), execute,
   };
   const database = { assistantConversation: {
     findFirst: vi.fn().mockImplementation(async () => structuredClone(row)),
@@ -82,25 +83,55 @@ describe('assistant runner boundaries', () => {
     expect(state.execute).toHaveBeenCalledTimes(24);
     expect(state.complete).toHaveBeenCalledTimes(3);
     expect(result.state).toBe('idle');
-    expect(result.pendingAction).toBeNull();
+    expect(result.pendingActions).toEqual([]);
     expect(result.messages.at(-1)?.content).toContain('上限');
     assertCompleteToolTurns(state.row.messages as unknown as AssistantMessage[]);
   });
 
-  test('a mixed tool batch executes only its confirmed write and remains valid for continuation', async () => {
+  test('a mixed tool batch runs its reads and proposes its writes; only the approved ones execute', async () => {
     const state = fixture();
     state.complete.mockResolvedValueOnce({ content: '', toolCalls: [call('read_1'), call('write_1', 'create_note'), call('read_2'), call('write_2', 'create_note')] });
     const proposal = await state.service.send(actor, state.row.id, { message: '查询后新增两项', timeZone: 'Asia/Shanghai', expectedVersion: 0 });
-    expect(proposal.pendingAction?.name).toBe('create_note');
-    expect(state.execute.mock.calls.map(([, tool]) => tool.id)).toEqual(['read_1']);
-    const result = await state.service.decide(actor, state.row.id, { approve: true, expectedVersion: proposal.version });
-    expect(result.pendingAction).toBeNull();
-    expect(state.execute.mock.calls.map(([, tool]) => tool.id)).toEqual(['read_1', 'write_1']);
+    expect(proposal.pendingActions.map(action => action.id)).toEqual(['write_1', 'write_2']);
+    expect(state.execute.mock.calls.map(([, tool]) => tool.id)).toEqual(['read_1', 'read_2']);
+    await expect(state.service.decide(actor, state.row.id, { approvedIds: ['write_1', 'invented'], expectedVersion: proposal.version })).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED' } });
+    const result = await state.service.decide(actor, state.row.id, { approvedIds: ['write_2'], expectedVersion: proposal.version });
+    expect(result.pendingActions).toEqual([]);
+    expect(state.execute.mock.calls.map(([, tool]) => tool.id)).toEqual(['read_1', 'read_2', 'write_2']);
     const continuedMessages = state.complete.mock.calls[1]?.[2];
     expect(continuedMessages).toBeDefined();
     assertCompleteToolTurns(continuedMessages!);
-    await expect(state.service.decide(actor, state.row.id, { approve: true, expectedVersion: proposal.version })).rejects.toMatchObject({ response: { code: 'EDIT_CONFLICT' } });
-    expect(state.execute).toHaveBeenCalledTimes(2);
+    expect(continuedMessages!.find(message => message.toolCallId === 'write_1')?.content).toContain('USER_DECLINED');
+    await expect(state.service.decide(actor, state.row.id, { approvedIds: ['write_2'], expectedVersion: proposal.version })).rejects.toMatchObject({ response: { code: 'EDIT_CONFLICT' } });
+    expect(state.execute).toHaveBeenCalledTimes(3);
+  });
+
+  test('declining every proposal executes nothing and answers without calling the model', async () => {
+    const state = fixture();
+    state.complete.mockResolvedValueOnce({ content: '', toolCalls: [call('write_1', 'create_note'), call('write_2', 'create_note')] });
+    const proposal = await state.service.send(actor, state.row.id, { message: '新增两项', timeZone: 'Asia/Shanghai', expectedVersion: 0 });
+    const result = await state.service.decide(actor, state.row.id, { approvedIds: [], expectedVersion: proposal.version });
+    expect(state.execute).not.toHaveBeenCalled();
+    expect(state.complete).toHaveBeenCalledTimes(1);
+    expect(result.messages.at(-1)?.content).toBe('已取消这些操作，没有执行任何修改。');
+    assertCompleteToolTurns(state.row.messages as unknown as AssistantMessage[]);
+  });
+
+  test('earlier turns reach the model shortened while the stored history keeps full results', async () => {
+    const state = fixture();
+    const body = '很长的笔记正文'.repeat(2_000);
+    state.execute.mockResolvedValue({ items: [{ id: 'note-1', title: '旅行清单', body, updatedAt: '2026-10-04T00:00:00.000Z' }], total: 1 });
+    state.complete.mockResolvedValueOnce({ content: '', toolCalls: [call('read_1')] }).mockResolvedValueOnce({ content: '找到了旅行清单。', toolCalls: [] });
+    const first = await state.service.send(actor, state.row.id, { message: '找旅行清单', timeZone: 'Asia/Shanghai', expectedVersion: 0 });
+    // Within the turn that read it, the model sees the full result.
+    expect(JSON.stringify(state.complete.mock.calls[1]?.[2])).toContain(body);
+    state.complete.mockResolvedValueOnce({ content: '好的。', toolCalls: [] });
+    await state.service.send(actor, state.row.id, { message: '谢谢', timeZone: 'Asia/Shanghai', expectedVersion: first.version });
+    const later = JSON.stringify(state.complete.mock.calls[2]?.[2]);
+    expect(later).not.toContain(body);
+    expect(later).not.toContain('2026-10-04T00:00:00.000Z');
+    expect(later).toContain('旅行清单');
+    expect(JSON.stringify(state.row.messages)).toContain(body);
   });
 
   test('revocation during a tool batch stops subsequent queries and repairs unanswered results', async () => {
@@ -118,6 +149,24 @@ describe('assistant runner boundaries', () => {
     assertCompleteToolTurns(state.row.messages as unknown as AssistantMessage[]);
   });
 
+  test('a provider failure tells the user its actual cause and logs no upstream text', async () => {
+    const state = fixture();
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    state.complete.mockRejectedValueOnce(new AssistantProviderFailure('ASSISTANT_PROVIDER_AUTH_FAILED', 'rejected', 'status 401'));
+    const result = await state.service.send(actor, state.row.id, { message: '查询数据', timeZone: 'Asia/Shanghai', expectedVersion: 0 });
+    expect(result.state).toBe('idle');
+    expect(result.messages.at(-1)?.content).toContain('模型服务拒绝了 API 密钥');
+    expect(warn).toHaveBeenCalledWith(`run stopped: conversation ${state.row.id}, provider provider-1, ASSISTANT_PROVIDER_AUTH_FAILED (status 401)`);
+    warn.mockRestore();
+  });
+
+  test('a cut-off answer is kept with a visible notice', async () => {
+    const state = fixture();
+    state.complete.mockResolvedValueOnce({ content: '本周安排如下', toolCalls: [], truncated: true });
+    const result = await state.service.send(actor, state.row.id, { message: '整理本周安排', timeZone: 'Asia/Shanghai', expectedVersion: 0 });
+    expect(result.messages.at(-1)?.content).toMatch(/^本周安排如下\n\n（回答达到模型输出上限/);
+  });
+
   test('concurrent approvals cannot both execute the same proposed write', async () => {
     const state = fixture();
     state.complete.mockResolvedValueOnce({ content: '', toolCalls: [call('write_1', 'create_note')] });
@@ -128,8 +177,8 @@ describe('assistant runner boundaries', () => {
     const blocked = new Promise<AssistantCompletion>(resolve => { release = resolve; });
     state.complete.mockImplementationOnce(async () => { entered(); return blocked; });
     const approvals = Promise.allSettled([
-      state.service.decide(actor, state.row.id, { approve: true, expectedVersion: proposal.version }),
-      state.service.decide(actor, state.row.id, { approve: true, expectedVersion: proposal.version }),
+      state.service.decide(actor, state.row.id, { approvedIds: proposal.pendingActions.map(action => action.id), expectedVersion: proposal.version }),
+      state.service.decide(actor, state.row.id, { approvedIds: proposal.pendingActions.map(action => action.id), expectedVersion: proposal.version }),
     ]);
     await started;
     try {

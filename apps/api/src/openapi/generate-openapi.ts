@@ -418,6 +418,14 @@ export interface CreateAssistantProviderDto {
 export interface UpdateAssistantProviderDto extends Partial<CreateAssistantProviderDto> {
   expectedUpdatedAt: string;
 }
+export interface CheckAssistantProviderDto {
+  providerId?: string;
+  protocol: 'openai-compatible' | 'anthropic';
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+}
+export interface AssistantProviderCheckResponseDto { toolCalling: boolean }
 export interface AssistantProviderResponseDto {
   id: string;
   name: string;
@@ -428,13 +436,16 @@ export interface AssistantProviderResponseDto {
   ownedByMe: boolean;
   hasCredential: boolean;
   updatedAt: string;
+  usage: AssistantProviderUsageDto | null;
 }
+export interface AssistantUsageMemberDto { userId: string; displayName: string; requests: number; inputTokens: number; outputTokens: number }
+export interface AssistantProviderUsageDto { month: string; requests: number; inputTokens: number; outputTokens: number; members: AssistantUsageMemberDto[] }
 export interface AssistantProviderListResponseDto { providers: AssistantProviderResponseDto[] }
 export interface CreateAssistantConversationDto { providerId: string }
 export interface SendAssistantMessageDto { message: string; timeZone: string; expectedVersion: number }
-export interface DecideAssistantActionDto { approve: boolean; expectedVersion: number }
+export interface DecideAssistantActionDto { approvedIds: string[]; expectedVersion: number }
 export interface AssistantVisibleMessageDto { role: 'user' | 'assistant' | 'tool'; content: string }
-export interface AssistantPendingActionDto { name: string; arguments: Record<string, unknown> }
+export interface AssistantPendingActionDto { id: string; name: string; arguments: Record<string, unknown> }
 export interface AssistantConversationSummaryDto { id: string; title: string; updatedAt: string }
 export interface AssistantConversationListResponseDto { conversations: AssistantConversationSummaryDto[] }
 export interface AssistantConversationResponseDto extends AssistantConversationSummaryDto {
@@ -442,7 +453,7 @@ export interface AssistantConversationResponseDto extends AssistantConversationS
   version: number;
   state: 'idle' | 'running';
   messages: AssistantVisibleMessageDto[];
-  pendingAction: AssistantPendingActionDto | null;
+  pendingActions: AssistantPendingActionDto[];
 }
 `;
 
@@ -450,6 +461,8 @@ const clientSource = `// Generated from openapi.json. Do not edit.
 import type {
   CreateAssistantProviderDto,
   UpdateAssistantProviderDto,
+  CheckAssistantProviderDto,
+  AssistantProviderCheckResponseDto,
   AssistantProviderResponseDto,
   AssistantProviderListResponseDto,
   CreateAssistantConversationDto,
@@ -1273,6 +1286,10 @@ export class ApiClient {
 
   async createAssistantProvider(accessToken: string, householdId: string, body: CreateAssistantProviderDto, signal?: AbortSignal): Promise<AssistantProviderResponseDto> {
     return this.authenticated<AssistantProviderResponseDto>('POST', \`/api/v1/households/\${encodeURIComponent(householdId)}/assistant/providers\`, accessToken, body, signal);
+  }
+
+  async checkAssistantProvider(accessToken: string, householdId: string, body: CheckAssistantProviderDto, signal?: AbortSignal): Promise<AssistantProviderCheckResponseDto> {
+    return this.authenticated<AssistantProviderCheckResponseDto>('POST', \`/api/v1/households/\${encodeURIComponent(householdId)}/assistant/providers/check\`, accessToken, body, signal);
   }
 
   async updateAssistantProvider(accessToken: string, householdId: string, providerId: string, body: UpdateAssistantProviderDto, signal?: AbortSignal): Promise<AssistantProviderResponseDto> {

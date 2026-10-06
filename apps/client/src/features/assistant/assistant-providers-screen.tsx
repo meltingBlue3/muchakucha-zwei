@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import Settings from 'lucide-react-native/icons/settings';
+import type { AssistantProviderUsageDto } from '@muchakucha/api-client';
 import { sessionApiClient } from '../auth/session-runtime';
 import { AppShell } from '../../ui/household-components';
 import { PageIntro } from '../../ui/page-intro';
@@ -9,6 +10,22 @@ import { SettingsSection } from '../../ui/settings-section';
 import { theme } from '../../ui/theme';
 import { AssistantBoundary, assistantPath, type AssistantHouseholdProps } from './assistant-boundary';
 import { useAssistantQuery } from './assistant-runtime';
+
+/** Token counts in the units people read: 8500 or 3.2 万. */
+export function formatTokens(count: number): string {
+  return count >= 10_000 ? `${(count / 10_000).toFixed(1).replace(/\.0$/, '')} 万` : String(count);
+}
+
+/** What a configuration cost its owner this month, by member. */
+export function UsageSummary({ usage }: { usage: AssistantProviderUsageDto }) {
+  if (!usage.requests) return <Text variant="caption">本月（UTC）还没有使用。</Text>;
+  return <Stack gap={1}>
+    <Text variant="caption">本月（UTC）：{usage.requests} 次请求，输入 {formatTokens(usage.inputTokens)}、输出 {formatTokens(usage.outputTokens)} tokens</Text>
+    {usage.members.map(member => <Text key={member.userId} variant="caption" color="inkMuted">
+      {member.displayName}：{member.requests} 次，{formatTokens(member.inputTokens + member.outputTokens)} tokens
+    </Text>)}
+  </Stack>;
+}
 
 function AssistantProviders({ householdId, householdName, writable }: AssistantHouseholdProps) {
   const router = useRouter();
@@ -26,7 +43,8 @@ function AssistantProviders({ householdId, householdName, writable }: AssistantH
       {query.data?.providers.map(provider => <SettingsSection key={provider.id} title={provider.name} icon={<Settings color={theme.colors.coral} size={theme.controlSizes.icon} />} detail={provider.ownedByMe ? '由你管理' : '家人共享'}>
         <Text>{provider.model}</Text>
         <Text variant="bodySm" color="inkMuted">{provider.baseUrl}</Text>
-        <Text variant="bodySm">{provider.visibility === 'private' ? '仅自己可用' : '本家庭成员可用'} · {provider.hasCredential ? '已配置密钥' : '尚未配置密钥'}</Text>
+        <Text variant="bodySm">{provider.visibility === 'private' ? '仅自己可用' : '本家庭成员可用'} · {provider.hasCredential ? '已配置密钥' : provider.ownedByMe ? '密钥无法读取，请编辑后重新填写' : '密钥无法读取，请联系配置创建者'}</Text>
+        {provider.usage ? <UsageSummary usage={provider.usage} /> : null}
         {provider.ownedByMe ? <Stack gap={2}>
           <Button label="编辑" accessibilityLabel={`编辑模型配置：${provider.name}`} tone="secondary" disabled={!writable} onPress={() => router.push(`${root}/providers/${encodeURIComponent(provider.id)}/edit`)} />
           <Button label="删除" accessibilityLabel={`删除模型配置：${provider.name}`} tone="secondary" disabled={!writable} onPress={() => router.push(`${root}/providers/${encodeURIComponent(provider.id)}/delete`)} />
