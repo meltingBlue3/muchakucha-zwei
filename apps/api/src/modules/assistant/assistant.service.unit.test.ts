@@ -160,6 +160,36 @@ describe('assistant runner boundaries', () => {
     warn.mockRestore();
   });
 
+  test('a thinking model gets its reasoning back on every later request, across steps and turns', async () => {
+    const state = fixture();
+    state.complete
+      .mockResolvedValueOnce({ content: '', toolCalls: [{ ...call('read_1'), replay: { extra_content: { google: { thought_signature: 'sig' } } } }], replay: { reasoning_content: '先查笔记。' } })
+      .mockResolvedValueOnce({ content: '有两条笔记。', toolCalls: [], replay: { reasoning_content: '整理结果。' } });
+    const first = await state.service.send(actor, state.row.id, { message: '整理笔记', timeZone: 'Asia/Shanghai', expectedVersion: 0 });
+    expect(state.complete.mock.calls[1]?.[2][1]).toEqual({ role: 'assistant', content: '', toolCalls: [{ ...call('read_1'), replay: { extra_content: { google: { thought_signature: 'sig' } } } }], replay: { reasoning_content: '先查笔记。' } });
+    // The final answer keeps its reasoning too, and none of it reaches the client.
+    expect(first.messages.at(-1)).toEqual({ role: 'assistant', content: '有两条笔记。' });
+    state.complete.mockResolvedValueOnce({ content: '好的。', toolCalls: [] });
+    await state.service.send(actor, state.row.id, { message: '谢谢', timeZone: 'Asia/Shanghai', expectedVersion: first.version });
+    const later = state.complete.mock.calls[2]?.[2] ?? [];
+    expect(later.filter(message => message.role === 'assistant').map(message => message.replay?.reasoning_content)).toEqual(['先查笔记。', '整理结果。']);
+  });
+
+  test('a rejection after the model called a tool is not blamed on the model name or tool support', async () => {
+    const state = fixture();
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const rejected = new AssistantProviderFailure('ASSISTANT_PROVIDER_REJECTED', 'rejected', 'status 400, invalid_request_error');
+    state.complete.mockRejectedValueOnce(rejected);
+    const before = await state.service.send(actor, state.row.id, { message: '查询数据', timeZone: 'Asia/Shanghai', expectedVersion: 0 });
+    expect(before.messages.at(-1)?.content).toMatch(/^模型服务拒绝了这次请求。请确认模型名称正确且支持工具调用。/);
+
+    state.complete.mockResolvedValueOnce({ content: '', toolCalls: [call('read_1')] }).mockRejectedValueOnce(rejected);
+    const after = await state.service.send(actor, state.row.id, { message: '整理笔记', timeZone: 'Asia/Shanghai', expectedVersion: before.version });
+    expect(after.messages.at(-1)?.content).toMatch(/^模型调用了工具，但模型服务拒绝了带回查询结果的后续请求。/);
+    expect(warn).toHaveBeenLastCalledWith(`run stopped: conversation ${state.row.id}, provider provider-1, ASSISTANT_PROVIDER_FOLLOW_UP_REJECTED (status 400, invalid_request_error)`);
+    warn.mockRestore();
+  });
+
   test('a cut-off answer is kept with a visible notice', async () => {
     const state = fixture();
     state.complete.mockResolvedValueOnce({ content: '本周安排如下', toolCalls: [], truncated: true });

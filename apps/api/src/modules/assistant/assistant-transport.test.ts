@@ -97,24 +97,31 @@ describe('assistant HTTPS transport', () => {
   });
 
   test.each([
-    [403, '{"error":"forbidden"}', 'ASSISTANT_PROVIDER_AUTH_FAILED'],
-    [400, '{"error":{"message":"API key not valid. Please pass a valid API key."}}', 'ASSISTANT_PROVIDER_AUTH_FAILED'],
-    [402, '{"error":{"message":"Insufficient Balance"}}', 'ASSISTANT_PROVIDER_QUOTA_EXCEEDED'],
-    [429, '{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}', 'ASSISTANT_PROVIDER_QUOTA_EXCEEDED'],
-    [429, '{"error":{"message":"Rate limit reached for requests"}}', 'ASSISTANT_PROVIDER_RATE_LIMITED'],
-    [404, '{"error":{"code":"model_not_found"}}', 'ASSISTANT_PROVIDER_ENDPOINT_NOT_FOUND'],
-    [400, '{"error":{"message":"Model Not Exist"}}', 'ASSISTANT_PROVIDER_ENDPOINT_NOT_FOUND'],
-    [400, '{"error":{"code":"context_length_exceeded"}}', 'ASSISTANT_PROVIDER_CONTEXT_TOO_LONG'],
-    [400, '{"type":"error","error":{"message":"prompt is too long: 210000 tokens > 200000 maximum"}}', 'ASSISTANT_PROVIDER_CONTEXT_TOO_LONG'],
-    [400, '{"error":{"message":"This model does not support tools"}}', 'ASSISTANT_PROVIDER_TOOLS_UNSUPPORTED'],
-    [422, '{"detail":"unknown field"}', 'ASSISTANT_PROVIDER_REJECTED'],
-    [529, '{"type":"error","error":{"type":"overloaded_error"}}', 'ASSISTANT_PROVIDER_UNAVAILABLE'],
-  ])('classifies an upstream %i error into a stable code without keeping its text', async (status, body, code) => {
+    [403, '{"error":"forbidden"}', 'ASSISTANT_PROVIDER_AUTH_FAILED', ''],
+    [400, '{"error":{"message":"API key not valid. Please pass a valid API key."}}', 'ASSISTANT_PROVIDER_AUTH_FAILED', ''],
+    [402, '{"error":{"message":"Insufficient Balance"}}', 'ASSISTANT_PROVIDER_QUOTA_EXCEEDED', ''],
+    [429, '{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}', 'ASSISTANT_PROVIDER_QUOTA_EXCEEDED', 'insufficient_quota'],
+    [429, '{"error":{"message":"Rate limit reached for requests"}}', 'ASSISTANT_PROVIDER_RATE_LIMITED', ''],
+    [404, '{"error":{"code":"model_not_found"}}', 'ASSISTANT_PROVIDER_ENDPOINT_NOT_FOUND', 'model_not_found'],
+    [400, '{"error":{"message":"Model Not Exist"}}', 'ASSISTANT_PROVIDER_ENDPOINT_NOT_FOUND', ''],
+    [400, '{"error":{"code":"context_length_exceeded"}}', 'ASSISTANT_PROVIDER_CONTEXT_TOO_LONG', 'context_length_exceeded'],
+    [400, '{"type":"error","error":{"message":"prompt is too long: 210000 tokens > 200000 maximum"}}', 'ASSISTANT_PROVIDER_CONTEXT_TOO_LONG', ''],
+    [400, '{"error":{"message":"This model does not support tools"}}', 'ASSISTANT_PROVIDER_TOOLS_UNSUPPORTED', ''],
+    [400, '{"error":{"message":"The reasoning_content in the thinking mode must be passed back to the API.","type":"invalid_request_error","param":null,"code":"invalid_request_error"}}',
+      'ASSISTANT_PROVIDER_REASONING_REQUIRED', 'invalid_request_error'],
+    [400, '[{"error":{"code":400,"message":"Function call is missing a thought_signature in functionCall parts.","status":"INVALID_ARGUMENT"}}]',
+      'ASSISTANT_PROVIDER_REASONING_REQUIRED', 'INVALID_ARGUMENT'],
+    [400, '{"error":{"code":"1214","message":"messages 参数非法"}}', 'ASSISTANT_PROVIDER_REJECTED', '1214'],
+    // Free text and anything shaped like a credential never become the identifier.
+    [400, '{"error":{"code":"Key sk-live-123 was rejected","type":"sk-abc123"}}', 'ASSISTANT_PROVIDER_REJECTED', ''],
+    [422, '{"detail":"unknown field"}', 'ASSISTANT_PROVIDER_REJECTED', ''],
+    [529, '{"type":"error","error":{"type":"overloaded_error"}}', 'ASSISTANT_PROVIDER_UNAVAILABLE', 'overloaded_error'],
+  ])('classifies an upstream %i error into a stable code, keeping only its identifier (%#)', async (status, body, code, id) => {
     statusCode = status;
     responseBody = body;
     const pending = postAssistantJson(new URL('https://provider.example.com/v1/messages'), {}, {});
-    await expect(pending).rejects.toMatchObject({ response: { code }, diagnostic: `status ${status}` });
-    try { await pending; } catch (error) { expect(JSON.stringify(error)).not.toContain(body); }
+    await expect(pending).rejects.toMatchObject({ response: { code }, diagnostic: id ? `status ${status}, ${id}` : `status ${status}` });
+    try { await pending; } catch (error) { expect(JSON.stringify(error)).not.toContain(body); expect(JSON.stringify(error)).not.toContain('sk-'); }
   });
 
   test('a connection failure keeps only the socket error code for logs', async () => {

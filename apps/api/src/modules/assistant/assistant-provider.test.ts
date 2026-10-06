@@ -36,22 +36,63 @@ describe('assistant provider adapters', () => {
     expect(transport.mock.calls[0]?.[2]).not.toHaveProperty('parallel_tool_calls');
   });
 
-  test('OpenAI-compatible tool arguments are parsed as an object', async () => {
+  test('OpenAI-compatible tool arguments are parsed as an object and the call keeps its provider ID', async () => {
     const transport = vi.fn<AssistantTransport>().mockResolvedValue(openAiResponse(null, [openAiCall]));
     await expect(new AssistantProvider(transport).complete(config, 'System', messages, definitions)).resolves.toEqual({
-      content: '', toolCalls: [{ id: serverId, name: 'find_notes', arguments: { query: 'travel' } }],
+      content: '', toolCalls: [{ id: 'call_1', name: 'find_notes', arguments: { query: 'travel' } }],
     });
   });
 
-  test('compatible services may number call IDs per response and report stop with tool calls', async () => {
+  test('a provider call ID is replaced only when malformed or already used in the conversation', async () => {
+    // Kimi numbers calls per response, so the same ID comes back in a later step; Mistral issues nine alphanumerics.
     const numbered = { ...openAiCall, id: 'functions.find_notes:0' };
-    const transport = vi.fn<AssistantTransport>().mockResolvedValue(openAiResponse(null, [numbered, numbered], 'stop'));
-    const result = await new AssistantProvider(transport).complete(config, 'System', messages, definitions);
-    expect(result.toolCalls).toEqual([
-      { id: serverId, name: 'find_notes', arguments: { query: 'travel' } },
-      { id: serverId, name: 'find_notes', arguments: { query: 'travel' } },
+    const history: AssistantMessage[] = [...messages,
+      { role: 'assistant', content: '', toolCalls: [{ id: 'functions.find_notes:0', name: 'find_notes', arguments: { query: 'travel' } }] },
+      { role: 'tool', content: '{"notes":[]}', toolCallId: 'functions.find_notes:0' },
+    ];
+    const transport = vi.fn<AssistantTransport>()
+      .mockResolvedValueOnce(openAiResponse(null, [numbered, { ...openAiCall, id: 'D681PevKs' }], 'stop'))
+      .mockResolvedValueOnce(openAiResponse(null, [{ ...openAiCall, id: 'has space' }, { ...openAiCall, id: 'x'.repeat(65) }, { ...openAiCall, id: 7 }, { ...openAiCall, id: 'dup' }, { ...openAiCall, id: 'dup' }]));
+    const later = await new AssistantProvider(transport).complete(config, 'System', history, definitions);
+    expect(later.toolCalls.map(call => call.id)).toEqual([serverId, 'D681PevKs']);
+    const malformed = await new AssistantProvider(transport).complete(config, 'System', messages, definitions);
+    expect(malformed.toolCalls.map(call => call.id)).toEqual([serverId, serverId, serverId, 'dup', serverId]);
+    expect(new Set(malformed.toolCalls.map(call => call.id)).size).toBe(5);
+  });
+
+  test('reasoning and thought signatures are kept and sent back verbatim on later requests', async () => {
+    const reasoningDetails = [{ type: 'reasoning.encrypted', data: 'opaque' }];
+    const signed = { ...openAiCall, extra_content: { google: { thought_signature: 'c2lnbmF0dXJl' } } };
+    const transport = vi.fn<AssistantTransport>().mockResolvedValueOnce({ choices: [{ finish_reason: 'tool_calls', message: {
+      role: 'assistant', content: null, reasoning_content: '先查询笔记。', reasoning_details: reasoningDetails, refusal: null, tool_calls: [signed],
+    } }] });
+    const provider = new AssistantProvider(transport);
+    const first = await provider.complete(config, 'System', messages, definitions);
+    expect(first).toEqual({
+      content: '', replay: { reasoning_content: '先查询笔记。', reasoning_details: reasoningDetails },
+      toolCalls: [{ id: 'call_1', name: 'find_notes', arguments: { query: 'travel' }, replay: { extra_content: signed.extra_content } }],
+    });
+
+    transport.mockResolvedValueOnce(openAiResponse());
+    await provider.complete(config, 'System', [...messages,
+      { role: 'assistant', content: first.content, toolCalls: first.toolCalls, ...(first.replay ? { replay: first.replay } : {}) },
+      { role: 'tool', content: '{"notes":[]}', toolCallId: 'call_1' },
+      // A notice the runner wrote has no reasoning of its own.
+      { role: 'assistant', content: '上次处理已中断。' },
+      { role: 'user', content: '继续' },
+    ], definitions);
+    expect(transport.mock.calls[1]?.[2].messages).toEqual([
+      { role: 'system', content: 'System' }, messages[0],
+      { role: 'assistant', content: '', reasoning_content: '先查询笔记。', reasoning_details: reasoningDetails, tool_calls: [signed] },
+      { role: 'tool', content: '{"notes":[]}', tool_call_id: 'call_1' },
+      { role: 'assistant', content: '上次处理已中断。', reasoning_content: '' },
+      { role: 'user', content: '继续' },
     ]);
-    expect(result.toolCalls[0]!.id).not.toBe(result.toolCalls[1]!.id);
+  });
+
+  test('reasoning longer than any real reply is rejected', async () => {
+    const transport = vi.fn<AssistantTransport>().mockResolvedValue({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: '好的', reasoning_content: 'x'.repeat(128_001) } }] });
+    await expect(new AssistantProvider(transport).complete(config, 'System', messages, definitions)).rejects.toMatchObject({ response: { code: 'ASSISTANT_PROVIDER_RESPONSE_INVALID' } });
   });
 
   test('a cut-off answer is kept and marked, while a cut-off tool call or empty answer fails', async () => {
@@ -108,7 +149,38 @@ describe('assistant provider adapters', () => {
 
   test('Anthropic tool-use blocks become the same provider-independent result', async () => {
     const transport = vi.fn<AssistantTransport>().mockResolvedValue({ type: 'message', role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'text', text: 'Searching.' }, { type: 'tool_use', id: 'toolu_1', name: 'find_notes', input: { query: 'travel' } }] });
-    await expect(new AssistantProvider(transport).complete({ ...config, protocol: 'anthropic' }, 'System', messages, definitions)).resolves.toEqual({ content: 'Searching.', toolCalls: [{ id: serverId, name: 'find_notes', arguments: { query: 'travel' } }] });
+    await expect(new AssistantProvider(transport).complete({ ...config, protocol: 'anthropic' }, 'System', messages, definitions)).resolves.toEqual({ content: 'Searching.', toolCalls: [{ id: 'toolu_1', name: 'find_notes', arguments: { query: 'travel' } }] });
+  });
+
+  test('Anthropic thinking blocks go back in their original order, with each call under its stored ID', async () => {
+    const anthropic = { ...config, protocol: 'anthropic' as const };
+    const transport = vi.fn<AssistantTransport>().mockResolvedValueOnce({ type: 'message', role: 'assistant', stop_reason: 'tool_use', content: [
+      { type: 'thinking', thinking: 'Look up notes first.', signature: 'sig-1' },
+      { type: 'tool_use', id: 'toolu_1', name: 'find_notes', input: { query: 'travel' } },
+      { type: 'redacted_thinking', data: 'opaque' },
+      { type: 'text', text: 'Also packing.' },
+      { type: 'tool_use', id: 'has space', name: 'find_notes', input: { query: 'packing' } },
+    ] });
+    const provider = new AssistantProvider(transport);
+    const first = await provider.complete(anthropic, 'System', messages, definitions);
+    expect(first).toMatchObject({ content: 'Also packing.', toolCalls: [{ id: 'toolu_1' }, { id: serverId }] });
+    const secondId = first.toolCalls[1]!.id;
+
+    transport.mockResolvedValueOnce({ type: 'message', role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'Done.' }] });
+    await provider.complete(anthropic, 'System', [...messages,
+      { role: 'assistant', content: first.content, toolCalls: first.toolCalls, ...(first.replay ? { replay: first.replay } : {}) },
+      { role: 'tool', content: '{"notes":[]}', toolCallId: 'toolu_1' },
+      { role: 'tool', content: '{"notes":[]}', toolCallId: secondId },
+    ], definitions);
+    expect((transport.mock.calls[1]?.[2].messages as unknown[])[1]).toEqual({ role: 'assistant', content: [
+      { type: 'thinking', thinking: 'Look up notes first.', signature: 'sig-1' },
+      { type: 'tool_use', id: 'toolu_1', name: 'find_notes', input: { query: 'travel' } },
+      { type: 'redacted_thinking', data: 'opaque' },
+      { type: 'text', text: 'Also packing.' },
+      { type: 'tool_use', id: secondId, name: 'find_notes', input: { query: 'packing' } },
+    ] });
+    // The stored reply is not touched by the request's cache breakpoint.
+    expect(JSON.stringify(first.replay)).not.toContain('cache_control');
   });
 
   test('Anthropic tool use is decided by content blocks and a max_tokens answer is marked as cut off', async () => {

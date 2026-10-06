@@ -78,7 +78,7 @@ export function AssistantProviderForm({ initial, busy, onSubmit, onCancel, onChe
     try {
       const result = await onCheck(input());
       setCheck(result.toolCalling
-        ? { key, status: 'ok', message: '连接正常，模型可以调用工具。' }
+        ? { key, status: 'ok', message: '连接正常，模型可以调用工具并读取结果。' }
         : { key, status: 'warning', message: '已连接，但模型没有调用工具。助手要靠工具调用查询家庭数据，请换用支持工具调用的模型。' });
     } catch (error) {
       setCheck({ key, status: 'failed', message: assistantError(error, '连接测试未能完成，请检查网络后重试。') });

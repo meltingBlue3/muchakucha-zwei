@@ -6,7 +6,7 @@ import { AssistantProvider } from './assistant-provider.js';
 import { AssistantProviderFailure } from './assistant-transport.js';
 import { AssistantSettingsService } from './assistant-settings.service.js';
 import { AssistantToolsService } from './assistant-tools.service.js';
-import type { AssistantActor, AssistantMessage, AssistantToolActor, AssistantToolCall, AssistantToolDefinition } from './assistant.types.js';
+import type { AssistantActor, AssistantCompletion, AssistantMessage, AssistantToolActor, AssistantToolCall, AssistantToolDefinition } from './assistant.types.js';
 import type {
   AssistantConversationResponseDto, AssistantProviderCheckResponseDto, CheckAssistantProviderDto, DecideAssistantActionDto, SendAssistantMessageDto,
 } from './dto/assistant.dto.js';
@@ -51,6 +51,22 @@ const CONNECTION_CHECK_TOOL: AssistantToolDefinition = {
   name: 'connection_check', description: 'Confirms that tool calls work. Takes no arguments.',
   parameters: { type: 'object', properties: {}, additionalProperties: false }, mutates: false,
 };
+const CONNECTION_CHECK_PROMPT = 'This is a connection check. Call the connection_check tool once, then reply with the single word OK.';
+
+/** The assistant message a completion becomes, with whatever the provider needs back on later requests. */
+function reply(completion: AssistantCompletion, content = completion.content): AssistantMessage {
+  return { role: 'assistant', content, ...(completion.toolCalls.length ? { toolCalls: completion.toolCalls } : {}), ...(completion.replay ? { replay: completion.replay } : {}) };
+}
+
+function isProviderRejection(error: unknown): error is AssistantProviderFailure {
+  return error instanceof AssistantProviderFailure && toolFailure(error) === 'ASSISTANT_PROVIDER_REJECTED';
+}
+
+/** A rejection after the model already called a tool rules out the model name and tool support:
+ * the service refused the request that brought the results back. */
+function followUpRejection(error: AssistantProviderFailure): AssistantProviderFailure {
+  return new AssistantProviderFailure('ASSISTANT_PROVIDER_FOLLOW_UP_REJECTED', 'The model provider rejected the request that returned tool results.', error.diagnostic);
+}
 
 const CONTEXT_TOO_LONG = '对话内容超出了模型能处理的长度。请开始新对话，或缩小问题范围。';
 /** Why a run stopped, in words the user can act on. Shared-model users are pointed at the configuration owner. */
@@ -63,6 +79,8 @@ const RUN_FAILURES: Record<string, string> = {
   ASSISTANT_CONTEXT_TOO_LARGE: CONTEXT_TOO_LONG,
   ASSISTANT_PROVIDER_TOOLS_UNSUPPORTED: '这个模型不支持工具调用，助手无法查询家庭数据。请换用支持工具调用的模型。',
   ASSISTANT_PROVIDER_REJECTED: '模型服务拒绝了这次请求。请确认模型名称正确且支持工具调用。',
+  ASSISTANT_PROVIDER_FOLLOW_UP_REJECTED: '模型调用了工具，但模型服务拒绝了带回查询结果的后续请求。这个模型的多轮工具调用方式可能与助手不兼容，可以换用同一服务的其他模型再试。',
+  ASSISTANT_PROVIDER_REASONING_REQUIRED: '这个模型要求带回它之前的思考内容，但这段对话中有回复没有保存它，例如助手更新前开始的对话。请开始新对话；仍然出错时，请换用同一服务的非思考模型。',
   ASSISTANT_PROVIDER_UNAVAILABLE: '模型服务暂时不可用，请稍后重试。',
   ASSISTANT_PROVIDER_TIMEOUT: '模型服务响应超时，请稍后重试或缩小问题范围。',
   ASSISTANT_PROVIDER_FAILED: '无法连接模型服务。请确认服务地址能从服务器访问，或稍后重试。',
@@ -149,13 +167,18 @@ export class AssistantService {
     return this.response(row);
   }
 
-  /** One model call with a single harmless tool: proves the endpoint, key and tool calling without touching household data. */
+  /** One step of a real run with a single harmless tool: the model calls it, then the result goes back in a
+   * second request. Proves the endpoint, key, tool calling and the follow-up without touching household data. */
   async check(actor: AssistantActor, input: CheckAssistantProviderDto): Promise<AssistantProviderCheckResponseDto> {
     const config = await this.settings.checkable(actor, input);
+    const request: AssistantMessage[] = [{ role: 'user', content: 'connection check' }];
     try {
-      const completion = await this.provider.complete(config, 'This is a connection check. Call the connection_check tool once. Do not answer in text.',
-        [{ role: 'user', content: 'connection check' }], [CONNECTION_CHECK_TOOL]);
-      return { toolCalling: completion.toolCalls.some(call => call.name === CONNECTION_CHECK_TOOL.name) };
+      const first = await this.provider.complete(config, CONNECTION_CHECK_PROMPT, request, [CONNECTION_CHECK_TOOL]);
+      if (!first.toolCalls.some(call => call.name === CONNECTION_CHECK_TOOL.name)) return { toolCalling: false };
+      const results = first.toolCalls.map(call => ({ role: 'tool' as const, toolCallId: call.id, content: JSON.stringify({ ok: true, tool: call.name, data: { connected: true } }) }));
+      try { await this.provider.complete(config, CONNECTION_CHECK_PROMPT, [...request, reply(first), ...results], [CONNECTION_CHECK_TOOL]); }
+      catch (error) { throw isProviderRejection(error) ? followUpRejection(error) : error; }
+      return { toolCalling: true };
     } catch (error) {
       this.logger.warn(`provider check failed: ${toolFailure(error, 'CHECK_FAILED')}${error instanceof AssistantProviderFailure ? ` (${error.diagnostic})` : ''}`);
       throw error;
@@ -282,11 +305,11 @@ export class AssistantService {
         if (completion.toolCalls.some(call => priorIds.has(call.id)) || new Set(completion.toolCalls.map(call => call.id)).size !== completion.toolCalls.length) throw new Error('Duplicate tool call');
         if (completion.toolCalls.length === 0) {
           const answer = completion.content || '模型没有返回回答，请补充问题后重试。';
-          messages.push({ role: 'assistant', content: completion.truncated ? `${answer}\n\n（回答达到模型输出上限，后面的内容被截断。可以让助手接着说，或缩小问题范围。）` : answer });
+          messages.push(reply(completion, completion.truncated ? `${answer}\n\n（回答达到模型输出上限，后面的内容被截断。可以让助手接着说，或缩小问题范围。）` : answer));
           await this.save(row.id, version, messages, [], 'idle');
           return this.get(actor, row.id);
         }
-        messages.push({ role: 'assistant', content: completion.content, toolCalls: completion.toolCalls });
+        messages.push(reply(completion));
         for (const call of completion.toolCalls) {
           // Reads in a batch run at once; every valid write in it becomes a proposal for the user to confirm.
           const mutates = this.tools.definitions().find(tool => tool.name === call.name)?.mutates === true;
@@ -313,7 +336,9 @@ export class AssistantService {
       messages.push({ role: 'assistant', content: stop === 'context'
         ? '本轮查询到的内容太多，超出了可以发给模型的长度。已执行的结果保留在对话中；请缩小查询范围，或开始新对话继续。'
         : '已达到本轮查询或时间上限。已执行操作的结果保留在对话中；请缩小问题范围或开始新对话继续。' });
-    } catch (error) {
+    } catch (caught) {
+      const turn = messages.slice(messages.findLastIndex(message => message.role === 'user'));
+      const error = isProviderRejection(caught) && turn.some(message => message.toolCalls?.length) ? followUpRejection(caught) : caught;
       const code = toolFailure(error, 'RUN_FAILED');
       // Logs carry IDs and stable codes only: no URL, credential, prompt or upstream text.
       if (error instanceof HttpException) {
