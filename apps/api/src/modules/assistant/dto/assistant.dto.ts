@@ -24,7 +24,7 @@ export class CheckAssistantProviderDto {
 }
 
 export class AssistantProviderCheckResponseDto {
-  @ApiProperty({ description: 'The model answered the check by calling a tool, as the assistant requires.' }) toolCalling!: boolean;
+  @ApiProperty({ description: 'The model called the check tool and the service accepted the follow-up request carrying its result, as every assistant step requires.' }) toolCalling!: boolean;
 }
 
 export class AssistantUsageMemberDto {

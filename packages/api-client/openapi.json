@@ -4446,7 +4446,7 @@
         "properties": {
           "toolCalling": {
             "type": "boolean",
-            "description": "The model answered the check by calling a tool, as the assistant requires."
+            "description": "The model called the check tool and the service accepted the follow-up request carrying its result, as every assistant step requires."
           }
         },
         "required": [

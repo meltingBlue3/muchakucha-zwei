@@ -57,6 +57,7 @@ const upstreamFailures = {
   ENDPOINT_NOT_FOUND: 'The model provider does not know this endpoint or model.',
   CONTEXT_TOO_LONG: 'The conversation exceeds the model context window.',
   TOOLS_UNSUPPORTED: 'The model does not support tool calls.',
+  REASONING_REQUIRED: 'The model requires reasoning from earlier replies that the conversation does not hold.',
   UNAVAILABLE: 'The model provider is unavailable.',
   REJECTED: 'The model provider rejected the request.',
 } as const;
@@ -67,14 +68,33 @@ function classifyUpstream(status: number, text: string): keyof typeof upstreamFa
   if (status === 429) return 'RATE_LIMITED';
   if (status === 404 || /model.{0,40}(not[ _]?(found|exist)|does not exist)|(unknown|invalid) model/.test(text)) return 'ENDPOINT_NOT_FOUND';
   if (status === 413 || /context[_ ]?(length|window)|maximum context|too many tokens|prompt is too long|input is too long|token limit/.test(text)) return 'CONTEXT_TOO_LONG';
+  // DeepSeek and Kimi thinking modes ask for reasoning_content back; Gemini for a thought signature.
+  if (status < 500 && /reasoning_content|reasoning_details|thought[_ ]signature/.test(text)) return 'REASONING_REQUIRED';
   if (/(tools?|function[_ ]?call(ing)?|tool[_ ]choice).{0,60}(not supported|unsupported|does not support|not support)|(not supported|unsupported|does not support).{0,60}(tools?\b|function)/.test(text)) return 'TOOLS_UNSUPPORTED';
   return status >= 500 ? 'UNAVAILABLE' : 'REJECTED';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** The error's own identifier, such as invalid_request_error, INVALID_ARGUMENT or Zhipu's 1214.
+ * Only a short word or number qualifies, never free text, so prompts, data and credentials stay out of the logs. */
+function upstreamErrorId(body: string): string | undefined {
+  let value: unknown;
+  try { value = JSON.parse(body); } catch { return undefined; }
+  // Gemini wraps its error in an array.
+  if (Array.isArray(value)) value = value[0];
+  if (!isRecord(value) || !isRecord(value.error)) return undefined;
+  const candidates = [value.error.code, value.error.type, value.error.status].filter((item): item is string => typeof item === 'string');
+  return candidates.find(item => /^[A-Za-z][A-Za-z_.-]{0,63}$/.test(item)) ?? candidates.find(item => /^\d{1,6}$/.test(item));
 }
 
 /** Classified from the status and a bounded error body read on the server; the body is then discarded. */
 export function upstreamFailure(status: number, body: string): AssistantProviderFailure {
   const kind = classifyUpstream(status, body.toLowerCase());
-  return new AssistantProviderFailure(`ASSISTANT_PROVIDER_${kind}`, upstreamFailures[kind], `status ${status}`);
+  const id = upstreamErrorId(body);
+  return new AssistantProviderFailure(`ASSISTANT_PROVIDER_${kind}`, upstreamFailures[kind], id ? `status ${status}, ${id}` : `status ${status}`);
 }
 
 function connectionFailure(error: unknown): AssistantProviderFailure {

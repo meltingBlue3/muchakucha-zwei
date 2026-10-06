@@ -158,9 +158,9 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect(JSON.stringify(complete.mock.calls[0]?.slice(1))).not.toContain(providerSecret);
   });
 
-  test('a connection check sends one harmless tool call and never household data', async () => {
+  test('a connection check runs one harmless tool round trip and never sends household data', async () => {
     const form = { protocol: 'openai-compatible', baseUrl: 'https://api.example.com/v1/', model: 'test-tool-model' };
-    complete.mockResolvedValueOnce(tool('connection_check', {}));
+    complete.mockResolvedValueOnce({ ...tool('connection_check', {}), replay: { reasoning_content: '调用检查工具。' } });
     const typed = await assistant(member, householdId, 'POST', '/providers/check', { ...form, apiKey: 'sk-typed-into-the-form' });
     expect(typed.statusCode).toBe(200);
     expect(typed.json()).toEqual({ toolCalling: true });
@@ -168,13 +168,24 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect(config).toEqual({ protocol: 'openai-compatible', baseUrl: 'https://api.example.com/v1', model: 'test-tool-model', apiKey: 'sk-typed-into-the-form' });
     expect(messages).toEqual([{ role: 'user', content: 'connection check' }]);
     expect(definitions.map(definition => definition.name)).toEqual(['connection_check']);
+    // The result goes back in a second request, carrying what the model needs returned, as every run step does.
+    expect(complete.mock.calls[1]?.[2]).toEqual([messages[0],
+      { role: 'assistant', content: '', toolCalls: [expect.objectContaining({ name: 'connection_check' })], replay: { reasoning_content: '调用检查工具。' } },
+      { role: 'tool', toolCallId: expect.any(String), content: expect.stringContaining('"connected":true') },
+    ]);
 
     // A text-only reply connects but cannot drive the assistant's tools.
     const provider = await createProvider(owner, householdId, 'household');
     complete.mockResolvedValueOnce({ content: '你好', toolCalls: [] });
     const saved = await assistant(owner, householdId, 'POST', '/providers/check', { ...form, providerId: provider.id });
     expect(saved.json()).toEqual({ toolCalling: false });
-    expect(complete.mock.calls[1]?.[0].apiKey).toBe(providerSecret);
+    expect(complete.mock.calls[2]?.[0].apiKey).toBe(providerSecret);
+
+    // A service that takes the call but refuses the follow-up fails the check before the configuration is used.
+    complete.mockResolvedValueOnce(tool('connection_check', {})).mockRejectedValueOnce(new AssistantProviderFailure('ASSISTANT_PROVIDER_REJECTED', 'The model provider rejected the request.', 'status 400'));
+    const followUp = await assistant(owner, householdId, 'POST', '/providers/check', { ...form, providerId: provider.id });
+    expect(followUp.statusCode).toBe(502);
+    expect(followUp.json().error.code).toBe('ASSISTANT_PROVIDER_FOLLOW_UP_REJECTED');
 
     // Sharing a configuration never lends its saved key to another member's check.
     const borrowed = await assistant(member, householdId, 'POST', '/providers/check', { ...form, baseUrl: 'https://collector.example.com/v1', providerId: provider.id });
@@ -182,7 +193,7 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect((await assistant(owner, householdId, 'POST', '/providers/check', form)).statusCode).toBe(400);
     expect((await assistant(outsider, householdId, 'POST', '/providers/check', { ...form, apiKey: 'sk-outsider' })).statusCode).toBe(404);
     expect((await assistant(owner, householdId, 'POST', '/providers/check', { ...form, baseUrl: 'https://10.0.0.1/v1', apiKey: 'sk-test' })).json().error.code).toBe('ASSISTANT_ENDPOINT_INVALID');
-    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete).toHaveBeenCalledTimes(5);
   });
 
   test('starting a conversation replaces an untouched one and keeps every conversation with messages', async () => {

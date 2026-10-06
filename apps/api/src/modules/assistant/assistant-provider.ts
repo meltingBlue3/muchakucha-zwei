@@ -3,7 +3,9 @@ import { BadRequestException, HttpException, Inject, Injectable, Optional } from
 import {
   AssistantProviderFailure, assistantProviderFailure, postAssistantJson, validateAssistantBaseUrl, type AssistantTransport,
 } from './assistant-transport.js';
-import type { AssistantCompletion, AssistantMessage, AssistantProviderConfig, AssistantToolCall, AssistantToolDefinition } from './assistant.types.js';
+import type {
+  AssistantCompletion, AssistantMessage, AssistantProviderConfig, AssistantReplay, AssistantToolCall, AssistantToolDefinition,
+} from './assistant.types.js';
 
 export { validateAssistantBaseUrl } from './assistant-transport.js';
 export const ASSISTANT_TRANSPORT = Symbol('ASSISTANT_TRANSPORT');
@@ -12,6 +14,15 @@ const MAX_CONTENT_LENGTH = 64_000;
 const MAX_ARGUMENTS_LENGTH = 32_000;
 // Reasoning models spend part of this budget before answering.
 const MAX_OUTPUT_TOKENS = 8_192;
+// Reasoning shares the output budget, so anything longer is not a real reply.
+const MAX_REPLAY_LENGTH = 128_000;
+const MAX_CALL_REPLAY_LENGTH = 16_000;
+
+/** Thinking modes reject a follow-up request that leaves out their earlier reasoning: DeepSeek and
+ * Kimi return it as reasoning_content, OpenRouter as reasoning_details, and Gemini signs each tool
+ * call in extra_content. These fields are stored as returned and sent back on every later request. */
+const OPENAI_MESSAGE_REPLAY = ['reasoning_content', 'reasoning_details'];
+const OPENAI_CALL_REPLAY = ['extra_content'];
 
 function invalidResponse(diagnostic: string): AssistantProviderFailure {
   return new AssistantProviderFailure('ASSISTANT_PROVIDER_RESPONSE_INVALID', 'The model provider returned an invalid or incomplete response.', diagnostic);
@@ -48,13 +59,35 @@ function textValue(value: unknown, maxLength: number, field: string, allowEmpty 
   return value;
 }
 
-/** Provider call IDs are not trusted to be well formed or unique across turns (some services number
- * calls per response), so every call gets a server-issued ID that is replayed consistently. */
-function toolCall(name: unknown, args: unknown, definitions: AssistantToolDefinition[]): AssistantToolCall {
+function replayOf(source: Record<string, unknown>, fields: string[], maxLength: number): AssistantReplay | undefined {
+  const present = fields.filter((field) => source[field] !== undefined && source[field] !== null);
+  if (!present.length) return undefined;
+  const replay: AssistantReplay = Object.fromEntries(present.map((field) => [field, source[field]]));
+  if (!isJsonValue(replay) || JSON.stringify(replay).length > maxLength) throw invalidResponse('replay invalid');
+  return replay;
+}
+
+function picked(replay: AssistantReplay | undefined, fields: string[]): AssistantReplay {
+  return replay ? Object.fromEntries(fields.filter((field) => Object.hasOwn(replay, field)).map((field) => [field, replay[field]])) : {};
+}
+
+/** Call IDs go back as the provider issued them, because some services accept only their own format
+ * (Mistral takes nine alphanumerics). An ID that is malformed, or already used in this conversation
+ * (some services number calls per response), is replaced with a server-issued one. */
+function callIds(messages: AssistantMessage[], pattern: RegExp): (raw: unknown) => string {
+  const used = new Set(messages.flatMap((message) => (message.toolCalls ?? []).map((call) => call.id)));
+  return (raw) => {
+    const id = typeof raw === 'string' && pattern.test(raw) && !used.has(raw) ? raw : `call_${randomUUID().replaceAll('-', '')}`;
+    used.add(id);
+    return id;
+  };
+}
+
+function toolCall(id: string, name: unknown, args: unknown, definitions: AssistantToolDefinition[], replay?: AssistantReplay): AssistantToolCall {
   const safeName = textValue(name, 100, 'tool name', false);
   if (!definitions.some((definition) => definition.name === safeName)) throw invalidResponse('unknown tool');
   if (!isRecord(args) || !isJsonValue(args) || JSON.stringify(args).length > MAX_ARGUMENTS_LENGTH) throw invalidResponse('tool arguments invalid');
-  return { id: `call_${randomUUID().replaceAll('-', '')}`, name: safeName, arguments: args };
+  return { id, name: safeName, arguments: args, ...(replay ? { replay } : {}) };
 }
 
 function tokens(value: unknown): number {
@@ -69,14 +102,17 @@ function usageOf(value: Record<string, unknown>, input: string[], output: string
 }
 
 /** A cut-off tool call may carry incomplete arguments, so only a cut-off answer survives. */
-function completion(content: string, toolCalls: AssistantToolCall[], truncated: boolean, usage: AssistantCompletion['usage']): AssistantCompletion {
+function completion(content: string, toolCalls: AssistantToolCall[], truncated: boolean, usage: AssistantCompletion['usage'], replay?: AssistantReplay): AssistantCompletion {
   if (truncated && (toolCalls.length > 0 || !content.trim())) throw truncatedResponse();
   if (!content.trim() && toolCalls.length === 0) throw invalidResponse('empty response');
   if (toolCalls.length > MAX_TOOL_CALLS) throw invalidResponse('too many tool calls');
-  return { content: textValue(content, MAX_CONTENT_LENGTH, 'content'), toolCalls, ...(truncated ? { truncated } : {}), ...(usage ? { usage } : {}) };
+  return {
+    content: textValue(content, MAX_CONTENT_LENGTH, 'content'), toolCalls,
+    ...(truncated ? { truncated } : {}), ...(usage ? { usage } : {}), ...(replay ? { replay } : {}),
+  };
 }
 
-function parseOpenAiResponse(value: unknown, definitions: AssistantToolDefinition[]): AssistantCompletion {
+function parseOpenAiResponse(value: unknown, definitions: AssistantToolDefinition[], nextId: (raw: unknown) => string): AssistantCompletion {
   if (!isRecord(value) || !Array.isArray(value.choices) || value.choices.length !== 1) throw invalidResponse('choices invalid');
   const choice: unknown = value.choices[0];
   if (!isRecord(choice) || !isRecord(choice.message) || choice.message.role !== 'assistant') throw invalidResponse('message invalid');
@@ -97,11 +133,11 @@ function parseOpenAiResponse(value: unknown, definitions: AssistantToolDefinitio
     const encoded = textValue(call.function.arguments, MAX_ARGUMENTS_LENGTH, 'tool arguments', false);
     let args: unknown;
     try { args = JSON.parse(encoded) as unknown; } catch { throw finish === 'length' ? truncatedResponse() : invalidResponse('tool arguments not json'); }
-    return toolCall(call.function.name, args, definitions);
-  }), finish === 'length', usageOf(value, ['prompt_tokens'], 'completion_tokens'));
+    return toolCall(nextId(call.id), call.function.name, args, definitions, replayOf(call, OPENAI_CALL_REPLAY, MAX_CALL_REPLAY_LENGTH));
+  }), finish === 'length', usageOf(value, ['prompt_tokens'], 'completion_tokens'), replayOf(message, OPENAI_MESSAGE_REPLAY, MAX_REPLAY_LENGTH));
 }
 
-function parseAnthropicResponse(value: unknown, definitions: AssistantToolDefinition[]): AssistantCompletion {
+function parseAnthropicResponse(value: unknown, definitions: AssistantToolDefinition[], nextId: (raw: unknown) => string): AssistantCompletion {
   if (!isRecord(value) || value.type !== 'message' || value.role !== 'assistant' || !Array.isArray(value.content) || value.content.length > 64) {
     throw invalidResponse('message invalid');
   }
@@ -110,27 +146,63 @@ function parseAnthropicResponse(value: unknown, definitions: AssistantToolDefini
   if (!['end_turn', 'tool_use', 'stop_sequence', 'max_tokens'].includes(stop as string)) throw invalidResponse(`stop_reason ${reasonOf(stop)}`);
   const text: string[] = [];
   const calls: AssistantToolCall[] = [];
+  // Thinking blocks go back in their original order among the text and tool use. A tool_use entry
+  // stands for the next call, so the call keeps whatever ID it was given.
+  const blocks: Record<string, unknown>[] = [];
+  let thinking = false;
   for (const block of value.content as unknown[]) {
     if (!isRecord(block)) throw invalidResponse('content block invalid');
-    if (block.type === 'text') text.push(textValue(block.text, MAX_CONTENT_LENGTH, 'content'));
-    else if (block.type === 'tool_use') calls.push(toolCall(block.name, block.input, definitions));
-    else throw invalidResponse(`content block ${reasonOf(block.type)}`);
+    if (block.type === 'text') {
+      const part = textValue(block.text, MAX_CONTENT_LENGTH, 'content');
+      text.push(part);
+      blocks.push({ type: 'text', text: part });
+    } else if (block.type === 'tool_use') {
+      calls.push(toolCall(nextId(block.id), block.name, block.input, definitions));
+      blocks.push({ type: 'tool_use' });
+    } else if (block.type === 'thinking' && typeof block.thinking === 'string' && (block.signature === undefined || typeof block.signature === 'string')) {
+      thinking = true;
+      blocks.push({ type: 'thinking', thinking: block.thinking, ...(block.signature === undefined ? {} : { signature: block.signature }) });
+    } else if (block.type === 'redacted_thinking' && typeof block.data === 'string') {
+      thinking = true;
+      blocks.push({ type: 'redacted_thinking', data: block.data });
+    } else throw invalidResponse(`content block ${reasonOf(block.type)}`);
   }
   // Cached input is reported apart from the rest; all of it is input the request carried.
-  return completion(text.join('\n'), calls, stop === 'max_tokens', usageOf(value, ['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'], 'output_tokens'));
+  return completion(text.join('\n'), calls, stop === 'max_tokens', usageOf(value, ['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'], 'output_tokens'),
+    thinking ? replayOf({ content: blocks }, ['content'], MAX_REPLAY_LENGTH) : undefined);
 }
 
 function openAiMessages(systemPrompt: string, messages: AssistantMessage[]): Record<string, unknown>[] {
+  // A service that returns reasoning_content expects it on every assistant turn it is sent. Runner
+  // notices, and replies stored before reasoning was kept, have none, so they carry an empty one.
+  const reasoning = messages.some((message) => message.replay !== undefined && Object.hasOwn(message.replay, 'reasoning_content'));
   return [{ role: 'system', content: systemPrompt }, ...messages.map((message) => {
     if (message.role === 'tool') return { role: 'tool', content: message.content, tool_call_id: message.toolCallId };
+    if (message.role === 'user') return { role: 'user', content: message.content };
     return {
-      role: message.role,
+      role: 'assistant',
       content: message.content,
+      ...(reasoning ? { reasoning_content: '' } : {}),
+      ...picked(message.replay, OPENAI_MESSAGE_REPLAY),
       ...(message.toolCalls?.length ? { tool_calls: message.toolCalls.map((call) => ({
-        id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+        id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) }, ...picked(call.replay, OPENAI_CALL_REPLAY),
       })) } : {}),
     };
   })];
+}
+
+function anthropicAssistantContent(message: AssistantMessage): Record<string, unknown>[] {
+  const calls = [...(message.toolCalls ?? [])];
+  const toolUse = (call: AssistantToolCall) => ({ type: 'tool_use', id: call.id, name: call.name, input: call.arguments });
+  const recorded = message.replay?.content;
+  if (!Array.isArray(recorded)) return [...(message.content ? [{ type: 'text', text: message.content }] : []), ...calls.map(toolUse)];
+  // Copies, because the cache breakpoint is set on the outgoing blocks.
+  const blocks = recorded.filter(isRecord).flatMap((block) => {
+    if (block.type !== 'tool_use') return [{ ...block }];
+    const call = calls.shift();
+    return call ? [toolUse(call)] : [];
+  });
+  return [...blocks, ...calls.map(toolUse)];
 }
 
 function anthropicMessages(messages: AssistantMessage[]): { role: 'user' | 'assistant'; content: Record<string, unknown>[] }[] {
@@ -144,10 +216,10 @@ function anthropicMessages(messages: AssistantMessage[]): { role: 'user' | 'assi
       // All results for a parallel tool turn belong in one following user message.
       if (previous?.role === 'user') previous.content.push(block);
       else result.push({ role: 'user', content: [block] });
+    } else if (message.role === 'assistant') {
+      result.push({ role: 'assistant', content: anthropicAssistantContent(message) });
     } else {
-      const content: Record<string, unknown>[] = message.content ? [{ type: 'text', text: message.content }] : [];
-      if (message.role === 'assistant') for (const call of message.toolCalls ?? []) content.push({ type: 'tool_use', id: call.id, name: call.name, input: call.arguments });
-      result.push({ role: message.role, content });
+      result.push({ role: 'user', content: message.content ? [{ type: 'text', text: message.content }] : [] });
     }
   }
   return result;
@@ -161,15 +233,19 @@ function withCacheBreakpoint(messages: ReturnType<typeof anthropicMessages>): Re
 
 interface ProtocolAdapter {
   path: string;
+  /** Provider call IDs kept as issued. */
+  callId: RegExp;
   headers: (apiKey: string) => Record<string, string>;
   body: (model: string, systemPrompt: string, messages: AssistantMessage[], definitions: AssistantToolDefinition[]) => Record<string, unknown>;
-  parse: (value: unknown, definitions: AssistantToolDefinition[]) => AssistantCompletion;
+  parse: (value: unknown, definitions: AssistantToolDefinition[], nextId: (raw: unknown) => string) => AssistantCompletion;
 }
 
 // Each provider owns only wire-format translation; permissions and tool execution stay in the runner.
 const adapters: Record<AssistantProviderConfig['protocol'], ProtocolAdapter> = {
   'openai-compatible': {
     path: 'chat/completions',
+    // Kimi numbers its calls as functions.<name>:<index>.
+    callId: /^[A-Za-z0-9_.:-]{1,64}$/,
     headers: (apiKey) => ({ authorization: `Bearer ${apiKey}` }),
     body: (model, systemPrompt, messages, definitions) => ({
       model, stream: false, max_completion_tokens: MAX_OUTPUT_TOKENS,
@@ -183,6 +259,7 @@ const adapters: Record<AssistantProviderConfig['protocol'], ProtocolAdapter> = {
   },
   anthropic: {
     path: 'messages',
+    callId: /^[A-Za-z0-9_-]{1,64}$/,
     headers: (apiKey) => ({ 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }),
     body: (model, systemPrompt, messages, definitions) => ({
       // Two cache breakpoints: the fixed tools and instructions, and the history up to this request,
@@ -212,7 +289,7 @@ export class AssistantProvider {
     url.pathname = `${url.pathname.replace(/\/+$/, '')}/${adapter.path}`;
     try {
       const value = await this.transport(url, adapter.headers(config.apiKey), adapter.body(config.model, systemPrompt, messages, definitions));
-      return adapter.parse(value, definitions);
+      return adapter.parse(value, definitions, callIds(messages, adapter.callId));
     } catch (error) {
       if (error instanceof HttpException) throw error;
       throw assistantProviderFailure('adapter');

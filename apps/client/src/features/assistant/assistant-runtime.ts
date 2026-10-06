@@ -20,6 +20,8 @@ const errorMessages: Record<string, string> = {
   ASSISTANT_PROVIDER_CONTEXT_TOO_LONG: '内容超出了模型能处理的长度。',
   ASSISTANT_PROVIDER_TOOLS_UNSUPPORTED: '这个模型不支持工具调用，请换用支持工具调用的模型。',
   ASSISTANT_PROVIDER_REJECTED: '模型服务拒绝了请求，请确认模型名称正确且支持工具调用。',
+  ASSISTANT_PROVIDER_FOLLOW_UP_REJECTED: '模型调用了工具，但模型服务拒绝了带回工具结果的后续请求。这个模型的多轮工具调用方式可能与助手不兼容，请换用同一服务的其他模型。',
+  ASSISTANT_PROVIDER_REASONING_REQUIRED: '这个模型要求带回它之前的思考内容，助手没能满足。请换用同一服务的非思考模型。',
   ASSISTANT_PROVIDER_UNAVAILABLE: '模型服务暂时不可用，请稍后重试。',
   ASSISTANT_PROVIDER_TIMEOUT: '模型服务响应超时，请稍后重试。',
   ASSISTANT_PROVIDER_FAILED: '无法连接模型服务，请确认服务地址能从服务器访问。',

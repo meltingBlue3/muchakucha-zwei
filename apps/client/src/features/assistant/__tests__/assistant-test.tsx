@@ -61,7 +61,8 @@ test('creating a household provider requires an explicit credential and explains
 test('a connection check uses the form values, needs no name, and its result belongs to the values it checked', async () => {
   const check = jest.fn()
     .mockResolvedValueOnce({ toolCalling: true })
-    .mockRejectedValueOnce(new ApiClientError(502, { error: { code: 'ASSISTANT_PROVIDER_AUTH_FAILED' } }));
+    .mockRejectedValueOnce(new ApiClientError(502, { error: { code: 'ASSISTANT_PROVIDER_AUTH_FAILED' } }))
+    .mockRejectedValueOnce(new ApiClientError(502, { error: { code: 'ASSISTANT_PROVIDER_FOLLOW_UP_REJECTED' } }));
   const view = await render(<MuchakuchaThemeProvider><AssistantProviderForm busy={false} onSubmit={jest.fn()} onCancel={jest.fn()} onCheck={check} /></MuchakuchaThemeProvider>);
   await fireEvent.changeText(view.getByLabelText('模型名称'), 'tool-model');
   await fireEvent.press(view.getByRole('button', { name: '测试连接' }));
@@ -71,11 +72,15 @@ test('a connection check uses the form values, needs no name, and its result bel
   await fireEvent.changeText(view.getByLabelText('API 密钥'), 'example-key');
   await fireEvent.press(view.getByRole('button', { name: '测试连接' }));
   expect(check).toHaveBeenCalledWith(expect.objectContaining({ protocol: 'openai-compatible', baseUrl: 'https://api.openai.com/v1', model: 'tool-model', apiKey: 'example-key' }));
-  await view.findByText('连接正常，模型可以调用工具。');
+  await view.findByText('连接正常，模型可以调用工具并读取结果。');
   await fireEvent.changeText(view.getByLabelText('API 密钥'), 'another-key');
-  expect(view.queryByText('连接正常，模型可以调用工具。')).toBeNull();
+  expect(view.queryByText('连接正常，模型可以调用工具并读取结果。')).toBeNull();
   await fireEvent.press(view.getByRole('button', { name: '测试连接' }));
   await view.findByText('模型服务拒绝了 API 密钥，请检查或更新密钥。');
+  // The check also sends the tool result back, so a service that refuses that step fails here, not mid-conversation.
+  await fireEvent.changeText(view.getByLabelText('模型名称'), 'thinking-model');
+  await fireEvent.press(view.getByRole('button', { name: '测试连接' }));
+  await view.findByText(/^模型调用了工具，但模型服务拒绝了带回工具结果的后续请求。/);
 });
 
 test('model protocol switches to the complete Anthropic API base path', async () => {

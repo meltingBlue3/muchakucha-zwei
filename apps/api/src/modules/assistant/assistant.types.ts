@@ -5,10 +5,15 @@ export interface AssistantToolDefinition {
   mutates: boolean;
 }
 
+/** Provider fields that later requests must carry back unchanged, such as a thinking model's
+ * reasoning or a thought signature. Only the protocol adapter that produced them reads them. */
+export type AssistantReplay = Record<string, unknown>;
+
 export interface AssistantToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  replay?: AssistantReplay;
 }
 
 export interface AssistantMessage {
@@ -18,6 +23,7 @@ export interface AssistantMessage {
   toolCallId?: string;
   /** When a user message was sent; relative dates in it are read against this instant. */
   sentAt?: string;
+  replay?: AssistantReplay;
 }
 
 export interface AssistantProviderConfig {
@@ -34,6 +40,8 @@ export interface AssistantCompletion {
   truncated?: boolean;
   /** Token counts the provider reported for this request, when it reported them. */
   usage?: { inputTokens: number; outputTokens: number };
+  /** Stored on the assistant message this completion becomes. */
+  replay?: AssistantReplay;
 }
 
 export interface AssistantActor {
