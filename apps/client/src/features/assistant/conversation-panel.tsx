@@ -10,7 +10,7 @@ import { Button, Heading, Inline, LoadingState, Stack, Text } from '../../ui/pri
 import { scrollKeyboardDismissMode } from '../../ui/keyboard-area';
 import { theme } from '../../ui/theme';
 import { assistantConversationRecords, type AssistantConversationRecord, type AssistantSource } from './conversation-records';
-import { AssistantComposer } from './assistant-composer';
+import { AssistantComposer, PromptSuggestions } from './assistant-composer';
 import { MarkdownBody } from '../notes/markdown-body';
 
 const sectionNames = { events: '日程', tasks: '任务', notes: '笔记' } as const;
@@ -25,9 +25,11 @@ function QueryRecord({ record, onOpenSource }: { record: AssistantConversationRe
     {open ? <AppDialog title="查询依据" size="sheet" busy={false} trigger={trigger} onClose={() => setOpen(false)}><Stack gap={4}>
       <Text variant="bodySm">以下是本次查询时的内容，可能与当前最新数据不同。</Text>
       <Text>{record.content}</Text>
-      {record.sources?.map((source, index) => <Stack key={index} gap={2} style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4] }}><Heading variant="section" level={2}>{source.title}</Heading>{source.excerpt ? <Text selectable>{source.excerpt}</Text> : null}
-        {source.link && onOpenSource ? <Button label="打开" accessibilityLabel={`打开${sectionNames[source.link.section]}：${source.title}`} tone="secondary" style={{ alignSelf: 'flex-start' }}
-          onPress={() => { const link = source.link!; setOpen(false); onOpenSource(link); }} /> : null}</Stack>)}
+      {record.sources?.map((source, index) => <Stack key={index} gap={2} style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4] }}>
+        <Inline gap={3} style={{ alignItems: 'flex-start' }}><Heading variant="section" level={2} style={{ flex: 1 }}>{source.title}</Heading>
+          {source.link && onOpenSource ? <Button label="打开" accessibilityLabel={`打开${sectionNames[source.link.section]}：${source.title}`} tone="secondary" size="compact"
+            onPress={() => { const link = source.link!; setOpen(false); onOpenSource(link); }} /> : null}</Inline>
+        {source.excerpt ? <Text selectable>{source.excerpt}</Text> : null}</Stack>)}
     </Stack></AppDialog> : null}
   </>;
 }
@@ -67,7 +69,7 @@ export function AssistantConversationPanel({ conversation, busy, disabled, onSen
       contentContainerStyle={{ flexGrow: 1, padding: theme.spacing[5], gap: theme.spacing[5], width: '100%', maxWidth: theme.layout.assistantReadingWidth, alignSelf: 'center' }}>
       {records.length === 0 && !outgoing ? <Stack gap={4} style={{ flex: 1, justifyContent: 'center', paddingVertical: theme.spacing[8] }}>
         <Sparkles size={theme.spacing[8]} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} /><Heading variant="heading" level={2}>今天，想一起安排什么？</Heading><Text color="inkMuted">从一个问题开始，或让我帮你记下要做的事。</Text>
-        {['这周有哪些安排，需要提前准备什么？', '帮我整理最近的家庭笔记'].map(prompt => <Button key={prompt} label={prompt} tone="secondary" disabled={blocked} onPress={() => { setMessage(prompt); input.current?.focus(); }} />)}
+        <PromptSuggestions disabled={blocked} onPick={prompt => { setMessage(prompt); input.current?.focus(); }} />
       </Stack> : records.map((item, index) => item.kind === 'query' ? <QueryRecord key={index} record={item} onOpenSource={onOpenSource} /> : <Stack key={index} gap={2} style={item.kind === 'user'
         ? userBubble
         : item.kind === 'operation' ? { padding: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: item.failed ? theme.colors.destructiveSoft : theme.colors.successSoft }

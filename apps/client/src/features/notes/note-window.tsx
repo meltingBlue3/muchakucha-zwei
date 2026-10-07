@@ -9,6 +9,6 @@ export function NoteWindow(props: Omit<RouteWindowProps, 'resource' | 'fallback'
   const [chrome, setChrome] = useState<NoteEditorChrome | null>(null);
   const updateChrome = useCallback((next: NoteEditorChrome | null) => setChrome(next), []);
   return <NoteEditorChromeContext.Provider value={updateChrome}>
-    <RouteWindow {...props} headerActions={chrome?.headerActions} footer={chrome?.footer ?? props.footer} step={chrome?.step ?? null} resource="notes" fallback={<NoteListScreen />} />
+    <RouteWindow {...props} headerActions={chrome?.headerActions ?? props.headerActions} footer={chrome?.footer ?? props.footer} step={chrome?.step ?? null} resource="notes" fallback={<NoteListScreen />} />
   </NoteEditorChromeContext.Provider>;
 }

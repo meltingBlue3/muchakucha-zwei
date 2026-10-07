@@ -9,7 +9,7 @@ import House from 'lucide-react-native/icons/house';
 import Users from 'lucide-react-native/icons/users';
 import Mail from 'lucide-react-native/icons/mail';
 import LogOut from 'lucide-react-native/icons/log-out';
-import { SettingsSection } from '../../ui/settings-section';
+import { SettingsRows, SettingsSection } from '../../ui/settings-section';
 import { PageIntro } from '../../ui/page-intro';
 
 import type { HouseholdApi } from './household-api';
@@ -446,9 +446,9 @@ export function HouseholdSettings({
     </Pressable>
   ) : null;
 
-  // One invite action in both layouts: the overview panel on wide screens, the top of 成员 otherwise.
-  const inviteButton = <Button ref={inviteTrigger} label="邀请家人" onPress={() => setActiveForm('invite')} />;
-    const leaveEntry = !actorIsOwner || canTransferBeforeLeaving ? (
+  // One invite action in both layouts: the overview panel on wide screens, beside the 成员 title otherwise.
+  const inviteButton = <Button ref={inviteTrigger} label="邀请家人" tone={inviteInOverview ? 'primary' : 'secondary'} size={inviteInOverview ? 'regular' : 'compact'} onPress={() => setActiveForm('invite')} />;
+  const leaveEntry = !actorIsOwner || canTransferBeforeLeaving ? (
     <Pressable ref={leaveTrigger} accessibilityRole="button" accessibilityLabel="离开家庭" onPress={() => {
       if (actorIsOwner) { setSuccessorId(null); setLeaveOpen(true); }
       else { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/leave?householdName=${encodeURIComponent(authoritativeName)}`); }
@@ -502,9 +502,9 @@ export function HouseholdSettings({
         {wide ? leaveEntry : null}
         </Stack>
         <Stack gap={4} style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', minWidth: 0 }}>
-        <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
-          {showInvite && canManage && !inviteInOverview ? inviteButton : null}
-        <Stack gap={0}>
+        <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}
+          action={showInvite && canManage && !inviteInOverview ? inviteButton : undefined}>
+        <SettingsRows>
           {data.members.map((member) => {
             const targetIsOwner = member.membershipId === data.ownerMembershipId;
             const action = governanceAction(actorRole, actorIsOwner, member.role, targetIsOwner, member.isCurrentUser);
@@ -527,11 +527,10 @@ export function HouseholdSettings({
                 onRemove={() => governance.remove?.(member.membershipId, member.displayName, member.role)}
                 canTransferTo={transferable}
                 onTransfer={() => governance.transfer?.(member.membershipId, member.displayName)}
-                labeledActions
               />
             );
           })}
-        </Stack>
+        </SettingsRows>
         </SettingsSection>
 
         {/* Invitation list — visible to owner/admin when showInvite is enabled */}
@@ -547,7 +546,7 @@ export function HouseholdSettings({
             ) : invitationList.length === 0 ? (
               <EmptyState message="还没有待处理的邀请。" />
             ) : (
-              <Stack>
+              <SettingsRows>
                 {invitationList.map((inv) => (
                   <InvitationRow
                     key={inv.id}
@@ -556,10 +555,9 @@ export function HouseholdSettings({
                     onResend={handleResend}
                     onRevoke={handleRevoke}
                     resendBusy={resendingId === inv.id}
-                    labeledActions
                   />
                 ))}
-              </Stack>
+              </SettingsRows>
             )}
           </SettingsSection>
         ) : null}

@@ -149,6 +149,11 @@ type ButtonProps = Omit<PressableProps, 'children'> & {
   tone?: ButtonTone;
   /** Set on a button that shows or hides content, so its state is announced. */
   expanded?: boolean;
+  /**
+   * `compact` is a smaller pill for a secondary action beside a title, in a
+   * row or in a phone sheet; it keeps the full touch target through hit slop.
+   */
+  size?: 'regular' | 'compact';
 };
 
 export const getButtonFill = (state: { disabled: boolean; pressed: boolean }, tone: Exclude<ButtonTone, 'secondary'> = 'primary'): string =>
@@ -158,13 +163,16 @@ export const getButtonFill = (state: { disabled: boolean; pressed: boolean }, to
       ? state.pressed ? theme.colors.destructivePressed : theme.colors.destructive
       : state.pressed ? theme.colors.primaryPressed : theme.colors.primary;
 
-export const Button = ({ disabled, label, loading = false, tone = 'primary', expanded, style, ...props }: ButtonProps) => {
+export const Button = ({ disabled, label, loading = false, tone = 'primary', expanded, size = 'regular', style, ...props }: ButtonProps) => {
   const activeTheme = useTheme<Theme>();
   const unavailable = disabled || loading;
   const [focused, setFocused] = useState(false);
   const { onBlur, onFocus, ...pressableProps } = props;
+  const compact = size === 'compact';
+  const slop = (activeTheme.controlSizes.touchTarget - activeTheme.controlSizes.compact) / 2;
   return (
     <Pressable
+      {...(compact ? { hitSlop: { top: slop, bottom: slop } } : {})}
       {...pressableProps}
       accessibilityLabel={pressableProps.accessibilityLabel ?? label}
       accessibilityRole="button"
@@ -192,9 +200,9 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', exp
           flexDirection: 'row',
           gap: activeTheme.spacing[2],
           justifyContent: 'center',
-          minHeight: activeTheme.controlSizes.primary,
+          minHeight: compact ? activeTheme.controlSizes.compact : activeTheme.controlSizes.primary,
           minWidth: activeTheme.controlSizes.touchTarget,
-          paddingHorizontal: activeTheme.spacing[5],
+          paddingHorizontal: compact ? activeTheme.spacing[4] : activeTheme.spacing[5],
           // The ring sits outside the pill on Web, so focusing never shifts the layout.
           ...(Platform.OS === 'web' && focused ? { outlineColor: activeTheme.colors.focusRing, outlineOffset: activeTheme.focus.offset, outlineStyle: 'solid', outlineWidth: activeTheme.focus.width } : {}),
         },
@@ -202,7 +210,7 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', exp
       ]}
     >
       {loading ? <Spinner inverse={tone !== 'secondary'} label={`${label}，正在处理`} /> : null}
-      <Text variant="button" color={unavailable ? 'inkMuted' : tone === 'secondary' ? 'ink' : 'surface'}>{label}</Text>
+      <Text variant={compact ? 'label' : 'button'} color={unavailable ? 'inkMuted' : tone === 'secondary' ? 'ink' : 'surface'}>{label}</Text>
     </Pressable>
   );
 };

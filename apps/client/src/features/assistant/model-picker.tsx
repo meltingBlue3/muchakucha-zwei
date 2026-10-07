@@ -5,10 +5,12 @@ import type { AssistantProviderResponseDto } from '@muchakucha/api-client';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Sparkles from 'lucide-react-native/icons/sparkles';
 import Check from 'lucide-react-native/icons/check';
+import Settings from 'lucide-react-native/icons/settings';
 import { AppDialog } from '../../ui/app-dialog';
-import { Button, Inline, Stack, Text } from '../../ui/primitives';
+import { Inline, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 import { assistantPath } from './assistant-boundary';
+import { MenuRow } from './menu-row';
 
 export function AssistantModelPicker({ householdId, providers, selectedId, busy, newConversation = false, onSelect }: {
   householdId: string; providers: AssistantProviderResponseDto[]; selectedId?: string | null;
@@ -33,8 +35,8 @@ export function AssistantModelPicker({ householdId, providers, selectedId, busy,
         <Text variant="caption">{provider.baseUrl}</Text>
         {provider.hasCredential ? null : <Text variant="caption" color="destructive">{provider.ownedByMe ? '密钥无法读取，请在模型配置中重新填写。' : '密钥无法读取，请联系配置创建者重新填写。'}</Text>}
       </Pressable>)}
+      <MenuRow label="模型配置" icon={Settings} opensPage onPress={() => { setOpen(false); router.push(`${assistantPath(householdId)}/providers`); }} />
       <Text variant="caption">对话和查询到的家庭数据会发送到所选服务，该服务能看到这些内容。共享模型的服务地址由配置者填写，费用也由配置者承担；配置者能看到每位家人的使用次数和用量，看不到对话内容。</Text>
-      <Button label="模型配置" tone="secondary" onPress={() => { setOpen(false); router.push(`${assistantPath(householdId)}/providers`); }} />
     </Stack></AppDialog> : null}
   </>;
 }

@@ -8,15 +8,22 @@ import { useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { Text } from './primitives';
 import { theme } from './theme';
 
-export interface CardAction {
-  kind: 'edit' | 'delete';
+type ActionIcon = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+interface ActionLook { label: string; icon: ActionIcon; destructive?: boolean }
+
+/**
+ * One menu item: `kind` picks the standard 编辑 or 删除, otherwise the item
+ * brings its own label and icon, such as 「移除」 on a member.
+ */
+export type CardAction = ({ kind: 'edit' | 'delete' } | ({ kind?: undefined } & ActionLook)) & {
   /** Full name for assistive technology, such as "删除任务：买菜". */
   accessibilityLabel: string;
-  onPress(): void;
-}
+  /** Receives the menu trigger, so a window opened from the item can return focus to it. */
+  onPress(trigger: View | null): void;
+};
 
-const ACTION_LOOK: Record<CardAction['kind'], { label: string; icon: ComponentType<{ size?: number; color?: string }>; destructive: boolean }> = {
-  edit: { label: '编辑', icon: Pencil, destructive: false },
+const STANDARD_LOOK: Record<'edit' | 'delete', ActionLook> = {
+  edit: { label: '编辑', icon: Pencil },
   delete: { label: '删除', icon: Trash2, destructive: true },
 };
 
@@ -52,10 +59,10 @@ function ActionsMenu({ subject, actions, disabled = false }: { subject: string; 
         <Pressable accessible={false} tabIndex={-1} testID="card-menu-dismiss" onPress={close} style={StyleSheet.absoluteFill} />
         <View ref={panel} accessibilityRole="menu" accessibilityLabel={menuLabel} accessibilityViewIsModal style={{ position: 'absolute', top: Math.max(insets.top, Math.min(anchor.top, height - insets.bottom - panelHeight - theme.spacing[2])), right: anchor.right, minWidth: theme.controlSizes.touchTarget * 3, backgroundColor: theme.colors.surface, padding: theme.spacing[2], borderRadius: theme.borderRadii.lg, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, boxShadow: theme.shadow.soft }}>
           {actions.map((action, index) => {
-            const { label, icon: Icon, destructive } = ACTION_LOOK[action.kind];
+            const { label, icon: Icon, destructive = false } = action.kind ? STANDARD_LOOK[action.kind] : action;
             return (
-              <Pressable key={action.kind} ref={index === 0 ? initial : undefined} accessibilityRole="menuitem" accessibilityLabel={action.accessibilityLabel} onPress={() => { close(); requestAnimationFrame(action.onPress); }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? (destructive ? theme.colors.destructiveSoft : theme.colors.surfaceMuted) : theme.colors.surface })}>
-                <Icon size={theme.controlSizes.icon} color={destructive ? theme.colors.destructive : theme.colors.ink} />
+              <Pressable key={action.accessibilityLabel} ref={index === 0 ? initial : undefined} accessibilityRole="menuitem" accessibilityLabel={action.accessibilityLabel} onPress={() => { close(); requestAnimationFrame(() => action.onPress(trigger.current)); }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? (destructive ? theme.colors.destructiveSoft : theme.colors.surfaceMuted) : theme.colors.surface })}>
+                <Icon size={theme.controlSizes.icon} color={destructive ? theme.colors.destructive : theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} />
                 <Text variant="label" color={destructive ? 'destructive' : 'ink'}>{label}</Text>
               </Pressable>
             );

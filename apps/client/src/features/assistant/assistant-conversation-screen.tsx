@@ -109,7 +109,7 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
       {query.loading && !query.data ? <LoadingState label="正在加载对话" /> : null}
       {conversation ? <>
         {!provider ? <Banner>这段对话的模型配置已删除或不再共享。历史内容仍可查看，请返回助手首页选择可用模型开始对话。</Banner> : null}
-        {conversation.state === 'running' ? <Button label="刷新处理结果" tone="secondary" loading={query.loading} disabled={operation.busy} onPress={() => { void query.reload(); }} /> : null}
+        {conversation.state === 'running' ? <Button label="刷新处理结果" tone="secondary" size="compact" loading={query.loading} disabled={operation.busy} onPress={() => { void query.reload(); }} style={{ alignSelf: 'flex-start' }} /> : null}
       </> : null}
     </Stack>;
   const pending = conversation?.pendingActions ?? [];

@@ -212,25 +212,31 @@ test('owner manages roles and removal through one window without losing the sett
   await addMembershipViaDb(household.id, member.userId, 'MEMBER');
   await loginUsernameFixture(page, owner.username, password, `/households/${household.id}/settings`);
   const role = async () => (await getHouseholdMemberships(owner.accessToken, household.id)).find(item => item.userId === member.userId)?.role;
-  await page.getByRole('button', { name: '提升 协作成员', exact: true }).click();
+  // Governance actions live in the member's 「…」 menu.
+  const memberMenu = page.getByRole('button', { name: '更多操作：成员：协作成员', exact: true });
+  const memberAction = async (name: string) => {
+    await memberMenu.click();
+    await page.getByRole('menuitem', { name, exact: true }).click();
+  };
+  await memberAction('提升 协作成员');
   await expect(page.getByRole('dialog')).toHaveCount(1);
   await page.getByRole('button', { name: '保留成员权限', exact: true }).click();
   expect(await role()).toBe('MEMBER');
-  await expect(page.getByRole('button', { name: '提升 协作成员', exact: true })).toBeFocused();
-  await page.getByRole('button', { name: '提升 协作成员', exact: true }).click();
+  await expect(memberMenu).toBeFocused();
+  await memberAction('提升 协作成员');
   await page.getByRole('button', { name: '确认提升为管理员', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/households/${household.id}/settings$`));
   expect(await role()).toBe('ADMIN');
-  await page.getByRole('button', { name: '降级 协作成员', exact: true }).click();
+  await memberAction('降级 协作成员');
   await page.getByRole('button', { name: '降级为成员', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/households/${household.id}/settings$`));
   expect(await role()).toBe('MEMBER');
-  await page.getByRole('button', { name: '移除 协作成员', exact: true }).click();
+  await memberAction('移除 协作成员');
   await expect(page.getByRole('dialog')).toHaveCount(1);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.keyboard.press('Escape');
   expect(await role()).toBe('MEMBER');
-  await page.getByRole('button', { name: '移除 协作成员', exact: true }).click();
+  await memberAction('移除 协作成员');
   await page.getByRole('button', { name: '移除成员', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/households/${household.id}/settings$`));
   expect(await role()).toBeUndefined();

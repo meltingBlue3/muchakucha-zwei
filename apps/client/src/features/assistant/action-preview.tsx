@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import type { AssistantConversationResponseDto } from '@muchakucha/api-client';
 import Check from 'lucide-react-native/icons/check';
 import { sessionApiClient } from '../auth/session-runtime';
-import { Banner, Button, ConfirmActions, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
+import { Banner, Button, ConfirmActions, Heading, Inline, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { DetailField } from '../../ui/detail-fields';
 import { formatDate, formatDateTime } from '../../ui/date-values';
 import { theme } from '../../ui/theme';
@@ -173,6 +173,7 @@ function ActionItem({ householdId, action, position, choice, busy, onReady }: {
       : <Heading variant="section">请确认：{details.title}</Heading>}
     {query.loading && !query.data ? <LoadingState label="正在核对操作内容" /> : null}
     {query.error ? <LoadError message="无法核对操作对象，请重试，或取消这次操作。" retrying={query.loading} disabled={busy} onRetry={() => { void query.reload(); }} /> : null}
+    {/* Short facts take one line each, name beside value, so a proposal fits a phone sheet. */}
     {query.data?.target ? <Stack gap={2}>
       <DetailField label="操作对象" value={query.data.target.title} />
       {query.data.target.recurrence ? <Text variant="bodySm">这是重复安排，本次操作仅影响这一次安排。</Text> : null}
@@ -182,8 +183,10 @@ function ActionItem({ householdId, action, position, choice, busy, onReady }: {
         {query.data.target.description || query.data.target.body ? <DetailField label="当前内容" value={query.data.target.description ?? query.data.target.body ?? ''} /> : null}
       </> : null}
     </Stack> : null}
-    {details.fields.map(field => field.changes !== undefined ? <TextChange key={field.label} field={field} />
-      : <DetailField key={field.label} label={field.label} value={field.value} notes={field.before === undefined ? [] : [`修改前：${field.before}`]} />)}
+    {details.fields.length ? <Stack gap={2}>
+      {details.fields.map(field => field.changes !== undefined ? <TextChange key={field.label} field={field} />
+        : <DetailField key={field.label} label={field.label} value={field.value} notes={field.before === undefined ? [] : [`修改前：${field.before}`]} />)}
+    </Stack> : null}
     {details.stale ? <Banner>操作对象已有变化。请取消这次操作，让助手重新查询并生成建议。</Banner> : null}
     {details.unresolved ? <Banner>部分成员或标签已不可用。请取消这次操作，让助手重新查询。</Banner> : null}
     {!details.supported ? <Banner>此版本暂不支持预览这项操作，请取消后重试。</Banner> : null}
@@ -218,8 +221,12 @@ export function AssistantActionsPreview({ householdId, actions, busy, disabled =
       <ActionItem householdId={householdId} action={action} busy={busy} onReady={onReady}
         {...(batch ? { position: index + 1, choice: { checked: !unchecked.has(action.id), onToggle: () => toggle(action.id) } } : {})} />
     </View>)}
+    {/* A way out that is not a decision: one quiet line, so the decision buttons stay the pair at the bottom. */}
+    {onAdjust ? <Inline gap={3}>
+      <Text variant="caption" style={{ flex: 1 }}>{batch ? '取消这些草稿，回到对话描述你的修改。' : '取消当前草稿，回到对话描述你的修改。'}</Text>
+      <Button label="调整方案" tone="secondary" size="compact" disabled={busy || disabled} onPress={onAdjust} />
+    </Inline> : null}
     <ConfirmActions cancelLabel={batch ? '全部取消' : '取消操作'} confirmLabel={batch ? `确认执行（${chosen.length}）` : destructive ? '确认删除' : '确认执行'} destructive={destructive} busy={busy}
       confirmDisabled={disabled || chosen.length === 0} onCancel={() => onDecide([])} onConfirm={() => onDecide(chosen.map(action => action.id))} />
-    {onAdjust ? <><Button label="调整方案" tone="secondary" disabled={busy || disabled} onPress={onAdjust} /><Text variant="caption">{batch ? '取消这些草稿，回到对话描述你的修改。' : '取消当前草稿，回到对话描述你的修改。'}</Text></> : null}
   </Stack>;
 }
