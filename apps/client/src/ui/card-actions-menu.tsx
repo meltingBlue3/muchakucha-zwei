@@ -5,6 +5,7 @@ import Ellipsis from 'lucide-react-native/icons/ellipsis';
 import Pencil from 'lucide-react-native/icons/pencil';
 import Trash2 from 'lucide-react-native/icons/trash-2';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
+import { insetFocusRing } from '../platform/focus-ring/focus-ring';
 import { Text } from './primitives';
 import { theme } from './theme';
 
@@ -61,7 +62,7 @@ function ActionsMenu({ subject, actions, disabled = false }: { subject: string; 
           {actions.map((action, index) => {
             const { label, icon: Icon, destructive = false } = action.kind ? STANDARD_LOOK[action.kind] : action;
             return (
-              <Pressable key={action.accessibilityLabel} ref={index === 0 ? initial : undefined} accessibilityRole="menuitem" accessibilityLabel={action.accessibilityLabel} onPress={() => { close(); requestAnimationFrame(() => action.onPress(trigger.current)); }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? (destructive ? theme.colors.destructiveSoft : theme.colors.surfaceMuted) : theme.colors.surface })}>
+              <Pressable {...insetFocusRing} key={action.accessibilityLabel} ref={index === 0 ? initial : undefined} accessibilityRole="menuitem" accessibilityLabel={action.accessibilityLabel} onPress={() => { close(); requestAnimationFrame(() => action.onPress(trigger.current)); }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? (destructive ? theme.colors.destructiveSoft : theme.colors.surfaceMuted) : theme.colors.surface })}>
                 <Icon size={theme.controlSizes.icon} color={destructive ? theme.colors.destructive : theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} />
                 <Text variant="label" color={destructive ? 'destructive' : 'ink'}>{label}</Text>
               </Pressable>

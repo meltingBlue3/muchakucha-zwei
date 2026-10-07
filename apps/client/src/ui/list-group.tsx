@@ -1,5 +1,6 @@
 import { Children, Fragment, isValidElement, useState, type ReactNode } from 'react';
 import { Platform, Pressable, View } from 'react-native';
+import { insetFocusRing } from '../platform/focus-ring/focus-ring';
 import { Text } from './primitives';
 import { theme } from './theme';
 
@@ -81,6 +82,7 @@ export function ListRow({ accessibilityLabel, onPress, leading, trailing, footer
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', minHeight: rowHeight, paddingLeft: leading ? theme.spacing[1] : theme.spacing[2], paddingRight: theme.spacing[2] }}>
         {leading ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', alignSelf: 'stretch', paddingTop: controlInset }}>{leading}</View> : null}
         <Pressable
+          {...insetFocusRing}
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel}
           // A button cannot be aria-selected, so the web marks the open item as current.

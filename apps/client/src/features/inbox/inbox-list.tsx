@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
+import { insetFocusRing } from '../../platform/focus-ring/focus-ring';
 import { AppDialog } from '../../ui/app-dialog';
 import { Banner, Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
@@ -59,7 +60,7 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
       {!loading && !error && messages.length === 0 ? <EmptyState title="暂无消息" message="新的通知会显示在这里。" /> : null}
       {messages.length > 0 ? <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, overflow: 'hidden' }}>
         {messages.map((message, index) => <View key={message.id} testID={`inbox-row-${message.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], borderBottomWidth: index < messages.length - 1 ? theme.borderWidths.default : 0, borderBottomColor: theme.colors.separator, paddingHorizontal: theme.spacing[2] }}>
-          <Pressable ref={node => { if (node) rowTriggers.current.set(message.id, node); else rowTriggers.current.delete(message.id); }} accessibilityRole="button" accessibilityLabel={`查看消息：${message.summary}`} accessibilityHint="打开消息详情"
+          <Pressable {...insetFocusRing} ref={node => { if (node) rowTriggers.current.set(message.id, node); else rowTriggers.current.delete(message.id); }} accessibilityRole="button" accessibilityLabel={`查看消息：${message.summary}`} accessibilityHint="打开消息详情"
             disabled={busy} onPress={() => { trigger.current = rowTriggers.current.get(message.id) ?? null; setSelectedId(message.id); }}
             style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[4], backgroundColor: pressed ? theme.colors.surfaceSubtle : theme.colors.transparent })}>
             <Text variant="bodySm" color="ink" numberOfLines={2}>{message.summary}</Text>
