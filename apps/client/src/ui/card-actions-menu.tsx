@@ -45,7 +45,7 @@ function ActionsMenu({ subject, actions, disabled = false }: { subject: string; 
       trigger.current?.measureInWindow((x, y, w, h) => setAnchor({ top: y + h, right: Math.max(theme.layout.mobileInset, width - x - w) }));
       setOpen(true);
     }} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, backgroundColor: pressed || open ? theme.colors.surfaceMuted : theme.colors.transparent })}>
-      <Ellipsis size={theme.controlSizes.icon} color={theme.colors.inkMuted} />
+      <Ellipsis size={theme.controlSizes.icon} color={theme.colors.inkFaint} strokeWidth={theme.controlSizes.iconStroke} />
     </Pressable>
     {open ? <Modal {...(Platform.OS === 'web' ? { 'aria-label': menuLabel } : {})} transparent visible animationType="none" onShow={focus} onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
       <View style={{ flex: 1 }}>

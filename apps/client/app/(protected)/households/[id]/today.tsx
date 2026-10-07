@@ -2,35 +2,24 @@ import { FloatingCreateButton } from '../../../../src/ui/floating-create-button'
 import { useContentDelete, useContentEdit } from '../../../../src/features/content/use-content-delete';
 import { rememberRouteTrigger } from '../../../../src/platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../../../src/ui/workspace-state';
-import { PageIntro, TodaySummary } from '../../../../src/ui/page-intro';
-import { formatDate } from '../../../../src/ui/date-values';
-import { HouseholdNavigation } from '../../../../src/ui/household-navigation';
+import { PageIntro } from '../../../../src/ui/page-intro';
+import { formatDate, formatWeekday, toTimeValue } from '../../../../src/ui/date-values';
+import { GroupLabel, ListGroup, NowMarker } from '../../../../src/ui/list-group';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
-import { useTheme } from '@shopify/restyle';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, useWindowDimensions } from 'react-native';
 import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
-import Calendar from 'lucide-react-native/icons/calendar';
-import Clock from 'lucide-react-native/icons/clock';
-import Hourglass from 'lucide-react-native/icons/hourglass';
-import Inbox from 'lucide-react-native/icons/inbox';
-import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
 
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
 import { useTaskCompletion } from '../../../../src/features/tasks/use-task-completion';
 import { useHouseholdContext } from '../../../../src/features/households/household-context';
+import { HouseholdScreen } from '../../../../src/features/households/household-screen';
 import { EventCard } from '../../../../src/features/events/event-card';
 import { TaskCard } from '../../../../src/features/tasks/task-card';
 import { toDateIso } from '../../../../src/features/events/calendar-utils';
 import { isApproachingDeadline, isOverdue } from '../../../../src/features/tasks/task-utils';
-import {
-  AccessChangedPanel,
-  AppShell,
-  HouseholdHeader,
-  HouseholdSwitcher,
-} from '../../../../src/ui/household-components';
 import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../../../src/ui/primitives';
-import type { Theme } from '../../../../src/ui/theme';
+import { theme } from '../../../../src/ui/theme';
 
 function todayIso(): string {
   return toDateIso(new Date());
@@ -102,15 +91,8 @@ export default function TodayRoute() {
   const editTask = useContentEdit('tasks');
   const deleteEvent = useContentDelete('events');
   const editEvent = useContentEdit('events');
-  const activeTheme = useTheme<Theme>();
-  const {
-    viewState,
-    households,
-    currentHouseholdId,
-    accessChangedHouseholdName,
-    refreshHouseholds,
-    switchHousehold,
-  } = useHouseholdContext();
+  const { width } = useWindowDimensions();
+  const { viewState, currentHouseholdId } = useHouseholdContext();
 
   const [events, setEvents] = useState<EventResponseDto[]>([]);
   const [tasks, setTasks] = useState<TaskResponseDto[]>([]);
@@ -119,14 +101,13 @@ export default function TodayRoute() {
   const loaded = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [, setCalendarDate] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, todayIso());
   const [showUpcoming, setShowUpcoming] = useWorkspaceState(`view:${id}:today:upcoming`, false);
   const [allOverdue, setAllOverdue] = useWorkspaceState(`view:${id}:today:allOverdue`, false);
   const [allUnscheduled, setAllUnscheduled] = useWorkspaceState(`view:${id}:today:allUnscheduled`, false);
+  const now = useMinuteClock();
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
 
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -137,7 +118,7 @@ export default function TodayRoute() {
   }, [members]);
 
   const fetchData = useCallback(async () => {
-    if (householdId === undefined || householdId === '') return;
+    if (householdId === undefined || householdId === null || householdId === '') return;
     if (!loaded.current) setLoading(true);
     setError(null);
     try {
@@ -165,13 +146,13 @@ export default function TodayRoute() {
     }
   }, [householdId]);
 
-  const completion = useTaskCompletion(householdId, fetchData);
+  const completion = useTaskCompletion(householdId ?? undefined, fetchData);
 
-  // Split tasks into groups
   const { overdueTasks, todayTasks, unscheduledTasks, approachingTasks, otherUpcomingTasks } = useMemo(
     () => partitionTodayTasks(tasks, completion.undoTaskId),
     [tasks, completion.undoTaskId],
   );
+  const day = useMemo(() => arrangeDay(events, todayTasks), [events, todayTasks]);
 
   const previewTasks = (items: TaskResponseDto[], expanded: boolean) => expanded
     ? items
@@ -216,250 +197,183 @@ export default function TodayRoute() {
     [router, householdId],
   );
 
+  const create = (kind: 'events' | 'tasks' | 'notes') => () => {
+    if (kind === 'events') setCalendarDate(todayIso());
+    rememberRouteTrigger();
+    router.push(`/households/${encodeURIComponent(householdId!)}/${kind}/new`);
+  };
 
-  const dateLabel = useMemo(() => formatDate(new Date(), { weekday: true }), []);
+  const taskRow = (task: TaskResponseDto, options: { time?: string; showDue?: boolean } = {}) => (
+    <TaskCard
+      key={task.id}
+      task={task}
+      assignees={(task.assigneeIds ?? []).map((uid) => ({ id: uid, name: memberNameMap.get(uid) ?? '未知成员' }))}
+      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
+      {...(options.time === undefined ? {} : { time: options.time })}
+      showDue={options.showDue ?? true}
+      {...completion.cardProps(task)}
+    />
+  );
+  const eventRow = (event: EventResponseDto, timeColumn: boolean) => (
+    <EventCard key={event.id} event={event} withinDay timeColumn={timeColumn} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />
+  );
 
-  const handleSwitch = useCallback(async (householdId: string) => {
-    if (householdId === (id ?? currentHouseholdId)) {
-      setSwitcherOpen(false);
-      return;
-    }
-    const success = await switchHousehold(householdId);
-    if (success) {
-      void router.replace(`/households/${encodeURIComponent(householdId)}/today`);
-    }
-    setSwitcherOpen(false);
-  }, [id, currentHouseholdId, switchHousehold, router]);
+  const wide = width >= theme.layout.navigationBreakpoint;
+  const ready = !loading && (error === null || loaded.current);
+  const nothingToday = events.length === 0 && todayTasks.length === 0;
+  const upcomingCount = approachingTasks.length + otherUpcomingTasks.length;
+  const nowIndex = day.timeline.findIndex(entry => entry.at > now.minutes);
 
-  // AccessChanged state
-  if (viewState === 'accessChanged') {
-    return (
-      <AppShell accessibilityLabel="家庭访问权已变化">
-        <AccessChangedPanel
-          hasOtherHouseholds={households.length > 0}
-          {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
-          onChooseOther={() => { void refreshHouseholds().then(() => router.replace('/households')); }}
-          onCreateNew={() => { void router.replace('/household-handoff'); }}
-        />
-      </AppShell>
-    );
-  }
+  const summary = (
+    <Text variant="bodySm">
+      {formatWeekday(now.date)}
+      {ready ? ` · ${events.length} 个日程 · ${todayTasks.length} 件待办` : ''}
+      {ready && overdueTasks.length > 0 ? <Text variant="bodySm" color="accent">{` · ${overdueTasks.length} 件逾期`}</Text> : null}
+    </Text>
+  );
 
-  if (householdId === undefined || householdId === '') {
-    return (
-      <AppShell accessibilityLabel="页面未找到">
-        <Stack gap={4}>
-          <Text>这个页面暂时无法访问。</Text>
-        </Stack>
-      </AppShell>
-    );
-  }
+  const overdueGroup = overdueTasks.length > 0 ? (
+    <View>
+      <GroupLabel tone="accent">{`逾期任务（${overdueTasks.length}）`}</GroupLabel>
+      <ListGroup>{previewTasks(overdueTasks, allOverdue).map(task => taskRow(task))}</ListGroup>
+      {overdueTasks.length > 3 ? <MoreButton label={allOverdue ? '收起逾期任务' : `查看全部逾期任务（${overdueTasks.length}）`} expanded={allOverdue} onPress={() => setAllOverdue(value => !value)} /> : null}
+    </View>
+  ) : null;
+
+  const allDayGroup = day.allDay.length > 0 ? (
+    <View>
+      <GroupLabel>{`全天（${day.allDay.length}）`}</GroupLabel>
+      <ListGroup>{day.allDay.map(entry => entry.kind === 'event' ? eventRow(entry.event, false) : taskRow(entry.task, { showDue: false }))}</ListGroup>
+    </View>
+  ) : null;
+
+  const timelineGroup = day.timeline.length > 0 ? (
+    <View>
+      <GroupLabel>{`时间线（${day.timeline.length}）`}</GroupLabel>
+      <ListGroup>
+        {day.timeline.flatMap((entry, index) => [
+          ...(index === nowIndex ? [<NowMarker key="now" time={toTimeValue(now.date)} />] : []),
+          entry.kind === 'event' ? eventRow(entry.event, true) : taskRow(entry.task, { time: toTimeValue(new Date(entry.task.dueDate!)), showDue: false }),
+        ])}
+        {nowIndex === -1 ? <NowMarker key="now" time={toTimeValue(now.date)} /> : null}
+      </ListGroup>
+    </View>
+  ) : null;
+
+  const unscheduledGroup = unscheduledTasks.length > 0 ? (
+    <View>
+      {/* A bounded preview keeps unscheduled work reachable without burying the day. */}
+      <GroupLabel>{`待安排（${unscheduledTasks.length}）`}</GroupLabel>
+      <ListGroup>{previewTasks(unscheduledTasks, allUnscheduled).map(task => taskRow(task))}</ListGroup>
+      {unscheduledTasks.length > 3 ? <MoreButton label={allUnscheduled ? '收起待安排' : `查看全部待安排（${unscheduledTasks.length}）`} expanded={allUnscheduled} onPress={() => setAllUnscheduled(value => !value)} /> : null}
+    </View>
+  ) : null;
+
+  // Hidden when nothing is coming up: a toggle that reveals zero items is noise.
+  const upcomingGroup = upcomingCount > 0 ? (
+    <Stack gap={4}>
+      <MoreButton label={showUpcoming ? '收起后续安排' : `查看后续安排（${upcomingCount}）`} expanded={showUpcoming} onPress={() => setShowUpcoming(value => !value)} />
+      {showUpcoming ? <>
+        <View>
+          <GroupLabel>{`临近截止日期（${approachingTasks.length}）`}</GroupLabel>
+          {approachingTasks.length === 0
+            ? <Text variant="bodySm" style={{ paddingHorizontal: theme.spacing[1] }}>未来 7 天内没有到期的任务。</Text>
+            : <ListGroup>{approachingTasks.map(task => taskRow(task))}</ListGroup>}
+        </View>
+        {otherUpcomingTasks.length > 0 ? (
+          <View>
+            <GroupLabel>{`稍后待办（${otherUpcomingTasks.length}）`}</GroupLabel>
+            <ListGroup>{otherUpcomingTasks.map(task => taskRow(task))}</ListGroup>
+          </View>
+        ) : null}
+      </> : null}
+    </Stack>
+  ) : null;
+
+  const primary = (
+    <Stack gap={6}>
+      {overdueGroup}
+      {nothingToday ? <EmptyState title="今天很清闲" message="今天没有日程，也没有到期的待办。" /> : null}
+      {allDayGroup}
+      {timelineGroup}
+    </Stack>
+  );
+  const secondary = unscheduledGroup || upcomingGroup ? <Stack gap={6}>{unscheduledGroup}{upcomingGroup}</Stack> : null;
 
   return (
-    <>
-      <AppShell accessibilityLabel="今日视图" notice={completion.undoNotice} refreshing={refreshing} onRefresh={handleRefresh} title="今日视图" showProfile headerContent={<HouseholdHeader
-          householdName={currentHousehold?.name ?? ''}
-          onOpenSwitcher={() => setSwitcherOpen(true)}
-        />} footer={<HouseholdNavigation householdId={householdId} active="today" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton actions={[
-        { kind: 'events', label: '创建日程', onPress: () => { setCalendarDate(todayIso()); rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/events/new`); } },
-        { kind: 'tasks', label: '创建任务', onPress: () => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/tasks/new`); } },
-        { kind: 'notes', label: '创建笔记', onPress: () => { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/notes/new`); } },
-      ]} /> : null}>
-      <Stack gap={4}>
-        <PageIntro title="今日" action={<Text variant="label" color="inkMuted">{dateLabel}</Text>} />
-        {!loading && error === null ? <TodaySummary events={events.length} tasks={todayTasks.length} overdue={overdueTasks.length} /> : null}
+    <HouseholdScreen
+      active="today"
+      accessibilityLabel="今日视图"
+      notice={completion.undoNotice}
+      refreshing={refreshing}
+      onRefresh={handleRefresh}
+      floatingAction={<FloatingCreateButton actions={[
+        { kind: 'events', label: '创建日程', onPress: create('events') },
+        { kind: 'tasks', label: '创建任务', onPress: create('tasks') },
+        { kind: 'notes', label: '创建笔记', onPress: create('notes') },
+      ]} />}
+    >
+      <Stack gap={6}>
+        <PageIntro title={formatDate(now.date)} subtitle={summary} />
 
-        {/* Loading */}
-        {loading && <LoadingState label="正在加载今日安排" />}
+        {loading ? <LoadingState label="正在加载今日安排" /> : null}
+        {error !== null ? <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载今日数据" /> : null}
 
-        {/* Error */}
-        {error !== null && <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载今日数据" />}
-
-        {!loading && (error === null || loaded.current) && (
-          <>
-            {/* Empty primary groups */}
-            {events.length === 0 && todayTasks.length === 0 ? <EmptyState message="今天没有待处理安排。" /> : null}
-            {/* Today's events */}
-            {events.length > 0 ? <View>
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: activeTheme.spacing[2],
-                marginBottom: activeTheme.spacing[2],
-              }}>
-                <Calendar size={16} color={activeTheme.colors.coral} />
-                <Text accessibilityRole="header" aria-level={2} variant="section">
-                  今日日程（{events.length}）
-                </Text>
+        {ready && viewState !== 'resolving' ? (
+          wide && secondary
+            ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing[8] }}>
+                <View style={{ flex: 3, minWidth: 0 }}>{primary}</View>
+                <View style={{ flex: 2, minWidth: 0 }}>{secondary}</View>
               </View>
-              <Stack gap={2}>
-                {events.map((event) => (
-                  <EventCard key={event.id} event={event} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />
-                ))}
-              </Stack>
-            </View> : null}
-
-            {/* Today's tasks */}
-            {todayTasks.length > 0 && (
-              <View>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: activeTheme.spacing[2],
-                  marginBottom: activeTheme.spacing[2],
-                }}>
-                  <Clock size={16} color={activeTheme.colors.teal} />
-                  <Text accessibilityRole="header" aria-level={2} variant="section">
-                  今日待办（{todayTasks.length}）
-                  </Text>
-                </View>
-                <Stack gap={2}>
-                  {todayTasks.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
-                      {...completion.cardProps(task)}
-                    />
-                  ))}
-                </Stack>
-              </View>
-            )}
-
-            {overdueTasks.length > 0 && (
-              <View>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: activeTheme.spacing[2],
-                  marginBottom: activeTheme.spacing[2],
-                }}>
-                  <TriangleAlert size={16} color={activeTheme.colors.destructive} />
-                  <Text accessibilityRole="header" aria-level={2} variant="section" color="destructive">
-                  逾期任务（{overdueTasks.length}）
-                  </Text>
-                </View>
-                <Stack gap={2}>
-                  {previewTasks(overdueTasks, allOverdue).map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
-                      {...completion.cardProps(task)}
-                    />
-                  ))}
-                </Stack>
-                {overdueTasks.length > 3 ? <Button label={allOverdue ? '收起逾期任务' : `查看全部逾期任务（${overdueTasks.length}）`} tone="secondary" expanded={allOverdue} style={{ marginTop: activeTheme.spacing[2] }} onPress={() => setAllOverdue(value => !value)} /> : null}
-              </View>
-            )}
-
-            {/* A bounded preview keeps unscheduled work reachable without burying the day. */}
-            {unscheduledTasks.length > 0 && (
-              <View>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: activeTheme.spacing[2],
-                  marginBottom: activeTheme.spacing[2],
-                }}>
-                  <Inbox size={16} color={activeTheme.colors.inkMuted} />
-                  <Text accessibilityRole="header" aria-level={2} variant="section">
-                  待安排（{unscheduledTasks.length}）
-                  </Text>
-                </View>
-                <Stack gap={2}>
-                  {previewTasks(unscheduledTasks, allUnscheduled).map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
-                      {...completion.cardProps(task)}
-                    />
-                  ))}
-                </Stack>
-                {unscheduledTasks.length > 3 ? <Button label={allUnscheduled ? '收起待安排' : `查看全部待安排（${unscheduledTasks.length}）`} tone="secondary" expanded={allUnscheduled} style={{ marginTop: activeTheme.spacing[2] }} onPress={() => setAllUnscheduled(value => !value)} /> : null}
-              </View>
-            )}
-
-            {/* Hidden when nothing is coming up: a toggle that reveals zero items is noise. */}
-            {approachingTasks.length + otherUpcomingTasks.length > 0 ? <Button
-              label={showUpcoming ? '收起后续安排' : `查看后续安排（${approachingTasks.length + otherUpcomingTasks.length}）`}
-              tone="secondary"
-              expanded={showUpcoming}
-              onPress={() => setShowUpcoming((value) => !value)}
-            /> : null}
-            {showUpcoming && approachingTasks.length + otherUpcomingTasks.length > 0 ? <>
-            {/* Upcoming work is secondary to today's actions. */}
-            <View>
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: activeTheme.spacing[2],
-                marginBottom: activeTheme.spacing[2],
-              }}>
-                <Hourglass size={16} color={activeTheme.colors.coral} />
-                <Text accessibilityRole="header" aria-level={2} variant="section">
-                  临近截止日期（{approachingTasks.length}）
-                </Text>
-              </View>
-              {approachingTasks.length === 0 ? (
-                <Text variant="bodySm" color="inkMuted">
-                  未来 7 天内没有到期的任务。
-                </Text>
-              ) : (
-                <Stack gap={2}>
-                  {approachingTasks.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
-                      {...completion.cardProps(task)}
-                    />
-                  ))}
-                </Stack>
-              )}
-            </View>
-
-            {/* Other upcoming tasks (more than 7 days away) */}
-            {otherUpcomingTasks.length > 0 && (
-              <View>
-                <Text variant="label" color="inkMuted" style={{ marginBottom: activeTheme.spacing[2] }}>
-                  稍后待办（{otherUpcomingTasks.length}）
-                </Text>
-                <Stack gap={2}>
-                  {otherUpcomingTasks.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-                      onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
-                      {...completion.cardProps(task)}
-                    />
-                  ))}
-                </Stack>
-              </View>
-            )}
-
-            </> : null}
-          </>
-        )}
+            : <Stack gap={6}>{primary}{secondary}</Stack>
+        ) : null}
       </Stack>
-    </AppShell>
+    </HouseholdScreen>
+  );
+}
 
-    <HouseholdSwitcher
-      currentHouseholdId={id ?? currentHouseholdId}
-      households={households}
-      onCreateNew={() => {
-        void router.push('/households/new');
-        setSwitcherOpen(false);
-      }}
-      onClose={() => setSwitcherOpen(false)}
-      onSelect={(hid) => { void handleSwitch(hid); }}
-      visible={switcherOpen}
-    />
-  </>  );
+/** A quiet full-width toggle under a group, such as 「查看全部待安排（5）」. */
+function MoreButton({ label, expanded, onPress }: { label: string; expanded: boolean; onPress(): void }) {
+  return <Button label={label} tone="secondary" expanded={expanded} onPress={onPress} style={{ marginTop: theme.spacing[2], alignSelf: 'flex-start' }} />;
+}
+
+type DayEntry =
+  | { kind: 'event'; at: number; event: EventResponseDto }
+  | { kind: 'task'; at: number; task: TaskResponseDto };
+
+const minutesOf = (iso: string): number => {
+  const date = new Date(iso);
+  return date.getHours() * 60 + date.getMinutes();
+};
+
+/**
+ * Lays out today: all-day events, events that began before today and tasks due
+ * today without a clock time go under 全天; everything with a time today runs
+ * in one timeline, events and tasks together, earliest first.
+ */
+export function arrangeDay(events: EventResponseDto[], todayTasks: TaskResponseDto[]): { allDay: DayEntry[]; timeline: DayEntry[] } {
+  const allDay: DayEntry[] = [];
+  const timeline: DayEntry[] = [];
+  for (const event of events) {
+    const entry = { kind: 'event' as const, at: minutesOf(event.startTime), event };
+    if (event.allDay || toDateIso(new Date(event.startTime)) !== todayIso()) allDay.push(entry);
+    else timeline.push(entry);
+  }
+  for (const task of todayTasks) {
+    const at = minutesOf(task.dueDate!);
+    // A due date without a time is stored as local midnight.
+    (at === 0 ? allDay : timeline).push({ kind: 'task', at, task });
+  }
+  timeline.sort((a, b) => a.at - b.at);
+  return { allDay, timeline };
+}
+
+/** The current time, refreshed each minute so the now marker keeps its place. */
+function useMinuteClock(): { date: Date; minutes: number } {
+  const [date, setDate] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setDate(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  return { date, minutes: date.getHours() * 60 + date.getMinutes() };
 }

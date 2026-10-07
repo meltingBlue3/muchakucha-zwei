@@ -94,8 +94,17 @@ type OwnedTextProps = React.ComponentProps<typeof RestyleText> & {
   variant?: TextVariant;
 };
 
-export const Text = ({ variant = 'body', ...props }: OwnedTextProps) => (
-  <RestyleText allowFontScaling maxFontSizeMultiplier={2} variant={variant} {...props} />
+const tabularFigures = { fontVariant: ['tabular-nums' as const] };
+
+export const Text = ({ variant = 'body', style, ...props }: OwnedTextProps) => (
+  <RestyleText
+    allowFontScaling
+    maxFontSizeMultiplier={2}
+    variant={variant}
+    // Times and counts line up in columns when every figure is the same width.
+    style={variant === 'time' || variant === 'numeral' ? [tabularFigures, style] : style}
+    {...props}
+  />
 );
 
 type HeadingProps = OwnedTextProps & {
@@ -123,7 +132,7 @@ export const Spinner = ({ label = '正在处理', inverse = false }: { label?: s
     <ActivityIndicator
       accessibilityLabel={label}
       accessibilityRole="progressbar"
-      color={inverse ? activeTheme.colors.surface : activeTheme.colors.coral}
+      color={inverse ? activeTheme.colors.surface : activeTheme.colors.inkMuted}
       size="small"
     />
   );
@@ -147,7 +156,7 @@ export const getButtonFill = (state: { disabled: boolean; pressed: boolean }, to
     ? theme.colors.disabled
     : tone === 'destructive'
       ? state.pressed ? theme.colors.destructivePressed : theme.colors.destructive
-      : state.pressed ? theme.colors.coralPressed : theme.colors.coral;
+      : state.pressed ? theme.colors.primaryPressed : theme.colors.primary;
 
 export const Button = ({ disabled, label, loading = false, tone = 'primary', expanded, style, ...props }: ButtonProps) => {
   const activeTheme = useTheme<Theme>();
@@ -177,21 +186,23 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', exp
             ? state.pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.surface
             : getButtonFill({ disabled: unavailable, pressed: state.pressed }, tone === 'destructive' ? 'destructive' : 'primary'),
           // A secondary button on a white surface needs an edge to read as a button; focus still wins.
-          borderColor: focused ? activeTheme.colors.focusRing : tone === 'secondary' && !unavailable ? activeTheme.colors.separator : activeTheme.colors.transparent,
-          borderRadius: activeTheme.borderRadii.lg,
-          borderWidth: activeTheme.borderWidths.focus,
+          borderColor: focused ? activeTheme.colors.focusRing : tone === 'secondary' && !unavailable ? activeTheme.colors.outline : activeTheme.colors.transparent,
+          borderRadius: activeTheme.borderRadii.full,
+          borderWidth: activeTheme.borderWidths.default,
           flexDirection: 'row',
           gap: activeTheme.spacing[2],
           justifyContent: 'center',
           minHeight: activeTheme.controlSizes.primary,
           minWidth: activeTheme.controlSizes.touchTarget,
-          paddingHorizontal: activeTheme.spacing[4],
+          paddingHorizontal: activeTheme.spacing[5],
+          // The ring sits outside the pill on Web, so focusing never shifts the layout.
+          ...(Platform.OS === 'web' && focused ? { outlineColor: activeTheme.colors.focusRing, outlineOffset: activeTheme.focus.offset, outlineStyle: 'solid', outlineWidth: activeTheme.focus.width } : {}),
         },
         typeof style === 'function' ? style(state) : style,
       ]}
     >
-      {loading ? <Spinner inverse label={`${label}，正在处理`} /> : null}
-      <Text variant="button" color={unavailable ? 'ink' : tone === 'secondary' ? 'link' : 'surface'}>{label}</Text>
+      {loading ? <Spinner inverse={tone !== 'secondary'} label={`${label}，正在处理`} /> : null}
+      <Text variant="button" color={unavailable ? 'inkMuted' : tone === 'secondary' ? 'ink' : 'surface'}>{label}</Text>
     </Pressable>
   );
 };
@@ -293,8 +304,8 @@ export const IconButton = ({ icon, label, style, visibleLabel = false, appearanc
       style={(state) => [
         {
           alignItems: 'center',
-          backgroundColor: state.pressed ? activeTheme.colors.coralSoft : appearance === 'plain' ? activeTheme.colors.transparent : activeTheme.colors.surface,
-          borderColor: appearance === 'plain' ? activeTheme.colors.transparent : state.pressed ? activeTheme.colors.coral : activeTheme.colors.separator,
+          backgroundColor: state.pressed ? activeTheme.colors.surfaceMuted : appearance === 'plain' ? activeTheme.colors.transparent : activeTheme.colors.surface,
+          borderColor: appearance === 'plain' ? activeTheme.colors.transparent : activeTheme.colors.outline,
           borderRadius: activeTheme.borderRadii.full,
           borderWidth: activeTheme.borderWidths.default,
           flexDirection: 'row',
@@ -373,7 +384,7 @@ export const TextField = forwardRef<NativeTextInput, FieldProps>(
               borderColor: error
                 ? activeTheme.colors.destructive
                 : focused
-                  ? activeTheme.colors.coral
+                  ? activeTheme.colors.ink
                   : activeTheme.colors.border,
               borderRadius: activeTheme.borderRadii.md,
               borderWidth: focused
@@ -460,9 +471,7 @@ export const Banner = ({ children, title, action }: BannerProps) => (
     accessibilityLiveRegion="assertive"
     accessibilityRole="alert"
     backgroundColor="destructiveSoft"
-    borderColor="destructive"
-    borderRadius="md"
-    borderWidth={theme.borderWidths.default}
+    borderRadius="lg"
     padding={4}
   >
     {/* Top-aligned: the icon sits beside the first line however tall the message grows. */}
@@ -530,17 +539,12 @@ export const EmptyState = ({ title, message, action }: { title?: string; message
 export const BrandMark = () => (
   <Inline accessibilityLabel="Muchakucha Zwei" gap={2}>
     <BrandLogo />
-    <Text variant="body" style={{ fontWeight: '600', flexShrink: 1 }}>Muchakucha Zwei</Text>
+    <Text variant="section" style={{ flexShrink: 1 }}>Muchakucha Zwei</Text>
   </Inline>
 );
 
 export const getMotionDuration = (reducedMotion: boolean): number =>
   reducedMotion ? theme.motion.reducedTransitionMs : theme.motion.transitionMs;
-
-export const shouldRenderAbstractFields = (preferences: {
-  forcedColors: boolean;
-  reducedMotion: boolean;
-}): boolean => !preferences.forcedColors && !preferences.reducedMotion;
 
 const readWebPreference = (query: string): boolean =>
   Platform.OS === 'web' && typeof window !== 'undefined' && window.matchMedia(query).matches;
@@ -578,20 +582,6 @@ export const AuthShell = ({ children }: PropsWithChildren) => {
   const duration = getMotionDuration(preferences.reducedMotion);
   return (
     <Screen>
-      {shouldRenderAbstractFields(preferences) ? (
-        <Box
-          accessibilityElementsHidden
-          backgroundColor="coralSoft"
-          borderRadius="full"
-          height={theme.spacing[16]}
-          importantForAccessibility="no-hide-descendants"
-          position="absolute"
-          right={theme.spacing[6]}
-          testID="auth-decoration"
-          top={theme.spacing[6]}
-          width={theme.spacing[16]}
-        />
-      ) : null}
       <View style={{ flex: 1, width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center', justifyContent: 'center', gap: theme.spacing[8] }}>
         <BrandMark />
       <Box
@@ -640,7 +630,7 @@ export const LinkText = ({ children, style, ...props }: LinkTextProps) => {
         typeof style === 'function' ? style(state) : style,
       ]}
     >
-      <Text color="link" variant="label">
+      <Text color="link" variant="label" style={{ textDecorationLine: 'underline' }}>
         {children}
       </Text>
     </Pressable>
@@ -660,17 +650,15 @@ export const StatusPanel = ({ action, body, heading, kind }: StatusPanelProps) =
   const headingRef = useRef<React.ElementRef<typeof RestyleText>>(null);
   const success = kind === 'success' || kind === 'resetSuccess';
   const Icon = success ? CircleCheck : kind === 'offline' ? Info : CircleAlert;
-  const color = success ? activeTheme.colors.teal : kind === 'expired' ? activeTheme.colors.destructive : activeTheme.colors.ink;
+  const color = success ? activeTheme.colors.success : kind === 'expired' ? activeTheme.colors.destructive : activeTheme.colors.ink;
   useEffect(() => {
     (headingRef.current as unknown as { focus?: () => void } | null)?.focus?.();
   }, []);
   return (
     <Box
       accessibilityLiveRegion="polite"
-      backgroundColor={success ? 'tealSoft' : kind === 'expired' ? 'destructiveSoft' : 'surfaceMuted'}
-      borderColor={success ? 'teal' : kind === 'expired' ? 'destructive' : 'border'}
+      backgroundColor={success ? 'successSoft' : kind === 'expired' ? 'destructiveSoft' : 'surfaceMuted'}
       borderRadius="lg"
-      borderWidth={activeTheme.borderWidths.default}
       padding={6}
     >
       <Stack gap={4}>

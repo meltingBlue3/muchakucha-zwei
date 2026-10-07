@@ -109,7 +109,7 @@ function TextChange({ field }: { field: ActionField }) {
     <Text variant="label" color="inkMuted">{field.label}</Text>
     {changes === null ? <Text>{field.value}</Text> : <>
       <Text variant="caption" color="inkMuted">删除 {removed} 行，新增 {added} 行</Text>
-      {changes.slice(0, SHOWN_CHANGED_LINES).map((line, index) => <Text key={index} selectable variant="bodySm" color={line.kind === 'removed' ? 'destructive' : 'teal'}>
+      {changes.slice(0, SHOWN_CHANGED_LINES).map((line, index) => <Text key={index} selectable variant="bodySm" color={line.kind === 'removed' ? 'destructive' : 'success'}>
         {line.kind === 'removed' ? '－ ' : '＋ '}{line.text || '（空行）'}
       </Text>)}
       {changes.length > SHOWN_CHANGED_LINES ? <Text variant="caption" color="inkMuted">另有 {changes.length - SHOWN_CHANGED_LINES} 行变化未显示</Text> : null}
@@ -123,7 +123,7 @@ function ActionChoice({ label, checked, disabled, onPress }: { label: string; ch
   return <Pressable accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{ checked, disabled }} aria-checked={checked} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
     <View style={{ width: theme.spacing[6], height: theme.spacing[6], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.sm, borderWidth: theme.borderWidths.default,
-      borderColor: disabled ? theme.colors.disabled : checked ? theme.colors.coral : theme.colors.border, backgroundColor: checked ? theme.colors.coral : theme.colors.surface }}>
+      borderColor: disabled ? theme.colors.disabled : checked ? theme.colors.primary : theme.colors.border, backgroundColor: checked ? theme.colors.primary : theme.colors.surface }}>
       {checked ? <Check size={theme.controlSizes.icon} color={theme.colors.surface} strokeWidth={theme.controlSizes.iconStroke} /> : null}
     </View>
     <Text variant="label" color={disabled ? 'inkMuted' : 'ink'} style={{ flex: 1 }}>{label}</Text>

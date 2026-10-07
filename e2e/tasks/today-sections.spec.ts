@@ -64,7 +64,7 @@ function todayAtNoonIso(): string {
   return date.toISOString();
 }
 
-test('undated tasks appear under 待安排 instead of inflating 今日待办', async ({ page }) => {
+test('undated tasks appear under 待安排 instead of inflating today', async ({ page }) => {
   const owner = await prepareAccount('owner');
   const household = await apiCall(owner.accessToken, 'POST', '/households', { name: '待安排之家' });
   expect(household.status).toBe(201);
@@ -83,8 +83,8 @@ test('undated tasks appear under 待安排 instead of inflating 今日待办', a
 
   await loginUsernameFixture(page, owner.username, password, `/households/${encodeURIComponent(householdId)}/today`);
 
-  // The headline group counts only work that is actually due today.
-  await expect(page.getByRole('heading', { name: '今日待办（1）' })).toBeVisible();
+  // Only work actually due today runs in the timeline; a noon due time places it there.
+  await expect(page.getByRole('heading', { name: '时间线（1）' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '待安排（2）' })).toBeVisible();
 
   // Splitting the group must not hide the undated work, only relabel it.

@@ -84,12 +84,10 @@ export function CalendarGrid({ value, onSelect }: { value: string; onSelect(valu
                     borderRadius: theme.borderRadii.full,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderWidth: isToday && !isSelected ? theme.borderWidths.default : 0,
-                    borderColor: theme.colors.coral,
-                    backgroundColor: isSelected ? theme.colors.coral : pressed ? theme.colors.surfaceMuted : theme.colors.transparent,
+                    backgroundColor: isSelected ? (isToday ? theme.colors.accent : theme.colors.primary) : pressed ? theme.colors.surfaceMuted : theme.colors.transparent,
                   })}
                 >
-                  <Text color={isSelected ? 'surface' : isToday ? 'coral' : 'ink'}>{day.getDate()}</Text>
+                  <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accent' : 'ink'}>{day.getDate()}</Text>
                 </Pressable>
               </View>
             );
@@ -186,7 +184,7 @@ export function TimePickerPanel({ value, onConfirm, onCancel }: { value: string;
               accessibilityLabel={`选择 ${slot}`}
               accessibilityState={{ selected: isSelected }}
               onPress={() => onConfirm(slot)}
-              style={({ pressed }) => ({ height: rowHeight, justifyContent: 'center', paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.sm, backgroundColor: isSelected ? theme.colors.coralSoft : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
+              style={({ pressed }) => ({ height: rowHeight, justifyContent: 'center', paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.sm, backgroundColor: isSelected ? theme.colors.surfaceSelected : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
             >
               <Text variant={isSelected ? 'label' : 'body'}>{slot}</Text>
             </Pressable>

@@ -133,15 +133,13 @@ export function RecurrenceRuleRow({ rule, deviceTimeZone, onPress }: RecurrenceR
       accessibilityState={{ disabled: false }}
       onPress={onPress}
       style={({ pressed }) => ({
-        backgroundColor: activeTheme.colors.surface,
-        borderColor: activeTheme.colors.border,
-        borderRadius: activeTheme.borderRadii.md,
-        borderWidth: activeTheme.borderWidths.default,
+        backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.surface,
         minHeight: activeTheme.controlSizes.touchTarget,
         // `opacity` is never the only signal that a rule has ended — the
         // `nextLine` below says so in words as well.
-        opacity: formatted.ended ? 0.6 : pressed ? 0.8 : 1,
-        padding: activeTheme.spacing[4],
+        opacity: formatted.ended ? 0.6 : 1,
+        paddingHorizontal: activeTheme.spacing[4],
+        paddingVertical: activeTheme.spacing[3],
       })}
     >
       <Stack gap={1}>
@@ -158,10 +156,10 @@ export function RecurrenceRuleRow({ rule, deviceTimeZone, onPress }: RecurrenceR
             {formatted.title}
           </Text>
         </View>
-        <Text variant="caption" color="inkMuted">
+        <Text variant="meta">
           {formatted.summary}
         </Text>
-        <Text variant="caption" color={formatted.ended ? 'inkMuted' : 'ink'}>
+        <Text variant="meta" color={formatted.ended ? 'inkMuted' : 'ink'}>
           {formatted.nextLine}
         </Text>
       </Stack>

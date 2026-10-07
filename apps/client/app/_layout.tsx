@@ -1,3 +1,5 @@
+import { Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
+import { useFonts } from 'expo-font';
 import { router, Stack, useGlobalSearchParams, usePathname } from 'expo-router';
 import { useCallback, useEffect } from 'react';
 
@@ -11,6 +13,8 @@ import { sessionStateStore, sessionTransport, setSessionLostHandler } from '../s
 import { MuchakuchaThemeProvider } from '../src/ui/primitives';
 
 export default function RootLayout() {
+  // Inter only supplies figures; a font that fails to load falls back to the system face.
+  const [fontsLoaded, fontError] = useFonts({ Inter_500Medium, Inter_600SemiBold });
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ intended?: string }>();
   const intendedRoute = sanitizeIntendedRoute(
@@ -44,7 +48,7 @@ export default function RootLayout() {
   return (
     <MuchakuchaThemeProvider>
       <SessionBootstrap
-        fontsReady
+        fontsReady={fontsLoaded || fontError !== null}
         intendedRoute={intendedRoute}
         onRoute={routeSession}
         restorationRequired={!isPublicContinuation}

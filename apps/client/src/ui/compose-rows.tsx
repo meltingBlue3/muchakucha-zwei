@@ -117,7 +117,7 @@ function moveFocus(event: WebKeyEvent) {
 }
 
 function OptionMark({ checked, disabled, multiple }: { checked: boolean; disabled: boolean; multiple: boolean }) {
-  const color = disabled ? theme.colors.disabled : checked ? theme.colors.coral : theme.colors.inkMuted;
+  const color = disabled ? theme.colors.disabled : checked ? theme.colors.primary : theme.colors.inkMuted;
   if (multiple) {
     return (
       <View style={{ width: theme.controlSizes.icon, height: theme.controlSizes.icon, borderRadius: theme.spacing[1], borderWidth: theme.borderWidths.focus, borderColor: color, backgroundColor: checked ? color : theme.colors.transparent, alignItems: 'center', justifyContent: 'center' }}>

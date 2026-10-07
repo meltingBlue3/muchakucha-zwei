@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { SessionStateStore } from '../auth/session-state';
 import type { SessionTransport } from '../../platform/session/session-transport';
 import { Banner, Button, Heading, LoadError, Spinner, Stack, Text, TextField } from '../../ui/primitives';
+import { MemberAvatar } from '../../ui/member-avatar';
 
 const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
 const nicknameSchema = z
@@ -46,6 +47,7 @@ function isDisplayNameFailure(error: unknown): boolean {
 export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, showHeading = true, onBusyChange }: ProfileFormProps) => {
   const [reload, setReload] = useState(0);
   const [savedName, setSavedName] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string>();
   const [success, setSuccess] = useState<string>();
@@ -78,6 +80,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, sh
       .then((user) => {
         reset({ displayName: user.displayName });
         setSavedName(user.displayName);
+        setUserId(user.id);
         setUsername(user.username);
       })
       .catch((error: unknown) => {
@@ -118,6 +121,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, sh
       );
       reset({ displayName: user.displayName });
         setSavedName(user.displayName);
+        setUserId(user.id);
       sessionStateStore.enterAuthenticated({ accessToken, currentUser: user });
       setSuccess('昵称已更新。');
     } catch (error) {
@@ -140,7 +144,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, sh
   return (
     <Stack gap={6}>
       <Stack gap={2}>
-        <Text variant="display" color="teal">{savedName ? [...savedName][0] : '我'}</Text>
+        {userId ? <MemberAvatar id={userId} name={savedName || '我'} size="lg" /> : null}
         {showHeading ? <Heading>个人资料</Heading> : null}
       </Stack>
       {loadError ? (

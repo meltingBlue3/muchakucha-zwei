@@ -163,8 +163,8 @@ async function mockAssistant(page: Page, options: { empty?: boolean } = {}) {
 }
 
 async function enterAssistant(page: Page) {
-  await page.goto(`${base}/more`);
-  await page.getByRole('button', { name: '打开家庭助手', exact: true }).click();
+  await page.goto(`${base}/today`);
+  await page.getByRole('tab', { name: '助手', exact: true }).click();
   await expect(page).toHaveURL(`${base}/assistant`);
 }
 
@@ -427,12 +427,14 @@ test('switching households separates private history, composer state and shared-
   await openExistingConversation(page);
   await page.getByLabel('发送给助手', { exact: true }).fill('只属于周末的家的未发送内容');
   await page.getByRole('main', { name: '助手对话', exact: true }).getByRole('button', { name: '返回', exact: true }).click();
-  await page.getByRole('main', { name: '家庭助手', exact: true }).getByRole('button', { name: '返回', exact: true }).click();
+  // The assistant home is a tab; households switch from any destination's header.
+  await expect(page.getByRole('main', { name: '家庭助手', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: '今日', exact: true }).click();
   await page.getByRole('button', { name: '当前家庭：周末的家，切换家庭', exact: true }).click();
   await page.getByRole('button', { name: /^父母的家，/ }).click();
-  await expect(page).toHaveURL(`/households/${secondHouseholdId}/more`);
+  await expect(page).toHaveURL(`/households/${secondHouseholdId}/today`);
   const requestsBeforeSecondHousehold = state.requests.length;
-  await page.getByRole('button', { name: '打开家庭助手', exact: true }).click();
+  await page.getByRole('tab', { name: '助手', exact: true }).click();
   await openHistory(page);
   await expect(page.getByRole('button', { name: '打开对话：探望安排', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '打开对话：周末准备清单', exact: true })).toHaveCount(0);

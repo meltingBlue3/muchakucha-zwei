@@ -1,44 +1,40 @@
+import { View } from 'react-native';
 import { CardActionsMenu } from '../../ui/card-actions-menu';
 import { markdownExcerpt } from './markdown';
 import { formatDate } from '../../ui/date-values';
-import { ContentCard } from '../../ui/content-card';
+import { ListRow } from '../../ui/list-group';
 import type { NoteResponseDto } from '@muchakucha/api-client';
-import { Stack, Text } from '../../ui/primitives';
+import { Text } from '../../ui/primitives';
+import { theme } from '../../ui/theme';
 
 interface NoteCardProps {
   onEdit?: (() => void) | undefined;
   onDelete?: (() => void) | undefined;
   note: NoteResponseDto;
   onPress: (note: NoteResponseDto) => void;
+  /** The note open beside the list on a wide screen. */
+  selected?: boolean;
 }
 
-export function NoteCard({ note, onPress, onEdit, onDelete }: NoteCardProps) {
-
-  const dateLabel = formatDate(new Date(note.updatedAt));
-
-  const bodyPreview = markdownExcerpt(note.body ?? '');
-  const previewText = bodyPreview.length > 120 ? bodyPreview.slice(0, 120) + '…' : bodyPreview;
+/** One note as a list row: title, then when it changed and how it begins. */
+export function NoteCard({ note, onPress, onEdit, onDelete, selected = false }: NoteCardProps) {
+  const excerpt = markdownExcerpt(note.body ?? '');
 
   return (
-    <ContentCard
+    <ListRow
       accessibilityLabel={`笔记：${note.title}`}
       onPress={() => onPress(note)}
+      selected={selected}
       trailing={<CardActionsMenu subject={`笔记：${note.title}`} actions={[
         ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: `编辑笔记：${note.title}`, onPress: onEdit }] : []),
         ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除笔记：${note.title}`, onPress: onDelete }] : []),
       ]} />}
     >
-      <Stack gap={1}>
-        <Text variant="body" style={{ fontWeight: '600' }} numberOfLines={2}>
-          {note.title}
-        </Text>
-        {previewText !== '' && (
-          <Text variant="bodySm" numberOfLines={2} color="inkMuted">
-            {previewText}
-          </Text>
-        )}
-        <Text variant="caption" color="inkMuted">更新于 {dateLabel}</Text>
-      </Stack>
-    </ContentCard>
+      <Text variant="body" numberOfLines={1}>{note.title}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: theme.spacing[2], marginTop: theme.spacing[1] / 2 }}>
+        <Text variant="time" color="inkFaint">{formatDate(new Date(note.updatedAt))}</Text>
+        {excerpt !== '' ? <Text variant="meta" numberOfLines={1} style={{ flex: 1 }}>{excerpt}</Text> : null}
+      </View>
+    </ListRow>
   );
 }

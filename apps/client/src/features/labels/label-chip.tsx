@@ -18,6 +18,27 @@ interface LabelChipProps {
 }
 
 /**
+ * A label inside a list row: its color as a dot and its name in quiet text.
+ * Rows show at most `max` labels and a count of the rest.
+ */
+export function LabelTags({ labels, max = 1 }: { labels: LabelResponseDto[]; max?: number }) {
+  const activeTheme = useTheme<Theme>();
+  if (labels.length === 0) return null;
+  const dot = activeTheme.spacing[2] - activeTheme.spacing[1] / 2;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2], flexShrink: 1 }}>
+      {labels.slice(0, max).map(label => (
+        <View key={label.id} accessible accessibilityRole="image" accessibilityLabel={`标签：${label.name}`} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], flexShrink: 1 }}>
+          <View style={{ width: dot, height: dot, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} />
+          <Text variant="meta" numberOfLines={1} style={{ flexShrink: 1 }}>{label.name}</Text>
+        </View>
+      ))}
+      {labels.length > max ? <Text variant="meta" color="inkFaint">+{labels.length - max}</Text> : null}
+    </View>
+  );
+}
+
+/**
  * Labels carry arbitrary member-chosen colors, so the color lives in the dot,
  * wash and outline while the name stays in ink: light presets such as yellow
  * would otherwise be unreadable as text.

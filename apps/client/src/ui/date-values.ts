@@ -60,6 +60,11 @@ export function formatDate(date: Date, { weekday = false }: { weekday?: boolean 
   return `${year}${date.getMonth() + 1}月${date.getDate()}日${weekday ? `周${WEEKDAY_NAMES[date.getDay()]}` : ''}`;
 }
 
+/** "周日" */
+export function formatWeekday(date: Date): string {
+  return `周${WEEKDAY_NAMES[date.getDay()]}`;
+}
+
 /** "9月27日 14:30", following `formatDate`. */
 export function formatDateTime(date: Date, options: { weekday?: boolean } = {}, now: Date = new Date()): string {
   return `${formatDate(date, options, now)} ${toTimeValue(date)}`;

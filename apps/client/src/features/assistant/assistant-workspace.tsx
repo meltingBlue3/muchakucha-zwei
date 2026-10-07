@@ -6,8 +6,7 @@ import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import PanelLeft from 'lucide-react-native/icons/panel-left';
 import SquarePen from 'lucide-react-native/icons/square-pen';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
-import { AppShell } from '../../ui/household-components';
-import { HouseholdNavigation } from '../../ui/household-navigation';
+import { HouseholdScreen } from '../households/household-screen';
 import { AppDialog } from '../../ui/app-dialog';
 import { Button, Heading, IconButton, Inline, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
@@ -31,14 +30,15 @@ export function AssistantWorkspace({ householdId, householdName, title, conversa
     {conversations.length === 0 ? <Text variant="bodySm">你的对话会保存在这里。</Text> : conversations.map(item => <Pressable key={item.id}
       accessibilityRole="button" accessibilityLabel={`打开对话：${item.title}`} accessibilityState={{ selected: item.id === conversationId, disabled: busy }} disabled={busy}
       onPress={() => { setDialog(null); if (item.id !== conversationId) router.push(`${root}/conversations/${encodeURIComponent(item.id)}`); }}
-      style={({ pressed }) => ({ padding: theme.spacing[3], gap: theme.spacing[1], borderRadius: theme.borderRadii.md, backgroundColor: item.id === conversationId ? theme.colors.coralSoft : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
+      style={({ pressed }) => ({ padding: theme.spacing[3], gap: theme.spacing[1], borderRadius: theme.borderRadii.md, backgroundColor: item.id === conversationId ? theme.colors.surfaceSelected : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
       <Text variant="bodySm" color="ink" numberOfLines={2}>{item.title}</Text><Text variant="caption">{formatDateTime(new Date(item.updatedAt))}</Text>
     </Pressable>)}
   </Stack>;
-  return <AppShell layout="workspace" accessibilityLabel={conversationId ? '助手对话' : '家庭助手'}
-    {...(wide ? { footer: <HouseholdNavigation householdId={householdId} active="assistant"><ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: theme.spacing[5] }}>{history}</ScrollView></HouseholdNavigation> } : {})}>
-    <Inline style={{ paddingHorizontal: theme.spacing[4], paddingVertical: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
-      {!wide ? <IconButton label="返回" appearance="plain" icon={<ArrowLeft size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => router.replace(conversationId ? root : `/households/${encodeURIComponent(householdId)}/more`)} /> : null}
+  // A conversation on a phone is a focused view: back to the assistant, no tab bar.
+  return <HouseholdScreen active="assistant" layout="workspace" headerRow={false} tabBar={!conversationId} accessibilityLabel={conversationId ? '助手对话' : '家庭助手'}
+    sidebar={<ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: theme.spacing[5] }}>{history}</ScrollView>}>
+    <Inline style={{ paddingLeft: !wide && conversationId ? theme.spacing[1] : theme.spacing[5], paddingRight: theme.spacing[2], paddingVertical: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
+      {!wide && conversationId ? <IconButton label="返回" appearance="plain" icon={<ArrowLeft size={theme.controlSizes.icon} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.replace(root)} /> : null}
       <Stack gap={1} style={{ flex: 1, minWidth: 0 }}><Heading variant="section" level={1} numberOfLines={1}>{title}</Heading><Text variant="caption" numberOfLines={1}>{householdName} · 对话仅自己可见</Text></Stack>
       {!wide ? <IconButton ref={historyTrigger} label="我的对话" appearance="plain" disabled={busy} icon={<PanelLeft size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={() => setDialog('history')} /> : <IconButton label="新对话" appearance="plain" disabled={busy} icon={<SquarePen size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={() => router.push(root)} />}
       <IconButton ref={optionsTrigger} label="助手选项" appearance="plain" disabled={busy} icon={<Ellipsis size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={() => setDialog('options')} />
@@ -52,5 +52,5 @@ export function AssistantWorkspace({ householdId, householdName, title, conversa
         <Text variant="bodySm">共享模型只共享使用权限，不共享你的对话记录。</Text>
       </Stack>}
     </AppDialog> : null}
-  </AppShell>;
+  </HouseholdScreen>;
 }

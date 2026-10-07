@@ -5,7 +5,7 @@ import { AppDialog } from '../../ui/app-dialog';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { PageIntro } from '../../ui/page-intro';
 import { useWorkspaceState } from '../../ui/workspace-state';
-import { HouseholdNavigation } from '../../ui/household-navigation';
+import { GroupLabel, ListGroup } from '../../ui/list-group';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
@@ -15,6 +15,7 @@ import { FilterActions, FilterButton } from '../../ui/filter-controls';
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useTaskCompletion } from './use-task-completion';
 import { useHouseholdContext } from '../households/household-context';
+import { HouseholdScreen } from '../households/household-screen';
 import { mergeLabels, useHouseholdLabels } from '../labels/use-household-labels';
 import {
   applyRecurringFilter,
@@ -28,22 +29,19 @@ import {
   type RecurringFilterKey,
 } from '../recurrence/recurring-filter';
 import { TaskCard } from './task-card';
-import {
-  AccessChangedPanel,
-  AppShell,
-  HouseholdHeader,
-  HouseholdSwitcher,
-} from '../../ui/household-components';
-import { Button, EmptyState, LoadError, LoadingState, Stack, StatusPanel, Text } from '../../ui/primitives';
+import { isOverdue } from './task-utils';
+import { toDateValue } from '../../ui/date-values';
+import { Button, EmptyState, LoadError, LoadingState, Stack, StatusPanel } from '../../ui/primitives';
 
 type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
 type PriorityFilterKey = 'all' | 'low' | 'medium' | 'high' | 'urgent';
 
+// Status is the everyday question, so it sits on the page; the rest waits in 筛选.
 const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: '全部' },
   { key: 'pending', label: '待办' },
   { key: 'in_progress', label: '进行中' },
   { key: 'completed', label: '已完成' },
+  { key: 'all', label: '全部' },
 ];
 
 const PRIORITY_FILTERS: { key: PriorityFilterKey; label: string }[] = [
@@ -54,19 +52,43 @@ const PRIORITY_FILTERS: { key: PriorityFilterKey; label: string }[] = [
   { key: 'urgent', label: '紧急' },
 ];
 
+type TaskGroup = { key: string; label: string; tone: 'muted' | 'accent'; tasks: TaskResponseDto[] };
+
+/**
+ * Open work grouped by when it is due — 逾期, 今天, 之后, then 待安排 for tasks
+ * without a date — so the list reads like a plan. Finished work is one group.
+ */
+export function groupTasksByDue(tasks: TaskResponseDto[], status: FilterKey, today: string): TaskGroup[] {
+  if (status === 'completed') return [{ key: 'completed', label: `已完成（${tasks.length}）`, tone: 'muted', tasks }];
+  const overdue: TaskResponseDto[] = [];
+  const dueToday: TaskResponseDto[] = [];
+  const later: TaskResponseDto[] = [];
+  const undated: TaskResponseDto[] = [];
+  const closed: TaskResponseDto[] = [];
+  for (const task of tasks) {
+    const due = task.dueDate ?? null;
+    if (task.status === 'completed' || task.status === 'cancelled') closed.push(task);
+    else if (due === null || due === '') undated.push(task);
+    else if (isOverdue(due)) overdue.push(task);
+    else if (toDateValue(new Date(due)) === today) dueToday.push(task);
+    else later.push(task);
+  }
+  const byDue = (a: TaskResponseDto, b: TaskResponseDto) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime();
+  return [
+    { key: 'overdue', label: `逾期（${overdue.length}）`, tone: 'accent' as const, tasks: overdue.sort(byDue) },
+    { key: 'today', label: `今天（${dueToday.length}）`, tone: 'muted' as const, tasks: dueToday.sort(byDue) },
+    { key: 'later', label: `之后（${later.length}）`, tone: 'muted' as const, tasks: later.sort(byDue) },
+    { key: 'undated', label: `待安排（${undated.length}）`, tone: 'muted' as const, tasks: undated },
+    { key: 'closed', label: `已结束（${closed.length}）`, tone: 'muted' as const, tasks: closed },
+  ].filter(group => group.tasks.length > 0);
+}
+
 export default function TaskListScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const deleteTask = useContentDelete('tasks');
   const editTask = useContentEdit('tasks');
-  const {
-    viewState,
-    households,
-    currentHouseholdId,
-    accessChangedHouseholdName,
-    refreshHouseholds,
-    switchHousehold,
-  } = useHouseholdContext();
+  const { currentHouseholdId } = useHouseholdContext();
 
   const [tasks, setTasks] = useState<TaskResponseDto[]>([]);
   const [materializedThrough, setMaterializedThrough] = useState<string | null>(null);
@@ -79,13 +101,11 @@ export default function TaskListScreen() {
   const [assigneeFilter, setAssigneeFilter] = useWorkspaceState<string>(`view:${id}:tasks:assigneeFilter`, 'all');
   const [labelFilter, setLabelFilter] = useWorkspaceState<string>(`view:${id}:tasks:labelFilter`, 'all');
   const [recurringFilter, setRecurringFilter] = useWorkspaceState<RecurringFilterKey>(`view:${id}:tasks:recurringFilter`, 'all');
-  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterTrigger = useRef<View>(null);
   const loaded = useRef(false);
 
   const householdId = id ?? currentHouseholdId;
-  const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
 
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -128,8 +148,8 @@ export default function TaskListScreen() {
     return result;
   }, [tasks, filter, priorityFilter, assigneeFilter, labelFilter, recurringFilter]);
 
+  // Status shows on the page itself, so the 筛选 count covers only what it hides.
   const activeFilterCount = [
-    filter !== 'all',
     priorityFilter !== 'all',
     assigneeFilter !== 'all',
     labelFilter !== 'all',
@@ -137,7 +157,7 @@ export default function TaskListScreen() {
   ].filter(Boolean).length;
 
   const clearFilters = () => {
-    setFilter('all'); setPriorityFilter('all'); setAssigneeFilter('all'); setLabelFilter('all'); setRecurringFilter('all');
+    setPriorityFilter('all'); setAssigneeFilter('all'); setLabelFilter('all'); setRecurringFilter('all');
   };
 
   const assigneeOptions = useMemo(() => {
@@ -153,7 +173,7 @@ export default function TaskListScreen() {
   }, [members]);
 
   const fetchData = useCallback(async () => {
-    if (householdId === undefined || householdId === '') return;
+    if (householdId === undefined || householdId === null || householdId === '') return;
     if (!loaded.current) setLoading(true);
     setError(null);
     try {
@@ -212,73 +232,41 @@ export default function TaskListScreen() {
     void router.push(`/households/${encodeURIComponent(householdId!)}/tasks/new`);
   }, [router, householdId]);
 
-  const todayIso = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  }, []);
+  const todayIso = useMemo(() => toDateValue(new Date()), []);
   const generationWindow = classifyGenerationWindow({
     materializedThrough,
     todayIso,
     viewedDateIso: null,
-    filtersActive: activeFilterCount > 0,
+    filtersActive: activeFilterCount > 0 || filter !== 'all',
   });
+  const groups = useMemo(() => groupTasksByDue(filteredTasks, filter, todayIso), [filteredTasks, filter, todayIso]);
 
-  const handleSwitch = useCallback(async (householdId: string) => {
-    if (householdId === (id ?? currentHouseholdId)) {
-      setSwitcherOpen(false);
-      return;
-    }
-    const success = await switchHousehold(householdId);
-    if (success) {
-      void router.replace(`/households/${encodeURIComponent(householdId)}/tasks`);
-    }
-    setSwitcherOpen(false);
-  }, [id, currentHouseholdId, switchHousehold, router]);
-
-  // AccessChanged state
-  if (viewState === 'accessChanged') {
-    return (
-      <AppShell accessibilityLabel="家庭访问权已变化">
-        <AccessChangedPanel
-          hasOtherHouseholds={households.length > 0}
-          {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
-          onChooseOther={() => {
-            void refreshHouseholds().then(() => router.replace('/households'));
-          }}
-          onCreateNew={() => {
-            void router.replace('/household-handoff');
-          }}
-        />
-      </AppShell>
-    );
-  }
-
-  if (householdId === undefined || householdId === '') {
-    return (
-      <AppShell accessibilityLabel="页面未找到">
-        <Stack gap={4}>
-          <Text>这个页面暂时无法访问。</Text>
-        </Stack>
-      </AppShell>
-    );
-  }
+  const filterSummary = activeFilterCount ? [
+    priorityFilter !== 'all' ? `${PRIORITY_FILTERS.find(p => p.key === priorityFilter)?.label}优先级` : '',
+    assigneeFilter !== 'all' ? memberNameMap.get(assigneeFilter) ?? '已选负责人' : '',
+    labelFilter !== 'all' ? availableLabels.find(l => l.id === labelFilter)?.name ?? '已选标签' : '',
+    recurringFilter !== 'all' ? '仅重复' : '',
+  ].filter(Boolean).join(' · ') : undefined;
 
   return (
-  <>
-    <AppShell accessibilityLabel="家庭任务" notice={completion.undoNotice} refreshing={refreshing} onRefresh={handleRefresh} title="家庭任务" showProfile headerContent={<HouseholdHeader householdName={currentHousehold?.name ?? ''} onOpenSwitcher={() => setSwitcherOpen(true)} />} footer={<HouseholdNavigation householdId={householdId} active="tasks" />} floatingAction={viewState === 'ready' ? <FloatingCreateButton label="创建任务" onPress={handleCreateTask} /> : null}>
-      <Stack gap={4}>
-
-        <PageIntro title="任务" action={<FilterButton ref={filterTrigger} label="筛选任务" count={activeFilterCount} onPress={() => setFiltersOpen(true)} />} />
-        {activeFilterCount ? <Text variant="bodySm" color="inkMuted">{[
-          filter !== 'all' ? FILTERS.find(f => f.key === filter)?.label : '',
-          priorityFilter !== 'all' ? `${PRIORITY_FILTERS.find(p => p.key === priorityFilter)?.label}优先级` : '',
-          assigneeFilter !== 'all' ? memberNameMap.get(assigneeFilter) ?? '已选负责人' : '',
-          labelFilter !== 'all' ? availableLabels.find(l => l.id === labelFilter)?.name ?? '已选标签' : '',
-          recurringFilter !== 'all' ? '仅重复' : '',
-        ].filter(Boolean).join(' · ')}</Text> : null}
+    <HouseholdScreen
+      active="tasks"
+      accessibilityLabel="家庭任务"
+      notice={completion.undoNotice}
+      refreshing={refreshing}
+      onRefresh={handleRefresh}
+      width="reading"
+      floatingAction={<FloatingCreateButton label="创建任务" onPress={handleCreateTask} />}
+    >
+      <Stack gap={5}>
+        <PageIntro
+          title="任务"
+          {...(filterSummary ? { subtitle: filterSummary } : {})}
+          action={<FilterButton ref={filterTrigger} label="筛选任务" count={activeFilterCount} onPress={() => setFiltersOpen(true)} />}
+        />
+        <FilterOptions hideLabel label="任务状态" options={FILTERS.map(f => ({ value: f.key, label: f.label, name: `筛选：${f.label}` }))} value={filter} onChange={value => setFilter(value as FilterKey)} />
         {filtersOpen ? <AppDialog title="筛选任务" trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
-          <Stack gap={4}>
-            <FilterOptions label="任务状态" options={FILTERS.map(f => ({ value: f.key, label: f.label, name: `筛选：${f.label}` }))} value={filter} onChange={value => setFilter(value as FilterKey)} />
+          <Stack gap={5}>
             <FilterOptions label="优先级" options={PRIORITY_FILTERS.map(p => ({ value: p.key, label: p.label, name: `优先级筛选：${p.label}` }))} value={priorityFilter} onChange={value => setPriorityFilter(value as PriorityFilterKey)} />
             <FilterOptions label="负责人" options={[{ value: 'all', label: '全部成员', name: '全部成员' }, ...assigneeOptions.map(m => ({ value: m.userId, label: m.displayName, name: `筛选：${m.displayName}` }))]} value={assigneeFilter} onChange={setAssigneeFilter} />
             {availableLabels.length ? <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(l => ({ value: l.id, label: l.name, name: `筛选标签：${l.name}` }))]} value={labelFilter} onChange={setLabelFilter} /> : null}
@@ -286,13 +274,10 @@ export default function TaskListScreen() {
           </Stack>
         </AppDialog> : null}
 
-        {/* Loading */}
         {loading && <LoadingState label="正在加载任务" />}
 
-        {/* Error */}
         {error !== null && <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载任务" />}
 
-        {/* Task list */}
         {!loading && error === null && filteredTasks.length === 0 && (
           generationWindow === 'behind' ? (
             <StatusPanel
@@ -303,8 +288,9 @@ export default function TaskListScreen() {
             />
           ) : (
             <EmptyState
+              {...(tasks.length === 0 ? { title: '还没有任务' } : {})}
               message={tasks.length === 0
-                ? '还没有任务。创建第一个任务，和家人一起安排。'
+                ? '创建第一个任务，和家人一起安排。'
                 : recurringFilter === 'recurring' &&
                     filter === 'all' &&
                     priorityFilter === 'all' &&
@@ -317,28 +303,23 @@ export default function TaskListScreen() {
           )
         )}
 
-        {filteredTasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            assigneeNames={(task.assigneeIds ?? []).map((uid) => memberNameMap.get(uid) ?? '未知成员')}
-            onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
-            {...completion.cardProps(task)}
-          />
+        {groups.map(group => (
+          <View key={group.key}>
+            <GroupLabel tone={group.tone}>{group.label}</GroupLabel>
+            <ListGroup>
+              {group.tasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  assignees={(task.assigneeIds ?? []).map((uid) => ({ id: uid, name: memberNameMap.get(uid) ?? '未知成员' }))}
+                  onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
+                  {...completion.cardProps(task)}
+                />
+              ))}
+            </ListGroup>
+          </View>
         ))}
       </Stack>
-    </AppShell>
-
-    <HouseholdSwitcher
-      currentHouseholdId={id ?? currentHouseholdId}
-      households={households}
-      onCreateNew={() => {
-        void router.push('/households/new');
-        setSwitcherOpen(false);
-      }}
-      onClose={() => setSwitcherOpen(false)}
-      onSelect={(hid) => { void handleSwitch(hid); }}
-      visible={switcherOpen}
-    />
-  </>  );
+    </HouseholdScreen>
+  );
 }

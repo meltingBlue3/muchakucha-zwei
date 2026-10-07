@@ -226,9 +226,11 @@ test.describe('recurring event and task journeys', () => {
     const detailOccurrence = occurrences[2]!;
     await page.getByLabel(new RegExp(`^${dayLabel(String(detailOccurrence.occurrenceDate))}(?:，今天)?，\\d+个日程$`)).click();
     await page.getByLabel(`日程：${title}，重复`).click();
-    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
-    await expect(page.getByText('重复安排', { exact: true })).toBeVisible();
-    await expect(page.getByText(/每周.*重复，共 4 次/)).toBeVisible();
+    // The wide sidebar also links to 重复安排, so read the field inside the window.
+    const detail = page.getByRole('dialog', { name: '日程详情' });
+    await expect(detail.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    await expect(detail.getByText('重复安排', { exact: true })).toBeVisible();
+    await expect(detail.getByText(/每周.*重复，共 4 次/)).toBeVisible();
   });
 
   test('splits an event only after scope selection and cancels one task occurrence', async ({ page }) => {
@@ -319,7 +321,7 @@ test.describe('recurring event and task journeys', () => {
     // only materializes as far as its frequency's window reaches. A weekly rule
     // has a 6-day lookahead, so anchoring on today with four consecutive weekdays
     // materializes today plus the next three days — every sibling stays in the
-    // future, which keeps them out of both the overdue and 今日待办 sections and
+    // future, which keeps them out of both the overdue and today groups and
     // leaves exactly one occurrence due today. The rule is anchored to the
     // browser's timezone so the materializer's "today" and the Today view's
     // "today" are the same calendar day.
@@ -360,13 +362,14 @@ test.describe('recurring event and task journeys', () => {
     await page.goto(`/households/${householdId}`);
     await page.getByRole('tab', { name: '今日', exact: true }).click();
     await expect(page.getByRole('main', { name: '今日视图' })).toBeVisible();
-    // Exactly one occurrence is due today, and it is in 今日待办 before the cancel —
-    // this is the "before" half of the exclusion assertion, so the "after" half
-    // below cannot pass vacuously.
-    await expect(page.getByText('今日待办（1）')).toBeVisible();
+    // Exactly one occurrence is due today, and it is listed for today before the
+    // cancel — under 全天 or 时间线 depending on whether it carries a time. This is
+    // the "before" half of the exclusion assertion, so the "after" half below
+    // cannot pass vacuously.
+    await expect(page.getByRole('heading', { name: /^(全天|时间线)（1）$/ })).toBeVisible();
 
     // Reach the occurrence from the Today view. The overdue section is empty and
-    // 今日待办 precedes the upcoming section, so this resolves to today's
+    // today's groups precede the upcoming section, so this resolves to today's
     // occurrence even though every occurrence in the series shares one title.
     await page.getByRole('button', { name: `更多操作：任务：${taskTitle}`, exact: true }).first().click();
     await page.getByRole('menuitem', { name: `删除任务：${taskTitle}`, exact: true }).click();
@@ -385,15 +388,17 @@ test.describe('recurring event and task journeys', () => {
     await page.goto(`/households/${householdId}`);
     await page.getByRole('tab', { name: '任务', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/households/${householdId}/tasks$`));
+    // The list opens on 待办; a cancelled occurrence is listed under 全部.
+    await page.getByRole('radio', { name: '筛选：全部', exact: true }).click();
     await expect(page.getByText('已取消', { exact: true })).toBeVisible();
 
     await page.goto(`/households/${householdId}`);
     await page.getByRole('tab', { name: '今日', exact: true }).click();
     await expect(page.getByRole('main', { name: '今日视图' })).toBeVisible();
-    // The cancelled occurrence is gone from 今日待办 — the section held only that
+    // The cancelled occurrence is gone from today — the group held only that
     // one task, so it disappears entirely. Its future siblings are untouched and
     // remain listed under the upcoming section.
-    await expect(page.getByText(/^今日待办 \(/)).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /^(全天|时间线)（/ })).toHaveCount(0);
     await page.getByRole('button', { name: /^查看后续安排/ }).click();
     await expect(page.getByLabel(`任务：${taskTitle}，重复`).first()).toBeVisible();
   });

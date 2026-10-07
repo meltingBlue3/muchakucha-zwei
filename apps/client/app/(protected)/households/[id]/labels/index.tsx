@@ -1,5 +1,5 @@
 import { CardActionsMenu } from '../../../../../src/ui/card-actions-menu';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
@@ -7,7 +7,8 @@ import type { LabelResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import { canManageLabels } from '../../../../../src/features/labels/label-permissions';
-import { AccessChangedPanel, AppShell } from '../../../../../src/ui/household-components';
+import { HouseholdScreen } from '../../../../../src/features/households/household-screen';
+import { ListGroup } from '../../../../../src/ui/list-group';
 import { AppDialog } from '../../../../../src/ui/app-dialog';
 import { PageIntro } from '../../../../../src/ui/page-intro';
 import { Button, ConfirmActions, EmptyState, FormActions, LoadError, LoadingState, Stack, Text, TextField } from '../../../../../src/ui/primitives';
@@ -19,9 +20,8 @@ type LabelAction = { kind: 'create' } | { kind: 'edit' | 'delete'; label: LabelR
 
 export default function LabelsIndexRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
   const theme = useTheme<Theme>();
-  const { viewState, households, currentHouseholdId, accessChangedHouseholdName, refreshHouseholds } = useHouseholdContext();
+  const { households, currentHouseholdId } = useHouseholdContext();
   const householdId = id ?? currentHouseholdId;
   const household = households.find(item => item.id === householdId);
   const canManage = canManageLabels(household?.role);
@@ -88,20 +88,14 @@ export default function LabelsIndexRoute() {
     } finally { setBusy(false); }
   };
 
-  if (viewState === 'accessChanged') return <AppShell accessibilityLabel="家庭访问权已变化">
-    <AccessChangedPanel hasOtherHouseholds={households.length > 0} {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })} onChooseOther={() => { void refreshHouseholds().then(() => router.replace('/households')); }} onCreateNew={() => router.replace('/household-handoff')} />
-  </AppShell>;
-  if (!householdId) return <AppShell accessibilityLabel="页面未找到"><Text>这个页面暂时无法访问。</Text></AppShell>;
-
-  return <AppShell accessibilityLabel="标签管理" title="标签管理" showBack showProfile refreshing={refreshing} onRefresh={() => void refresh()}>
-    <Stack gap={4}>
-      <PageIntro title="标签" action={canManage ? <Button label="创建" accessibilityLabel="创建标签" onPress={() => open({ kind: 'create' })} /> : undefined} />
-      {!canManage ? <Text variant="bodySm" color="inkMuted">标签由所有者和管理员维护，你可以给日程和任务使用它们。</Text> : null}
+  return <HouseholdScreen active="labels" subpage accessibilityLabel="标签管理" width="reading" refreshing={refreshing} onRefresh={() => void refresh()}>
+    <Stack gap={5}>
+      <PageIntro title="标签" subtitle={canManage ? '给日程和任务分类，全家共用。' : '标签由所有者和管理员维护，你可以给日程和任务使用它们。'} action={canManage ? <Button label="创建" accessibilityLabel="创建标签" onPress={() => open({ kind: 'create' })} /> : undefined} />
       {loading ? <LoadingState label="正在加载标签" /> : null}
       {error ? <LoadError message={error} onRetry={() => void fetchLabels()} /> : null}
       {!loading && !error && !labels.length ? <EmptyState message={canManage ? '还没有标签，点击“创建”为日程和任务分类。' : '还没有标签，所有者或管理员创建后即可使用。'} /> : null}
-      <Stack gap={1}>
-        {labels.map(label => <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingVertical: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderColor: theme.colors.separator }}>
+      <ListGroup>
+        {labels.map(label => <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.controlSizes.touchTarget + theme.spacing[2], paddingLeft: theme.spacing[4], paddingRight: theme.spacing[2] }}>
           <View style={{ width: theme.spacing[3], height: theme.spacing[3], borderRadius: theme.borderRadii.full, backgroundColor: label.color }} />
           <Text style={{ flex: 1 }} accessibilityLabel={`标签：${label.name}`}>{label.name}</Text>
           {canManage ? <CardActionsMenu subject={`标签 ${label.name}`} actions={[
@@ -109,7 +103,7 @@ export default function LabelsIndexRoute() {
             { kind: 'delete', accessibilityLabel: `删除标签 ${label.name}`, onPress: () => open({ kind: 'delete', label }) },
           ]} /> : null}
         </View>)}
-      </Stack>
+      </ListGroup>
     </Stack>
     {action && canManage ? <AppDialog title={action.kind === 'create' ? '创建标签' : action.kind === 'edit' ? '编辑标签' : '删除标签'} busy={busy} onClose={close} trigger={trigger}>
       <Stack gap={4}>
@@ -128,5 +122,5 @@ export default function LabelsIndexRoute() {
         {action.kind === 'delete' ? <ConfirmActions cancelLabel="取消删除" confirmLabel="确认删除" confirmAccessibilityLabel={`确认删除标签 ${action.label.name}`} destructive busy={busy} onCancel={close} onConfirm={() => void submit()} /> : <FormActions onCancel={close} onSubmit={() => void submit()} submitting={busy} submitLabel={action.kind === 'create' ? '创建' : '保存'} />}
       </Stack>
     </AppDialog> : null}
-  </AppShell>;
+  </HouseholdScreen>;
 }

@@ -20,6 +20,7 @@ jest.mock('../household-context', () => ({ useHouseholdContext: () => ({
   refreshHouseholds: mockRefresh, switchHousehold: mockSwitch,
 }) }));
 jest.mock('../../auth/session-runtime', () => ({
+  sessionStateStore: jest.requireActual('../../auth/session-state').createSessionStateStore(),
   sessionApiClient: { createHousehold: (...args: unknown[]) => mockCreate(...args) },
   sessionTransport: { getAccessToken: () => 'test-token' },
 }));

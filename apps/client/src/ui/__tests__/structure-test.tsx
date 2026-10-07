@@ -2,7 +2,7 @@ import { fireEvent, render, within } from '@testing-library/react-native';
 import { StyleSheet, Text as NativeText } from 'react-native';
 
 import { LabelChip } from '../../features/labels/label-chip';
-import { ContentCard } from '../content-card';
+import { ListRow } from '../list-group';
 import { Heading, MuchakuchaThemeProvider } from '../primitives';
 import { theme } from '../theme';
 
@@ -19,13 +19,13 @@ test('heading levels follow the visual size unless a screen says otherwise', asy
   expect(view.getByText('买菜').props['aria-level']).toBe(2);
 });
 
-test('a content card opens from its body and keeps its controls as siblings', async () => {
+test('a list row opens from its body and keeps its controls as siblings', async () => {
   const onPress = jest.fn();
   const onMenu = jest.fn();
   const view = await renderOwned(
-    <ContentCard accessibilityLabel="笔记：清单" onPress={onPress} trailing={<NativeText accessibilityRole="button" onPress={onMenu}>更多</NativeText>}>
+    <ListRow accessibilityLabel="笔记：清单" onPress={onPress} trailing={<NativeText accessibilityRole="button" onPress={onMenu}>更多</NativeText>}>
       <NativeText>清单</NativeText>
-    </ContentCard>,
+    </ListRow>,
   );
   const body = view.getByRole('button', { name: '笔记：清单' });
   await fireEvent.press(body);

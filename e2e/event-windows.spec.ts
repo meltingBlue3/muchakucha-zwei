@@ -35,6 +35,11 @@ async function setup(page: Page) {
   return events;
 }
 
+/** Phones open the calendar on one week; wide screens already show the month. */
+async function showMonth(page: Page) {
+  if ((page.viewportSize()?.width ?? 0) < 1024) await page.getByRole('button', { name: '展开月历', exact: true }).click();
+}
+
 for (const width of [320, 390, 1440]) {
   test(`calendar and event windows fit ${width}px and preserve the selected date`, async ({ page }, testInfo) => {
     const events = await setup(page);
@@ -65,6 +70,8 @@ for (const width of [320, 390, 1440]) {
     await page.keyboard.press('Escape');
     await expect(page).toHaveURL(`${base}/events`);
     await expect(page.getByRole('button', { name: /^2030年6月15日/ })).toHaveAttribute('aria-pressed', 'true');
+    // Phones show one week, and 6月20日 falls in the next one.
+    if (width < 1024) await page.getByRole('button', { name: '下一周', exact: true }).click();
     await page.getByRole('button', { name: /^2030年6月20日/ }).click();
     await page.getByRole('button', { name: '创建日程', exact: true }).click();
     const create = page.getByRole('dialog', { name: '创建日程', exact: true });
@@ -84,6 +91,7 @@ for (const width of [320, 390, 1440]) {
 test('calendar filters have visible summaries and Today restores the current month', async ({ page }) => {
   await setup(page);
   await page.goto(`${base}/events`);
+  await showMonth(page);
   await page.getByRole('button', { name: '下一个月' }).click();
   await expect(page.getByText('2030年7月', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '回到今天' }).click();
@@ -141,6 +149,7 @@ test('a late response from the previous month cannot replace the selected month'
   const juneRequest = page.waitForRequest(request => request.url().includes('startDate=2030-06-01'));
   await page.goto(`${base}/events`);
   await juneRequest;
+  await showMonth(page);
   await page.getByRole('button', { name: '下一个月' }).click();
   const july = page.getByRole('button', { name: '日程：七月安排', exact: true });
   await expect(july).toBeVisible();

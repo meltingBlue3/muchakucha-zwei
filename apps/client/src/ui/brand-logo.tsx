@@ -1,15 +1,37 @@
-import { Image } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { theme } from './theme';
 
-/** The compact, decorative graphic used beside the product name. */
+/**
+ * The brand seal: 「家」 in white on vermilion, like a name stamp pressed into
+ * a family notebook. Decorative; the product name beside it is the label.
+ */
 export const BrandLogo = () => (
-  <Image
+  <View
     accessible={false}
     accessibilityElementsHidden
     importantForAccessibility="no-hide-descendants"
-    resizeMode="contain"
-    source={require('../../assets/images/brand-mark.png')}
-    style={{ height: theme.spacing[6], width: theme.spacing[10] }}
-  />
+    style={{
+      width: theme.controlSizes.avatar,
+      height: theme.controlSizes.avatar,
+      borderRadius: theme.borderRadii.sm,
+      backgroundColor: theme.colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      transform: [{ rotate: '-4deg' }],
+    }}
+  >
+    <Text
+      allowFontScaling={false}
+      style={{
+        color: theme.colors.surface,
+        fontFamily: theme.fontFamilies.semibold,
+        fontSize: theme.typography.section.fontSize,
+        fontWeight: '700',
+        lineHeight: theme.typography.section.lineHeight - theme.spacing[1],
+      }}
+    >
+      家
+    </Text>
+  </View>
 );

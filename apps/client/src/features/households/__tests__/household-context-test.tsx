@@ -84,6 +84,21 @@ describe('HouseholdProvider recovery state machine', () => {
     expect(store.getCurrentId()).toBe(beta.id);
   });
 
+  test('a confirmed rename reaches the household list without refetching or leaving ready', async () => {
+    const store = createStore();
+    const api = { listMyHouseholds: jest.fn().mockResolvedValue([alpha, beta]) } as unknown as HouseholdApi;
+    const Provider = createHouseholdProvider(api, () => 'access-token', store);
+    let context: HouseholdContextValue | undefined;
+    function Probe() { context = useHouseholdContext(); return <Text>{`${context.viewState}:${context.households.map(h => h.name).join(',')}`}</Text>; }
+    const view = await render(<Provider><Probe /></Provider>);
+    await view.findByText(/^ready:/);
+    await act(async () => { context!.applyHouseholdName(beta.id, 'Gamma'); });
+    expect(view.getByText(/^ready:/).props.children).toMatch(/Alpha/);
+    expect(view.getByText(/^ready:/).props.children).toMatch(/Gamma/);
+    expect(view.queryByText(/Beta/)).toBeNull();
+    expect(api.listMyHouseholds).toHaveBeenCalledTimes(1);
+  });
+
   test('hydrates before resolution and reaches accessChanged when a switch target disappeared', async () => {
     const store = createStore();
     const listMyHouseholds = jest

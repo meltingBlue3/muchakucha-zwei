@@ -27,8 +27,8 @@ export function AssistantModelPicker({ householdId, providers, selectedId, busy,
       {newConversation ? <Text variant="bodySm">切换模型会开启新对话，当前记录保留。</Text> : null}
       {providers.map(provider => <Pressable key={provider.id} accessibilityRole="button" accessibilityLabel={`选择 ${provider.name}`} accessibilityState={{ selected: provider.id === selectedId, disabled: !provider.hasCredential }} disabled={!provider.hasCredential}
         onPress={() => { setOpen(false); if (provider.id !== selectedId) onSelect(provider.id); }}
-        style={({ pressed }) => ({ borderWidth: theme.borderWidths.default, borderColor: provider.id === selectedId ? theme.colors.coral : theme.colors.separator, borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.surfaceMuted : provider.id === selectedId ? theme.colors.coralSoft : theme.colors.surface, padding: theme.spacing[4], gap: theme.spacing[1] })}>
-        <Inline><Text variant="label" style={{ flex: 1 }}>{provider.name}</Text>{provider.id === selectedId ? <Check size={theme.controlSizes.icon} color={theme.colors.coral} /> : null}</Inline>
+        style={({ pressed }) => ({ borderWidth: theme.borderWidths.default, borderColor: provider.id === selectedId ? theme.colors.primary : theme.colors.separator, borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.surfaceMuted : provider.id === selectedId ? theme.colors.surfaceSelected : theme.colors.surface, padding: theme.spacing[4], gap: theme.spacing[1] })}>
+        <Inline><Text variant="label" style={{ flex: 1 }}>{provider.name}</Text>{provider.id === selectedId ? <Check size={theme.controlSizes.icon} color={theme.colors.ink} /> : null}</Inline>
         <Text variant="caption">{provider.model} · {provider.visibility === 'private' ? '仅自己可用' : provider.ownedByMe ? '你共享给家庭' : '家人共享'}</Text>
         <Text variant="caption">{provider.baseUrl}</Text>
         {provider.hasCredential ? null : <Text variant="caption" color="destructive">{provider.ownedByMe ? '密钥无法读取，请在模型配置中重新填写。' : '密钥无法读取，请联系配置创建者重新填写。'}</Text>}

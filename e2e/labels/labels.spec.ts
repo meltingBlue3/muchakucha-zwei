@@ -86,14 +86,14 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   await createButton.click();
   await expect(page.getByText('请输入标签名称。')).toBeVisible();
   await page.getByLabel('标签名称', { exact: true }).fill('学校');
-  await page.getByLabel('选择颜色 #277A72').click();
-  await expect(page.getByRole('radio', { name: '选择颜色 #277A72' })).toBeChecked();
+  await page.getByLabel('选择颜色 #2C716C').click();
+  await expect(page.getByRole('radio', { name: '选择颜色 #2C716C' })).toBeChecked();
   await createButton.click();
 
   await expect(page.getByLabel('标签：学校')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   let labels = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/labels`);
-  expect(labels.body.labels).toEqual([expect.objectContaining({ name: '学校', color: '#277A72' })]);
+  expect(labels.body.labels).toEqual([expect.objectContaining({ name: '学校', color: '#2C716C' })]);
   const labelId = labels.body.labels[0].id as string;
 
   // --- A duplicate name is rejected without losing the form ---

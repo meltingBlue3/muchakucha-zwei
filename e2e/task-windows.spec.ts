@@ -82,6 +82,8 @@ test('direct task window links survive reload and close to a safe destination', 
 
 test('closing a task opened from today restores the original entry', async ({ page }) => {
   await setup(page);
+  // Keep the fixture's due date ahead of today, so the task stays under 后续安排.
+  await page.clock.setFixedTime(new Date('2026-09-29T02:00:00Z'));
   await page.goto(`${base}/today`);
   await page.getByRole('button', { name: /查看后续安排/ }).click();
   const item = page.getByRole('button', { name: /^任务：/ });
@@ -102,12 +104,12 @@ test('filter summaries remain visible after closing the filter window', async ({
   await filter.getByRole('radio', { name: '筛选：小林', exact: true }).click();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await filter.getByRole('button', { name: '完成', exact: true }).click();
-  await expect(page.getByText('待办 · 高优先级 · 小林', { exact: true })).toBeVisible();
+  await expect(page.getByText('高优先级 · 小林', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('task-list-390.png') });
   await page.getByRole('button', { name: /^筛选任务/ }).click();
   await filter.getByRole('button', { name: '清除', exact: true }).click();
   await filter.getByRole('button', { name: '完成', exact: true }).click();
-  await expect(page.getByText('待办 · 高优先级 · 小林', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('高优先级 · 小林', { exact: true })).toHaveCount(0);
 });
 
 test('a failed save retains the draft and busy windows resist closing', async ({ page }, testInfo) => {

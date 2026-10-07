@@ -232,8 +232,8 @@ function ruleDetailScreen(page: Page) {
 
 async function openRuleList(page: Page, householdId: string): Promise<void> {
   await page.goto(`/households/${householdId}`);
-  await page.getByRole('tab', { name: '家庭', exact: true }).click();
-  await page.getByLabel('管理重复安排').click();
+  // The household pages sit in the wide-screen sidebar.
+  await page.getByRole('link', { name: '重复安排', exact: true }).click();
   await expect(ruleListScreen(page)).toBeVisible();
 }
 

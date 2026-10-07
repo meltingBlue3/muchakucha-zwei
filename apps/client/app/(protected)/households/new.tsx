@@ -104,7 +104,7 @@ export default function NewHouseholdRoute() {
       <RouteWindow title="创建家庭" resource="households" busy={isSubmitting || entering} exitAllowed={exitAllowed} fallback={<AppShell title="家庭"><Text>一起管理家里的日程、任务和笔记。</Text></AppShell>}>
         <Stack gap={6}>
           <Stack gap={2}>
-            <Text variant="label" color="teal">准备好了</Text>
+            <Text variant="label" color="success">准备好了</Text>
             <Heading>家庭已创建</Heading>
           </Stack>
           <Stack accessibilityLiveRegion="polite" accessibilityRole={'status' as never} gap={1}>

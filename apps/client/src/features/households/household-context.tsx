@@ -23,6 +23,8 @@ export interface HouseholdContextValue {
   accessChangedHouseholdName: string | undefined;
   switchHousehold: (householdId: string) => Promise<boolean>;
   refreshHouseholds: (preferredHouseholdId?: string) => Promise<boolean>;
+  /** Applies a rename the server confirmed, so every header shows it without a refetch. */
+  applyHouseholdName: (householdId: string, name: string) => void;
   enterAccessChanged: (lostHouseholdName?: string, lostHouseholdId?: string) => void;
   resolve: () => Promise<void>;
 }
@@ -157,6 +159,10 @@ export function createHouseholdProvider(
       return promise;
     }, [doResolve]);
 
+    const applyHouseholdName = useCallback((householdId: string, name: string) => {
+      setHouseholds((current) => current.map((household) => household.id === householdId ? { ...household, name } : household));
+    }, []);
+
     const refreshHouseholds = useCallback(async (preferredHouseholdId?: string): Promise<boolean> => {
       setViewState('resolving');
       // Persist current selection during refresh.
@@ -288,6 +294,7 @@ export function createHouseholdProvider(
       accessChangedHouseholdName,
       switchHousehold,
       refreshHouseholds,
+      applyHouseholdName,
       enterAccessChanged,
       resolve,
     };
