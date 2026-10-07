@@ -33,19 +33,19 @@ The API `dev` script compiles and then runs; it does not watch files, so a sourc
 
 Outside CI both Playwright configs set `reuseExistingServer`, so a run whose origins match an already-running dev server will drive that server — against the development database, without the rate-limit bypass, producing 429s and polluted data that read as product bugs.
 
-When the human already has `pnpm dev` on 3000 and 8081, run browser checks on free ports instead:
+When the human already has `pnpm dev` running, list the ports it holds before choosing yours: Metro takes 8081, and the API port comes from their `.env` (3100 has been seen, not only the default 3000). Then run browser checks on ports nothing listens on:
 
 ```sh
-PORT=3100 \
-API_ORIGIN=http://127.0.0.1:3100 \
-WEB_ORIGIN=http://127.0.0.1:8181 \
+PORT=3200 \
+API_ORIGIN=http://127.0.0.1:3200 \
+WEB_ORIGIN=http://127.0.0.1:8281 \
 DATABASE_URL='postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:55432/muchakucha_test' \
 pnpm exec playwright test -c playwright.config.ts
 ```
 
-`playwright.config.ts` validates each origin as a bare scheme, host, and port — a trailing path or credential is rejected at startup.
+`playwright.config.ts` validates each origin as a bare scheme, host, and port — a trailing path or credential is rejected at startup. A static build you already serve on `WEB_ORIGIN` is reused in place of Metro; its embedded API origin has to be `API_ORIGIN` (see [testing.md](testing.md#the-api-origin-inside-a-build)).
 
-The mocked config is pinned to port 8081 and cannot be relocated, so it runs against whichever Web server holds that port.
+Without `UI_BASE_URL`, the mocked config starts or reuses the Web server on 8081, which is the human's when they are running one. Point `UI_BASE_URL` at a server of your own instead.
 
 ## Ownership of processes
 

@@ -30,9 +30,9 @@ pnpm openapi:check
 
 Filter Playwright by title with `-g`, not by `file:line`: a line filter silently matches nothing once the file shifts. A run started in the background takes an explicit `-c <config>` path; without it Playwright resolves a different config and reports "No tests found".
 
-`playwright.ui.config.ts` intercepts every API request and covers only `account-experience.spec.ts` and `ux-regressions.spec.ts` at a 390×844 viewport. It is the fast check for pure UI regressions and proves nothing about server behavior.
+`playwright.ui.config.ts` intercepts every API request and runs the specs in its `testMatch`, at 390×844 unless a test sets its own size. It is the fast check for pure UI regressions and proves nothing about server behavior. `playwright.config.ts` runs every spec in `e2e/`, these included, at its 1280×720 default, so a test written for one layout pins its viewport.
 
-Its default Metro server bundles a whole page per navigation and has timed out a full run before. When that happens, check the same code against a static build rather than relaxing the timeout or skipping the failing case:
+Run browser suites against a static build, not Metro. The dev server sends its development bundle (about 7 MB) gzip-compressed, and on Windows that one response took about 47 seconds per page load: any test that navigates twice reaches the 60-second timeout. A static export of the same code loads in a fraction of a second. Do not relax the timeout or skip a case to get a Metro run through.
 
 ```sh
 pnpm --filter client exec expo export --platform web   # writes apps/client/dist
@@ -40,6 +40,16 @@ UI_BASE_URL=http://127.0.0.1:8085 pnpm exec playwright test -c playwright.ui.con
 ```
 
 `UI_BASE_URL` replaces the managed web server, so the address has to serve `apps/client/dist` with SPA route fallback.
+
+### The API origin inside a build
+
+`EXPO_PUBLIC_API_ORIGIN` is inlined when a module is transformed, and Metro caches transforms. Exporting with a new value can therefore keep the previous origin; `--clear` makes the new value take effect. Check what a build embeds before running a suite against it:
+
+```sh
+grep -ohE "https?://(localhost|127\.0\.0\.1)[:0-9]*" apps/client/dist/_expo/static/js/web/entry-*.js | sort -u
+```
+
+`--clear` empties the cache that a running `expo start` shares: it can fail while the human's dev server holds those files, and it makes that server transform everything again. Clear only when no dev server is running, or choose the origin before the first export. For the mocked config, embed a port nothing listens on, so a request that misses its mock fails instead of reaching a real API. For the real-API config, embed exactly `API_ORIGIN`.
 
 ## Writing API integration tests
 
