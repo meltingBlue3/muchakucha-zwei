@@ -43,18 +43,10 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
     trigger.current = container.current;
     void action.run();
   };
-  // In a row: the primary answer is a compact filled pill, the other plain text.
-  const actions = (message: InboxMessage) => message.actions.map(action => {
-    const unavailable = busy || loading;
-    const filled = action.primary && !unavailable;
-    return (
-      <Pressable key={action.id} accessibilityRole="button" accessibilityLabel={action.accessibilityLabel}
-        disabled={unavailable} accessibilityState={{ disabled: unavailable, busy }} onPress={() => run(action)}
-        style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing[4], borderRadius: theme.borderRadii.full, backgroundColor: filled ? (pressed ? theme.colors.primaryPressed : theme.colors.primary) : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
-        <Text variant="label" color={unavailable ? 'inkMuted' : filled ? 'surface' : 'link'}>{action.label}</Text>
-      </Pressable>
-    );
-  });
+  // In a row: compact pills, the primary answer filled and the other outlined.
+  const actions = (message: InboxMessage) => message.actions.map(action => (
+    <Button key={action.id} label={action.label} accessibilityLabel={action.accessibilityLabel} tone={action.primary ? 'primary' : 'secondary'} size="compact" disabled={busy || loading} onPress={() => run(action)} />
+  ));
   // In the message window: the app's standard buttons, secondary first.
   const windowActions = (message: InboxMessage) => [...message.actions].sort((a, b) => Number(Boolean(a.primary)) - Number(Boolean(b.primary))).map(action => (
     <Button key={action.id} label={action.label} accessibilityLabel={action.accessibilityLabel} tone={action.primary ? 'primary' : 'secondary'} disabled={busy || loading} onPress={() => run(action)} style={{ flexGrow: 1, flexBasis: theme.controlSizes.touchTarget * 3 }} />
@@ -73,7 +65,7 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
             <Text variant="bodySm" color="ink" numberOfLines={2}>{message.summary}</Text>
             <Text variant="caption" style={{ marginTop: theme.spacing[1] }}>{formatDate(new Date(message.createdAt))}</Text>
           </Pressable>
-          <View style={{ flexDirection: 'row', flexShrink: 0 }}>{actions(message)}</View>
+          <View style={{ flexDirection: 'row', flexShrink: 0, gap: theme.spacing[2], paddingRight: theme.spacing[1] }}>{actions(message)}</View>
         </View>)}
       </View> : null}
     </Stack>

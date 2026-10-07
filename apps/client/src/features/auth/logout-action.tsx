@@ -2,6 +2,7 @@ import type { ApiClient } from '@muchakucha/api-client';
 import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
+import LogOut from 'lucide-react-native/icons/log-out';
 
 import type { SessionStateStore } from './session-state';
 import type { SessionTransport } from '../../platform/session/session-transport';
@@ -91,7 +92,11 @@ export const LogoutAction = ({
 
   return (
     <>
-      <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="退出登录" onPress={() => setConfirming(true)} style={({ pressed }) => ({ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', alignItems: 'center', borderWidth: activeTheme.borderWidths.default, borderColor: activeTheme.colors.border, borderRadius: activeTheme.borderRadii.md, backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.surface })}><Text variant="label" color="destructive">退出登录</Text></Pressable>
+      {/* Drawn like 「离开家庭」 at the foot of 家庭设置: a quiet red entry, not a boxed button. */}
+      <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="退出登录" onPress={() => setConfirming(true)} style={({ pressed }) => ({ minHeight: activeTheme.controlSizes.touchTarget, flexDirection: 'row', gap: activeTheme.spacing[2], justifyContent: 'center', alignItems: 'center', borderRadius: activeTheme.borderRadii.lg, backgroundColor: pressed ? activeTheme.colors.destructiveSoft : activeTheme.colors.transparent })}>
+        <LogOut size={activeTheme.controlSizes.icon} color={activeTheme.colors.destructive} strokeWidth={activeTheme.controlSizes.iconStroke} />
+        <Text variant="label" color="destructive">退出登录</Text>
+      </Pressable>
       {confirming ? <AppDialog title="退出这台设备？" busy={pending} onClose={cancel} trigger={trigger}>{confirmation}</AppDialog> : null}
     </>
   );

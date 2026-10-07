@@ -319,7 +319,9 @@ for (const width of [320, 390, 1440]) {
     expect(browserStorage).not.toContain('ui-private-secret');
     expect(browserStorage).not.toContain('ui-household-secret');
     await expect(page.getByText(/ui-(?:private|household)-secret/)).toHaveCount(0);
-    await providers.getByRole('button', { name: '返回', exact: true }).click();
+    // A phone goes back from the subpage; a wide screen goes up through the sidebar, as from 家庭设置.
+    if (width === 1440) await page.getByRole('tab', { name: '助手', exact: true }).click();
+    else await providers.getByRole('button', { name: '返回', exact: true }).click();
     // The first message is typed on the assistant home; the conversation is created for it and sends it.
     const home = page.getByRole('main', { name: '家庭助手', exact: true });
     await home.getByLabel('开始新对话', { exact: true }).fill('这周出门前需要准备什么？');

@@ -29,9 +29,10 @@ export function AssistantWorkspace({ householdId, householdName, title, conversa
   const optionsTrigger = useRef<View>(null);
   const root = assistantPath(householdId);
   const startNew = () => { setDialog(null); router.push(root); };
+  // The caption lines up with the titles inside the rows, like 「家庭」 above the sidebar's family pages.
   const history = <Stack gap={3}>
-    <Text variant="caption">最近对话 · 仅自己可见</Text>
-    {conversations.length === 0 ? <Text variant="bodySm">你的对话会保存在这里。</Text> : conversations.map(item => <Pressable key={item.id}
+    <Text variant="caption" style={{ paddingHorizontal: theme.spacing[3] }}>最近对话 · 仅自己可见</Text>
+    {conversations.length === 0 ? <Text variant="bodySm" style={{ paddingHorizontal: theme.spacing[3] }}>你的对话会保存在这里。</Text> : conversations.map(item => <Pressable key={item.id}
       accessibilityRole="button" accessibilityLabel={`打开对话：${item.title}`} accessibilityState={{ selected: item.id === conversationId, disabled: busy }} disabled={busy}
       onPress={() => { setDialog(null); if (item.id !== conversationId) router.push(`${root}/conversations/${encodeURIComponent(item.id)}`); }}
       style={({ pressed }) => ({ padding: theme.spacing[3], gap: theme.spacing[1], borderRadius: theme.borderRadii.md, backgroundColor: item.id === conversationId ? theme.colors.surfaceSelected : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>

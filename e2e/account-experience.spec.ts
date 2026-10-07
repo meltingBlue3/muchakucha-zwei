@@ -70,15 +70,24 @@ test('no-household onboarding offers both routes and profile access', async ({ p
 test('profile only enables saving changed input and announces success', async ({ page }) => {
   await mockApi(page, true);
   await page.goto('/profile');
-  const save = page.getByRole('button', { name: '保存昵称' });
-  await expect(page.getByLabel('昵称', { exact: true })).toHaveValue('小林');
-  await expect(save).toBeDisabled();
-  await page.getByLabel('昵称', { exact: true }).fill('小林的新昵称');
-  await save.click();
-  await expect(page.getByText('昵称已更新。')).toBeVisible();
-  await expect(save).toBeDisabled();
+  await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
+  await expect(page.getByText('family_member', { exact: true })).toBeVisible();
   await checkLayout(page);
   await page.screenshot({ path: 'test-results/account-profile-mobile.png', fullPage: true });
+  // The nickname is a fact on the page; 编辑 opens the same window as the account menu.
+  const edit = page.getByRole('button', { name: '编辑昵称' });
+  await edit.click();
+  const dialog = page.getByRole('dialog', { name: '个人资料', exact: true });
+  const save = dialog.getByRole('button', { name: '保存', exact: true });
+  await expect(dialog.getByLabel('昵称', { exact: true })).toHaveValue('小林');
+  await expect(save).toBeDisabled();
+  await dialog.getByLabel('昵称', { exact: true }).fill('小林的新昵称');
+  await save.click();
+  await expect(dialog.getByText('昵称已更新。')).toBeVisible();
+  await expect(save).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(edit).toBeFocused();
+  await expect(page.getByText('小林的新昵称', { exact: true })).toBeVisible();
 });
 
 test('blur validation leaves focus where the pointer sent it; only a submit moves it', async ({ page }) => {
@@ -143,10 +152,12 @@ for (const width of [320, 390, 1440]) {
     await expect(dialog.getByLabel('昵称', { exact: true })).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toBeFocused();
+    // Keyboard focus draws the vermilion ring, as on every Button.
+    await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toHaveCSS('outline-color', 'rgb(194, 56, 28)');
     await checkLayout(page);
     await page.screenshot({ path: `test-results/account-dialog-profile-${width}.png` });
     await dialog.getByLabel('昵称', { exact: true }).fill('新的昵称');
-    await dialog.getByRole('button', { name: '保存昵称' }).click();
+    await dialog.getByRole('button', { name: '保存', exact: true }).click();
     await expect(dialog.getByText('昵称已更新。')).toBeVisible();
     await expect(page).toHaveURL(/household-handoff$/);
     await page.keyboard.press('Escape');

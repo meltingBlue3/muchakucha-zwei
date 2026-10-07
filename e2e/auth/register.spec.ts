@@ -38,7 +38,8 @@ test.describe('Web username registration journey', () => {
     await page.reload();
     await expect(page.getByRole('heading', { name: '开始设置你的家庭' })).toBeVisible();
     await page.goto('/profile');
-    await expect(page.getByText(username, { exact: true })).toBeVisible();
+    // A new account's nickname is its username, so both facts show the same text.
+    await expect(page.getByText(username, { exact: true }).first()).toBeVisible();
     await page.getByRole('button', { name: '退出登录' }).click();
     await page.getByRole('dialog').getByRole('button', { name: '确认退出登录', exact: true }).click();
     await expect(page).toHaveURL(/\/login/);

@@ -314,7 +314,7 @@ export default function RecurrenceRuleDetailRoute() {
                 onCancel={close}
                 onSubmit={() => setSaveConfirmOpen(true)}
                 submitting={false}
-                submitLabel="保存更改"
+                submitLabel="保存"
                 disabled={ended || busy || saveConfirmOpen || recurrence === null || endsOnInvalid}
               />
             </Stack>
