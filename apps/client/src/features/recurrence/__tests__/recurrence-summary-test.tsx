@@ -18,6 +18,8 @@ describe('recurrence summary formatting', () => {
     [{ ...baseRule, freq: 'daily' }, '每天重复'],
     [{ ...baseRule, freq: 'weekly', byWeekday: [3] }, '每周三重复'],
     [{ ...baseRule, freq: 'weekly', byWeekday: [6, 2, 4] }, '每周二、四、六重复'],
+    // Weeks start on Monday, so Sunday is listed last.
+    [{ ...baseRule, freq: 'weekly', byWeekday: [0, 1, 5] }, '每周一、五、日重复'],
     [{ ...baseRule, freq: 'monthly' }, '每月 12 日重复'],
     [{ ...baseRule, freq: 'yearly' }, '每年 8 月 12 日重复'],
   ] satisfies [RecurrenceDto, string][])('formats %j as a Chinese summary', (rule, expected) => {

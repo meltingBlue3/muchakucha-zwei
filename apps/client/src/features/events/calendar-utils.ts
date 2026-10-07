@@ -1,8 +1,6 @@
 /** Pure date helpers for the calendar month grid. No React dependency. */
 
-import { formatDate } from '../../ui/date-values';
-
-const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'] as const;
+import { daysSinceMonday, formatDate, WEEK_HEADER } from '../../ui/date-values';
 
 export interface CalendarDay {
   date: Date;
@@ -19,7 +17,7 @@ export interface CalendarMonth {
 }
 
 export function getDayNames(): readonly string[] {
-  return DAY_NAMES;
+  return WEEK_HEADER;
 }
 
 export function getCalendarMonth(year: number, month: number): CalendarMonth {
@@ -29,13 +27,13 @@ export function getCalendarMonth(year: number, month: number): CalendarMonth {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
 
-  // Start from the Sunday of the week containing the 1st
+  // Start from the Monday of the week containing the 1st
   const start = new Date(firstDay);
-  start.setDate(start.getDate() - start.getDay());
+  start.setDate(start.getDate() - daysSinceMonday(start));
 
-  // End on the Saturday of the week containing the last day
+  // End on the Sunday of the week containing the last day
   const end = new Date(lastDay);
-  end.setDate(end.getDate() + (6 - end.getDay()));
+  end.setDate(end.getDate() + (6 - daysSinceMonday(end)));
 
   const weeks: CalendarDay[][] = [];
   let current = new Date(start);
@@ -51,7 +49,7 @@ export function getCalendarMonth(year: number, month: number): CalendarMonth {
       iso,
     });
 
-    if (current.getDay() === 6) {
+    if (daysSinceMonday(current) === 6) {
       weeks.push(week);
       week = [];
     }

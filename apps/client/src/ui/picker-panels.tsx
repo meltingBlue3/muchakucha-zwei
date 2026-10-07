@@ -6,9 +6,7 @@ import CalendarDays from 'lucide-react-native/icons/calendar';
 import Pencil from 'lucide-react-native/icons/pencil';
 import { Button, Inline, Stack, Text, TextField } from './primitives';
 import { theme } from './theme';
-import { formatDayLabel, normalizeDateInput, normalizeTimeInput, parseDateValue, toDateValue } from './date-values';
-
-const WEEK_HEADER = ['一', '二', '三', '四', '五', '六', '日'] as const;
+import { daysSinceMonday, formatDayLabel, normalizeDateInput, normalizeTimeInput, parseDateValue, toDateValue, WEEK_HEADER } from './date-values';
 
 /** Right-aligned 取消 / 确定, like a Material dialog. */
 export function PickerActions({ onCancel, onConfirm, confirmLabel = '确定', confirmDisabled = false }: {
@@ -37,7 +35,7 @@ export function CalendarGrid({ value, onSelect }: { value: string; onSelect(valu
   }, [value]);
   const today = toDateValue(new Date());
   const weeks = useMemo(() => {
-    const leading = (month.getDay() + 6) % 7;
+    const leading = daysSinceMonday(month);
     const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
     const cells: Array<Date | null> = [
       ...Array.from({ length: leading }, () => null),
