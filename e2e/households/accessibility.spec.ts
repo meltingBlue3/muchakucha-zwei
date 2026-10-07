@@ -272,11 +272,13 @@ test.describe('household accessibility matrix', () => {
     await expect(page.getByLabel('家庭名称', { exact: true })).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: '创建家庭', exact: true })).toBeFocused();
-    await expect(page.getByLabel('家庭名称', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+    // Tabbing past an empty name is not a mistake yet; it is reported on submit.
+    await expect(page.getByLabel('家庭名称', { exact: true })).toHaveAttribute('aria-invalid', 'false');
 
-    // Submitting still moves focus to the first invalid field.
+    // Submitting reports it and moves focus to the first invalid field.
     await page.getByRole('button', { name: '创建家庭', exact: true }).click();
     await expect(page.getByLabel('家庭名称', { exact: true })).toBeFocused();
+    await expect(page.getByLabel('家庭名称', { exact: true })).toHaveAttribute('aria-invalid', 'true');
   });
 
   // ============================================================================
