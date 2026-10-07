@@ -78,6 +78,9 @@ test('profile only enables saving changed input and announces success', async ({
   const edit = page.getByRole('button', { name: '编辑昵称' });
   await edit.click();
   const dialog = page.getByRole('dialog', { name: '个人资料', exact: true });
+  // Opened by pointer, the window focuses its close button without a ring.
+  await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toHaveCSS('outline-style', 'none');
   const save = dialog.getByRole('button', { name: '保存', exact: true });
   await expect(dialog.getByLabel('昵称', { exact: true })).toHaveValue('小林');
   await expect(save).toBeDisabled();
@@ -88,6 +91,12 @@ test('profile only enables saving changed input and announces success', async ({
   await page.keyboard.press('Escape');
   await expect(edit).toBeFocused();
   await expect(page.getByText('小林的新昵称', { exact: true })).toBeVisible();
+  // A row in a grouped list draws its ring inside, where the group cannot clip it.
+  const householdsRow = page.getByRole('button', { name: '我的家庭', exact: true });
+  await page.keyboard.press('Shift');
+  await householdsRow.focus();
+  await expect(householdsRow).toHaveCSS('outline-color', 'rgb(194, 56, 28)');
+  await expect(householdsRow).toHaveCSS('outline-offset', '-2px');
 });
 
 test('blur validation leaves focus where the pointer sent it; only a submit moves it', async ({ page }) => {
@@ -152,7 +161,7 @@ for (const width of [320, 390, 1440]) {
     await expect(dialog.getByLabel('昵称', { exact: true })).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toBeFocused();
-    // Keyboard focus draws the vermilion ring, as on every Button.
+    // Keyboard focus draws the vermilion ring (the global :focus-visible rule).
     await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toHaveCSS('outline-color', 'rgb(194, 56, 28)');
     await checkLayout(page);
     await page.screenshot({ path: `test-results/account-dialog-profile-${width}.png` });

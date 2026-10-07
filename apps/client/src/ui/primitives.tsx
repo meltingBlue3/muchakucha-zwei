@@ -164,26 +164,14 @@ export const getButtonFill = (state: { disabled: boolean; pressed: boolean }, to
       : state.pressed ? theme.colors.primaryPressed : theme.colors.primary;
 
 /**
- * The Web keyboard focus ring: a vermilion outline drawn outside the control,
- * so focusing never shifts the layout. Native platforms draw their own.
+ * Button's Web focus ring: a vermilion outline drawn outside the pill, so
+ * focusing never shifts the layout. Every other focusable element gets the
+ * same ring from the global `:focus-visible` rule (platform/focus-ring).
  */
-export const webFocusRing = (focused: boolean) =>
+const webFocusRing = (focused: boolean) =>
   Platform.OS === 'web' && focused
     ? { outlineColor: theme.colors.focusRing, outlineOffset: theme.focus.offset, outlineStyle: 'solid' as const, outlineWidth: theme.focus.width }
     : {};
-
-/**
- * Whether a control holds keyboard focus, judged like `:focus-visible`: a tap,
- * a click or a window moving focus into itself shows no ring.
- */
-export const useFocusVisible = () => {
-  const [focusVisible, setFocusVisible] = useState(false);
-  return {
-    focusVisible,
-    onFocus: (event: { target: unknown }) => setFocusVisible(Platform.OS === 'web' && (event.target as Element).matches(':focus-visible')),
-    onBlur: () => setFocusVisible(false),
-  };
-};
 
 export const Button = ({ disabled, label, loading = false, tone = 'primary', expanded, size = 'regular', style, ...props }: ButtonProps) => {
   const activeTheme = useTheme<Theme>();

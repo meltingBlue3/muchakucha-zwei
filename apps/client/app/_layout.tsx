@@ -10,7 +10,10 @@ import {
   type SessionDestination,
 } from '../src/features/auth/session-bootstrap';
 import { sessionStateStore, sessionTransport, setSessionLostHandler } from '../src/features/auth/session-runtime';
+import { installFocusRing } from '../src/platform/focus-ring/focus-ring';
 import { MuchakuchaThemeProvider } from '../src/ui/primitives';
+
+installFocusRing();
 
 export default function RootLayout() {
   // Inter only supplies figures; a font that fails to load falls back to the system face.
