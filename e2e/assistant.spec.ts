@@ -345,6 +345,8 @@ for (const width of [320, 390, 1440]) {
 
 test('assistant proposals show readable targets and only explicit confirmation changes family content', async ({ page }) => {
   const state = await mockAssistant(page);
+  // A phone shows the proposal in the 操作预览 window; the wide inspector is covered by the width loop above.
+  await page.setViewportSize({ width: 390, height: 844 });
   await openExistingConversation(page);
   await send(page, '新增一个准备周末野餐的任务，交给小林');
   await openProposal(page);
@@ -424,6 +426,8 @@ test('assistant loading and provider failures recover persisted work without sen
 
 test('switching households separates private history, composer state and shared-model management', async ({ page }) => {
   const state = await mockAssistant(page);
+  // Leaving a conversation through 返回 and reading history from its window are the phone paths.
+  await page.setViewportSize({ width: 390, height: 844 });
   await openExistingConversation(page);
   await page.getByLabel('发送给助手', { exact: true }).fill('只属于周末的家的未发送内容');
   await page.getByRole('main', { name: '助手对话', exact: true }).getByRole('button', { name: '返回', exact: true }).click();
