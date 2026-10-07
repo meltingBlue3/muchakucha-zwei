@@ -251,10 +251,12 @@ test('changes a non-owner role', async ({ page, request }) => {
     const adminPage = await adminContext.newPage();
     await loginUsernameFixture(adminPage, admin.username, password);
     await adminPage.goto(`${WEB_ORIGIN}/households/${household.id}/settings`);
-    await expect(adminPage.getByRole('button', { name: '移除 成员甲', exact: true })).toBeVisible();
-    await expect(adminPage.getByRole('button', { name: /^(提升|降级) / })).toHaveCount(0);
-    await expect(adminPage.getByRole('button', { name: '移除 成员乙', exact: true })).toHaveCount(0);
-    await expect(adminPage.getByRole('button', { name: '移除 家主', exact: true })).toHaveCount(0);
+    // Members the admin cannot act on get no 「…」 menu at all.
+    await expect(adminPage.getByRole('button', { name: '更多操作：成员：成员乙', exact: true })).toHaveCount(0);
+    await expect(adminPage.getByRole('button', { name: '更多操作：成员：家主', exact: true })).toHaveCount(0);
+    await adminPage.getByRole('button', { name: '更多操作：成员：成员甲', exact: true }).click();
+    await expect(adminPage.getByRole('menuitem', { name: '移除 成员甲', exact: true })).toBeVisible();
+    await expect(adminPage.getByRole('menuitem', { name: /^(提升|降级) / })).toHaveCount(0);
   } finally {
     await adminContext.close();
   }

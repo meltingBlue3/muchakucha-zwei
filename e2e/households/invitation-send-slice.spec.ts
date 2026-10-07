@@ -87,7 +87,8 @@ test('delivers a username invitation to the inbox from settings [RED:INVITATION_
     // Resending from the pending list reopens the dialog with delivery confirmation.
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
-    await page.getByRole('button', { name: `重新发送邀请给 ${outsider.username}`, exact: true }).click();
+    await page.getByRole('button', { name: `更多操作：邀请：${outsider.username}`, exact: true }).click();
+    await page.getByRole('menuitem', { name: `重新发送邀请给 ${outsider.username}`, exact: true }).click();
     await expect(dialog.getByText('邀请已重新发送到对方的收件箱。')).toBeVisible();
 
     const rotated = await database.query<{ invalidated_at: Date | null }>(

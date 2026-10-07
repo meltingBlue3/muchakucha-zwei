@@ -59,7 +59,7 @@ export default function NoteDetailRoute() {
   const body = note.body ?? '';
 
   return (
-    <NoteWindow title="笔记详情" footer={<Button label="编辑笔记" onPress={handleEdit} />}>
+    <NoteWindow title="笔记详情" headerActions={<Button label="编辑" accessibilityLabel="编辑笔记" tone="secondary" size="compact" onPress={handleEdit} />}>
       <Stack gap={4}>
         <Heading level={2}>{note.title}</Heading>
         <Text variant="caption" color="inkMuted">最后更新于 {formatDateTime(new Date(note.updatedAt))}</Text>

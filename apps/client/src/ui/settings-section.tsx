@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { Children, isValidElement, type ReactNode } from 'react';
+import { View } from 'react-native';
 import { Heading, Inline, Stack, Text } from './primitives';
 import { theme } from './theme';
 
@@ -23,4 +24,11 @@ export function SettingsSection({ title, icon, detail, action, children }: {
       {children}
     </Stack>
   );
+}
+
+/** The rows of a settings panel, with hairlines between them and none after the last. */
+export function SettingsRows({ children }: { children: ReactNode }) {
+  return <View>
+    {Children.toArray(children).filter(isValidElement).map((row, index) => <View key={row.key ?? index} style={index > 0 ? { borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator } : undefined}>{row}</View>)}
+  </View>;
 }

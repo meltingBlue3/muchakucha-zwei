@@ -25,6 +25,11 @@ export interface HouseholdContextValue {
   refreshHouseholds: (preferredHouseholdId?: string) => Promise<boolean>;
   /** Applies a rename the server confirmed, so every header shows it without a refetch. */
   applyHouseholdName: (householdId: string, name: string) => void;
+  /**
+   * Remembers a joined household that a page opened by link or refresh, so
+   * `/households` and the next launch return to it rather than to the old one.
+   */
+  rememberHousehold: (householdId: string) => void;
   enterAccessChanged: (lostHouseholdName?: string, lostHouseholdId?: string) => void;
   resolve: () => Promise<void>;
 }
@@ -163,6 +168,14 @@ export function createHouseholdProvider(
       setHouseholds((current) => current.map((household) => household.id === householdId ? { ...household, name } : household));
     }, []);
 
+    const rememberHousehold = useCallback((householdId: string) => {
+      if (householdId === currentHouseholdId || !households.some((h) => h.id === householdId)) return;
+      const timestamps = { ...store.getAccessTimestamps(), [householdId]: Date.now() };
+      setCurrentHouseholdId(householdId);
+      setHouseholds((current) => sortHouseholds(current, householdId, timestamps));
+      void store.setCurrentId(householdId).then(() => store.setAccessTimestamps(timestamps)).catch(() => undefined);
+    }, [currentHouseholdId, households, store]);
+
     const refreshHouseholds = useCallback(async (preferredHouseholdId?: string): Promise<boolean> => {
       setViewState('resolving');
       // Persist current selection during refresh.
@@ -295,6 +308,7 @@ export function createHouseholdProvider(
       switchHousehold,
       refreshHouseholds,
       applyHouseholdName,
+      rememberHousehold,
       enterAccessChanged,
       resolve,
     };

@@ -61,6 +61,7 @@ describe('username invitation settings', () => {
     expect(view.queryByLabelText('邀请链接')).toBeNull();
 
     await fireEvent.press(view.getByLabelText('关闭邀请家人'));
+    await fireEvent.press(view.getByLabelText('更多操作：邀请：family-member'));
     await fireEvent.press(view.getByLabelText('重新发送邀请给 family-member'));
     expect(await view.findByText('邀请已重新发送到对方的收件箱。')).toBeTruthy();
   });

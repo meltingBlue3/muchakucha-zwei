@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 
 import { AccountMenu } from '../../ui/account-menu';
@@ -41,10 +41,21 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const narrow = useWindowDimensions().width < theme.layout.navigationBreakpoint;
-  const { viewState, households, currentHouseholdId, accessChangedHouseholdName, refreshHouseholds, switchHousehold } = useHouseholdContext();
+  const { viewState, households, currentHouseholdId, accessChangedHouseholdName, refreshHouseholds, switchHousehold, rememberHousehold } = useHouseholdContext();
   const [menuOpen, setMenuOpen] = useState(false);
   const householdId = id ?? currentHouseholdId;
   const householdName = households.find(h => h.id === householdId)?.name ?? '';
+
+  // A link or a refresh can open another household than the remembered one.
+  // Each page adopts its household once, when the list is first ready; it
+  // stays out of the way while the menu switches household and then
+  // replaces this page.
+  const adopted = useRef<string | null>(null);
+  useEffect(() => {
+    if (viewState !== 'ready' || !id || adopted.current === id) return;
+    adopted.current = id;
+    rememberHousehold(id);
+  }, [viewState, id, rememberHousehold]);
 
   const handleSwitch = useCallback(async (nextId: string) => {
     if (nextId !== householdId && await switchHousehold(nextId)) {

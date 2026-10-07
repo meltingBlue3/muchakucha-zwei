@@ -59,6 +59,8 @@ test('deep links use the route household and preserve operation failures', async
   const requests = await setup(page);
   await page.goto(`/households/${a}/today`);
   await expect(page.getByRole('button', { name: '当前家庭：家庭 A，切换家庭' })).toBeVisible();
+  // The linked household replaces the remembered one, so /households and the next launch return here.
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('muchakucha:currentHouseholdId'))).toBe(a);
   await page.getByRole('button', { name: '完成任务', exact: true }).click();
   // The refusal is reported on the card that was tapped, not in a page banner.
   await expect(page.getByText('你没有权限修改这个任务。')).toBeVisible();
@@ -84,8 +86,10 @@ for (const width of [320, 390, 1440]) {
     });
     await page.goto(`/households/${a}/settings`);
     await expect(page.getByRole('heading', { name: '基本信息', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: '提升 名字比较长的家庭成员', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: '撤销邀请 another_family_member', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '更多操作：成员：名字比较长的家庭成员', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '更多操作：邀请：another_family_member', exact: true })).toBeVisible();
+    // Your own row has no actions.
+    await expect(page.getByRole('button', { name: '更多操作：成员：小林', exact: true })).toHaveCount(0);
     const overflow = await page.evaluate(() => [...document.querySelectorAll('input, [role="button"], [role="heading"]')].some((el) => {
       const r = el.getBoundingClientRect();
       return r.width > 0 && (r.right > innerWidth + 1 || r.left < -1);
@@ -128,15 +132,19 @@ for (const width of [320, 390, 1440]) {
       revokeAttempts++;
       await route.fulfill({ status: revokeAttempts === 1 ? 503 : 200, json: {} });
     });
-    const revoke = page.getByRole('button', { name: '撤销邀请 another_family_member', exact: true });
-    await revoke.click();
+    const revoke = page.getByRole('button', { name: '更多操作：邀请：another_family_member', exact: true });
+    const openRevoke = async () => {
+      await revoke.click();
+      await page.getByRole('menuitem', { name: '撤销邀请 another_family_member', exact: true }).click();
+    };
+    await openRevoke();
     await expect(page.getByRole('dialog', { name: '撤销邀请？' })).toBeVisible();
     expect(await dialogAppearance(page)).toEqual(appearance);
     await page.screenshot({ path: `test-results/settings-revoke-dialog-${width}.png` });
     await page.getByRole('button', { name: '保留邀请' }).click();
     expect(revokeAttempts).toBe(0);
     await expect(revoke).toBeFocused();
-    await revoke.click();
+    await openRevoke();
     await page.getByRole('button', { name: '撤销邀请', exact: true }).click();
     await expect(page.getByText('撤销失败，家庭邀请状态未改变。请重试。')).toBeVisible();
     await page.getByRole('button', { name: '撤销邀请', exact: true }).click();

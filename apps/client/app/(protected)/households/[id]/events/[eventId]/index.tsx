@@ -80,7 +80,7 @@ export default function EventDetailRoute() {
 
   const when = formatDateRange(event.startTime, event.endTime, event.allDay, { weekday: true });
   return (
-    <EventWindow title="日程详情" footer={<Button label="编辑日程" onPress={handleEdit} />}>
+    <EventWindow title="日程详情" headerActions={<Button label="编辑" accessibilityLabel="编辑日程" tone="secondary" size="compact" onPress={handleEdit} />}>
       <Stack gap={5}>
         <Stack gap={2}>
           <Heading level={2}>{event.title}</Heading>

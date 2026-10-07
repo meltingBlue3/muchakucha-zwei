@@ -188,6 +188,8 @@ export const theme = createTheme({
     touchTarget: 48,
     field: 48,
     primary: 48,
+    /** A small pill for secondary actions in a header, a row or a phone sheet; its hit area stays `touchTarget`. */
+    compact: 36,
     fab: 56,
     icon: 20,
     iconStroke: 1.75,
@@ -236,6 +238,8 @@ export const theme = createTheme({
     formColumnsBreakpoint: 480,
     /** Width of the time column in a timeline or agenda row. */
     timeColumn: 60,
+    /** Name column of a fact shown on one line, such as 「截止时间」 beside its value. */
+    fieldLabelColumn: 72,
   },
   blur: { dialog: 24 },
   motion: {

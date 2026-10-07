@@ -41,6 +41,7 @@ jest.mock('../../households/household-context', () => ({
     accessChangedHouseholdName: undefined,
     refreshHouseholds: jest.fn(),
     switchHousehold: jest.fn(),
+    rememberHousehold: jest.fn(),
     enterAccessChanged: jest.fn(),
     resolve: jest.fn(),
   }),

@@ -8,7 +8,7 @@ import { theme } from '../../ui/theme';
 import { AssistantBoundary, assistantPath, type AssistantHouseholdProps } from './assistant-boundary';
 import { useAssistantOperation, useAssistantQuery } from './assistant-runtime';
 import { AssistantWorkspace } from './assistant-workspace';
-import { AssistantComposer } from './assistant-composer';
+import { AssistantComposer, PromptSuggestions } from './assistant-composer';
 import { queueFirstMessage } from './first-message';
 import { AssistantModelPicker } from './model-picker';
 
@@ -38,7 +38,8 @@ function AssistantHome({ householdId, householdName, writable }: AssistantHouseh
     router.push(`${assistantPath(householdId)}/conversations/${encodeURIComponent(result.value.id)}`);
   };
   return <AssistantWorkspace householdId={householdId} householdName={householdName} title="家庭助手" conversations={query.data?.conversations ?? []} busy={operation.busy} onRefresh={() => { void query.reload(); }}>
-    <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: theme.spacing[6], gap: theme.spacing[5], maxWidth: theme.layout.assistantReadingWidth, width: '100%', alignSelf: 'center' }}>
+    {/* The same left edge as the title row above. */}
+    <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: theme.spacing[5], paddingVertical: theme.spacing[6], gap: theme.spacing[5], maxWidth: theme.layout.assistantReadingWidth, width: '100%', alignSelf: 'center' }}>
       {!writable ? <Banner>当前离线，恢复连接后即可继续使用助手。</Banner> : null}
       {operation.error ? <Banner>{operation.error}</Banner> : null}
       {query.error ? <LoadError message={query.error} onRetry={() => { void query.reload(); }} retrying={query.loading} disabled={operation.busy} /> : null}
@@ -51,7 +52,7 @@ function AssistantHome({ householdId, householdName, writable }: AssistantHouseh
           <AssistantComposer label="开始新对话" value={message} onChangeText={setMessage} onSend={() => { void start(); }} busy={operation.busy}
             blocked={operation.busy || !writable || query.loading || !selected.hasCredential}
             modelControl={<AssistantModelPicker householdId={householdId} providers={providers} selectedId={selected.id} busy={operation.busy} onSelect={setSelectedId} />} />
-          {['这周有哪些安排，需要提前准备什么？', '帮我整理最近的家庭笔记'].map(prompt => <Button key={prompt} label={prompt} tone="secondary" disabled={operation.busy || !writable} onPress={() => setMessage(prompt)} style={{ alignSelf: 'flex-start' }} />)}
+          <PromptSuggestions disabled={operation.busy || !writable} onPick={setMessage} />
           <Text variant="caption">内容修改前，由你确认。其他家人看不到你的对话。</Text>
           {/* Whoever runs the endpoint sees what is sent to it; for a shared model that is the configuration owner's choice. */}
           <Text variant="caption">{selected.ownedByMe

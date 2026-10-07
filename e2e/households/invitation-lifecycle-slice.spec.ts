@@ -211,8 +211,9 @@ test('manages invitation lifecycle', async ({ page, request }) => {
   // RESEND: replaces the pending inbox item
   // ============================================================================
 
-  // Find the resend button for the pending invitation at resend
-  await page.getByRole('button', { name: '重新发送邀请给 resend' }).click();
+  // Resend lives in the invitation's 「…」 menu.
+  await page.getByRole('button', { name: '更多操作：邀请：resend' }).click();
+  await page.getByRole('menuitem', { name: '重新发送邀请给 resend' }).click();
 
   // Resending returns a replacement link that the owner can share with the recipient.
   const inviteDialog = page.getByRole('dialog', { name: '邀请家人' }).last();
@@ -235,18 +236,22 @@ test('manages invitation lifecycle', async ({ page, request }) => {
   // REVOKE: confirmation dialog keeps or revokes the invitation
   // ============================================================================
 
-  const revokeButton = page.getByRole('button', { name: '撤销邀请 revoke-test' });
+  const revokeMenu = page.getByRole('button', { name: '更多操作：邀请：revoke-test' });
+  const revoke = async () => {
+    await revokeMenu.click();
+    await page.getByRole('menuitem', { name: '撤销邀请 revoke-test' }).click();
+  };
   const revokeDialog = page.getByRole('dialog', { name: '撤销邀请？' }).last();
 
   // The safe action closes the dialog without revoking.
-  await revokeButton.click();
+  await revoke();
   await expect(revokeDialog.getByText('撤销后，对方将无法接受这份邀请。')).toBeVisible();
   await revokeDialog.getByRole('button', { name: '保留邀请', exact: true }).click();
   await expect(revokeDialog).toBeHidden();
-  await expect(revokeButton).toBeFocused();
+  await expect(revokeMenu).toBeFocused();
 
   // The destructive action revokes it.
-  await revokeButton.click();
+  await revoke();
   await revokeDialog.getByRole('button', { name: '撤销邀请', exact: true }).click();
   await expect(revokeDialog).toBeHidden();
 

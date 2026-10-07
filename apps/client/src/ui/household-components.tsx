@@ -52,6 +52,7 @@ import { MemberAvatar } from './member-avatar';
 import { PageCreateActionContext } from './page-intro';
 import { ActionNotice, useActionNoticeDismissal, type ActionNoticeProps } from './action-notice';
 import { formatDateTime } from './date-values';
+import { CardActionsMenu, type CardAction } from './card-actions-menu';
 
 // ---- AppShell ----
 
@@ -602,60 +603,6 @@ export const RoleBadge = ({ role }: RoleBadgeProps) => {
   );
 };
 
-// ---- RowAction ----
-
-interface RowActionProps {
-  accessibilityLabel: string;
-  icon: React.ComponentType<{ color: string; size: number; strokeWidth: number }>;
-  color: string;
-  label: string;
-  /** Show the visible label next to the icon (wide layouts). */
-  showLabel?: boolean;
-  onPress?: (() => void) | undefined;
-  disabled?: boolean;
-  busyLabel?: string;
-}
-
-const RowAction = forwardRef<View, RowActionProps>(({
-  accessibilityLabel,
-  icon: Icon,
-  color,
-  label,
-  showLabel = false,
-  onPress,
-  disabled = false,
-  busyLabel,
-}, ref) => (
-  <Pressable
-    ref={ref}
-    accessibilityLabel={accessibilityLabel}
-    accessibilityRole="button"
-    disabled={disabled || busyLabel !== undefined}
-    onPress={onPress}
-    style={({ pressed }) => ({
-      alignItems: 'center',
-      backgroundColor: pressed ? theme.colors.surfaceMuted : 'transparent',
-      borderRadius: theme.borderRadii.md,
-      flexDirection: 'row',
-      gap: theme.spacing[1],
-      justifyContent: 'center',
-      minHeight: theme.controlSizes.touchTarget,
-      minWidth: theme.controlSizes.touchTarget,
-      opacity: disabled || busyLabel !== undefined ? 0.5 : 1,
-      paddingHorizontal: showLabel ? theme.spacing[2] : 0,
-    })}
-  >
-    {busyLabel !== undefined ? (
-      <Spinner label={busyLabel} />
-    ) : (
-      <Icon color={color} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-    )}
-    {showLabel ? <Text variant="label" style={{ color }}>{label}</Text> : null}
-  </Pressable>
-));
-
-RowAction.displayName = 'RowAction';
-
 // ---- MemberRow ----
 
 interface MemberRowProps {
@@ -668,10 +615,9 @@ interface MemberRowProps {
   /** Only ever true for the current owner acting on a non-self member. */
   canTransferTo?: boolean;
   onTransfer?: () => void;
-  /** Label each action and align the action row with the member name (wide layouts). */
-  labeledActions?: boolean;
 }
 
+/** One member: avatar, name and role, with the governance actions in a 「…」 menu. */
 export const MemberRow = ({
   member,
   roleAction,
@@ -680,27 +626,29 @@ export const MemberRow = ({
   onRemove,
   canTransferTo = false,
   onTransfer,
-  labeledActions = false,
 }: MemberRowProps) => {
   const roleLabel = ROLE_LABELS[member.role] ?? member.role;
-  const hasActions = roleAction !== undefined || canRemoveMember || canTransferTo;
+  const actions: CardAction[] = [];
+  if (roleAction !== undefined && onRoleAction) {
+    const promote = roleAction === 'promote';
+    actions.push({ label: promote ? '提升为管理员' : '降级为成员', icon: promote ? CircleArrowUp : CircleArrowDown, accessibilityLabel: `${promote ? '提升' : '降级'} ${member.displayName}`, onPress: onRoleAction });
+  }
+  if (canTransferTo && onTransfer) actions.push({ label: '转移所有权', icon: Crown, accessibilityLabel: `转移所有权给 ${member.displayName}`, onPress: onTransfer });
+  if (canRemoveMember && onRemove) actions.push({ label: '移除', icon: UserMinus, destructive: true, accessibilityLabel: `移除 ${member.displayName}`, onPress: onRemove });
 
   return (
     <View
       style={{
-        borderBottomColor: theme.colors.separator,
-        borderBottomWidth: theme.borderWidths.default,
+        alignItems: 'center',
+        flexDirection: 'row',
+        gap: theme.spacing[3],
+        minHeight: theme.controlSizes.touchTarget + theme.spacing[4],
         paddingVertical: theme.spacing[2],
       }}
     >
       <View
         accessibilityLabel={`${member.displayName}，${roleLabel}${member.isCurrentUser ? '，本人' : ''}`}
-        style={{
-          alignItems: 'center',
-          flexDirection: 'row',
-          gap: theme.spacing[3],
-          minHeight: theme.controlSizes.touchTarget + theme.spacing[4],
-        }}
+        style={{ alignItems: 'center', flex: 1, flexDirection: 'row', gap: theme.spacing[3], minWidth: 0 }}
       >
         <MemberAvatar id={member.userId} name={member.displayName} size="lg" />
 
@@ -723,58 +671,21 @@ export const MemberRow = ({
               </Text>
             ) : null}
           </Inline>
-          <Text
-            numberOfLines={1}
-            variant="caption"
-          >
-            {member.username}
-          </Text>
+          {/* The role sits under the name like an invitation's status, so the name keeps the width. */}
+          <Inline gap={2} style={{ alignItems: 'center' }}>
+            <RoleBadge role={member.role} />
+            <Text
+              numberOfLines={1}
+              style={{ flexShrink: 1 }}
+              variant="caption"
+            >
+              {member.username}
+            </Text>
+          </Inline>
         </Stack>
-
-        <RoleBadge role={member.role} />
       </View>
 
-      {hasActions ? (
-        <Inline
-          gap={1}
-          style={{
-            flexWrap: 'wrap',
-            justifyContent: labeledActions ? 'flex-start' : 'flex-end',
-            marginLeft: labeledActions ? theme.controlSizes.touchTarget + theme.spacing[3] - theme.spacing[2] : 0,
-          }}
-        >
-          {roleAction !== undefined ? (
-            <RowAction
-              accessibilityLabel={`${roleAction === 'promote' ? '提升' : '降级'} ${member.displayName}`}
-              icon={roleAction === 'promote' ? CircleArrowUp : CircleArrowDown}
-              color={theme.colors.ink}
-              label={roleAction === 'promote' ? '提升' : '降级'}
-              showLabel={labeledActions}
-              onPress={onRoleAction}
-            />
-          ) : null}
-          {canTransferTo ? (
-            <RowAction
-              accessibilityLabel={`转移所有权给 ${member.displayName}`}
-              icon={Crown}
-              color={theme.colors.ink}
-              label="转移所有权"
-              showLabel={labeledActions}
-              onPress={onTransfer}
-            />
-          ) : null}
-          {canRemoveMember ? (
-            <RowAction
-              accessibilityLabel={`移除 ${member.displayName}`}
-              icon={UserMinus}
-              color={theme.colors.destructive}
-              label="移除"
-              showLabel={labeledActions}
-              onPress={onRemove}
-            />
-          ) : null}
-        </Inline>
-      ) : null}
+      <CardActionsMenu subject={`成员：${member.displayName}`} actions={actions} />
     </View>
   );
 };
@@ -801,29 +712,26 @@ export interface InvitationRowProps {
   /** Whether the current user can manage invitations (owner/admin). */
   canManage: boolean;
   onResend?: (invitationId: string) => void;
+  /** Receives the 「…」 trigger, so the confirmation can return focus to it. */
   onRevoke?: (invitationId: string, trigger: View | null) => void;
   resendBusy?: boolean;
-  revokeBusy?: boolean;
-  /** Show visible labels on the resend and revoke actions (wide layouts). */
-  labeledActions?: boolean;
 }
 
+/** One invitation: recipient, status and expiry, with resend and revoke in a 「…」 menu. */
 export const InvitationRow = ({
   invitation,
   canManage,
   onResend,
   onRevoke,
   resendBusy = false,
-  revokeBusy = false,
-  labeledActions = false,
 }: InvitationRowProps) => {
-  const revokeTrigger = useRef<View>(null);
   const recipient = invitation.username;
   const statusLabel = INVITATION_STATUS_LABELS[invitation.status] ?? invitation.status;
   const isPending = invitation.status === 'pending';
   const isExpired = invitation.status === 'expired';
-  const canResend = (isPending || isExpired) && canManage && onResend !== undefined;
-  const canRevoke = isPending && canManage && onRevoke !== undefined;
+  const actions: CardAction[] = [];
+  if ((isPending || isExpired) && canManage && onResend) actions.push({ label: '重新发送', icon: RefreshCw, accessibilityLabel: `重新发送邀请给 ${recipient}`, onPress: () => onResend(invitation.id) });
+  if (isPending && canManage && onRevoke) actions.push({ label: '撤销', icon: Ban, destructive: true, accessibilityLabel: `撤销邀请 ${recipient}`, onPress: trigger => onRevoke(invitation.id, trigger) });
 
   const expiresDate = new Date(invitation.expiresAt);
   const expiryText = formatDateTime(expiresDate);
@@ -833,12 +741,9 @@ export const InvitationRow = ({
       accessibilityLabel={`邀请：${recipient}，${statusLabel}`}
       style={{
         alignItems: 'center',
-        borderBottomColor: theme.colors.separator,
-        borderBottomWidth: theme.borderWidths.default,
         flexDirection: 'row',
-        flexWrap: 'wrap',
         gap: theme.spacing[3],
-        minHeight: 72,
+        minHeight: theme.controlSizes.touchTarget + theme.spacing[4],
         paddingVertical: theme.spacing[2],
       }}
     >
@@ -859,7 +764,7 @@ export const InvitationRow = ({
       </View>
 
       {/* Username, status, expiry */}
-      <Stack gap={1} style={{ flex: 1, minWidth: 0, flexBasis: theme.controlSizes.primary * 2 }}>
+      <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>
         <Text
           numberOfLines={1}
           variant="body"
@@ -882,42 +787,19 @@ export const InvitationRow = ({
             <Clock color={theme.colors.inkMuted} size={theme.controlSizes.icon - 4} strokeWidth={theme.controlSizes.iconStroke} />
             <Text variant="bodySm">{statusLabel}</Text>
           </View>
-          <Text variant="caption" numberOfLines={1}>
+          <Text variant="caption">
             失效：{expiryText}
           </Text>
         </Inline>
       </Stack>
 
-      {/* Actions */}
-      {canResend || canRevoke ? (
-        <Inline gap={1} style={{ marginLeft: 'auto' }}>
-          {canResend ? (
-            <RowAction
-              accessibilityLabel={`重新发送邀请给 ${recipient}`}
-              icon={RefreshCw}
-              color={theme.colors.ink}
-              label="重新发送"
-              showLabel={labeledActions}
-              disabled={revokeBusy}
-              {...(resendBusy ? { busyLabel: '重新发送中' } : {})}
-              onPress={() => onResend?.(invitation.id)}
-            />
-          ) : null}
-          {canRevoke ? (
-            <RowAction
-              ref={revokeTrigger}
-              accessibilityLabel={`撤销邀请 ${recipient}`}
-              icon={Ban}
-              color={theme.colors.destructive}
-              label="撤销"
-              showLabel={labeledActions}
-              disabled={resendBusy}
-              {...(revokeBusy ? { busyLabel: '撤销中' } : {})}
-              onPress={() => onRevoke?.(invitation.id, revokeTrigger.current)}
-            />
-          ) : null}
-        </Inline>
-      ) : null}
+      {resendBusy ? (
+        <View style={{ alignItems: 'center', justifyContent: 'center', minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget }}>
+          <Spinner label="重新发送中" />
+        </View>
+      ) : (
+        <CardActionsMenu subject={`邀请：${recipient}`} actions={actions} />
+      )}
     </View>
   );
 };

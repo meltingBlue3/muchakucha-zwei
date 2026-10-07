@@ -84,6 +84,26 @@ describe('HouseholdProvider recovery state machine', () => {
     expect(store.getCurrentId()).toBe(beta.id);
   });
 
+  test('a household opened by link or refresh becomes the remembered one without a refetch', async () => {
+    const store = createStore();
+    const api = { listMyHouseholds: jest.fn().mockResolvedValue([alpha, beta]) } as unknown as HouseholdApi;
+    const Provider = createHouseholdProvider(api, () => 'access-token', store);
+    let context: HouseholdContextValue | undefined;
+    function Probe() { context = useHouseholdContext(); return <Text>{context.currentHouseholdId}</Text>; }
+    const view = await render(<Provider><Probe /></Provider>);
+    await view.findByText(beta.id);
+    await act(async () => { context!.rememberHousehold(alpha.id); });
+    expect(view.getByText(alpha.id)).toBeTruthy();
+    expect(context!.viewState).toBe('ready');
+    expect(context!.households.map((household) => household.id)).toEqual([alpha.id, beta.id]);
+    await waitFor(() => expect(store.getCurrentId()).toBe(alpha.id));
+    expect(store.getAccessTimestamps()[alpha.id]).toBeGreaterThan(200);
+    expect(api.listMyHouseholds).toHaveBeenCalledTimes(1);
+    // A household this account has not joined is left to the page to report.
+    await act(async () => { context!.rememberHousehold('household-x'); });
+    expect(store.getCurrentId()).toBe(alpha.id);
+  });
+
   test('a confirmed rename reaches the household list without refetching or leaving ready', async () => {
     const store = createStore();
     const api = { listMyHouseholds: jest.fn().mockResolvedValue([alpha, beta]) } as unknown as HouseholdApi;

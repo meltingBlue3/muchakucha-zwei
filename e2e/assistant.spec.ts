@@ -309,7 +309,8 @@ for (const width of [320, 390, 1440]) {
     expect(state.providerSubmissions.map(item => ({ visibility: item.visibility, protocol: item.protocol }))).toEqual([
       { visibility: 'private', protocol: 'openai-compatible' }, { visibility: 'household', protocol: 'anthropic' },
     ]);
-    await providers.getByRole('button', { name: '编辑模型配置：家人共用模型', exact: true }).click();
+    await providers.getByRole('button', { name: '更多操作：模型配置：家人共用模型', exact: true }).click();
+    await page.getByRole('menuitem', { name: '编辑模型配置：家人共用模型', exact: true }).click();
     const edit = page.getByRole('dialog', { name: '编辑模型配置', exact: true });
     await expect(edit.getByLabel('API 密钥', { exact: true })).toHaveValue('');
     await expect(edit.getByText('已保存的密钥不会显示。留空保留原密钥，填写后替换。', { exact: true })).toBeVisible();
@@ -447,7 +448,7 @@ test('switching households separates private history, composer state and shared-
   await openModelSettings(page);
   const providers = page.getByRole('main', { name: '助手模型配置', exact: true });
   await expect(providers.getByText('父母共享模型', { exact: true })).toBeVisible();
-  await expect(providers.getByRole('button', { name: /^编辑模型配置：|^删除模型配置：/ })).toHaveCount(0);
+  await expect(providers.getByRole('button', { name: /^更多操作：模型配置：|^编辑模型配置：|^删除模型配置：/ })).toHaveCount(0);
   await providers.getByRole('button', { name: '返回', exact: true }).click();
   await openHistory(page);
   await page.getByRole('button', { name: '打开对话：探望安排', exact: true }).click();

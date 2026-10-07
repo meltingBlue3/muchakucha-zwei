@@ -1,7 +1,7 @@
 import { forwardRef, useState, type ReactNode } from 'react';
 import { TextInput, View } from 'react-native';
 import ArrowUp from 'lucide-react-native/icons/arrow-up';
-import { IconButton, Inline, Stack, Text } from '../../ui/primitives';
+import { Button, IconButton, Inline, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 
 /** The message box shared by the assistant home and a conversation. */
@@ -23,3 +23,12 @@ export const AssistantComposer = forwardRef<TextInput, {
 });
 
 AssistantComposer.displayName = 'AssistantComposer';
+
+const suggestions = ['这周有哪些安排，需要提前准备什么？', '帮我整理最近的家庭笔记'];
+
+/** Starter questions as small chips that wrap, so they fill one or two lines instead of a stack of full buttons. */
+export function PromptSuggestions({ disabled, onPick }: { disabled: boolean; onPick(prompt: string): void }) {
+  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[3] }}>
+    {suggestions.map(prompt => <Button key={prompt} label={prompt} tone="secondary" size="compact" disabled={disabled} onPress={() => onPick(prompt)} />)}
+  </View>;
+}

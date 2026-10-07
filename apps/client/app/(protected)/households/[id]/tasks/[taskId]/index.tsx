@@ -126,17 +126,15 @@ export default function TaskDetailRoute() {
       ? null
       : formatRecurrenceSummary(recurrence, currentTimeZone(recurrence.timezone));
 
-  const footer = (
+  // 编辑 sits in the title bar like 保存 in the edit window; the footer keeps the one status action.
+  const footer = !cancelled || statusError ? (
     <Stack gap={2}>
       {statusError ? <Banner>{statusError}</Banner> : null}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
-        {!cancelled ? <Button label={task.status === 'completed' ? '标记为未完成' : '标记为完成'} loading={statusBusy} onPress={() => void writeStatus(task.status === 'completed' ? 'pending' : 'completed')} style={{ flexGrow: 1 }} /> : null}
-        <Button label="编辑任务" tone="secondary" disabled={statusBusy} onPress={handleEdit} style={{ flexGrow: 1 }} />
-      </View>
+      {!cancelled ? <Button label={task.status === 'completed' ? '标记为未完成' : '标记为完成'} loading={statusBusy} onPress={() => void writeStatus(task.status === 'completed' ? 'pending' : 'completed')} /> : null}
     </Stack>
-  );
+  ) : null;
   return (
-    <TaskWindow title="任务详情" busy={statusBusy} footer={footer}>
+    <TaskWindow title="任务详情" busy={statusBusy} footer={footer} headerActions={<Button label="编辑" accessibilityLabel="编辑任务" tone="secondary" size="compact" disabled={statusBusy} onPress={handleEdit} />}>
       <Stack gap={5}>
         <Stack gap={2}>
           <Heading level={2}>{task.title}</Heading>

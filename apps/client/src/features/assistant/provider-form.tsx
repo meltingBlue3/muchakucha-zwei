@@ -97,7 +97,7 @@ export function AssistantProviderForm({ initial, busy, onSubmit, onCancel, onChe
     <PasswordField ref={keyRef} label="API 密钥" value={apiKey} onChangeText={setApiKey} autoCapitalize="none" autoCorrect={false} autoComplete="off" maxLength={4096} disabled={busy} submitAttempt={connectionAttempts}
       hint={initial ? '已保存的密钥不会显示。留空保留原密钥，填写后替换。' : '密钥由服务器加密保存，不保存到本机草稿。'} {...(connectionAttempts && !initial && !apiKey.trim() ? { error: '请输入 API 密钥。' } : {})} />
     {onCheck ? <Stack gap={2}>
-      <Button label="测试连接" tone="secondary" loading={shownCheck?.status === 'checking'} disabled={busy} onPress={() => { void runCheck(); }} style={{ alignSelf: 'flex-start' }} />
+      <Button label="测试连接" tone="secondary" size="compact" loading={shownCheck?.status === 'checking'} disabled={busy} onPress={() => { void runCheck(); }} style={{ alignSelf: 'flex-start' }} />
       {shownCheck && shownCheck.status !== 'checking' ? <Inline accessibilityLiveRegion="polite" gap={2} style={{ alignItems: 'flex-start' }}>
         {shownCheck.status === 'ok'
           ? <CircleCheck color={theme.colors.success} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
