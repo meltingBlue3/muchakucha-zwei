@@ -9,6 +9,8 @@ import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import Building2 from 'lucide-react-native/icons/building-2';
 import X from 'lucide-react-native/icons/x';
 import Check from 'lucide-react-native/icons/check';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import HousePlus from 'lucide-react-native/icons/house-plus';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Crown from 'lucide-react-native/icons/crown';
 import Shield from 'lucide-react-native/icons/shield';
@@ -46,6 +48,7 @@ import {
 } from './primitives';
 import { theme } from './theme';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
+import { MemberAvatar } from './member-avatar';
 import { PageCreateActionContext } from './page-intro';
 import { ActionNotice, useActionNoticeDismissal, type ActionNoticeProps } from './action-notice';
 import { formatDateTime } from './date-values';
@@ -70,6 +73,11 @@ interface AppShellProps {
   notice?: ActionNoticeProps | null;
   /** A workspace owns its scrolling areas and persistent composer. */
   layout?: 'document' | 'workspace';
+  /**
+   * How wide the page grows on a large screen: `reading` keeps a single
+   * column of lists or text comfortable; `wide` leaves room for two columns.
+   */
+  width?: 'reading' | 'wide';
 }
 
 export const AppShell = ({
@@ -87,6 +95,7 @@ export const AppShell = ({
   floatingAction,
   notice,
   layout = 'document',
+  width: contentWidth = 'wide',
 }: AppShellProps) => {
   const router = useRouter();
   const blurTarget = useRef<View>(null);
@@ -104,7 +113,10 @@ export const AppShell = ({
     }
   }, [onBack, router]);
 
-  const hasNav = title !== undefined || showBack || showProfile;
+  // With the sidebar open, the household switch and the account live in it,
+  // so a destination page needs no header row of its own.
+  const hasNav = (title !== undefined || showBack || showProfile) && !(wideNavigation && headerContent !== undefined && !showBack);
+  const inset = width < theme.breakpoints.mobile ? theme.layout.compactInset : theme.layout.mobileInset;
 
   return (
     <DialogBackground.Provider value={blurTarget}>
@@ -121,14 +133,12 @@ export const AppShell = ({
         <View
           style={{
             alignItems: 'center',
-            borderBottomColor: theme.colors.separator,
-            borderBottomWidth: theme.borderWidths.default,
-            backgroundColor: theme.colors.surface,
+            backgroundColor: theme.colors.canvas,
             flexDirection: 'row',
             justifyContent: 'space-between',
-            minHeight: 48,
-            paddingHorizontal: theme.layout.mobileInset,
-            paddingVertical: theme.spacing[2],
+            minHeight: theme.controlSizes.touchTarget + theme.spacing[2],
+            paddingLeft: showBack ? theme.spacing[1] : inset,
+            paddingRight: theme.spacing[2],
           }}
         >
           {/* Left: back button */}
@@ -157,15 +167,15 @@ export const AppShell = ({
           {/* Center: title */}
           {headerContent === undefined ? <Text
             numberOfLines={1}
-            style={{ flex: 1, textAlign: 'center', fontWeight: '600' as const }}
-            variant="body"
+            style={{ flex: 1, textAlign: 'center' }}
+            variant="section"
           >
             {title ?? ''}
           </Text> : <View style={{ flex: 1, minWidth: 0, paddingRight: theme.spacing[4] }}>{headerContent}</View>}
 
           {/* Global destinations: inbox directly precedes the account menu. */}
           <View style={{ minWidth: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center' }}>
-            {showProfile ? <>{showInbox ?  <IconButton appearance="plain" label="收件箱" icon={<Inbox color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} /> : null}<AccountMenu /></> : null}
+            {showProfile ? <>{showInbox ? <InboxButton /> : null}<AccountMenu /></> : null}
           </View>
         </View>
       ) : null}
@@ -174,10 +184,10 @@ export const AppShell = ({
         {layout === 'workspace' ? children : <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
-            paddingHorizontal: width < theme.breakpoints.mobile ? theme.layout.compactInset : theme.layout.mobileInset,
-            paddingTop: footer !== undefined ? theme.spacing[3] : theme.spacing[6],
+            paddingHorizontal: wideNavigation ? theme.spacing[10] : inset,
+            paddingTop: wideNavigation ? theme.spacing[8] : hasNav ? theme.spacing[1] : theme.spacing[6],
             paddingBottom: floatingAction && !desktopActions ? theme.spacing[16] + theme.spacing[10] : theme.spacing[10],
-            maxWidth: Platform.OS === 'web' ? theme.layout.householdMaxWidth : undefined,
+            maxWidth: Platform.OS === 'web' ? (contentWidth === 'reading' ? theme.layout.contentMaxWidth : theme.layout.householdMaxWidth) + (wideNavigation ? theme.spacing[10] * 2 : 0) : undefined,
             alignSelf: Platform.OS === 'web' ? 'center' : undefined,
             width: '100%',
           }}
@@ -188,8 +198,8 @@ export const AppShell = ({
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                colors={[theme.colors.coral]}
-                tintColor={theme.colors.coral}
+                colors={[theme.colors.inkMuted]}
+                tintColor={theme.colors.inkMuted}
               />
             ) : undefined
           }
@@ -207,47 +217,52 @@ export const AppShell = ({
   );
 };
 
+// ---- InboxButton ----
+
+/** The personal inbox, where invitations to other households arrive. */
+export const InboxButton = () => {
+  const router = useRouter();
+  return <IconButton appearance="plain" label="收件箱" icon={<Inbox color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} />;
+};
+
 // ---- HouseholdHeader ----
 
 interface HouseholdHeaderProps {
   householdName: string;
   onOpenSwitcher: () => void;
+  /** `sidebar` is the larger form at the top of the wide-screen navigation. */
+  placement?: 'bar' | 'sidebar';
 }
 
-export const HouseholdHeader = ({ householdName, onOpenSwitcher }: HouseholdHeaderProps) => (
+/** The current household's name with a chevron; it opens the household menu. */
+export const HouseholdHeader = ({ householdName, onOpenSwitcher, placement = 'bar' }: HouseholdHeaderProps) => (
   <Pressable
     accessibilityLabel={`当前家庭：${householdName}，切换家庭`}
     accessibilityRole="button"
     onPress={onOpenSwitcher}
-    style={{
+    style={({ pressed }) => ({
       alignItems: 'center',
+      alignSelf: placement === 'sidebar' ? 'stretch' : 'flex-start',
+      backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent,
+      borderRadius: theme.borderRadii.md,
       flexDirection: 'row',
-      justifyContent: 'space-between',
-      minHeight: theme.controlSizes.touchTarget + 8,
-      paddingVertical: theme.spacing[2],
       flexShrink: 1,
-    }}
+      gap: theme.spacing[1],
+      marginLeft: placement === 'bar' ? -theme.spacing[2] : 0,
+      maxWidth: '100%',
+      minHeight: theme.controlSizes.touchTarget,
+      paddingHorizontal: theme.spacing[2],
+    })}
   >
-    <View style={{ flex: 1 }}>
-      <Text variant="caption">当前家庭</Text>
-      <Text
-        numberOfLines={2}
-        variant="body"
-        style={{ fontWeight: '600' as const }}
-      >
-        {householdName}
-      </Text>
-    </View>
-    <View
-      style={{
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: theme.controlSizes.touchTarget,
-        minWidth: theme.controlSizes.touchTarget,
-      }}
+    <Text
+      numberOfLines={1}
+      variant={placement === 'sidebar' ? 'section' : 'label'}
+      color={placement === 'sidebar' ? 'ink' : 'inkMuted'}
+      style={{ flexShrink: 1 }}
     >
-      <ChevronDown color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-    </View>
+      {householdName}
+    </Text>
+    <ChevronDown color={theme.colors.inkMuted} size={theme.controlSizes.icon - theme.spacing[1]} strokeWidth={theme.controlSizes.iconStroke} />
   </Pressable>
 );
 
@@ -280,8 +295,8 @@ export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryA
   return (
     <View style={{
       backgroundColor: theme.colors.surface,
-      borderColor: isCurrent ? theme.colors.coral : theme.colors.separator,
-      borderRadius: theme.borderRadii.xl,
+      borderColor: isCurrent ? theme.colors.primary : theme.colors.transparent,
+      borderRadius: theme.borderRadii.lg,
       borderWidth: theme.borderWidths.default,
       overflow: 'hidden',
       padding: theme.spacing[4],
@@ -308,7 +323,7 @@ export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryA
             </Inline>
           </Stack>
           {isCurrent ? (
-            <Check color={theme.colors.coral} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+            <Check color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
           ) : null}
         </Inline>
         </Pressable>
@@ -332,13 +347,20 @@ interface HouseholdSwitcherProps {
   onCreateNew: () => void;
   visible: boolean;
   onClose: () => void;
+  /** The household's own pages, listed under the households on a phone. */
+  links?: Array<{ label: string; icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; onPress: () => void }>;
 }
 
+/**
+ * The household menu: every household to switch between, creating another
+ * one, and the current household's own pages. A bottom sheet on phones, a
+ * centered panel on Web.
+ */
 export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
-  ({ households, currentHouseholdId, onSelect, onCreateNew, visible, onClose }, ref) => {
+  ({ households, currentHouseholdId, onSelect, onCreateNew, visible, onClose, links = [] }, ref) => {
     const headingRef = useRef<View>(null);
     // The panel is pinned flush to the physical bottom edge (see the height:'75%'
-    // comment below), which on Android puts the "创建家庭" button right under the
+    // comment below), which on Android puts the last row right under the
     // gesture-nav bar unless we pad for it explicitly.
     const insets = useSafeAreaInsets();
 
@@ -352,12 +374,24 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
     // accessibility queries while the switcher is inactive.
     if (!visible) return null;
 
+    const rowStyle = ({ pressed }: { pressed: boolean }) => ({
+      alignItems: 'center' as const,
+      backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface,
+      flexDirection: 'row' as const,
+      gap: theme.spacing[3],
+      minHeight: theme.controlSizes.touchTarget + theme.spacing[2],
+      paddingHorizontal: theme.spacing[5],
+    });
+    const iconSlot = { alignItems: 'center' as const, justifyContent: 'center' as const, width: theme.controlSizes.avatar, height: theme.controlSizes.avatar };
+
     const content = (
       <View
         ref={ref}
         style={{
           backgroundColor: theme.colors.surface,
-          borderRadius: Platform.OS === 'web' ? theme.borderRadii.xl : 0,
+          borderTopLeftRadius: theme.borderRadii.xl,
+          borderTopRightRadius: theme.borderRadii.xl,
+          ...(Platform.OS === 'web' ? { borderRadius: theme.borderRadii.xl } : {}),
           // Native needs a definite (not max-only) height here: the header
           // above is intrinsically sized and the household ScrollView below
           // is flex:1, so without a concrete height to allocate, Yoga gives
@@ -367,7 +401,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
             : { height: '75%' as unknown as number }),
           width: Platform.OS === 'web' ? theme.layout.switcherWidth : '100%',
           ...(Platform.OS === 'web'
-            ? { boxShadow: theme.elevation.softWeb as string }
+            ? { boxShadow: theme.shadow.raised as string }
             : {}),
           overflow: 'hidden',
         }}
@@ -375,67 +409,79 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
         <View
           style={{
             alignItems: 'center',
-            borderBottomColor: theme.colors.separator,
-            borderBottomWidth: theme.borderWidths.default,
             flexDirection: 'row',
             justifyContent: 'space-between',
-            padding: theme.spacing[4],
+            paddingLeft: theme.spacing[5],
+            paddingRight: theme.spacing[2],
+            paddingTop: theme.spacing[3],
+            paddingBottom: theme.spacing[1],
           }}
         >
-          <Heading ref={headingRef}>切换家庭</Heading>
+          <Heading ref={headingRef} variant="section" level={1}>切换家庭</Heading>
           <Pressable
             accessibilityLabel="关闭切换家庭"
             accessibilityRole="button"
             onPress={onClose}
-            style={{
+            style={({ pressed }) => ({
               alignItems: 'center',
+              backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent,
+              borderRadius: theme.borderRadii.full,
               justifyContent: 'center',
               minHeight: theme.controlSizes.touchTarget,
               minWidth: theme.controlSizes.touchTarget,
-            }}
+            })}
           >
-            <X color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+            <X color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
           </Pressable>
         </View>
-        <ScrollView style={{ flex: 1 }}>
-          {households.map((household) => (
-            <Pressable
-              accessibilityLabel={`${household.name}，${ROLE_LABELS[household.role] ?? household.role}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: household.id === currentHouseholdId }}
-              key={household.id}
-              onPress={() => handleSelect(household.id)}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface,
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                minHeight: 72,
-                paddingHorizontal: theme.spacing[4],
-                paddingVertical: theme.spacing[2],
-              })}
-            >
-              <Stack gap={1} style={{ flex: 1 }}>
-                <Text numberOfLines={1} variant="body">
-                  {household.name}
-                </Text>
-                <Inline gap={2}>
-                  <Text variant="caption">
-                    {ROLE_LABELS[household.role] ?? household.role}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: theme.spacing[3] + insets.bottom }}>
+          {households.map((household) => {
+            const current = household.id === currentHouseholdId;
+            return (
+              <Pressable
+                accessibilityLabel={`${household.name}，${ROLE_LABELS[household.role] ?? household.role}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: current }}
+                key={household.id}
+                onPress={() => handleSelect(household.id)}
+                style={rowStyle}
+              >
+                <View style={{ ...iconSlot, borderRadius: theme.borderRadii.sm, backgroundColor: current ? theme.colors.primary : theme.colors.surfaceMuted }}>
+                  <Text variant="label" color={current ? 'surface' : 'inkMuted'}>{[...household.name.trim()][0] ?? '?'}</Text>
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} variant="body" style={current ? { fontWeight: '600' } : undefined}>
+                    {household.name}
                   </Text>
-                  <Text variant="caption">
-                    {household.memberCount} 位成员
+                  <Text variant="meta">
+                    {ROLE_LABELS[household.role] ?? household.role} · {household.memberCount} 位成员
                   </Text>
-                </Inline>
-              </Stack>
-              {household.id === currentHouseholdId ? (
-                <Check color={theme.colors.coral} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-              ) : null}
-            </Pressable>
-          ))}
-          <View style={{ padding: theme.spacing[4], paddingBottom: theme.spacing[4] + insets.bottom }}>
-            <Button label="创建家庭" onPress={() => { rememberRouteTrigger(); onCreateNew(); }} />
-          </View>
+                </View>
+                {current ? (
+                  <Check color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.focus.width} />
+                ) : null}
+              </Pressable>
+            );
+          })}
+          <Pressable accessibilityRole="button" accessibilityLabel="创建家庭" onPress={() => { rememberRouteTrigger(); onCreateNew(); }} style={rowStyle}>
+            <View style={iconSlot}>
+              <HousePlus color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+            </View>
+            <Text variant="body" color="inkMuted">创建家庭</Text>
+          </Pressable>
+          {links.length > 0 ? (
+            <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, marginTop: theme.spacing[2], paddingTop: theme.spacing[2] }}>
+              {links.map(({ label, icon: LinkIcon, onPress }) => (
+                <Pressable key={label} accessibilityRole="button" accessibilityLabel={label} onPress={() => { onClose(); onPress(); }} style={rowStyle}>
+                  <View style={iconSlot}>
+                    <LinkIcon color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+                  </View>
+                  <Text variant="body" style={{ flex: 1 }}>{label}</Text>
+                  <ChevronRight color={theme.colors.inkFaint} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </ScrollView>
       </View>
     );
@@ -494,9 +540,7 @@ export const AccessChangedPanel = ({
     accessibilityRole="alert"
     style={{
       backgroundColor: theme.colors.destructiveSoft,
-      borderColor: theme.colors.destructive,
-      borderRadius: theme.borderRadii.xl,
-      borderWidth: theme.borderWidths.default,
+      borderRadius: theme.borderRadii.lg,
       padding: theme.spacing[6],
     }}
   >
@@ -639,7 +683,6 @@ export const MemberRow = ({
   labeledActions = false,
 }: MemberRowProps) => {
   const roleLabel = ROLE_LABELS[member.role] ?? member.role;
-  const avatarChar = [...member.displayName.trim().normalize('NFC')][0] ?? '?';
   const hasActions = roleAction !== undefined || canRemoveMember || canTransferTo;
 
   return (
@@ -659,25 +702,7 @@ export const MemberRow = ({
           minHeight: theme.controlSizes.touchTarget + theme.spacing[4],
         }}
       >
-        {/* Avatar placeholder */}
-        <View
-          accessibilityLabel={`${member.displayName}的头像`}
-          style={{
-            alignItems: 'center',
-            backgroundColor: theme.colors.surfaceMuted,
-            borderRadius: theme.borderRadii.full,
-            height: theme.controlSizes.touchTarget,
-            justifyContent: 'center',
-            width: theme.controlSizes.touchTarget,
-          }}
-        >
-          <Text
-            style={{ fontWeight: '600' as const }}
-            variant="body"
-          >
-            {avatarChar}
-          </Text>
-        </View>
+        <MemberAvatar id={member.userId} name={member.displayName} size="lg" />
 
         {/* Name, username, role */}
         <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>
@@ -722,7 +747,7 @@ export const MemberRow = ({
             <RowAction
               accessibilityLabel={`${roleAction === 'promote' ? '提升' : '降级'} ${member.displayName}`}
               icon={roleAction === 'promote' ? CircleArrowUp : CircleArrowDown}
-              color={roleAction === 'promote' ? theme.colors.coral : theme.colors.ink}
+              color={theme.colors.ink}
               label={roleAction === 'promote' ? '提升' : '降级'}
               showLabel={labeledActions}
               onPress={onRoleAction}
@@ -732,7 +757,7 @@ export const MemberRow = ({
             <RowAction
               accessibilityLabel={`转移所有权给 ${member.displayName}`}
               icon={Crown}
-              color={theme.colors.coral}
+              color={theme.colors.ink}
               label="转移所有权"
               showLabel={labeledActions}
               onPress={onTransfer}

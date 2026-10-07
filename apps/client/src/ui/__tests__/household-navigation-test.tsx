@@ -14,8 +14,8 @@ test('switches sections within the same household without stacking tab visits', 
   expect(mockReplace).not.toHaveBeenCalled();
   await fireEvent.press(view.getByRole('tab', { name: '任务' }));
   expect(mockReplace).toHaveBeenCalledWith('/households/family%2Fa/tasks');
-  await fireEvent.press(view.getByRole('tab', { name: '家庭' }));
-  expect(mockReplace).toHaveBeenLastCalledWith('/households/family%2Fa/more');
+  await fireEvent.press(view.getByRole('tab', { name: '助手' }));
+  expect(mockReplace).toHaveBeenLastCalledWith('/households/family%2Fa/assistant');
 });
 
 test('the whole household header opens the switcher through its accessible control', async () => {

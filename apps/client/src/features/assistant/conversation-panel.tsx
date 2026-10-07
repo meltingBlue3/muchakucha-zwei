@@ -32,7 +32,7 @@ function QueryRecord({ record, onOpenSource }: { record: AssistantConversationRe
   </>;
 }
 
-const userBubble = { alignSelf: 'flex-end', maxWidth: '90%', backgroundColor: theme.colors.coralSoft, padding: theme.spacing[4], borderRadius: theme.borderRadii.lg, borderBottomRightRadius: theme.borderRadii.sm } as const;
+const userBubble = { alignSelf: 'flex-end', maxWidth: '90%', backgroundColor: theme.colors.surfaceSelected, padding: theme.spacing[4], borderRadius: theme.borderRadii.lg, borderBottomRightRadius: theme.borderRadii.sm } as const;
 
 /** `onSend` resolves false when the message may not have reached the server; its text is then given back. */
 export function AssistantConversationPanel({ conversation, busy, disabled, onSend, modelControl, feedback, pendingPreview, draft, outgoing = null, onOpenSource }: {
@@ -66,13 +66,13 @@ export function AssistantConversationPanel({ conversation, busy, disabled, onSen
       onContentSizeChange={() => { if (followEnd.current) scroll.current?.scrollToEnd({ animated: false }); }}
       contentContainerStyle={{ flexGrow: 1, padding: theme.spacing[5], gap: theme.spacing[5], width: '100%', maxWidth: theme.layout.assistantReadingWidth, alignSelf: 'center' }}>
       {records.length === 0 && !outgoing ? <Stack gap={4} style={{ flex: 1, justifyContent: 'center', paddingVertical: theme.spacing[8] }}>
-        <Sparkles size={theme.spacing[8]} color={theme.colors.coral} /><Heading variant="heading" level={2}>今天，想一起安排什么？</Heading><Text color="inkMuted">从一个问题开始，或让我帮你记下要做的事。</Text>
+        <Sparkles size={theme.spacing[8]} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} /><Heading variant="heading" level={2}>今天，想一起安排什么？</Heading><Text color="inkMuted">从一个问题开始，或让我帮你记下要做的事。</Text>
         {['这周有哪些安排，需要提前准备什么？', '帮我整理最近的家庭笔记'].map(prompt => <Button key={prompt} label={prompt} tone="secondary" disabled={blocked} onPress={() => { setMessage(prompt); input.current?.focus(); }} />)}
       </Stack> : records.map((item, index) => item.kind === 'query' ? <QueryRecord key={index} record={item} onOpenSource={onOpenSource} /> : <Stack key={index} gap={2} style={item.kind === 'user'
         ? userBubble
-        : item.kind === 'operation' ? { padding: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: item.failed ? theme.colors.destructiveSoft : theme.colors.tealSoft }
+        : item.kind === 'operation' ? { padding: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: item.failed ? theme.colors.destructiveSoft : theme.colors.successSoft }
         : { paddingVertical: theme.spacing[1] }}>
-        {item.kind !== 'user' ? <Inline gap={2}>{item.kind === 'assistant' ? <Sparkles size={theme.controlSizes.icon} color={theme.colors.coral} /> : <CircleCheck size={theme.controlSizes.icon} color={item.failed ? theme.colors.destructive : theme.colors.teal} />}<Text variant="caption" color={item.kind === 'assistant' ? 'coral' : 'inkMuted'}>{item.kind === 'operation' ? '执行记录' : '助手'}</Text></Inline> : null}
+        {item.kind !== 'user' ? <Inline gap={2}>{item.kind === 'assistant' ? <Sparkles size={theme.controlSizes.icon} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} /> : <CircleCheck size={theme.controlSizes.icon} color={item.failed ? theme.colors.destructive : theme.colors.success} />}<Text variant="caption" color={item.kind === 'assistant' ? 'ink' : 'inkMuted'}>{item.kind === 'operation' ? '执行记录' : '助手'}</Text></Inline> : null}
         {item.kind === 'assistant' ? <MarkdownBody source={item.content} tableLabel="助手表格，可横向滚动" headingOffset={1} /> : <Text selectable variant={item.kind === 'operation' ? 'bodySm' : 'body'} color={item.failed ? 'destructive' : 'ink'}>{item.content}</Text>}
       </Stack>)}
       {outgoing ? <Stack gap={2} style={userBubble}><Text selectable>{outgoing}</Text></Stack> : null}

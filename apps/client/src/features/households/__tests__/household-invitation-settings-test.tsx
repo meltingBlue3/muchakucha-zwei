@@ -3,7 +3,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
-import { HouseholdSettings, type HouseholdSettingsApi } from '../household-settings';
+import { HouseholdSettings, type HouseholdSettingsApi, type HouseholdSettingsProps } from '../household-settings';
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
@@ -34,13 +34,14 @@ function createApi(): HouseholdSettingsApi {
   };
 }
 
-async function renderSettings(householdApi: HouseholdSettingsApi) {
+async function renderSettings(householdApi: HouseholdSettingsApi, props: Partial<HouseholdSettingsProps> = {}) {
   return render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}>
       <MuchakuchaThemeProvider>
         <HouseholdSettings
-          householdId="household-1" householdName="家" onOpenSwitcher={jest.fn()} showInvite
+          householdId="household-1" householdName="家" showInvite
           deps={{ householdApi, getAccessToken: () => 'access-token' }}
+          {...props}
         />
       </MuchakuchaThemeProvider>
     </SafeAreaProvider>,
@@ -74,6 +75,33 @@ describe('username invitation settings', () => {
     expect(await view.findByText('未找到这个用户名，请让家人先注册账户。')).toBeTruthy();
     expect(view.getByDisplayValue('missing-family-member')).toBeTruthy();
     expect(view.queryByLabelText('邀请链接')).toBeNull();
+  });
+});
+
+describe('renaming the household', () => {
+  test('reports the name the server confirmed, so the household headers follow it', async () => {
+    const api = createApi();
+    jest.mocked(api.updateHousehold).mockResolvedValue({ ...(await api.getHousehold('access-token', 'household-1')), name: '新家' });
+    const onRenamed = jest.fn();
+    const view = await renderSettings(api, { showRename: true, onRenamed });
+    await fireEvent.press(await view.findByRole('button', { name: '编辑家庭名称' }));
+    await fireEvent.changeText(view.getByLabelText('家庭名称'), ' 新家 ');
+    await fireEvent.press(view.getByRole('button', { name: '保存' }));
+    expect(await view.findByText('家庭名称已更新。')).toBeTruthy();
+    expect(onRenamed).toHaveBeenCalledWith('新家');
+  });
+
+  test('keeps the old name everywhere when the rename fails', async () => {
+    const api = createApi();
+    jest.mocked(api.updateHousehold).mockRejectedValue(new Error('offline'));
+    const onRenamed = jest.fn();
+    const view = await renderSettings(api, { showRename: true, onRenamed });
+    await fireEvent.press(await view.findByRole('button', { name: '编辑家庭名称' }));
+    await fireEvent.changeText(view.getByLabelText('家庭名称'), '新家');
+    await fireEvent.press(view.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(api.updateHousehold).toHaveBeenCalled());
+    expect(view.getByDisplayValue('新家')).toBeTruthy();
+    expect(onRenamed).not.toHaveBeenCalled();
   });
 });
 

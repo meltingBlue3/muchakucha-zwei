@@ -102,6 +102,17 @@ export function formatDateRange(startIso: string, endIso: string, allDay: boolea
     : `${startDate} ${formatTime(startIso)} – ${formatDate(end, options)} ${formatTime(endIso)}`;
 }
 
+/**
+ * The time of an event within a day it is listed under: "07:30–08:00" when it
+ * starts and ends that day, otherwise the full range so a multi-day event
+ * never hides its other end.
+ */
+export function formatTimeRange(startIso: string, endIso: string, allDay: boolean): string {
+  const sameDay = toDateIso(new Date(startIso)) === toDateIso(new Date(endIso));
+  if (allDay) return sameDay ? '全天' : formatDateRange(startIso, endIso, true);
+  return sameDay ? `${formatTime(startIso)}–${formatTime(endIso)}` : formatDateRange(startIso, endIso, false);
+}
+
 export function today(): Date {
   return new Date();
 }

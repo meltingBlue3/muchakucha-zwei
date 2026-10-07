@@ -2,7 +2,7 @@ import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import type { GetHouseholdResponseDto, InvitationListItemDto } from '@muchakucha/api-client';
 import { ApiClientError } from '@muchakucha/api-client';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 import { AppDialog } from '../../ui/app-dialog';
 import House from 'lucide-react-native/icons/house';
@@ -10,6 +10,7 @@ import Users from 'lucide-react-native/icons/users';
 import Mail from 'lucide-react-native/icons/mail';
 import LogOut from 'lucide-react-native/icons/log-out';
 import { SettingsSection } from '../../ui/settings-section';
+import { PageIntro } from '../../ui/page-intro';
 
 import type { HouseholdApi } from './household-api';
 import {
@@ -20,7 +21,6 @@ import {
 } from './member-governance';
 import {
   AppShell,
-  HouseholdHeader,
   InvitationRow,
   MemberRow,
 } from '../../ui/household-components';
@@ -43,20 +43,19 @@ export interface HouseholdSettingsDeps {
 export interface HouseholdSettingsProps {
   householdId: string;
   householdName: string;
-  onOpenSwitcher: () => void;
   deps: HouseholdSettingsDeps;
   /** When true, show the rename form above the member list. Default false. */
   showRename?: boolean;
   /** Called when membership loss is detected after a rename attempt. */
   onRenameAccessChanged?: (lostHouseholdName: string) => void;
+  /** Called with the name the server confirmed after a rename. */
+  onRenamed?: (name: string) => void;
   /** When true, show the invitation form. Only visible to owner/admin. Default false. */
   showInvite?: boolean;
   /** Called when membership loss is detected after an invitation attempt. */
   onInviteAccessChanged?: (lostHouseholdName: string) => void;
-  /** Optional nav header props passed through to the internal AppShell. */
-  navTitle?: string;
-  navShowBack?: boolean;
-  navShowProfile?: boolean;
+  /** The page around the settings; a plain AppShell unless the route supplies its household frame. */
+  frame?: (accessibilityLabel: string, content: ReactNode) => ReactNode;
 }
 
 type ViewState =
@@ -68,16 +67,15 @@ type ViewState =
 export function HouseholdSettings({
   householdId,
   householdName,
-  onOpenSwitcher,
   deps,
   showRename = false,
   onRenameAccessChanged,
+  onRenamed,
   showInvite = false,
   onInviteAccessChanged,
-  navTitle,
-  navShowBack = false,
-  navShowProfile = false,
+  frame = (accessibilityLabel, content) => <AppShell accessibilityLabel={accessibilityLabel}>{content}</AppShell>,
 }: HouseholdSettingsProps) {
+  const intro = (name: string) => <PageIntro title="家庭设置" subtitle={name} />;
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [activeForm, setActiveForm] = useState<'rename' | 'invite' | null>(null);
@@ -167,6 +165,7 @@ export function HouseholdSettings({
       setViewState({ kind: 'ready', data: result });
       setRenameValue(result.name);
       setRenameSuccess(RENAME_SUCCESS);
+      onRenamed?.(result.name);
     } catch (error: unknown) {
       if (!mountedRef.current) return;
 
@@ -403,43 +402,28 @@ export function HouseholdSettings({
 
   if (viewState.kind === 'loading') {
     return (
-      <AppShell accessibilityLabel="正在加载成员" title={navTitle} showBack={navShowBack} showProfile={navShowProfile}>
-        <Stack gap={6}>
-          <HouseholdHeader
-            householdName={householdName}
-            onOpenSwitcher={onOpenSwitcher}
-          />
-          <LoadingState label="正在加载成员" />
-        </Stack>
-      </AppShell>
+      frame('正在加载成员', <Stack gap={6}>
+        {intro(householdName)}
+        <LoadingState label="正在加载成员" />
+      </Stack>)
     );
   }
 
   if (viewState.kind === 'error') {
     return (
-      <AppShell accessibilityLabel="成员加载失败" title={navTitle} showBack={navShowBack} showProfile={navShowProfile}>
-        <Stack gap={6}>
-          <HouseholdHeader
-            householdName={householdName}
-            onOpenSwitcher={onOpenSwitcher}
-          />
-          <LoadError message={viewState.message} onRetry={() => { setViewState({ kind: 'loading' }); setLoadAttempt(value => value + 1); }} retryAccessibilityLabel="重试加载成员" />
-        </Stack>
-      </AppShell>
+      frame('成员加载失败', <Stack gap={6}>
+        {intro(householdName)}
+        <LoadError message={viewState.message} onRetry={() => { setViewState({ kind: 'loading' }); setLoadAttempt(value => value + 1); }} retryAccessibilityLabel="重试加载成员" />
+      </Stack>)
     );
   }
 
   if (viewState.kind === 'inconsistent') {
     return (
-      <AppShell accessibilityLabel="成员数据异常" title={navTitle} showBack={navShowBack} showProfile={navShowProfile}>
-        <Stack gap={6}>
-          <HouseholdHeader
-            householdName={householdName}
-            onOpenSwitcher={onOpenSwitcher}
-          />
-          <LoadError message={viewState.message} onRetry={() => { setViewState({ kind: 'loading' }); setLoadAttempt(value => value + 1); }} retryAccessibilityLabel="重试加载成员" />
-        </Stack>
-      </AppShell>
+      frame('成员数据异常', <Stack gap={6}>
+        {intro(householdName)}
+        <LoadError message={viewState.message} onRetry={() => { setViewState({ kind: 'loading' }); setLoadAttempt(value => value + 1); }} retryAccessibilityLabel="重试加载成员" />
+      </Stack>)
     );
   }
 
@@ -474,23 +458,15 @@ export function HouseholdSettings({
     </Pressable>
   ) : null;
 
-  const householdHeader = (
-    <HouseholdHeader
-      householdName={authoritativeName}
-      onOpenSwitcher={onOpenSwitcher}
-    />
-  );
-
-  return (
-    <AppShell accessibilityLabel={`${authoritativeName}的成员`} title={navTitle} showBack={navShowBack} showProfile={navShowProfile}>
+  return frame(`${authoritativeName}的成员`, (<>
       <Stack gap={6}>
-        {wide ? <View style={{ width: theme.layout.settingsNavWidth }}>{householdHeader}</View> : householdHeader}
+        {intro(authoritativeName)}
 
         <View style={{ flexDirection: wide ? 'row' : 'column', gap: wide ? theme.spacing[6] : theme.spacing[4], alignItems: wide ? 'flex-start' : 'stretch' }}>
         <Stack gap={4} style={{ width: wide ? theme.layout.settingsNavWidth : '100%' }}>
         {/* Rename form — only shown on the settings route */}
         {showRename ? (
-          <SettingsSection title="基本信息" icon={<House size={theme.controlSizes.icon} color={theme.colors.coral} />}>
+          <SettingsSection title="基本信息" icon={<House size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
             {wide ? (
               <Stack gap={4}>
                 <Stack gap={1}>
@@ -526,7 +502,7 @@ export function HouseholdSettings({
         {wide ? leaveEntry : null}
         </Stack>
         <Stack gap={4} style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', minWidth: 0 }}>
-        <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.teal} />}>
+        <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
           {showInvite && canManage && !inviteInOverview ? inviteButton : null}
         <Stack gap={0}>
           {data.members.map((member) => {
@@ -560,7 +536,7 @@ export function HouseholdSettings({
 
         {/* Invitation list — visible to owner/admin when showInvite is enabled */}
         {showInvite && canManage ? (
-          <SettingsSection title="邀请" icon={<Mail size={theme.controlSizes.icon} color={theme.colors.coral} />}>
+          <SettingsSection title="邀请" icon={<Mail size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
 
             {invitationListError !== undefined ? (
               <LoadError message={`邀请列表没有加载成功。${invitationListError}`} onRetry={() => setInvitationAttempt(value => value + 1)} retryAccessibilityLabel="重试加载邀请" />
@@ -607,13 +583,13 @@ export function HouseholdSettings({
                     accessibilityState={{ checked: selected }}
                     aria-checked={selected}
                     onPress={() => setSuccessorId(member.membershipId)}
-                    style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, borderWidth: theme.borderWidths.default, borderColor: selected ? theme.colors.coral : theme.colors.separator, backgroundColor: selected ? theme.colors.coralSoft : pressed ? theme.colors.surfaceMuted : theme.colors.surface })}
+                    style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, borderWidth: theme.borderWidths.default, borderColor: selected ? theme.colors.primary : theme.colors.separator, backgroundColor: selected ? theme.colors.surfaceSelected : pressed ? theme.colors.surfaceMuted : theme.colors.surface })}
                   >
                     <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
                       <Text numberOfLines={1}>{member.displayName}</Text>
                       <Text variant="caption" numberOfLines={1}>{member.username}</Text>
                     </Stack>
-                    {selected ? <Text variant="label" color="coral">已选择</Text> : null}
+                    {selected ? <Text variant="label" color="ink">已选择</Text> : null}
                   </Pressable>
                 );
               })}
@@ -739,6 +715,5 @@ export function HouseholdSettings({
           </Stack>
         </AppDialog>
       ) : null}
-    </AppShell>
-  );
+    </>));
 }

@@ -27,24 +27,25 @@ describe('typed design-token and composition contract', () => {
   // Phase 1: Core design-token contract
   // ============================================================================
 
-  test('D-14 exposes one Restyle-owned warm, modern, restrained typed theme', () => {
-    expect(theme.colors.canvas).toBe('#FFF8F2');
+  test('D-14 exposes one Restyle-owned paper, ink, and vermilion typed theme', () => {
+    expect(theme.colors.canvas).toBe('#F6F4EF');
     expect(theme.colors.surface).toBe('#FFFFFF');
-    expect(theme.colors.ink).toBe('#2D2725');
+    expect(theme.colors.ink).toBe('#1D1B18');
     expect(Object.keys(theme.textVariants)).toEqual(
       expect.arrayContaining(['body', 'label', 'button', 'heading', 'display']),
     );
   });
 
-  test('D-15 defines the approved cream, coral, ink, and limited teal semantic palette', () => {
+  test('D-15 defines the approved paper, ink-primary, and reserved vermilion semantic palette', () => {
     expect(theme.colors).toMatchObject({
-      canvas: '#FFF8F2',
-      coral: '#B94736',
-      coralPressed: '#963A2D',
-      destructive: '#B42318',
-      ink: '#2D2725',
-      inkMuted: '#6F625D',
-      teal: '#277A72',
+      canvas: '#F6F4EF',
+      primary: '#1D1B18',
+      primaryPressed: '#3A3631',
+      accent: '#C2381C',
+      destructive: '#A61B1B',
+      ink: '#1D1B18',
+      inkMuted: '#5F5A52',
+      inkFaint: '#736E66',
     });
   });
 
@@ -52,15 +53,15 @@ describe('typed design-token and composition contract', () => {
     expect(Object.values(theme.spacing)).toEqual([0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64]);
     expect(theme.typography).toMatchObject({
       body: { fontSize: 16, fontWeight: '400', lineHeight: 24 },
-      button: { fontSize: 16, fontWeight: '600', lineHeight: 20 },
+      button: { fontSize: 15, fontWeight: '600', lineHeight: 20 },
       caption: { fontSize: 12, fontWeight: '500', lineHeight: 16 },
-      display: { fontSize: 32, fontWeight: '600', lineHeight: 40 },
-      heading: { fontSize: 24, fontWeight: '600', lineHeight: 32 },
+      display: { fontSize: 30, fontWeight: '700', lineHeight: 38 },
+      heading: { fontSize: 22, fontWeight: '700', lineHeight: 30 },
     });
     expect(theme.borderRadii).toEqual({ full: 999, xl: 24, lg: 16, md: 12, sm: 8 });
     expect(theme.borderWidths).toEqual({ default: 1, focus: 2 });
     expect(theme.focus).toEqual({ offset: 2, width: 2 });
-    expect(theme.elevation).toEqual({ native: 0, softWeb: '0 8px 28px rgba(45,39,37,0.08)' });
+    expect(theme.elevation).toEqual({ native: 0, softWeb: '0 1px 2px rgba(29,27,24,0.06), 0 8px 24px rgba(29,27,24,0.08)' });
   });
 
   test('rejects raw color, spacing, radius, and font-size literals outside theme-owned files', () => {
@@ -91,11 +92,10 @@ describe('typed design-token and composition contract', () => {
     }
   });
 
-  test('D-16 composes authentication from BrandMark, form primitives, and decorative abstract fields only', () => {
+  test('D-16 composes authentication from BrandMark and form primitives only', () => {
     const primitives = readSource('src/ui/primitives.tsx');
     expect(primitives).toContain('export const BrandMark');
     expect(primitives).toContain('export const AuthShell');
-    expect(primitives).toContain('shouldRenderAbstractFields');
   });
 
   test('D-16 forbids large household-scene or character illustration primitives', () => {
@@ -105,7 +105,7 @@ describe('typed design-token and composition contract', () => {
 
   test('D-17 limits elevation to the light Web auth-card hierarchy and avoids heavy native shadows', () => {
     expect(theme.elevation.native).toBe(0);
-    expect(theme.elevation.softWeb).toBe('0 8px 28px rgba(45,39,37,0.08)');
+    expect(theme.elevation.softWeb).toBe('0 1px 2px rgba(29,27,24,0.06), 0 8px 24px rgba(29,27,24,0.08)');
     expect(readSource('src/ui/primitives.tsx')).not.toMatch(/\belevation:\s*[1-9]|shadowOpacity:\s*(?:0\.[2-9]|1)/);
   });
 
@@ -114,7 +114,7 @@ describe('typed design-token and composition contract', () => {
   // ============================================================================
 
   test('defines the Phase 2 overlay, layout, and motion semantic tokens', () => {
-    expect(theme.colors.overlay).toBe('rgba(45,39,37,0.60)');
+    expect(theme.colors.overlay).toBe('rgba(29,27,24,0.60)');
     expect(theme.layout.householdMaxWidth).toBe(960);
     expect(theme.layout.switcherWidth).toBe(360);
     expect(theme.layout.switcherMaxHeight).toBe(480);

@@ -40,8 +40,8 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   // close action again; the element that opened that step may no longer exist.
   useEffect(() => { focus(); }, [title, focus]);
   const closeButton = (
-    <Pressable ref={initial} accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : sheet ? theme.colors.transparent : theme.colors.surfaceSubtle, borderRadius: theme.borderRadii.full })}>
-      <X size={sheet ? theme.controlSizes.icon + theme.spacing[1] : theme.controlSizes.icon} color={sheet ? theme.colors.ink : theme.colors.inkMuted} />
+    <Pressable ref={initial} accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent, borderRadius: theme.borderRadii.full })}>
+      <X size={sheet ? theme.controlSizes.icon + theme.spacing[1] : theme.controlSizes.icon} color={sheet ? theme.colors.ink : theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
     </Pressable>
   );
   return (
@@ -57,7 +57,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
             ? { width: '100%', maxHeight: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, padding: theme.spacing[5], paddingBottom: insets.bottom + theme.spacing[5], gap: theme.spacing[4] }
             : sheet
             ? { flex: 1, width: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, paddingTop: theme.spacing[2], paddingHorizontal: theme.spacing[2], paddingBottom: insets.bottom + theme.spacing[2], gap: theme.spacing[2] }
-            : { width: '100%', maxWidth: size === 'editor' ? theme.layout.editorDialogMaxWidth : theme.layout.dialogMaxWidth, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, borderColor: theme.colors.separator, borderWidth: theme.borderWidths.default, padding: theme.spacing[6], gap: theme.spacing[4] }}>
+            : { width: '100%', maxWidth: size === 'editor' ? theme.layout.editorDialogMaxWidth : theme.layout.dialogMaxWidth, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, padding: theme.spacing[6], gap: theme.spacing[4], ...(Platform.OS === 'web' ? { boxShadow: theme.shadow.raised } : {}) }}>
             {sheet ? (
               <Inline gap={1} style={{ paddingRight: theme.spacing[2] }}>
                 {closeButton}

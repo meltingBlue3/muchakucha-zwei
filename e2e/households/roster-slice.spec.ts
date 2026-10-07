@@ -184,8 +184,7 @@ test('shows the isolated totally ordered roster', async ({ page, request }) => {
   await expect(page).toHaveURL(/\/households/);
 
   // --- Verify: navigation to the owned household destination works ---
-  await page.getByRole('tab', { name: '家庭', exact: true }).click();
-  await page.getByLabel('打开家庭设置').click();
+  await page.getByRole('link', { name: '家庭设置', exact: true }).click();
   await expect(page).toHaveURL(/\/households\/[^/]+\/settings$/);
 
   const rosterMain = page.getByRole('main');

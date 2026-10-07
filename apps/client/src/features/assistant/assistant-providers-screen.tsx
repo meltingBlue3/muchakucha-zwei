@@ -40,7 +40,7 @@ function AssistantProviders({ householdId, householdName, writable }: AssistantH
       {query.error ? <LoadError message={query.error} retrying={query.loading} onRetry={() => { void query.reload(); }} /> : null}
       {query.loading && query.data === null ? <LoadingState label="正在加载模型配置" /> : null}
       {query.data?.providers.length === 0 ? <EmptyState message="还没有模型配置。添加支持工具调用的模型后即可使用助手。" /> : null}
-      {query.data?.providers.map(provider => <SettingsSection key={provider.id} title={provider.name} icon={<Settings color={theme.colors.coral} size={theme.controlSizes.icon} />} detail={provider.ownedByMe ? '由你管理' : '家人共享'}>
+      {query.data?.providers.map(provider => <SettingsSection key={provider.id} title={provider.name} icon={<Settings color={theme.colors.inkMuted} size={theme.controlSizes.icon} />} detail={provider.ownedByMe ? '由你管理' : '家人共享'}>
         <Text>{provider.model}</Text>
         <Text variant="bodySm" color="inkMuted">{provider.baseUrl}</Text>
         <Text variant="bodySm">{provider.visibility === 'private' ? '仅自己可用' : '本家庭成员可用'} · {provider.hasCredential ? '已配置密钥' : provider.ownedByMe ? '密钥无法读取，请编辑后重新填写' : '密钥无法读取，请联系配置创建者'}</Text>

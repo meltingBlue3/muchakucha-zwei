@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import { View } from 'react-native';
 import { Heading, Inline, Stack, Text } from './primitives';
 import { theme } from './theme';
 
+/** One white panel of a settings page: an icon and title, then its rows. */
 export function SettingsSection({ title, icon, detail, action, children }: {
   title: string;
   icon: ReactNode;
@@ -11,12 +11,12 @@ export function SettingsSection({ title, icon, detail, action, children }: {
   children: ReactNode;
 }) {
   return (
-    <Stack gap={4} style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, padding: theme.spacing[4] }}>
+    <Stack gap={4} style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, padding: theme.spacing[5] }}>
       <Inline gap={3}>
-        <View style={{ backgroundColor: theme.colors.surfaceSubtle, borderRadius: theme.borderRadii.md, padding: theme.spacing[2] }}>{icon}</View>
+        {icon}
         <Stack gap={0} style={{ flex: 1 }}>
           <Heading variant="section">{title}</Heading>
-          {detail ? <Text variant="caption">{detail}</Text> : null}
+          {detail ? <Text variant="meta">{detail}</Text> : null}
         </Stack>
         {action}
       </Inline>

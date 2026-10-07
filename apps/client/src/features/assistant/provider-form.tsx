@@ -23,7 +23,7 @@ export function AssistantChoice<T extends string>({ label, options, value, onCha
     {options.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityLabel={option.label}
       accessibilityState={{ checked: option.value === value, disabled }} aria-checked={option.value === value} disabled={disabled}
       onPress={() => onChange(option.value)}
-      style={({ pressed }) => ({ flexGrow: 1, minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', padding: theme.spacing[3], borderRadius: theme.borderRadii.md, borderWidth: theme.borderWidths.default, borderColor: option.value === value ? theme.colors.coral : theme.colors.separator, backgroundColor: pressed ? theme.colors.surfaceMuted : option.value === value ? theme.colors.coralSoft : theme.colors.surface })}>
+      style={({ pressed }) => ({ flexGrow: 1, minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', padding: theme.spacing[3], borderRadius: theme.borderRadii.md, borderWidth: theme.borderWidths.default, borderColor: option.value === value ? theme.colors.primary : theme.colors.separator, backgroundColor: pressed ? theme.colors.surfaceMuted : option.value === value ? theme.colors.surfaceSelected : theme.colors.surface })}>
       <Text variant="label" color={option.value === value ? 'link' : 'inkMuted'}>{option.value === value ? '✓ ' : ''}{option.label}</Text>
     </Pressable>)}
   </View></Stack>;
@@ -100,7 +100,7 @@ export function AssistantProviderForm({ initial, busy, onSubmit, onCancel, onChe
       <Button label="测试连接" tone="secondary" loading={shownCheck?.status === 'checking'} disabled={busy} onPress={() => { void runCheck(); }} style={{ alignSelf: 'flex-start' }} />
       {shownCheck && shownCheck.status !== 'checking' ? <Inline accessibilityLiveRegion="polite" gap={2} style={{ alignItems: 'flex-start' }}>
         {shownCheck.status === 'ok'
-          ? <CircleCheck color={theme.colors.teal} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+          ? <CircleCheck color={theme.colors.success} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
           : <CircleAlert color={theme.colors.destructive} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />}
         <Text variant="bodySm" color={shownCheck.status === 'ok' ? 'ink' : 'destructive'} style={{ flex: 1 }}>{shownCheck.message}</Text>
       </Inline> : <Text variant="caption">用上面的地址、模型和密钥发送一次测试请求，不读取家庭数据。</Text>}

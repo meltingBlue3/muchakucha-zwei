@@ -44,7 +44,7 @@ function AssistantHome({ householdId, householdName, writable }: AssistantHouseh
       {query.error ? <LoadError message={query.error} onRetry={() => { void query.reload(); }} retrying={query.loading} disabled={operation.busy} /> : null}
       {query.loading && !query.data ? <LoadingState label="正在加载助手" /> : null}
       <Stack gap={5}>
-        <Sparkles size={theme.spacing[8]} color={theme.colors.coral} />
+        <Sparkles size={theme.spacing[8]} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} />
         <Heading variant="display" level={2}>把琐事交给我，{'\n'}把时间留给家人。</Heading>
         <Text color="inkMuted">查安排、记任务、整理笔记。{'\n'}说说你想做什么，我们一起安排好。</Text>
         {query.data ? selected ? <Stack gap={3}>

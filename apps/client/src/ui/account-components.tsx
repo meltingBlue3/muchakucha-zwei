@@ -22,8 +22,8 @@ export function HouseholdSetup({ onCreate, onJoin }: { onCreate(): void; onJoin(
         { title: '查看家庭邀请', description: '家人已经邀请你？前往收件箱接受邀请。', action: onJoin, icon: Mail, primary: false },
       ].map(({ title, description, action, icon: Icon, primary }) => (
         <Pressable key={title} accessibilityRole="button" accessibilityLabel={title} accessibilityHint={description} onPress={() => { rememberRouteTrigger(); action(); }}
-          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], padding: theme.spacing[5], borderRadius: theme.borderRadii.xl, borderWidth: theme.borderWidths.default, borderColor: primary ? theme.colors.coral : theme.colors.border, backgroundColor: pressed ? theme.colors.surfaceMuted : primary ? theme.colors.coralSoft : theme.colors.surface })}>
-          <Icon color={primary ? theme.colors.coral : theme.colors.teal} size={theme.spacing[6]} />
+          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], padding: theme.spacing[5], borderRadius: theme.borderRadii.lg, borderWidth: theme.borderWidths.default, borderColor: primary ? theme.colors.primary : theme.colors.transparent, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface })}>
+          <Icon color={primary ? theme.colors.ink : theme.colors.inkMuted} size={theme.spacing[6]} strokeWidth={theme.controlSizes.iconStroke} />
           <Stack gap={2} style={{ flex: 1 }}><Text variant="label">{title}</Text><Text variant="bodySm">{description}</Text></Stack>
           <ChevronRight color={theme.colors.inkMuted} size={theme.controlSizes.icon} />
         </Pressable>

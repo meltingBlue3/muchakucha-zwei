@@ -18,7 +18,7 @@ export const AssistantComposer = forwardRef<TextInput, {
       style={{ ...theme.typography.body, fontFamily: theme.fontFamilies.regular, color: theme.colors.ink, minHeight: theme.controlSizes.touchTarget, maxHeight: theme.controlSizes.field * 3, padding: theme.spacing[1], textAlignVertical: 'top', outlineWidth: 0 }} />
     <Inline style={{ justifyContent: 'space-between' }}><View style={{ flex: 1, minWidth: 0 }}>{modelControl ?? <Text variant="caption">内容修改前，由你确认</Text>}</View><IconButton label="发送" disabled={unavailable} accessibilityState={{ disabled: unavailable, busy }}
       icon={<ArrowUp size={theme.controlSizes.icon} color={unavailable ? theme.colors.inkMuted : theme.colors.surface} />} onPress={onSend}
-      style={{ backgroundColor: unavailable ? theme.colors.surfaceMuted : theme.colors.coral, borderRadius: theme.borderRadii.lg }} /></Inline>
+      style={{ backgroundColor: unavailable ? theme.colors.surfaceMuted : theme.colors.primary, borderRadius: theme.borderRadii.lg }} /></Inline>
   </Stack>;
 });
 

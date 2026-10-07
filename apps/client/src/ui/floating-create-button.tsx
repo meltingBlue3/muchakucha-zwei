@@ -3,16 +3,16 @@ import { Modal, Platform, Pressable, View, useWindowDimensions } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Plus from 'lucide-react-native/icons/plus';
 import X from 'lucide-react-native/icons/x';
-import Calendar from 'lucide-react-native/icons/calendar';
-import ListTodo from 'lucide-react-native/icons/list-todo';
-import FileText from 'lucide-react-native/icons/file-text';
+import CalendarDays from 'lucide-react-native/icons/calendar-days';
+import CircleCheck from 'lucide-react-native/icons/circle-check';
+import NotebookText from 'lucide-react-native/icons/notebook-text';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { DialogBackdrop } from './dialog-backdrop';
 import { Button, Text } from './primitives';
 import { theme } from './theme';
 
 type CreateAction = { kind: 'events' | 'tasks' | 'notes'; label: string; onPress(): void };
-const icons = { events: Calendar, tasks: ListTodo, notes: FileText };
+const icons = { events: CalendarDays, tasks: CircleCheck, notes: NotebookText };
 type Props = { label: string; onPress(): void; actions?: never } | { label?: never; onPress?: never; actions: CreateAction[] };
 
 export function FloatingCreateButton(props: Props) {
@@ -26,15 +26,15 @@ export function FloatingCreateButton(props: Props) {
   const initial = useRef<View>(null);
   const close = useCallback(() => setOpen(false), []);
   const focus = useOverlayFocus({ mode: open ? 'menu' : 'closed', panel, initial, trigger, onClose: close });
-  const buttonStyle = { width: theme.spacing[16], height: theme.spacing[16], borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.coral, alignItems: 'center' as const, justifyContent: 'center' as const, boxShadow: theme.shadow.soft };
+  const buttonStyle = { width: theme.controlSizes.fab, height: theme.controlSizes.fab, borderRadius: theme.borderRadii.lg + theme.spacing[1] / 2, backgroundColor: theme.colors.primary, alignItems: 'center' as const, justifyContent: 'center' as const, boxShadow: theme.shadow.raised };
   const openCreate = () => {
     if (!props.actions) { props.onPress(); return; }
     trigger.current?.measureInWindow((x, y, w, h) => setAnchor({ right: Math.max(theme.spacing[4], width - x - w), bottom: Math.max(insets.bottom + theme.spacing[4], height - y - h), top: y + h + theme.spacing[2] }));
     setOpen(true);
   };
   return <>
-    {desktop ? <Button ref={trigger} testID="header-create" label={props.label ?? '创建'} accessibilityLabel={props.label ?? '创建新内容'} aria-haspopup={props.actions ? 'menu' : undefined} {...(props.actions ? { expanded: open } : {})} onPress={openCreate} /> : <Pressable ref={trigger} testID="floating-create" accessibilityRole="button" accessibilityLabel={props.label ?? '创建新内容'} aria-haspopup={props.actions ? 'menu' : undefined} aria-{...(props.actions ? { expanded: open } : {})} accessibilityState={props.actions ? { expanded: open } : {}} onPress={openCreate} style={({ pressed }) => [buttonStyle, { backgroundColor: pressed ? theme.colors.coralPressed : theme.colors.coral }]}>
-      <Plus size={theme.spacing[8]} color={theme.colors.surface} />
+    {desktop ? <Button ref={trigger} testID="header-create" label={props.label ?? '创建'} accessibilityLabel={props.label ?? '创建新内容'} aria-haspopup={props.actions ? 'menu' : undefined} {...(props.actions ? { expanded: open } : {})} onPress={openCreate} /> : <Pressable ref={trigger} testID="floating-create" accessibilityRole="button" accessibilityLabel={props.label ?? '创建新内容'} aria-haspopup={props.actions ? 'menu' : undefined} aria-{...(props.actions ? { expanded: open } : {})} accessibilityState={props.actions ? { expanded: open } : {}} onPress={openCreate} style={({ pressed }) => [buttonStyle, { backgroundColor: pressed ? theme.colors.primaryPressed : theme.colors.primary }]}>
+      <Plus size={theme.spacing[6] + theme.spacing[1]} color={theme.colors.surface} strokeWidth={theme.focus.width} />
     </Pressable>}
     {open && props.actions ? <Modal {...(Platform.OS === 'web' ? { 'aria-label': '创建选项' } : {})} transparent visible animationType="none" onShow={focus} onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
       <View style={{ flex: 1 }}>
@@ -42,11 +42,11 @@ export function FloatingCreateButton(props: Props) {
         <View ref={panel} accessibilityRole="menu" accessibilityLabel="创建内容" accessibilityViewIsModal style={{ position: 'absolute', right: anchor.right, ...(desktop ? { top: anchor.top } : { bottom: anchor.bottom }), gap: theme.spacing[3], alignItems: 'flex-end', maxWidth: width - theme.layout.mobileInset * 2 }}>
           {props.actions.map(({ kind, label, onPress }, index) => {
             const Icon = icons[kind];
-            return <Pressable key={kind} ref={index === 0 ? initial : undefined} accessibilityRole="menuitem" accessibilityLabel={label} onPress={() => { close(); requestAnimationFrame(onPress); }} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', minHeight: theme.controlSizes.primary, paddingHorizontal: theme.spacing[6], paddingVertical: theme.spacing[3], gap: theme.spacing[3], backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.coralSoft, borderRadius: theme.borderRadii.full })}>
-              <Icon color={theme.colors.coral} size={theme.controlSizes.icon} /><Text variant="button" color="link">{label}</Text>
+            return <Pressable key={kind} ref={index === 0 ? initial : undefined} accessibilityRole="menuitem" accessibilityLabel={label} onPress={() => { close(); requestAnimationFrame(onPress); }} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', minHeight: theme.controlSizes.primary, paddingHorizontal: theme.spacing[6], paddingVertical: theme.spacing[3], gap: theme.spacing[3], backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface, borderRadius: theme.borderRadii.full, boxShadow: theme.shadow.soft })}>
+              <Icon color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} /><Text variant="button" color="ink">{label}</Text>
             </Pressable>;
           })}
-          {!desktop ? <Pressable accessibilityRole="menuitem" accessibilityLabel="关闭创建菜单" onPress={close} style={buttonStyle}><X size={theme.spacing[8]} color={theme.colors.surface} /></Pressable> : null}
+          {!desktop ? <Pressable accessibilityRole="menuitem" accessibilityLabel="关闭创建菜单" onPress={close} style={buttonStyle}><X size={theme.spacing[6] + theme.spacing[1]} color={theme.colors.surface} strokeWidth={theme.focus.width} /></Pressable> : null}
         </View>
       </View>
     </Modal> : null}

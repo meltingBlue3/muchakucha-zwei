@@ -189,24 +189,38 @@ for (const width of [390, 1440]) {
 test('family management is a restorable destination', async ({ page }) => {
   await setup(page);
   await page.goto(`/households/${a}/more`);
-  await expect(page.getByRole('tab', { name: '家庭', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', { name: '家庭', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '打开家庭设置', exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/households/${a}/more$`));
+});
+
+test('the household menu reaches the family pages on a phone', async ({ page }) => {
+  await setup(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/households/${a}/today`);
+  await page.getByRole('button', { name: '当前家庭：家庭 A，切换家庭' }).click();
+  await page.getByRole('button', { name: '标签管理', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/households/${a}/labels$`));
+  await expect(page.getByRole('tablist', { name: '家庭主导航' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '返回', exact: true })).toBeVisible();
 });
 
 test('task filters and calendar month survive tab switches', async ({ page }) => {
   await setup(page);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/households/${a}/tasks`);
-  await page.getByRole('button', { name: /^筛选任务/ }).click();
+  // Status sits on the page itself; the 筛选 window holds the rest.
   await page.getByRole('radio', { name: '筛选：进行中', exact: true }).click();
-  await page.getByRole('button', { name: '完成', exact: true }).click();
   await page.getByRole('tab', { name: '日历', exact: true }).click();
+  // Phones open on one week; the month is one tap away and stays open.
+  await page.getByRole('button', { name: '展开月历', exact: true }).click();
   await page.getByLabel('下一个月').click();
   const nextMonth = await page.getByText(/^\d{4}年\s*\d{1,2}月$/).innerText();
   await page.getByRole('tab', { name: '任务', exact: true }).click();
-  await expect(page.getByRole('button', { name: '筛选任务，已选择 1 项' })).toBeVisible();
-  await expect(page.getByText('进行中', { exact: true })).toBeVisible();
+  await expect(page.getByRole('radio', { name: '筛选：进行中', exact: true })).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('tab', { name: '日历', exact: true }).click();
   await expect(page.getByText(nextMonth, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '收起月历', exact: true })).toBeVisible();
 });
 
 for (const kind of ['tasks', 'events'] as const) {
@@ -269,13 +283,15 @@ for (const width of [320, 390, 1440]) {
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
     await page.setViewportSize({ width, height: 900 });
-    for (const [route, title] of [['today', '今日'], ['events', '日历'], ['tasks', '任务'], ['notes', '笔记'], ['more', '家庭']]) {
-      if (route === 'today') await page.goto(`/households/${a}/today`);
-      else await page.getByRole('tab', { name: title, exact: true }).click();
+    // Today is titled with the date; 家庭 has no tab and is reached through the household menu.
+    const destinations: Array<[string, string | RegExp, string?]> = [['today', /^\d{1,2}月\d{1,2}日$/], ['events', '日历', '日历'], ['tasks', '任务', '任务'], ['notes', '笔记', '笔记'], ['more', '家庭']];
+    for (const [route, title, tab] of destinations) {
+      if (tab) await page.getByRole('tab', { name: tab, exact: true }).click();
+      else await page.goto(`/households/${a}/${route}`);
       await expect(page.getByRole('heading', { name: title, exact: true, level: 1 })).toBeVisible();
       const navigation = page.getByRole('tablist', { name: '家庭主导航' });
-      await expect(navigation.getByRole('tab')).toHaveCount(width >= 1024 ? 6 : 5);
-      if (width >= 1024) await expect(navigation.getByRole('tab', { name: '助手', exact: true })).toBeVisible();
+      await expect(navigation.getByRole('tab')).toHaveCount(5);
+      await expect(navigation.getByRole('tab', { name: '助手', exact: true })).toBeVisible();
       const navBounds = await navigation.boundingBox();
       expect(navBounds).not.toBeNull();
       expect(navBounds!.y + navBounds!.height).toBeLessThanOrEqual(901);
@@ -416,7 +432,8 @@ for (const width of [320, 390, 1440]) {
       await page.goto(`/households/${a}/${route}`);
       const create = page.getByRole('button', { name: createLabel, exact: true });
       await expect(create).toBeInViewport();
-      const heading = await page.getByRole('heading', { name: title, exact: true }).boundingBox();
+      // Today's title is the date itself.
+      const heading = await page.getByRole('heading', route === 'today' ? { name: /^\d{1,2}月\d{1,2}日$/ } : { name: title, exact: true }).boundingBox();
       const button = await create.boundingBox();
       if (width === 1440) {
         expect(Math.abs(button!.y + button!.height / 2 - heading!.y - heading!.height / 2)).toBeLessThan(2);
@@ -442,10 +459,17 @@ for (const width of [320, 390, 1440]) {
       const filterBox = await filter.boundingBox();
       expect(Math.abs(filterBox!.y + filterBox!.height / 2 - heading!.y - heading!.height / 2)).toBeLessThan(2);
       expect(filterBox!.x).toBeGreaterThan(heading!.x);
-      await expect(page.getByRole('radio')).toHaveCount(0);
+      // Only the task status chips sit on the page; everything else waits in 筛选.
+      await expect(page.getByRole('radio')).toHaveCount(route === 'tasks' ? 4 : 0);
       if (route === 'tasks') {
         await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(1);
         await expect(page.getByRole('button', { name: '任务：待办样例', exact: true })).toBeVisible();
+        await expect(page.getByRole('radio', { name: '筛选：待办', exact: true })).toHaveAttribute('aria-checked', 'true');
+        await page.getByRole('radio', { name: '筛选：已完成', exact: true }).click();
+        await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(1);
+        await expect(page.getByRole('button', { name: '任务：已完成样例', exact: true })).toBeVisible();
+        await page.getByRole('radio', { name: '筛选：全部', exact: true }).click();
+        await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(3);
       }
       await filter.click();
       const dialog = page.getByRole('dialog', { name: route === 'tasks' ? '筛选任务' : '筛选日程', exact: true });
@@ -457,19 +481,13 @@ for (const width of [320, 390, 1440]) {
       expect(Math.abs(doneBox!.width - clearBox!.width * 2)).toBeLessThan(2);
       await expect(clear).toBeInViewport();
       await expect(done).toBeInViewport();
-      if (route === 'tasks') {
-        await expect(dialog.getByRole('radio', { name: '筛选：待办', exact: true })).toHaveAttribute('aria-checked', 'true');
-        await dialog.getByRole('radio', { name: '筛选：已完成', exact: true }).click();
-        await done.click();
-        await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(1);
-        await expect(page.getByRole('button', { name: '任务：已完成样例', exact: true })).toBeVisible();
-        await filter.click();
-      } else await dialog.getByRole('radio', { name: '重复筛选：仅看重复', exact: true }).click();
+      if (route === 'tasks') await dialog.getByRole('radio', { name: '优先级筛选：高', exact: true }).click();
+      else await dialog.getByRole('radio', { name: '重复筛选：仅看重复', exact: true }).click();
       await page.screenshot({ path: testInfo.outputPath(`${route}-filters-${width}.png`) });
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await clear.click();
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByRole('radio', { name: route === 'tasks' ? '筛选：全部' : '重复筛选：全部', exact: true })).toHaveAttribute('aria-checked', 'true');
+      await expect(dialog.getByRole('radio', { name: route === 'tasks' ? '优先级筛选：全部优先级' : '重复筛选：全部', exact: true })).toHaveAttribute('aria-checked', 'true');
       await done.click();
       await expect(filter).toBeFocused();
       if (route === 'tasks') await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(3);

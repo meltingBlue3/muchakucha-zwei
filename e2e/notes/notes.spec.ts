@@ -91,7 +91,7 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   const notesPath = `/households/${encodeURIComponent(householdId)}/notes`;
 
   await loginUsernameFixture(page, owner.username, password, notesPath);
-  await expect(page.getByText(/还没有笔记。适合记采购清单、旅行计划、家电说明/)).toBeVisible();
+  await expect(page.getByText('还没有笔记', { exact: true })).toBeVisible();
 
   // --- Create: an empty title stays on the form with an inline error ---
   await page.getByRole('button', { name: '创建笔记' }).click();
@@ -146,7 +146,7 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   await page.getByRole('button', { name: '确认删除笔记' }).click();
 
   await expect(page).toHaveURL(new RegExp(`${notesPath}$`));
-  await expect(page.getByText(/还没有笔记。适合记采购清单、旅行计划、家电说明/)).toBeVisible();
+  await expect(page.getByText('还没有笔记', { exact: true })).toBeVisible();
   const afterDelete = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`);
   expect(afterDelete.status).toBe(404);
 });

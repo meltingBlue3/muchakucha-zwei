@@ -236,7 +236,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
             value={form.allDay}
             onValueChange={(v) => updateField('allDay', v)}
             // Like a system switch: a neutral track when off, the accent when on, and a white thumb.
-            trackColor={{ false: activeTheme.colors.border, true: activeTheme.colors.teal }}
+            trackColor={{ false: activeTheme.colors.border, true: activeTheme.colors.primary }}
             thumbColor={activeTheme.colors.surface}
             ios_backgroundColor={activeTheme.colors.border}
           />

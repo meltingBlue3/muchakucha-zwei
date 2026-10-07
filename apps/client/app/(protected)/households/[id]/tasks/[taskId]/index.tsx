@@ -141,7 +141,7 @@ export default function TaskDetailRoute() {
         <Stack gap={2}>
           <Heading level={2}>{task.title}</Heading>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[2] }}>
-            <Text variant="label" color={task.status === 'completed' || task.status === 'in_progress' ? 'teal' : 'inkMuted'}>{cancelled ? '已取消' : statusLabel(task.status)}</Text>
+            <Text variant="label" color={task.status === 'completed' ? 'success' : task.status === 'in_progress' ? 'ink' : 'inkMuted'}>{cancelled ? '已取消' : statusLabel(task.status)}</Text>
             {overdue ? <Text variant="label" color="destructive">已逾期</Text> : null}
             {/* 进行中 is a deliberate stage, offered beside the status it changes rather than behind a "more" toggle. */}
             {!cancelled && task.status !== 'completed' ? (

@@ -198,7 +198,7 @@ function Choice({ label, selected, onPress, role = 'radio', circle = false, fill
         ? { width: '100%', maxWidth: theme.controlSizes.touchTarget - theme.spacing[1], aspectRatio: 1 }
         : fill
           ? { flex: 1, minHeight: theme.controlSizes.touchTarget - theme.spacing[1], paddingHorizontal: theme.spacing[1] }
-          : { minHeight: theme.controlSizes.touchTarget - theme.spacing[1], minWidth: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[3] }), borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? theme.colors.coral : pressed ? theme.colors.surfaceMuted : theme.colors.surfaceSubtle, borderWidth: theme.borderWidths.default, borderColor: selected ? theme.colors.coral : theme.colors.separator })}
+          : { minHeight: theme.controlSizes.touchTarget - theme.spacing[1], minWidth: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[3] }), borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? theme.colors.primary : pressed ? theme.colors.surfaceMuted : theme.colors.surfaceSubtle, borderWidth: theme.borderWidths.default, borderColor: selected ? theme.colors.primary : theme.colors.outline })}
     >
       <Text variant="bodySm" color={selected ? 'surface' : 'ink'}>{label.startsWith('星期') ? label.slice(2) : label}</Text>
     </Pressable>

@@ -19,7 +19,6 @@ import {
   TextField,
   getButtonFill,
   getMotionDuration,
-  shouldRenderAbstractFields,
 } from '../primitives';
 import { theme } from '../theme';
 
@@ -93,8 +92,8 @@ describe('Restyle-owned primitive state contract', () => {
   test('Button owns rest, pressed, focused, loading, and disabled states while keeping its label and width stable', async () => {
     const view = await renderOwned(<Button label="登录" />);
     let button = view.getByRole('button');
-    expect(flattenedStyle(button).backgroundColor).toBe(theme.colors.coral);
-    expect(getButtonFill({ disabled: false, pressed: true })).toBe(theme.colors.coralPressed);
+    expect(flattenedStyle(button).backgroundColor).toBe(theme.colors.primary);
+    expect(getButtonFill({ disabled: false, pressed: true })).toBe(theme.colors.primaryPressed);
     await fireEvent(view.getByRole('button'), 'focus', { nativeEvent: {} });
     expect(flattenedStyle(view.getByRole('button')).borderColor).toBe(theme.colors.focusRing);
     await view.rerender(
@@ -151,13 +150,13 @@ describe('Restyle-owned primitive state contract', () => {
     expect(view.getByLabelText('保存中').props.accessibilityRole).toBe('progressbar');
   });
 
-  test('D-17 gives every touch target at least 48 by 48 pixels and primary inputs and buttons 52 pixels of height', async () => {
+  test('D-17 gives every touch target, input, and primary button at least 48 by 48 pixels', async () => {
     expect(theme.controlSizes.touchTarget).toBeGreaterThanOrEqual(48);
-    expect(theme.controlSizes.field).toBe(52);
-    expect(theme.controlSizes.primary).toBe(52);
+    expect(theme.controlSizes.field).toBe(48);
+    expect(theme.controlSizes.primary).toBe(48);
     const view = await renderOwned(<Button label="继续" />);
     const style = flattenedStyle(view.getByRole('button'));
-    expect(style.minHeight).toBe(52);
+    expect(style.minHeight).toBe(48);
     expect(style.minWidth).toBeGreaterThanOrEqual(48);
   });
 
@@ -177,8 +176,5 @@ describe('Restyle-owned primitive state contract', () => {
     expect(view.getByText('内容').props.maxFontSizeMultiplier).toBe(2);
     expect(getMotionDuration(true)).toBe(theme.motion.reducedTransitionMs);
     expect(getMotionDuration(false)).toBe(theme.motion.transitionMs);
-    expect(shouldRenderAbstractFields({ forcedColors: true, reducedMotion: false })).toBe(false);
-    expect(shouldRenderAbstractFields({ forcedColors: false, reducedMotion: true })).toBe(false);
-    expect(shouldRenderAbstractFields({ forcedColors: false, reducedMotion: false })).toBe(true);
   });
 });

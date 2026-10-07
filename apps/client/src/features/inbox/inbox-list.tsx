@@ -50,7 +50,7 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
     return (
       <Pressable key={action.id} accessibilityRole="button" accessibilityLabel={action.accessibilityLabel}
         disabled={unavailable} accessibilityState={{ disabled: unavailable, busy }} onPress={() => run(action)}
-        style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing[4], borderRadius: theme.borderRadii.full, backgroundColor: filled ? (pressed ? theme.colors.coralPressed : theme.colors.coral) : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
+        style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing[4], borderRadius: theme.borderRadii.full, backgroundColor: filled ? (pressed ? theme.colors.primaryPressed : theme.colors.primary) : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
         <Text variant="label" color={unavailable ? 'inkMuted' : filled ? 'surface' : 'link'}>{action.label}</Text>
       </Pressable>
     );
