@@ -30,7 +30,8 @@ function frequencySummary(rule: RecurrenceDto): string {
     case 'weekly': {
       const weekdays = [...new Set(rule.byWeekday ?? [])]
         .filter((weekday) => weekday >= 0 && weekday < DAY_NAMES.length)
-        .sort((left, right) => left - right)
+        // Listed from Monday, so Sunday comes last as it does in the weekday picker.
+        .sort((left, right) => (left + 6) % 7 - (right + 6) % 7)
         .map((weekday) => DAY_NAMES[weekday]);
       return interval > 1 ? `每 ${interval} 周的周${weekdays.join('、')}重复` : `每周${weekdays.join('、')}重复`;
     }

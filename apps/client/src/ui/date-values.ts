@@ -2,6 +2,14 @@
 
 const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'] as const;
 
+/** Weeks start on Monday everywhere: the calendar, its week view, the date picker and weekly repeats. */
+export const WEEK_HEADER = ['一', '二', '三', '四', '五', '六', '日'] as const;
+
+/** Days since the Monday that starts this date's week (Monday 0 … Sunday 6). */
+export function daysSinceMonday(date: Date): number {
+  return (date.getDay() + 6) % 7;
+}
+
 export function isDateValue(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [y, m, d] = value.split('-').map(Number);
