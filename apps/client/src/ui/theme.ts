@@ -1,6 +1,8 @@
 import { createTheme } from '@shopify/restyle';
 import { numericFontFamily, numericStrongFontFamily, systemFontFamily } from '../platform/typography/font-family';
 
+export type ColorScheme = 'light' | 'dark';
+
 /**
  * 纸 · 墨 · 朱 — paper, ink and vermilion.
  *
@@ -10,6 +12,8 @@ import { numericFontFamily, numericStrongFontFamily, systemFontFamily } from '..
  * otherwise comes from the family itself: member avatars and labels.
  */
 export const theme = createTheme({
+  /** Drives native chrome whose contrast must follow the active app theme. */
+  colorScheme: 'light' as ColorScheme,
   colors: {
     canvas: '#F6F4EF',
     surface: '#FFFFFF',

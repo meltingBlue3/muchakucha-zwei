@@ -11,6 +11,7 @@ import {
 } from '../src/features/auth/session-bootstrap';
 import { sessionStateStore, sessionTransport, setSessionLostHandler } from '../src/features/auth/session-runtime';
 import { installFocusRing } from '../src/platform/focus-ring/focus-ring';
+import { AppStatusBar } from '../src/ui/app-status-bar';
 import { MuchakuchaThemeProvider } from '../src/ui/primitives';
 
 installFocusRing();
@@ -50,6 +51,7 @@ export default function RootLayout() {
 
   return (
     <MuchakuchaThemeProvider>
+      <AppStatusBar />
       <SessionBootstrap
         fontsReady={fontsLoaded || fontError !== null}
         intendedRoute={intendedRoute}
