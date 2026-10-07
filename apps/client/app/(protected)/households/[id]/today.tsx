@@ -1,3 +1,4 @@
+import { useOpenWindowItem } from '../../../../src/ui/route-window';
 import { FloatingCreateButton } from '../../../../src/ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../../../../src/features/content/use-content-delete';
 import { rememberRouteTrigger } from '../../../../src/platform/overlays/route-trigger';
@@ -87,6 +88,8 @@ export function partitionTodayTasks(tasks: TaskResponseDto[], retainCompletedId:
 export default function TodayRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const openTaskId = useOpenWindowItem('taskId');
+  const openEventId = useOpenWindowItem('eventId');
   const deleteTask = useContentDelete('tasks');
   const editTask = useContentEdit('tasks');
   const deleteEvent = useContentDelete('events');
@@ -211,11 +214,12 @@ export default function TodayRoute() {
       onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
       {...(options.time === undefined ? {} : { time: options.time })}
       showDue={options.showDue ?? true}
+      selected={task.id === openTaskId}
       {...completion.cardProps(task)}
     />
   );
   const eventRow = (event: EventResponseDto, timeColumn: boolean) => (
-    <EventCard key={event.id} event={event} withinDay timeColumn={timeColumn} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />
+    <EventCard key={event.id} event={event} withinDay timeColumn={timeColumn} selected={event.id === openEventId} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />
   );
 
   const wide = width >= theme.layout.navigationBreakpoint;

@@ -18,10 +18,12 @@ interface EventCardProps {
   withinDay?: boolean;
   /** Puts the start time in a leading column, lining the row up in a timeline. */
   timeColumn?: boolean;
+  /** Its window is open beside the list. */
+  selected?: boolean;
 }
 
 /** One event as a list row: start time, a bar in its label's color, then title and place. */
-export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false, timeColumn = false }: EventCardProps) {
+export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false, timeColumn = false, selected = false }: EventCardProps) {
   const activeTheme = useTheme<Theme>();
   const labels = event.labels ?? [];
   const place = event.location !== null && event.location !== '' ? event.location : null;
@@ -34,6 +36,7 @@ export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false,
     <ListRow
       accessibilityLabel={`日程：${event.title}${event.recurrenceRuleId == null ? '' : '，重复'}`}
       onPress={() => onPress(event)}
+      selected={selected}
       leading={<>
         {timeColumn ? <RowSlot width={activeTheme.layout.timeColumn}><Text variant="time" style={{ paddingLeft: activeTheme.spacing[3] }}>{startTime}</Text></RowSlot> : null}
         {/* As wide as a task's completion mark, so event and task titles line up in a mixed list. */}

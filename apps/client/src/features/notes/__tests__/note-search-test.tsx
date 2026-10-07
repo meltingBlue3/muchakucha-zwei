@@ -10,6 +10,7 @@ const mockListNotes = jest.fn();
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: 'household-1' }),
+  useGlobalSearchParams: () => ({ id: 'household-1' }),
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
   useFocusEffect: (effect: () => void | (() => void)) => {
     const React = jest.requireActual<typeof import('react')>('react');

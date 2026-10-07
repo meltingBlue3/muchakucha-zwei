@@ -1,3 +1,4 @@
+import { useOpenWindowItem } from '../../ui/route-window';
 import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
@@ -19,6 +20,7 @@ import { Button, EmptyState, LoadError, LoadingState, Stack } from '../../ui/pri
 export default function NotesListRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const openNoteId = useOpenWindowItem('noteId');
   const deleteNote = useContentDelete('notes');
   const editNote = useContentEdit('notes');
   const { currentHouseholdId } = useHouseholdContext();
@@ -113,7 +115,7 @@ export default function NotesListRoute() {
 
         <ListGroup>
           {visibleNotes.map((note) => (
-            <NoteCard key={note.id} note={note} onPress={handleNotePress} onEdit={editNote(note)} onDelete={deleteNote(note)} />
+            <NoteCard key={note.id} note={note} selected={note.id === openNoteId} onPress={handleNotePress} onEdit={editNote(note)} onDelete={deleteNote(note)} />
           ))}
         </ListGroup>
       </Stack>

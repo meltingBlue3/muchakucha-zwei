@@ -231,6 +231,8 @@ export const theme = createTheme({
     dialogMaxWidth: 440,
     editorDialogMaxWidth: 640,
     editorSheetBreakpoint: 600,
+    /** A task, event or note window docked beside the page on a wide screen. */
+    dockedPanelWidth: 480,
     formColumnsBreakpoint: 480,
     /** Width of the time column in a timeline or agenda row. */
     timeColumn: 60,
