@@ -150,6 +150,49 @@ test('card menu opens deletion and Escape restores the card action', async ({ pa
   await expect(more).toBeFocused();
 });
 
+test('wide screens dock task windows beside the list and keep their steps in place', async ({ page }) => {
+  await setup(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/tasks`);
+  const row = page.getByRole('button', { name: /^任务：/ });
+  await row.click();
+  const detail = page.getByRole('dialog', { name: '任务详情', exact: true });
+  await expect(detail).toBeVisible();
+  const docked = (await detail.getByTestId('app-dialog-panel').boundingBox())!;
+  // Against the right edge at full height, leaving the list readable on the left.
+  expect(docked.x + docked.width).toBeGreaterThan(1440 - 24);
+  expect(docked.height).toBeGreaterThan(900 - 48);
+  expect(docked.x).toBeGreaterThan(1440 / 2);
+  await expect(page.getByTestId('app-dialog-blur')).toHaveCount(0);
+  // The window hides the list from the accessibility tree, so find the marked row by its attribute.
+  const current = page.locator('[aria-current="true"]');
+  await expect(current).toHaveCount(1);
+  await expect(current).toContainText('准备周末的家庭聚餐');
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  // Editing and its pickers stay in the same docked panel.
+  await detail.getByRole('button', { name: '编辑任务', exact: true }).click();
+  const edit = page.getByRole('dialog', { name: '编辑任务', exact: true });
+  await expect(edit).toBeVisible();
+  expect(await edit.getByTestId('app-dialog-panel').boundingBox()).toEqual(docked);
+  await edit.getByRole('button', { name: /^截止日期，/ }).click();
+  const picker = page.getByRole('dialog', { name: '选择日期', exact: true });
+  await expect(picker).toBeVisible();
+  expect(await picker.getByTestId('app-dialog-panel').boundingBox()).toEqual(docked);
+  await page.keyboard.press('Escape');
+  await expect(edit).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(detail).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(`${base}/tasks`);
+  await expect(current).toHaveCount(0);
+  // A deletion asked from the row menu is a short confirmation, centered as before.
+  await page.getByRole('button', { name: /^更多操作：任务：/ }).click();
+  await page.getByRole('menuitem', { name: /^删除任务：/ }).click();
+  const confirm = (await page.getByRole('dialog', { name: '删除任务', exact: true }).getByTestId('app-dialog-panel').boundingBox())!;
+  expect(Math.abs(confirm.x + confirm.width / 2 - 1440 / 2)).toBeLessThan(2);
+  await expect(page.getByTestId('app-dialog-blur')).toHaveCount(1);
+});
+
 test('editing from the card menu returns to the list, while editing from detail returns to detail', async ({ page }) => {
   await setup(page);
   await page.goto(`${base}/tasks`);

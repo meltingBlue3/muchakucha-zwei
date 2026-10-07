@@ -1,3 +1,4 @@
+import { useOpenWindowItem } from '../../ui/route-window';
 import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
@@ -38,6 +39,7 @@ const byStart = (a: EventResponseDto, b: EventResponseDto) => Number(b.allDay) -
 export default function CalendarScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const openEventId = useOpenWindowItem('eventId');
   const deleteEvent = useContentDelete('events');
   const editEvent = useContentEdit('events');
   const activeTheme = useTheme<Theme>();
@@ -240,7 +242,7 @@ export default function CalendarScreen() {
                 {...(filterSummary ? { action: <Button label="调整筛选" tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
               /> : null}
               <ListGroup>
-                {selectedDateEvents.map(event => <EventCard key={event.id} event={event} withinDay timeColumn onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />)}
+                {selectedDateEvents.map(event => <EventCard key={event.id} event={event} withinDay timeColumn selected={event.id === openEventId} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />)}
               </ListGroup>
             </Stack>
           </View>

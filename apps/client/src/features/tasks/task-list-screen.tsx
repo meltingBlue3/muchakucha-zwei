@@ -1,3 +1,4 @@
+import { useOpenWindowItem } from '../../ui/route-window';
 import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../content/use-content-delete';
 import { FilterOptions } from '../../ui/filter-options';
@@ -86,6 +87,7 @@ export function groupTasksByDue(tasks: TaskResponseDto[], status: FilterKey, tod
 export default function TaskListScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const openTaskId = useOpenWindowItem('taskId');
   const deleteTask = useContentDelete('tasks');
   const editTask = useContentEdit('tasks');
   const { currentHouseholdId } = useHouseholdContext();
@@ -313,6 +315,7 @@ export default function TaskListScreen() {
                   task={task}
                   assignees={(task.assigneeIds ?? []).map((uid) => ({ id: uid, name: memberNameMap.get(uid) ?? '未知成员' }))}
                   onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
+                  selected={task.id === openTaskId}
                   {...completion.cardProps(task)}
                 />
               ))}

@@ -1,5 +1,5 @@
 import { Children, Fragment, isValidElement, useState, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import { Text } from './primitives';
 import { theme } from './theme';
 
@@ -74,13 +74,17 @@ export function ListRow({ accessibilityLabel, onPress, leading, trailing, footer
   const rowHeight = theme.controlSizes.touchTarget + theme.spacing[2];
   const controlInset = (rowHeight - theme.controlSizes.touchTarget) / 2;
   return (
-    <View style={{ backgroundColor: pressed ? theme.colors.surfaceMuted : selected ? theme.colors.surfaceSelected : theme.colors.surface }}>
+    // The open row lets the paper show through and carries an ink bar: a
+    // darker fill would push red due dates and faint metadata under 4.5:1.
+    <View style={{ backgroundColor: pressed ? theme.colors.surfaceMuted : selected ? theme.colors.canvas : theme.colors.surface }}>
+      {selected ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: theme.spacing[2], bottom: theme.spacing[2], width: theme.spacing[1] - 1, borderTopRightRadius: theme.borderRadii.full, borderBottomRightRadius: theme.borderRadii.full, backgroundColor: theme.colors.ink }} /> : null}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', minHeight: rowHeight, paddingLeft: leading ? theme.spacing[1] : theme.spacing[2], paddingRight: theme.spacing[2] }}>
         {leading ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', alignSelf: 'stretch', paddingTop: controlInset }}>{leading}</View> : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel}
-          {...(selected ? { accessibilityState: { selected } } : {})}
+          // A button cannot be aria-selected, so the web marks the open item as current.
+          {...(selected ? Platform.OS === 'web' ? { 'aria-current': true } : { accessibilityState: { selected } } : {})}
           onPress={onPress}
           onPressIn={() => setPressed(true)}
           onPressOut={() => setPressed(false)}

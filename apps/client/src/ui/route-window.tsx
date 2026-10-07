@@ -1,6 +1,6 @@
 import { WindowConfirmation, type WindowConfirmationRequest } from './window-confirmation';
 import { ConfirmActions, Stack, Text } from './primitives';
-import { useIsFocused, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useGlobalSearchParams, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { View } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
@@ -27,6 +27,18 @@ export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 're
     else router.replace(`/households/${encodeURIComponent(id)}/${resource}`);
   }, [hasBackground, router, id, resource]);
   return { close, hasBackground };
+}
+
+/** Family content opens beside its list on a wide screen; account and setup windows stay centered. */
+const DOCKED_RESOURCES: ReadonlySet<RouteWindowProps['resource']> = new Set(['tasks', 'events', 'notes', 'recurrence-rules']);
+
+/**
+ * The item whose window is open above this page, so its row can be marked
+ * while the window is docked beside the list.
+ */
+export function useOpenWindowItem(param: 'taskId' | 'eventId' | 'noteId'): string | undefined {
+  const value = useGlobalSearchParams<Record<typeof param, string>>()[param];
+  return typeof value === 'string' ? value : undefined;
 }
 
 /**
@@ -114,7 +126,7 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
       <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={focused ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
-      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} headerActions={confirmation || step ? null : headerActions} {...(footer === undefined || confirmation || step ? {} : { footer })}>
+      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={size === 'editor' && DOCKED_RESOURCES.has(resource)} headerActions={confirmation || step ? null : headerActions} {...(footer === undefined || confirmation || step ? {} : { footer })}>
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>
