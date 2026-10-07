@@ -58,7 +58,8 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
   }, [viewState, id, rememberHousehold]);
 
   const handleSwitch = useCallback(async (nextId: string) => {
-    if (nextId !== householdId && await switchHousehold(nextId)) {
+    // An account page belongs to no household, so it stays put after a switch.
+    if (nextId !== householdId && await switchHousehold(nextId) && active !== 'account') {
       router.replace(householdPath(nextId, active));
     }
     setMenuOpen(false);
@@ -96,6 +97,7 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
           <HouseholdNavigation
             householdId={householdId}
             active={active}
+            belowActive={subpage}
             header={<HouseholdHeader householdName={householdName} onOpenSwitcher={openMenu} placement="sidebar" />}
             footer={<View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[3] }}><InboxButton /><AccountMenu variant="row" /></View>}
           >
@@ -120,5 +122,34 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
         links={narrow ? familyPages.map(page => ({ label: page.label, icon: page.icon, onPress: () => router.push(householdPath(householdId, page.key)) })) : []}
       />
     </>
+  );
+}
+
+/**
+ * A page of the person rather than of a household, such as 收件箱 or 个人中心.
+ * A wide screen keeps the current household's sidebar around it, so reaching
+ * it from the sidebar does not drop the whole frame. A phone, or an account
+ * that has no household yet, shows it as a plain page with a back button.
+ */
+export function AccountScreen({ accessibilityLabel, refreshing, onRefresh, showInbox = true, children }: {
+  accessibilityLabel: string;
+  refreshing?: boolean;
+  onRefresh?: () => void;
+  /** Off on the inbox itself. */
+  showInbox?: boolean;
+  children: ReactNode;
+}) {
+  const router = useRouter();
+  const wide = useWindowDimensions().width >= theme.layout.navigationBreakpoint;
+  const { currentHouseholdId } = useHouseholdContext();
+  const refresh = { ...(refreshing === undefined ? {} : { refreshing }), ...(onRefresh ? { onRefresh } : {}) };
+  if (wide && currentHouseholdId !== null) {
+    return <HouseholdScreen active="account" subpage accessibilityLabel={accessibilityLabel} width="reading" {...refresh}>{children}</HouseholdScreen>;
+  }
+  return (
+    <AppShell title="" accessibilityLabel={accessibilityLabel} showBack showProfile showInbox={showInbox} width="reading" {...refresh}
+      onBack={() => router.canGoBack() ? router.back() : router.replace('/household-handoff')}>
+      {children}
+    </AppShell>
   );
 }

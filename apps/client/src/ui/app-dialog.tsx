@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import X from 'lucide-react-native/icons/x';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
-import { Button, Heading, Inline } from './primitives';
+import { Button, Heading, Inline, useFocusVisible, webFocusRing } from './primitives';
 import { SheetActionSlot, type SheetAction } from './sheet-action';
 import { theme } from './theme';
 
@@ -46,8 +46,9 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   // A dialog can replace its content with a confirmation step. Focus its safe
   // close action again; the element that opened that step may no longer exist.
   useEffect(() => { focus(); }, [title, focus]);
+  const { focusVisible, onFocus, onBlur } = useFocusVisible();
   const closeButton = (
-    <Pressable ref={initial} accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent, borderRadius: theme.borderRadii.full })}>
+    <Pressable ref={initial} accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} onFocus={onFocus} onBlur={onBlur} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent, borderRadius: theme.borderRadii.full, ...webFocusRing(focusVisible) })}>
       <X size={sheet ? theme.controlSizes.icon + theme.spacing[1] : theme.controlSizes.icon} color={sheet ? theme.colors.ink : theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
     </Pressable>
   );

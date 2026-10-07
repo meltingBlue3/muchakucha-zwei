@@ -453,7 +453,7 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(detail).toBeVisible();
     await expect(detail.getByText(ENDED_DETAIL_NOTE, { exact: true })).toBeVisible();
     await expect(detail.getByLabel(END_ACTION)).toHaveAttribute('aria-disabled', 'true');
-    await expect(detail.getByLabel('保存更改')).toHaveAttribute('aria-disabled', 'true');
+    await expect(detail.getByRole('button', { name: '保存', exact: true })).toHaveAttribute('aria-disabled', 'true');
   });
 });
 
@@ -478,14 +478,14 @@ test('a direct rule window preserves draft choices and saves only after confirma
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`rule-window-${width}.png`) });
   }
-  await page.getByRole('button', { name: '保存更改', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(1);
   const unchanged = await apiCall(account.accessToken, 'GET', `/api/v1/households/${householdId}/recurrence-rules/${ruleId}`);
   expect(unchanged.status).toBe(200);
   expect(unchanged.body.freq).toBe('daily');
   await page.keyboard.press('Escape');
   await expect(repeat).toHaveAccessibleName(/^重复规则，每周.重复$/);
-  await page.getByRole('button', { name: '保存更改', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('button', { name: '确认保存', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/households/${householdId}/recurrence-rules$`));
   const saved = await listRules(account.accessToken, householdId);

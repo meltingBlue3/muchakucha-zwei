@@ -115,7 +115,7 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
       {mode === 'profile' || mode === 'logout' ? (
         <AppDialog title={title} busy={busy} onClose={close} trigger={trigger}>
           {mode === 'profile' ? (
-            <ProfileForm showHeading={false} onBusyChange={setBusy} apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} />
+            <ProfileForm onBusyChange={setBusy} apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} />
           ) : (
             <LogoutAction confirmationOnly onCancel={close} onBusyChange={setBusy} apiClient={sessionApiClient} onLoggedOut={() => router.replace('/login')} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} />
           )}

@@ -90,7 +90,7 @@ export default function LabelsIndexRoute() {
 
   return <HouseholdScreen active="labels" subpage accessibilityLabel="标签管理" width="reading" refreshing={refreshing} onRefresh={() => void refresh()}>
     <Stack gap={5}>
-      <PageIntro title="标签" subtitle={canManage ? '给日程和任务分类，全家共用。' : '标签由所有者和管理员维护，你可以给日程和任务使用它们。'} action={canManage ? <Button label="创建" accessibilityLabel="创建标签" onPress={() => open({ kind: 'create' })} /> : undefined} />
+      <PageIntro title="标签管理" subtitle={canManage ? '给日程和任务分类，全家共用。' : '标签由所有者和管理员维护，你可以给日程和任务使用它们。'} action={canManage ? <Button label="创建" accessibilityLabel="创建标签" onPress={() => open({ kind: 'create' })} /> : undefined} />
       {loading ? <LoadingState label="正在加载标签" /> : null}
       {error ? <LoadError message={error} onRetry={() => void fetchLabels()} /> : null}
       {!loading && !error && !labels.length ? <EmptyState message={canManage ? '还没有标签，点击“创建”为日程和任务分类。' : '还没有标签，所有者或管理员创建后即可使用。'} /> : null}

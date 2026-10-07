@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import type { SessionStateStore } from '../auth/session-state';
 import type { SessionTransport } from '../../platform/session/session-transport';
-import { Banner, Button, Heading, LoadError, Spinner, Stack, Text, TextField } from '../../ui/primitives';
+import { Banner, Button, LoadError, Spinner, Stack, Text, TextField } from '../../ui/primitives';
 import { MemberAvatar } from '../../ui/member-avatar';
 
 const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
@@ -23,7 +23,6 @@ export interface ProfileFormProps {
   apiClient: ProfileApi;
   sessionStateStore: SessionStateStore;
   sessionTransport: SessionTransport;
-  showHeading?: boolean;
   onBusyChange?: (busy: boolean) => void;
 }
 
@@ -44,7 +43,8 @@ function isDisplayNameFailure(error: unknown): boolean {
   );
 }
 
-export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, showHeading = true, onBusyChange }: ProfileFormProps) => {
+/** The nickname editor inside the 个人资料 window, opened from the account menu or 个人中心. */
+export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, onBusyChange }: ProfileFormProps) => {
   const [reload, setReload] = useState(0);
   const [savedName, setSavedName] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
@@ -143,10 +143,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, sh
 
   return (
     <Stack gap={6}>
-      <Stack gap={2}>
-        {userId ? <MemberAvatar id={userId} name={savedName || '我'} size="lg" /> : null}
-        {showHeading ? <Heading>个人资料</Heading> : null}
-      </Stack>
+      {userId ? <MemberAvatar id={userId} name={savedName || '我'} size="lg" /> : null}
       {loadError ? (
         <LoadError title="暂时无法加载资料" message={loadError} retryLabel="重新加载资料" onRetry={() => setReload((value) => value + 1)} />
       ) : errors.root?.server?.message ? (
@@ -197,7 +194,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, sh
       />
       <Button
         disabled={loadError !== undefined || isSubmitting || !isDirty}
-        label="保存昵称"
+        label="保存"
         loading={isSubmitting}
         onPress={() => void submit()}
       />

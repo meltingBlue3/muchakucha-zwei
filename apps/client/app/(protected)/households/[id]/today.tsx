@@ -336,9 +336,9 @@ export default function TodayRoute() {
   );
 }
 
-/** A quiet full-width toggle under a group, such as 「查看全部待安排（5）」. */
+/** A quiet compact toggle under a group, such as 「查看全部待安排（5）」. */
 function MoreButton({ label, expanded, onPress }: { label: string; expanded: boolean; onPress(): void }) {
-  return <Button label={label} tone="secondary" expanded={expanded} onPress={onPress} style={{ marginTop: theme.spacing[2], alignSelf: 'flex-start' }} />;
+  return <Button label={label} tone="secondary" size="compact" expanded={expanded} onPress={onPress} style={{ marginTop: theme.spacing[2], alignSelf: 'flex-start' }} />;
 }
 
 type DayEntry =

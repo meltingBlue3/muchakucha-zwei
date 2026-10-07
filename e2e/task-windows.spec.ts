@@ -390,7 +390,7 @@ for (const width of [390, 1440]) {
     await custom.getByRole('button', { name: '完成', exact: true }).click();
     await expect(repeat).toHaveAccessibleName('重复规则，每 2 周的周一重复');
 
-    await window.getByRole('button', { name: '保存更改', exact: true }).click();
+    await window.getByRole('button', { name: '保存', exact: true }).click();
     const confirm = page.getByRole('dialog', { name: '确认保存重复安排', exact: true });
     await expect(confirm.getByText('这会影响明天起的每一次。', { exact: true })).toBeVisible();
     await confirm.getByRole('button', { name: '确认保存', exact: true }).click();

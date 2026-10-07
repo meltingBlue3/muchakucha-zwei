@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import Settings from 'lucide-react-native/icons/settings';
 import type { AssistantProviderUsageDto } from '@muchakucha/api-client';
 import { sessionApiClient } from '../auth/session-runtime';
-import { AppShell } from '../../ui/household-components';
+import { HouseholdScreen } from '../households/household-screen';
 import { CardActionsMenu } from '../../ui/card-actions-menu';
 import { PageIntro } from '../../ui/page-intro';
 import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
@@ -33,8 +33,9 @@ function AssistantProviders({ householdId, householdName, writable }: AssistantH
   const root = assistantPath(householdId);
   const load = useCallback((token: string) => sessionApiClient.listAssistantProviders(token, householdId), [householdId]);
   const query = useAssistantQuery(load);
-  // PageIntro carries the title; the top bar only goes back.
-  return <AppShell showBack accessibilityLabel="助手模型配置" refreshing={query.loading && query.data !== null} onRefresh={() => { void query.reload(); }}>
+  // A subpage of 助手: a phone gets a back button and PageIntro carries the
+  // title; a wide screen keeps the sidebar with 助手 selected.
+  return <HouseholdScreen active="assistant" subpage width="reading" accessibilityLabel="助手模型配置" refreshing={query.loading && query.data !== null} onRefresh={() => { void query.reload(); }}>
     <Stack gap={4}>
       <PageIntro title="模型配置" action={<Button label="添加" accessibilityLabel="添加模型配置" disabled={!writable} onPress={() => router.push(`${root}/providers/new`)} />} />
       <Text variant="bodySm" color="inkMuted">{householdName} · 配置由创建者管理</Text>
@@ -56,7 +57,7 @@ function AssistantProviders({ householdId, householdName, writable }: AssistantH
         {provider.ownedByMe ? null : <Text variant="caption">如需修改，请联系配置创建者。</Text>}
       </SettingsSection>)}
     </Stack>
-  </AppShell>;
+  </HouseholdScreen>;
 }
 
 export default function AssistantProvidersScreen() {

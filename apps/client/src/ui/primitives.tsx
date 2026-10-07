@@ -163,6 +163,28 @@ export const getButtonFill = (state: { disabled: boolean; pressed: boolean }, to
       ? state.pressed ? theme.colors.destructivePressed : theme.colors.destructive
       : state.pressed ? theme.colors.primaryPressed : theme.colors.primary;
 
+/**
+ * The Web keyboard focus ring: a vermilion outline drawn outside the control,
+ * so focusing never shifts the layout. Native platforms draw their own.
+ */
+export const webFocusRing = (focused: boolean) =>
+  Platform.OS === 'web' && focused
+    ? { outlineColor: theme.colors.focusRing, outlineOffset: theme.focus.offset, outlineStyle: 'solid' as const, outlineWidth: theme.focus.width }
+    : {};
+
+/**
+ * Whether a control holds keyboard focus, judged like `:focus-visible`: a tap,
+ * a click or a window moving focus into itself shows no ring.
+ */
+export const useFocusVisible = () => {
+  const [focusVisible, setFocusVisible] = useState(false);
+  return {
+    focusVisible,
+    onFocus: (event: { target: unknown }) => setFocusVisible(Platform.OS === 'web' && (event.target as Element).matches(':focus-visible')),
+    onBlur: () => setFocusVisible(false),
+  };
+};
+
 export const Button = ({ disabled, label, loading = false, tone = 'primary', expanded, size = 'regular', style, ...props }: ButtonProps) => {
   const activeTheme = useTheme<Theme>();
   const unavailable = disabled || loading;
@@ -203,8 +225,7 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', exp
           minHeight: compact ? activeTheme.controlSizes.compact : activeTheme.controlSizes.primary,
           minWidth: activeTheme.controlSizes.touchTarget,
           paddingHorizontal: compact ? activeTheme.spacing[4] : activeTheme.spacing[5],
-          // The ring sits outside the pill on Web, so focusing never shifts the layout.
-          ...(Platform.OS === 'web' && focused ? { outlineColor: activeTheme.colors.focusRing, outlineOffset: activeTheme.focus.offset, outlineStyle: 'solid', outlineWidth: activeTheme.focus.width } : {}),
+          ...webFocusRing(focused),
         },
         typeof style === 'function' ? style(state) : style,
       ]}

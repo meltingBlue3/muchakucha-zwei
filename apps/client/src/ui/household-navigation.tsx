@@ -34,8 +34,12 @@ export const familyPages: ReadonlyArray<{ key: 'settings' | 'labels' | 'recurren
 ];
 
 export type FamilyPage = typeof familyPages[number]['key'];
-/** `more` is the household page reached by link; it has no tab of its own. */
-export type HouseholdTab = typeof destinations[number]['key'] | FamilyPage | 'more';
+/**
+ * `more` is the household page reached by link; it has no tab of its own.
+ * `account` is a page of the person rather than the household (收件箱、个人中心)
+ * shown inside the household frame on a wide screen.
+ */
+export type HouseholdTab = typeof destinations[number]['key'] | FamilyPage | 'more' | 'account';
 
 export const householdPath = (householdId: string, page: string): `/households/${string}` => `/households/${encodeURIComponent(householdId)}/${page}`;
 
@@ -45,9 +49,11 @@ export const householdPath = (householdId: string, page: string): `/households/$
  * family pages, any page-specific content (`children`, such as the assistant's
  * conversations) and the account at the bottom (`footer`).
  */
-export function HouseholdNavigation({ householdId, active, children, header, footer }: {
+export function HouseholdNavigation({ householdId, active, belowActive = false, children, header, footer }: {
   householdId: string;
   active: HouseholdTab;
+  /** The page sits below the selected destination (助手 › 模型配置), so selecting it again goes back up. */
+  belowActive?: boolean;
   children?: ReactNode;
   header?: ReactNode;
   footer?: ReactNode;
@@ -56,7 +62,7 @@ export function HouseholdNavigation({ householdId, active, children, header, foo
   const { width } = useWindowDimensions();
   const wide = width >= theme.layout.navigationBreakpoint;
   const go = (key: string) => {
-    if (active !== key) router.replace(householdPath(householdId, key));
+    if (active !== key || belowActive) router.replace(householdPath(householdId, key));
   };
 
   if (!wide) {

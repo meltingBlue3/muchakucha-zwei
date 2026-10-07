@@ -63,9 +63,9 @@ describe('profile nickname form contract', () => {
     await fireEvent.press(await view.findByRole('button', { name: '重新加载资料' }));
     await waitFor(() => expect(view.getByLabelText('昵称').props.value).toBe(currentUser.displayName));
     expect(view.queryByText('暂时无法加载资料')).toBeNull();
-    expect(view.getByRole('button', { name: '保存昵称' }).props.accessibilityState.disabled).toBe(true);
+    expect(view.getByRole('button', { name: '保存' }).props.accessibilityState.disabled).toBe(true);
     await fireEvent.changeText(view.getByLabelText('昵称'), '新的家庭昵称');
-    expect(view.getByRole('button', { name: '保存昵称' }).props.accessibilityState.disabled).toBe(false);
+    expect(view.getByRole('button', { name: '保存' }).props.accessibilityState.disabled).toBe(false);
   });
 
   test('loads only the authenticated subject profile and displays the current nickname', async () => {
@@ -82,13 +82,13 @@ describe('profile nickname form contract', () => {
     await fireEvent(nickname, 'blur');
     // Leaving an empty field is not yet a mistake; saving it is.
     expect(view.queryByText('请输入昵称。')).toBeNull();
-    await fireEvent.press(view.getByRole('button', { name: '保存昵称' }));
+    await fireEvent.press(view.getByRole('button', { name: '保存' }));
     expect(await view.findByText('请输入昵称。')).toBeTruthy();
 
     await fireEvent.changeText(nickname, '  新昵称  ');
     // The shown error follows the correction without waiting for blur.
     expect(view.queryByText('请输入昵称。')).toBeNull();
-    await fireEvent.press(view.getByRole('button', { name: '保存昵称' }));
+    await fireEvent.press(view.getByRole('button', { name: '保存' }));
     await waitFor(() =>
       expect(apiClient.updateMe).toHaveBeenCalledWith(
         'current-access-token',
@@ -101,7 +101,7 @@ describe('profile nickname form contract', () => {
   test('allows duplicate display names while preserving the authenticated subject', async () => {
     const { apiClient, sessionStateStore, view } = await renderProfile();
     await fireEvent.changeText(view.getByLabelText('昵称'), '可重复的家庭昵称');
-    await fireEvent.press(view.getByRole('button', { name: '保存昵称' }));
+    await fireEvent.press(view.getByRole('button', { name: '保存' }));
 
     const success = await view.findByText('昵称已更新。');
     expect(success.parent?.props.accessibilityLiveRegion).toBe('polite');
@@ -123,10 +123,10 @@ describe('profile nickname form contract', () => {
     );
     const { view } = await renderProfile({ apiClient });
     await fireEvent.changeText(view.getByLabelText('昵称'), '等待保存');
-    const save = view.getByRole('button', { name: '保存昵称' });
+    const save = view.getByRole('button', { name: '保存' });
     await fireEvent.press(save);
     await waitFor(() =>
-      expect(view.getByText('保存昵称').parent?.props.accessibilityState).toEqual({
+      expect(view.getByText('保存').parent?.props.accessibilityState).toEqual({
         busy: true,
         disabled: true,
       }),
@@ -147,11 +147,11 @@ describe('profile nickname form contract', () => {
       .mockRejectedValueOnce(new Error('private upstream detail'));
     const { view } = await renderProfile({ apiClient });
     await fireEvent.changeText(view.getByLabelText('昵称'), '字段错误');
-    await fireEvent.press(view.getByRole('button', { name: '保存昵称' }));
+    await fireEvent.press(view.getByRole('button', { name: '保存' }));
     expect(await view.findByText('请输入 1–80 个字符的昵称。')).toBeTruthy();
 
     await fireEvent.changeText(view.getByLabelText('昵称'), '服务错误');
-    await fireEvent.press(view.getByRole('button', { name: '保存昵称' }));
+    await fireEvent.press(view.getByRole('button', { name: '保存' }));
     expect(await view.findByText('这次没有完成。请检查网络后重试。')).toBeTruthy();
     expect(JSON.stringify(view.toJSON())).not.toContain('private upstream detail');
   });
