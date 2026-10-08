@@ -101,8 +101,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
   // an empty due date produced `startsOn: ''`, which fails the server's
   // `startsOn` format validation on every recurring create. Scoped to
   // create only — an existing recurring task's due date is a real,
-  // independently-editable field (UpdateSeriesDto.dueDate), so editing
-  // keeps the field and its current start-date coupling unchanged.
+  // independently-editable field and must not move the repeat rule's anchor.
   const isCreate = initial === undefined;
   // CR-03: the /series endpoint has no way to detach an occurrence into a
   // standalone item — selecting 不重复 here omits `recurrence` from the
@@ -140,17 +139,14 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
   const titleErrorId = `task-title-error-${useId()}`;
   const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, string>>({});
 
-  // WR-07: an empty due date must never become the rule's startsOn — the
-  // server rejects startsOn: ''. A new task's rule starts today (the server
-  // derives each occurrence's due date from the rule), and an existing task
-  // without a due date falls back to today as well.
-  const recurrenceStart = isCreate || form.dueDate === '' ? todayIso : form.dueDate;
+  // Existing repeats keep their anchor even when this occurrence moves or
+  // loses its due date. Other tasks use a nonempty default for the picker.
+  const recurrenceStart = initial?.recurrence?.startsOn ?? (isCreate || form.dueDate === '' ? todayIso : form.dueDate);
 
   const updateField = useCallback(<K extends keyof TaskInput>(key: K, value: TaskInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
     if (key === 'title' && typeof value === 'string' && value.trim() !== '') setTitleError(null);
-    // The due date is the start the repeat's end date is checked against.
     if (key === 'recurrence' || key === 'dueDate') setRecurrenceErrors({});
   }, [setForm]);
 

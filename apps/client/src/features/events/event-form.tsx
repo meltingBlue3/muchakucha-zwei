@@ -110,6 +110,9 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
     const date = defaultDate ?? toDateIso(new Date());
     return { ...EMPTY_INPUT, startDate: date, endDate: date };
   });
+  // An existing series keeps its own anchor when just this occurrence moves.
+  // New repeats still follow the event's first date.
+  const recurrenceStart = initial?.recurrence?.startsOn ?? form.startDate;
   const [error, setError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   // Start and end checks, shown under the end row.
@@ -131,7 +134,6 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
     setForm((prev) => ({ ...prev, ...moveEventStart(prev, next) }));
     setError(null);
     setTimeError(null);
-    // The start date is what the repeat's end date is checked against.
     setRecurrenceErrors({});
   }, [setForm]);
 
@@ -141,7 +143,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
       titleInput.current?.focus();
       return;
     }
-    if (form.recurrence?.endsOn !== undefined && form.recurrence.endsOn <= form.startDate) {
+    if (form.recurrence?.endsOn !== undefined && form.recurrence.endsOn <= recurrenceStart) {
       setRecurrenceErrors({ 'recurrence.endsOn': '重复的截止日期必须晚于开始日期。' });
       return;
     }
@@ -204,7 +206,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
         setError('保存失败，请检查网络后重试。');
       }
     }
-  }, [form, onSubmit]);
+  }, [form, onSubmit, recurrenceStart]);
 
   return (
     <Stack gap={0}>
@@ -261,7 +263,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
           disableTurnOff={isExistingRecurring}
           errors={recurrenceErrors}
           onChange={setRecurrence}
-          startDate={form.startDate}
+          startDate={recurrenceStart}
           value={form.recurrence}
         />
       </FormSection>
