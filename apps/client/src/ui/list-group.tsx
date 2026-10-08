@@ -31,8 +31,9 @@ export function ListGroup({ children }: { children: ReactNode }) {
  * the time column, between what has passed and what is still to come.
  */
 export function NowMarker({ time }: { time: string }) {
+  // As tall as the time's line: Android clips text that overflows its row.
   return (
-    <View accessible accessibilityRole="image" accessibilityLabel={`现在 ${time}`} style={{ flexDirection: 'row', alignItems: 'center', height: theme.spacing[3] }}>
+    <View accessible accessibilityRole="image" accessibilityLabel={`现在 ${time}`} style={{ flexDirection: 'row', alignItems: 'center', height: theme.typography.time.lineHeight }}>
       <Text variant="time" color="accent" style={{ width: theme.layout.timeColumn + theme.spacing[1], paddingLeft: theme.spacing[4], fontFamily: theme.fontFamilies.numericStrong }}>{time}</Text>
       <View style={{ width: theme.spacing[2] - 2, height: theme.spacing[2] - 2, borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.accent }} />
       <View style={{ flex: 1, height: theme.borderWidths.focus - 0.5, backgroundColor: theme.colors.accent }} />

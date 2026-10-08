@@ -92,7 +92,8 @@ export function CalendarMonth({
       style={{
         width: cellSize,
         height: cellSize,
-        borderRadius: activeTheme.borderRadii.full,
+        // Half the size, not `full`: Android draws an oversized radius as a square.
+        borderRadius: cellSize / 2,
         alignItems: 'center',
         justifyContent: 'center',
         // Same marks as the date picker: a filled circle selects, vermilion marks today.
