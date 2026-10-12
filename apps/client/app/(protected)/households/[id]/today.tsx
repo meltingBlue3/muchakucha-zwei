@@ -7,8 +7,8 @@ import { PageIntro } from '../../../../src/ui/page-intro';
 import { formatDate, formatWeekday, toTimeValue } from '../../../../src/ui/date-values';
 import { GroupLabel, ListGroup, NowMarker } from '../../../../src/ui/list-group';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, useWindowDimensions } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { AppState, View, useWindowDimensions } from 'react-native';
 import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
@@ -101,7 +101,8 @@ export default function TodayRoute() {
   const [tasks, setTasks] = useState<TaskResponseDto[]>([]);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const loaded = useRef(false);
+  const loadedDay = useRef<string | null>(null);
+  const requestGeneration = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [, setCalendarDate] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, todayIso());
@@ -109,8 +110,15 @@ export default function TodayRoute() {
   const [allOverdue, setAllOverdue] = useWorkspaceState(`view:${id}:today:allOverdue`, false);
   const [allUnscheduled, setAllUnscheduled] = useWorkspaceState(`view:${id}:today:allUnscheduled`, false);
   const now = useMinuteClock();
+  const currentDate = toDateIso(now.date);
+  // The API pads its range for client time zones; only local dates belong here.
+  const todayEvents = useMemo(() => events.filter(event =>
+    toDateIso(new Date(event.startTime)) <= currentDate &&
+    toDateIso(new Date(event.endTime)) >= currentDate,
+  ), [events, currentDate]);
 
   const householdId = id ?? currentHouseholdId;
+  const dayKey = `${householdId}:${currentDate}`;
 
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -122,40 +130,46 @@ export default function TodayRoute() {
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === null || householdId === '') return;
-    if (!loaded.current) setLoading(true);
+    const request = ++requestGeneration.current;
+    if (loadedDay.current !== dayKey) setLoading(true);
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
+      if (request !== requestGeneration.current) return;
       if (token === null) {
         setError('登录已过期，请重新登录。');
         return;
       }
 
-      const today = todayIso();
       const [eventsResult, tasksResult, householdResult] = await Promise.all([
-        sessionApiClient.listEvents(token, householdId, today, today),
+        // Use the calendar query so events spanning into today are included.
+        sessionApiClient.listEvents(token, householdId, currentDate, currentDate, undefined, undefined, true),
         sessionApiClient.listTasks(token, householdId),
         sessionApiClient.getHousehold(token, householdId),
       ]);
 
-      loaded.current = true;
+      if (request !== requestGeneration.current) return;
+      loadedDay.current = dayKey;
       setEvents(eventsResult.events);
       setMembers(householdResult.members);
       setTasks(tasksResult.tasks);
-    } catch (err) {
-      setError(loaded.current ? '刷新失败，仍显示上次的安排。请检查网络后重试。' : '无法加载今日数据，请检查网络连接后重试。');
+    } catch {
+      if (request === requestGeneration.current) setError(loadedDay.current === dayKey
+        ? '刷新失败，仍显示上次的安排。请检查网络后重试。'
+        : '无法加载今日数据，请检查网络连接后重试。');
     } finally {
-      setLoading(false);
+      if (request === requestGeneration.current) setLoading(false);
     }
-  }, [householdId]);
+  }, [householdId, currentDate, dayKey]);
 
   const completion = useTaskCompletion(householdId ?? undefined, fetchData);
 
   const { overdueTasks, todayTasks, unscheduledTasks, approachingTasks, otherUpcomingTasks } = useMemo(
     () => partitionTodayTasks(tasks, completion.undoTaskId),
-    [tasks, completion.undoTaskId],
+    // The partitions read the local clock even when the task data is unchanged.
+    [tasks, completion.undoTaskId, currentDate],
   );
-  const day = useMemo(() => arrangeDay(events, todayTasks), [events, todayTasks]);
+  const day = useMemo(() => arrangeDay(todayEvents, todayTasks), [todayEvents, todayTasks]);
 
   const previewTasks = (items: TaskResponseDto[], expanded: boolean) => expanded
     ? items
@@ -177,6 +191,7 @@ export default function TodayRoute() {
   useFocusEffect(
     useCallback(() => {
       void fetchData();
+      return () => { requestGeneration.current++; };
     }, [fetchData]),
   );
 
@@ -223,15 +238,15 @@ export default function TodayRoute() {
   );
 
   const wide = width >= theme.layout.navigationBreakpoint;
-  const ready = !loading && (error === null || loaded.current);
-  const nothingToday = events.length === 0 && todayTasks.length === 0;
+  const ready = !loading && loadedDay.current === dayKey;
+  const nothingToday = todayEvents.length === 0 && todayTasks.length === 0;
   const upcomingCount = approachingTasks.length + otherUpcomingTasks.length;
   const nowIndex = day.timeline.findIndex(entry => entry.at > now.minutes);
 
   const summary = (
     <Text variant="bodySm">
       {formatWeekday(now.date)}
-      {ready ? ` · ${events.length} 个日程 · ${todayTasks.length} 件待办` : ''}
+      {ready ? ` · ${todayEvents.length} 个日程 · ${todayTasks.length} 件待办` : ''}
       {ready && overdueTasks.length > 0 ? <Text variant="bodySm" color="accent">{` · ${overdueTasks.length} 件逾期`}</Text> : null}
     </Text>
   );
@@ -372,12 +387,21 @@ export function arrangeDay(events: EventResponseDto[], todayTasks: TaskResponseD
   return { allDay, timeline };
 }
 
-/** The current time, refreshed each minute so the now marker keeps its place. */
+/** Refresh at minute boundaries, on navigation focus and after app suspension. */
 function useMinuteClock(): { date: Date; minutes: number } {
   const [date, setDate] = useState(() => new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setDate(new Date()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
+  useFocusEffect(useCallback(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      clearTimeout(timer);
+      setDate(new Date());
+      timer = setTimeout(tick, 60_000 - Date.now() % 60_000);
+    };
+    tick();
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') tick();
+    });
+    return () => { clearTimeout(timer); subscription.remove(); };
+  }, []));
   return { date, minutes: date.getHours() * 60 + date.getMinutes() };
 }
