@@ -39,9 +39,13 @@ export const sessionApiClient = withSessionRetry(rawApiClient, {
 
 // Session changes are synchronous: account drafts are loaded before protected
 // forms mount, and sign-out clears them even when navigating outside that tree.
+// Expiry keeps them for the same account's next sign-in; revocation and replay
+// are treated like sign-out.
 sessionStateStore.subscribe((state) => {
   if (state.kind === 'authenticated' && state.session.currentUser !== undefined) {
     draftWorkspace.activateAccount(state.session.currentUser.id);
+  } else if (state.kind === 'reauthRequired' && state.reason === 'expired') {
+    draftWorkspace.suspendSession();
   } else if (state.kind === 'unauthenticated' || state.kind === 'reauthRequired') {
     draftWorkspace.endSession();
   }

@@ -42,6 +42,12 @@ export function createWorkspaceState(storage?: DraftStorage) {
       accountId = null; allowedHouseholds = null;
       emit();
     },
+    /** An expired session detaches the account without deleting its persisted drafts. */
+    suspendSession() {
+      values.clear(); dirtyDrafts.clear();
+      accountId = null; allowedHouseholds = null;
+      emit();
+    },
     retainHouseholds(ids: string[]) {
       allowedHouseholds = new Set(ids);
       for (const key of values.keys()) {

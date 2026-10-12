@@ -51,6 +51,18 @@ test('logout removes persisted drafts and stale mounted editors cannot recreate 
   expect(open('alice').get(a)).toBeUndefined();
 });
 
+test('an expired session keeps persisted drafts for the next sign-in but detaches mounted editors', () => {
+  const { open, values } = disk();
+  const store = open('alice');
+  store.set(a, { title: '过期前的草稿', body: '' });
+  store.suspendSession();
+  expect(store.get(a)).toBeUndefined();
+  store.set(a, { title: '迟到的更新', body: '' });
+  expect(JSON.parse(values.get('alice')!).drafts[a]).toEqual({ title: '过期前的草稿', body: '' });
+  store.activateAccount('alice');
+  expect(store.get(a)).toEqual({ title: '过期前的草稿', body: '' });
+});
+
 test('authoritative membership loss purges only that household, including after a restart', () => {
   const { open } = disk();
   const store = open('alice');
