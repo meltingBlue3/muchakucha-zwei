@@ -8,7 +8,8 @@ import { formatDate, formatWeekday, toTimeValue } from '../../../../src/ui/date-
 import { GroupLabel, ListGroup, NowMarker } from '../../../../src/ui/list-group';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { AppState, View, useWindowDimensions } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
+import { useMinuteClock } from '../../../../src/ui/use-minute-clock';
 import type { EventResponseDto, TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../src/features/auth/session-runtime';
@@ -385,23 +386,4 @@ export function arrangeDay(events: EventResponseDto[], todayTasks: TaskResponseD
   }
   timeline.sort((a, b) => a.at - b.at);
   return { allDay, timeline };
-}
-
-/** Refresh at minute boundaries, on navigation focus and after app suspension. */
-function useMinuteClock(): { date: Date; minutes: number } {
-  const [date, setDate] = useState(() => new Date());
-  useFocusEffect(useCallback(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      clearTimeout(timer);
-      setDate(new Date());
-      timer = setTimeout(tick, 60_000 - Date.now() % 60_000);
-    };
-    tick();
-    const subscription = AppState.addEventListener('change', state => {
-      if (state === 'active') tick();
-    });
-    return () => { clearTimeout(timer); subscription.remove(); };
-  }, []));
-  return { date, minutes: date.getHours() * 60 + date.getMinutes() };
 }

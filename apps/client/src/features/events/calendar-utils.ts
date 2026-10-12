@@ -20,9 +20,7 @@ export function getDayNames(): readonly string[] {
   return WEEK_HEADER;
 }
 
-export function getCalendarMonth(year: number, month: number): CalendarMonth {
-  const today = new Date();
-  const todayIso = toDateIso(today);
+export function getCalendarMonth(year: number, month: number, todayIso = toDateIso(new Date())): CalendarMonth {
 
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);

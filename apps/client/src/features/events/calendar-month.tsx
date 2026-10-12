@@ -8,7 +8,7 @@ import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
 import { formatDayLabel, parseDateValue } from '../../ui/date-values';
-import { getCalendarMonth, getDayNames, formatMonthLabel, type CalendarDay } from './calendar-utils';
+import { getCalendarMonth, getDayNames, formatMonthLabel, toDateIso, type CalendarDay } from './calendar-utils';
 
 /** What a detailed month cell shows for one event. */
 export interface CalendarCellEvent {
@@ -18,6 +18,7 @@ export interface CalendarCellEvent {
 }
 
 interface CalendarMonthProps {
+  todayIso?: string;
   year: number;
   month: number;
   eventsByDate: Map<string, number>;
@@ -45,6 +46,7 @@ const TITLES_PER_DAY = 3;
  * when the grid is wide enough.
  */
 export function CalendarMonth({
+  todayIso = toDateIso(new Date()),
   year,
   month,
   eventsByDate,
@@ -61,7 +63,7 @@ export function CalendarMonth({
 }: CalendarMonthProps) {
   const activeTheme = useTheme<Theme>();
   const dayNames = getDayNames();
-  const calendar = useMemo(() => getCalendarMonth(year, month), [year, month]);
+  const calendar = useMemo(() => getCalendarMonth(year, month, todayIso), [year, month, todayIso]);
   const week = mode === 'week';
   const detailed = !week && eventTitlesByDate !== undefined;
   const weeks = week

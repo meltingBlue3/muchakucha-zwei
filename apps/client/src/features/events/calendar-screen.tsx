@@ -7,6 +7,7 @@ import { FilterActions, FilterButton } from '../../ui/filter-controls';
 import { FilterOptions } from '../../ui/filter-options';
 import { PageIntro } from '../../ui/page-intro';
 import { formatDate } from '../../ui/date-values';
+import { useMinuteClock } from '../../ui/use-minute-clock';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { GroupLabel, ListGroup } from '../../ui/list-group';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -51,7 +52,8 @@ export default function CalendarScreen() {
   const requestGeneration = useRef(0);
   const { currentHouseholdId } = useHouseholdContext();
 
-  const today = useMemo(() => new Date(), []);
+  const { date: today } = useMinuteClock();
+  const todayIso = toDateIso(today);
   const [year, setYear] = useWorkspaceState(`view:${id}:events:year`, today.getFullYear());
   const [month, setMonth] = useWorkspaceState(`view:${id}:events:month`, today.getMonth());
   const [selectedDateIso, setSelectedDateIso] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, toDateIso(today));
@@ -190,7 +192,7 @@ export default function CalendarScreen() {
     date.setDate(date.getDate() + days);
     handleSelectDate(toDateIso(date));
   };
-  const selectedIsToday = selectedDateIso === toDateIso(new Date());
+  const selectedIsToday = selectedDateIso === todayIso;
 
   return (
     <HouseholdScreen
@@ -218,6 +220,7 @@ export default function CalendarScreen() {
         <View style={{ flexDirection: wide ? 'row' : 'column', gap: activeTheme.spacing[6], alignItems: wide ? 'flex-start' : 'stretch' }}>
           <View testID="calendar-month-pane" style={{ flex: wide ? 2 : undefined, minWidth: 0 }}>
             <CalendarMonth
+              todayIso={todayIso}
               year={year}
               month={month}
               eventsByDate={eventsByDate}

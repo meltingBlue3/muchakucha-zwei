@@ -28,7 +28,8 @@ export default function LabelsIndexRoute() {
   const [labels, setLabels] = useState<LabelResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const loaded = useRef(false);
+  const loadedHousehold = useRef<string | null>(null);
+  const requestGeneration = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [action, setAction] = useState<LabelAction | null>(null);
   const [name, setName] = useState('');
@@ -41,19 +42,25 @@ export default function LabelsIndexRoute() {
 
   const fetchLabels = useCallback(async () => {
     if (!householdId) return;
+    const request = ++requestGeneration.current;
     setError(null);
-    if (!loaded.current) setLoading(true);
+    if (loadedHousehold.current !== householdId) { setLoading(true); setLabels([]); setAction(null); }
     try {
       const token = await sessionTransport.getAccessToken();
+      if (request !== requestGeneration.current) return;
       if (token === null) throw new Error('Session expired');
       const result = await sessionApiClient.listLabels(token, householdId);
+      if (request !== requestGeneration.current) return;
       setLabels(result.labels);
-      loaded.current = true;
+      loadedHousehold.current = householdId;
     } catch {
-      setError(loaded.current ? '刷新失败，仍显示上次的标签。请重试。' : '无法加载标签，请检查网络后重试。');
-    } finally { setLoading(false); }
+      if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? '刷新失败，仍显示上次的标签。请重试。' : '无法加载标签，请检查网络后重试。');
+    } finally { if (request === requestGeneration.current) setLoading(false); }
   }, [householdId]);
-  useFocusEffect(useCallback(() => { void fetchLabels(); }, [fetchLabels]));
+  useFocusEffect(useCallback(() => {
+    void fetchLabels();
+    return () => { requestGeneration.current++; };
+  }, [fetchLabels]));
   const refresh = async () => { setRefreshing(true); await fetchLabels(); setRefreshing(false); };
   const open = (next: LabelAction) => {
     rememberRouteTrigger();

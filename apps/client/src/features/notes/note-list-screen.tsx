@@ -30,28 +30,32 @@ export default function NotesListRoute() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useWorkspaceState(`view:${id}:notes:query`, '');
-  const loaded = useRef(false);
+  const loadedHousehold = useRef<string | null>(null);
+  const requestGeneration = useRef(0);
 
   const householdId = id ?? currentHouseholdId;
   const visibleNotes = searchNotesByTitle(notes, query);
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === null || householdId === '') return;
-    if (!loaded.current) setLoading(true);
+    const request = ++requestGeneration.current;
+    if (loadedHousehold.current !== householdId) { setLoading(true); setNotes([]); }
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
+      if (request !== requestGeneration.current) return;
       if (token === null) {
         setError('登录已过期，请重新登录。');
         return;
       }
       const result = await sessionApiClient.listNotes(token, householdId);
+      if (request !== requestGeneration.current) return;
       setNotes(result.notes);
-      loaded.current = true;
+      loadedHousehold.current = householdId;
     } catch {
-      setError(loaded.current ? '刷新失败，仍显示上次的笔记。请检查网络后重试。' : '无法加载笔记，请检查网络连接后重试。');
+      if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? '刷新失败，仍显示上次的笔记。请检查网络后重试。' : '无法加载笔记，请检查网络连接后重试。');
     } finally {
-      setLoading(false);
+      if (request === requestGeneration.current) setLoading(false);
     }
   }, [householdId]);
 
@@ -61,6 +65,7 @@ export default function NotesListRoute() {
   useFocusEffect(
     useCallback(() => {
       void fetchData();
+      return () => { requestGeneration.current++; };
     }, [fetchData]),
   );
 

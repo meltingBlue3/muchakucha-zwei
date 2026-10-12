@@ -30,8 +30,8 @@ import {
   type RecurringFilterKey,
 } from '../recurrence/recurring-filter';
 import { TaskCard } from './task-card';
-import { isOverdue } from './task-utils';
 import { toDateValue } from '../../ui/date-values';
+import { useMinuteClock } from '../../ui/use-minute-clock';
 import { Button, EmptyState, LoadError, LoadingState, Stack, StatusPanel } from '../../ui/primitives';
 
 type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
@@ -70,7 +70,7 @@ export function groupTasksByDue(tasks: TaskResponseDto[], status: FilterKey, tod
     const due = task.dueDate ?? null;
     if (task.status === 'completed' || task.status === 'cancelled') closed.push(task);
     else if (due === null || due === '') undated.push(task);
-    else if (isOverdue(due)) overdue.push(task);
+    else if (toDateValue(new Date(due)) < today) overdue.push(task);
     else if (toDateValue(new Date(due)) === today) dueToday.push(task);
     else later.push(task);
   }
@@ -105,7 +105,9 @@ export default function TaskListScreen() {
   const [recurringFilter, setRecurringFilter] = useWorkspaceState<RecurringFilterKey>(`view:${id}:tasks:recurringFilter`, 'all');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterTrigger = useRef<View>(null);
-  const loaded = useRef(false);
+  const loadedHousehold = useRef<string | null>(null);
+  const requestGeneration = useRef(0);
+  const todayIso = toDateValue(useMinuteClock().date);
 
   const householdId = id ?? currentHouseholdId;
 
@@ -176,10 +178,14 @@ export default function TaskListScreen() {
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === null || householdId === '') return;
-    if (!loaded.current) setLoading(true);
+    const request = ++requestGeneration.current;
+    if (loadedHousehold.current !== householdId) {
+      setLoading(true); setTasks([]); setMembers([]); setMaterializedThrough(null);
+    }
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
+      if (request !== requestGeneration.current) return;
       if (token === null) {
         setError('登录已过期，请重新登录。');
         return;
@@ -188,14 +194,15 @@ export default function TaskListScreen() {
         sessionApiClient.listTasks(token, householdId),
         sessionApiClient.getHousehold(token, householdId),
       ]);
-      loaded.current = true;
+      if (request !== requestGeneration.current) return;
+      loadedHousehold.current = householdId;
       setTasks(tasksResult.tasks);
       setMaterializedThrough(tasksResult.materializedThrough ?? null);
       setMembers(householdResult.members);
-    } catch (err) {
-      setError(loaded.current ? '刷新失败，仍显示上次的任务。请检查网络后重试。' : '无法加载任务，请检查网络连接后重试。');
+    } catch {
+      if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? '刷新失败，仍显示上次的任务。请检查网络后重试。' : '无法加载任务，请检查网络连接后重试。');
     } finally {
-      setLoading(false);
+      if (request === requestGeneration.current) setLoading(false);
     }
   }, [householdId]);
 
@@ -211,6 +218,7 @@ export default function TaskListScreen() {
   useFocusEffect(
     useCallback(() => {
       void fetchData();
+      return () => { requestGeneration.current++; };
     }, [fetchData]),
   );
 
@@ -234,7 +242,6 @@ export default function TaskListScreen() {
     void router.push(`/households/${encodeURIComponent(householdId!)}/tasks/new`);
   }, [router, householdId]);
 
-  const todayIso = useMemo(() => toDateValue(new Date()), []);
   const generationWindow = classifyGenerationWindow({
     materializedThrough,
     todayIso,

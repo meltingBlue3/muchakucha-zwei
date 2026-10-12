@@ -34,7 +34,8 @@ export default function RecurrenceRulesIndexRoute() {
   // A ref, not state: `fetchRules` must keep a stable identity, otherwise it
   // changes the moment the first load finishes and `useFocusEffect` fires a
   // second, pointless request on every arrival.
-  const loadedOnce = useRef(false);
+  const loadedHousehold = useRef<string | null>(null);
+  const requestGeneration = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,24 +48,27 @@ export default function RecurrenceRulesIndexRoute() {
     // Only the FIRST load shows the spinner. A focus refetch keeps the
     // previously loaded rules on screen, so returning from the detail screen
     // never flashes an empty list on the way to the same list.
-    if (!loadedOnce.current) setLoading(true);
+    const request = ++requestGeneration.current;
+    if (loadedHousehold.current !== householdId) { setLoading(true); setRules([]); }
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
+      if (request !== requestGeneration.current) return;
       if (token === null) {
         setError('登录已过期，请重新登录。');
         return;
       }
       const result = await sessionApiClient.listRecurrenceRules(token, householdId);
+      if (request !== requestGeneration.current) return;
       setRules(result.rules);
-      loadedOnce.current = true;
+      loadedHousehold.current = householdId;
     } catch {
       // The stale list is deliberately left in place next to the error block:
       // losing what the user could already read is a worse failure mode than
       // showing it beside a retry.
-      setError(LOAD_ERROR);
+      if (request === requestGeneration.current) setError(LOAD_ERROR);
     } finally {
-      setLoading(false);
+      if (request === requestGeneration.current) setLoading(false);
     }
   }, [householdId]);
 
@@ -74,6 +78,7 @@ export default function RecurrenceRulesIndexRoute() {
   useFocusEffect(
     useCallback(() => {
       void fetchRules();
+      return () => { requestGeneration.current++; };
     }, [fetchRules]),
   );
 
