@@ -74,3 +74,24 @@ test('leaves unauthenticated calls and non-401 failures alone', async () => {
   await expect(withSessionRetry(client, value).listEvents('token-1', 'home')).rejects.toMatchObject({ status: 500 });
   expect(refresh).not.toHaveBeenCalled();
 });
+
+test('does not refresh an old request after the session was cleared', async () => {
+  const client = new FakeClient();
+  const { refresh, lost, value } = session({ current: null });
+  await expect(withSessionRetry(client, value).listEvents('token-1', 'home')).rejects.toMatchObject({ status: 401 });
+  expect(refresh).not.toHaveBeenCalled();
+  expect(lost).not.toHaveBeenCalled();
+});
+
+test('a superseded refresh failure cannot clear a newly accepted login', async () => {
+  const client = new FakeClient();
+  let token = 'token-1';
+  const lost = jest.fn();
+  const wrapped = withSessionRetry(client, {
+    getAccessToken: () => token,
+    refresh: async () => { token = 'new-account'; return { kind: 'unauthenticated' }; },
+    onSessionLost: lost,
+  });
+  await expect(wrapped.listEvents('token-1', 'home')).rejects.toMatchObject({ status: 401 });
+  expect(lost).not.toHaveBeenCalled();
+});

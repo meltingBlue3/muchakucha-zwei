@@ -13,6 +13,54 @@ const apiResponse = (status: number, body: unknown) => ({
 });
 
 describe('platform session transport contract', () => {
+  test.each(['native', 'web'] as const)('%s ignores a refresh response that arrives after logout', async (platform) => {
+    let finish!: (value: { accessToken: string; refreshToken?: string }) => void;
+    const request = jest.fn(() => new Promise<{ accessToken: string; refreshToken?: string }>(resolve => { finish = resolve; }));
+    const transport = platform === 'native' ? createNativeSessionTransport(request) : createWebSessionTransport(request);
+    await transport.acceptIssuedSession({ accessToken: 'old-access', ...(platform === 'native' ? { refreshToken: 'old-refresh' } : {}) });
+    const refreshing = transport.refresh();
+    await Promise.resolve();
+    expect(request).toHaveBeenCalledTimes(1);
+    await transport.clear();
+    finish({ accessToken: 'late-access', ...(platform === 'native' ? { refreshToken: 'late-refresh' } : {}) });
+    await expect(refreshing).resolves.toEqual({ kind: 'unauthenticated' });
+    expect(transport.getAccessToken()).toBeNull();
+    expect(await SecureStore.getItemAsync('muchakucha.session.refresh.v1')).toBeNull();
+  });
+
+  test.each(['native', 'web'] as const)('%s leaves a newer login intact when an older refresh returns', async (platform) => {
+    let finish!: (value: { accessToken: string; refreshToken?: string }) => void;
+    const request = jest.fn(() => new Promise<{ accessToken: string; refreshToken?: string }>(resolve => { finish = resolve; }));
+    const transport = platform === 'native' ? createNativeSessionTransport(request) : createWebSessionTransport(request);
+    const credentials = (name: string) => ({ accessToken: name, ...(platform === 'native' ? { refreshToken: `${name}-refresh` } : {}) });
+    await transport.acceptIssuedSession(credentials('old'));
+    const refreshing = transport.refresh();
+    await Promise.resolve();
+    await transport.clear();
+    await transport.acceptIssuedSession(credentials('new-account'));
+    finish(credentials('late-old-account'));
+    await expect(refreshing).resolves.toEqual({ kind: 'unauthenticated' });
+    expect(transport.getAccessToken()).toBe('new-account');
+    if (platform === 'native') expect(await SecureStore.getItemAsync('muchakucha.session.refresh.v1')).toBe('new-account-refresh');
+  });
+
+  test('native logout also clears a credential write already in progress', async () => {
+    const transport = createNativeSessionTransport(jest.fn());
+    const write = SecureStore.setItemAsync;
+    let finishWrite!: () => void;
+    jest.mocked(SecureStore.setItemAsync).mockImplementationOnce((key, value) => new Promise<void>(resolve => {
+      finishWrite = () => { void write(key, value).then(resolve); };
+    }));
+    const accepting = transport.acceptIssuedSession({ accessToken: 'pending-access', refreshToken: 'pending-refresh' });
+    const rejected = expect(accepting).rejects.toMatchObject({ outcome: { kind: 'unauthenticated' } });
+    await Promise.resolve();
+    const clearing = transport.clear();
+    finishWrite();
+    await Promise.all([clearing, rejected]);
+    expect(transport.getAccessToken()).toBeNull();
+    expect(await SecureStore.getItemAsync('muchakucha.session.refresh.v1')).toBeNull();
+  });
+
   test('native persists refresh before publishing memory-only access', async () => {
     const transport = createNativeSessionTransport(jest.fn());
     jest.mocked(SecureStore.setItemAsync).mockImplementationOnce(async () => {

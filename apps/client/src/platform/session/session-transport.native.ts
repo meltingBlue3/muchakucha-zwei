@@ -26,6 +26,7 @@ export function createNativeSessionTransport(
   source: NativeSessionSource,
 ): SessionTransport {
   let accessToken: string | null = null;
+  let generation = 0;
   const sessionApi: SessionApiClient | null =
     typeof source === 'function'
       ? null
@@ -33,32 +34,51 @@ export function createNativeSessionTransport(
   const requestSession: NativeSessionRequest =
     typeof source === 'function' ? source : sessionApi!.refreshNative;
 
+  // Serialize durable writes with logout so a pending write cannot restore a cleared credential.
+  let credentialWrite = Promise.resolve();
+  const writeCredential = (write: () => Promise<void>): Promise<void> => {
+    const next = credentialWrite.then(write, write);
+    credentialWrite = next.catch(() => undefined);
+    return next;
+  };
+
   const clear = async (): Promise<void> => {
+    generation++;
     accessToken = null;
-    await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+    await writeCredential(() => SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY));
   };
 
   const acceptIssuedSession = async (
     session: IssuedSession,
+    expectedGeneration = ++generation,
   ): Promise<AccessSession> => {
+    if (expectedGeneration !== generation) throw new SessionRestoreError({ kind: 'unauthenticated' });
     if (!session.accessToken || !session.refreshToken) {
       await clear();
       throw new Error('Native issued sessions require access and refresh tokens.');
     }
 
     try {
-      await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, session.refreshToken);
+      const refreshToken = session.refreshToken;
+      await writeCredential(async () => {
+        if (expectedGeneration === generation) await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+      });
+      if (expectedGeneration !== generation) throw new SessionRestoreError({ kind: 'unauthenticated' });
       accessToken = session.accessToken;
       return { accessToken };
     } catch (error) {
-      accessToken = null;
-      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY).catch(() => undefined);
+      if (expectedGeneration === generation) {
+        accessToken = null;
+        await writeCredential(() => SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY)).catch(() => undefined);
+      }
       throw error;
     }
   };
 
   const performRefresh = async (): Promise<RestoreOutcome> => {
+    const request = generation;
     const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    if (request !== generation) return { kind: 'unauthenticated' };
     if (!refreshToken) {
       accessToken = null;
       return { kind: 'unauthenticated' };
@@ -66,15 +86,19 @@ export function createNativeSessionTransport(
 
     try {
       const session = await requestSession(refreshToken);
-      const accepted = await acceptIssuedSession(session);
+      if (request !== generation) return { kind: 'unauthenticated' };
+      const accepted = await acceptIssuedSession(session, request);
+      const currentUser = sessionApi === null ? undefined : await sessionApi.getCurrentUser();
+      if (request !== generation) return { kind: 'unauthenticated' };
       return {
         kind: 'authenticated',
         session:
           sessionApi === null
             ? accepted
-            : { ...accepted, currentUser: await sessionApi.getCurrentUser() },
+            : { ...accepted, currentUser: currentUser! },
       };
     } catch (error) {
+      if (request !== generation) return { kind: 'unauthenticated' };
       if (error instanceof SessionRestoreError) {
         if (error.outcome.kind === 'reauthRequired') {
           await clear();
@@ -95,15 +119,19 @@ export function createNativeSessionTransport(
     if (sessionApi === null) {
       throw new Error('Login requires the generated session API client.');
     }
+    const request = ++generation;
     try {
       const accepted = await acceptIssuedSession(
-        await sessionApi.login(credentials, 'native'),
+        await sessionApi.login(credentials, 'native'), request,
       );
+      const currentUser = await sessionApi.getCurrentUser();
+      if (request !== generation) return { kind: 'unauthenticated' };
       return {
         kind: 'authenticated',
-        session: { ...accepted, currentUser: await sessionApi.getCurrentUser() },
+        session: { ...accepted, currentUser },
       };
     } catch (error) {
+      if (request !== generation) return { kind: 'unauthenticated' };
       if (error instanceof SessionRestoreError) return error.outcome;
       throw error;
     }
@@ -112,12 +140,16 @@ export function createNativeSessionTransport(
   const loadCurrentUser = async (): Promise<RestoreOutcome> => {
     if (sessionApi === null) return refresh();
     if (accessToken === null) return refresh();
+    const request = generation;
     try {
+      const currentUser = await sessionApi.getCurrentUser();
+      if (request !== generation || accessToken === null) return { kind: 'unauthenticated' };
       return {
         kind: 'authenticated',
-        session: { accessToken, currentUser: await sessionApi.getCurrentUser() },
+        session: { accessToken, currentUser },
       };
     } catch (error) {
+      if (request !== generation) return { kind: 'unauthenticated' };
       if (error instanceof SessionRestoreError) {
         return error.outcome.kind === 'reauthRequired' ? refresh() : error.outcome;
       }

@@ -30,10 +30,13 @@ export function withSessionRetry<T extends object>(client: T, session: RetrySess
           const used = args[0];
           if (!(error instanceof ApiClientError) || error.status !== 401 || typeof used !== 'string') throw error;
           let token = session.getAccessToken();
-          if (token === null || token === used) {
+          // A request left over from logout must not start a new refresh.
+          if (token === null) throw error;
+          if (token === used) {
             const outcome = await session.refresh();
             if (outcome.kind === 'reauthRequired' || outcome.kind === 'unauthenticated') {
-              session.onSessionLost(outcome);
+              const current = session.getAccessToken();
+              if (current === null || current === used) session.onSessionLost(outcome);
               throw error;
             }
             if (outcome.kind !== 'authenticated') throw error;

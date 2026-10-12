@@ -29,6 +29,7 @@ export function createWebSessionTransport(
   source: WebSessionSource,
 ): SessionTransport {
   let accessToken: string | null = null;
+  let generation = 0;
   const sessionApi: SessionApiClient | null =
     typeof source === 'function'
       ? null
@@ -39,12 +40,15 @@ export function createWebSessionTransport(
       : async () => sessionApi!.refreshWeb();
 
   const clear = async (): Promise<void> => {
+    generation++;
     accessToken = null;
   };
 
   const acceptIssuedSession = async (
     session: IssuedSession,
+    expectedGeneration = ++generation,
   ): Promise<AccessSession> => {
+    if (expectedGeneration !== generation) throw new SessionRestoreError({ kind: 'unauthenticated' });
     if (!session.accessToken || session.refreshToken !== undefined) {
       await clear();
       throw new Error('Web sessions must contain only an access token.');
@@ -54,17 +58,22 @@ export function createWebSessionTransport(
   };
 
   const performRefresh = async (): Promise<RestoreOutcome> => {
+    const request = generation;
     try {
       const session = await requestSession({ credentials: 'include' });
-      const accepted = await acceptIssuedSession(session);
+      if (request !== generation) return { kind: 'unauthenticated' };
+      const accepted = await acceptIssuedSession(session, request);
+      const currentUser = sessionApi === null ? undefined : await sessionApi.getCurrentUser();
+      if (request !== generation) return { kind: 'unauthenticated' };
       return {
         kind: 'authenticated',
         session:
           sessionApi === null
             ? accepted
-            : { ...accepted, currentUser: await sessionApi.getCurrentUser() },
+            : { ...accepted, currentUser: currentUser! },
       };
     } catch (error) {
+      if (request !== generation) return { kind: 'unauthenticated' };
       if (error instanceof SessionRestoreError) {
         if (error.outcome.kind === 'reauthRequired') {
           await clear();
@@ -85,15 +94,19 @@ export function createWebSessionTransport(
     if (sessionApi === null) {
       throw new Error('Login requires the generated session API client.');
     }
+    const request = ++generation;
     try {
       const accepted = await acceptIssuedSession(
-        await sessionApi.login(credentials, 'web'),
+        await sessionApi.login(credentials, 'web'), request,
       );
+      const currentUser = await sessionApi.getCurrentUser();
+      if (request !== generation) return { kind: 'unauthenticated' };
       return {
         kind: 'authenticated',
-        session: { ...accepted, currentUser: await sessionApi.getCurrentUser() },
+        session: { ...accepted, currentUser },
       };
     } catch (error) {
+      if (request !== generation) return { kind: 'unauthenticated' };
       if (error instanceof SessionRestoreError) return error.outcome;
       throw error;
     }
@@ -102,12 +115,16 @@ export function createWebSessionTransport(
   const loadCurrentUser = async (): Promise<RestoreOutcome> => {
     if (sessionApi === null) return refresh();
     if (accessToken === null) return refresh();
+    const request = generation;
     try {
+      const currentUser = await sessionApi.getCurrentUser();
+      if (request !== generation || accessToken === null) return { kind: 'unauthenticated' };
       return {
         kind: 'authenticated',
-        session: { accessToken, currentUser: await sessionApi.getCurrentUser() },
+        session: { accessToken, currentUser },
       };
     } catch (error) {
+      if (request !== generation) return { kind: 'unauthenticated' };
       if (error instanceof SessionRestoreError) {
         return error.outcome.kind === 'reauthRequired' ? refresh() : error.outcome;
       }
