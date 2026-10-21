@@ -197,6 +197,19 @@ test('cancelling while the microphone opens closes it again once it is open', as
   expect(view.queryByText('正在录音')).toBeNull();
 });
 
+test('the permission dialog pausing the app does not cancel the attempt', async () => {
+  let answer!: (permission: VoicePermission) => void;
+  recorder.requestPermission.mockImplementationOnce(() => new Promise(resolve => { answer = resolve; }));
+  const view = await render(<Composer />);
+  await fireEvent.press(view.getByRole('button', { name: '语音输入' }));
+  // Android reports the app as backgrounded while the system dialog is open.
+  await act(async () => changeAppState('background'));
+  await act(async () => changeAppState('active'));
+  await act(async () => answer({ granted: true, canAskAgain: true }));
+  expect(await view.findByText('正在录音')).toBeTruthy();
+  expect(recorder.discard).not.toHaveBeenCalled();
+});
+
 test('in a conversation, voice text is sent only by the send button and pending actions disable the microphone', async () => {
   const conversation: AssistantConversationResponseDto = { id: 'chat', title: '家庭安排', providerId: 'provider', version: 1, state: 'idle', messages: [], pendingActions: [], updatedAt: '2026-10-04T00:00:00.000Z' };
   const send = jest.fn().mockResolvedValue(true);

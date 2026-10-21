@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
-  AudioQuality, IOSOutputFormat, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, type RecordingOptions,
+  AudioQuality, IOSOutputFormat, getRecordingPermissionsAsync, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder,
+  type RecordingOptions,
 } from 'expo-audio';
 import { canOpenRecordingSettings, discardRecording, readRecording, recordingAvailable } from './recording-file';
 
@@ -55,7 +56,9 @@ export function useVoiceRecorder(): VoiceRecorder | null {
     return {
       canOpenSettings: canOpenRecordingSettings,
       async requestPermission() {
-        const permission = await requestRecordingPermissionsAsync();
+        // Asking on Android opens the system permission screen even when already granted, which pauses the app.
+        const current = await getRecordingPermissionsAsync();
+        const permission = current.granted ? current : await requestRecordingPermissionsAsync();
         return { granted: permission.granted, canAskAgain: permission.canAskAgain };
       },
       async start() {

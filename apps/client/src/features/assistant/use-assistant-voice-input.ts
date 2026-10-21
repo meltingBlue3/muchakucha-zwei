@@ -124,14 +124,14 @@ export function useAssistantVoiceInput({ householdId, providerId, value, onChang
   // A notice is about the last attempt; editing the draft dismisses it.
   useEffect(() => { setNotice(null); setSettings(false); }, [value]);
   useEffect(() => {
+    // Leaving the app, or a phone call, ends the recording: keep what was said rather than losing it.
+    // Before recording starts this is ignored: Android reports the app as backgrounded while the
+    // system permission dialog is open.
     const subscription = AppState.addEventListener('change', state => {
-      if (state !== 'background') return;
-      // Leaving the app, or a phone call, ends the recording: keep what was said rather than losing it.
-      if (attempt.current?.timer) void finish();
-      else cancel();
+      if (state === 'background' && attempt.current?.timer) void finish();
     });
     return () => subscription.remove();
-  }, [cancel, finish]);
+  }, [finish]);
 
   return {
     available: Boolean(recorder && providerId), phase, engaged: phase !== 'idle', notice, settings, elapsed,

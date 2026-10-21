@@ -1,5 +1,7 @@
 import { renderHook } from '@testing-library/react-native';
-import { setAudioModeAsync, useAudioRecorder } from 'expo-audio';
+import {
+  getRecordingPermissionsAsync, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, type PermissionResponse,
+} from 'expo-audio';
 import { useVoiceRecorder } from '../voice-recorder';
 
 const mockFiles = new Map<string, string>();
@@ -45,6 +47,19 @@ test('records small mono AAC, returns it in memory and deletes the file', async 
   expect(mockFiles.has(uri)).toBe(false);
   // Playback leaves the earpiece once recording ends.
   expect(setAudioModeAsync).toHaveBeenLastCalledWith({ allowsRecording: false });
+});
+
+test('asks for the microphone only while it is not granted', async () => {
+  const permission = (granted: boolean, canAskAgain = true) => ({ granted, canAskAgain, expires: 'never', status: granted ? 'granted' : 'denied' }) as PermissionResponse;
+  const { voice } = await setup();
+  jest.mocked(getRecordingPermissionsAsync).mockResolvedValueOnce(permission(true));
+  await expect(voice.requestPermission()).resolves.toEqual({ granted: true, canAskAgain: true });
+  // Asking on Android opens the system permission screen even when granted, which pauses the app.
+  expect(requestRecordingPermissionsAsync).not.toHaveBeenCalled();
+  jest.mocked(getRecordingPermissionsAsync).mockResolvedValueOnce(permission(false));
+  jest.mocked(requestRecordingPermissionsAsync).mockResolvedValueOnce(permission(false, false));
+  await expect(voice.requestPermission()).resolves.toEqual({ granted: false, canAskAgain: false });
+  expect(requestRecordingPermissionsAsync).toHaveBeenCalledTimes(1);
 });
 
 test('a recording the system cannot finalize yields nothing and leaves no file', async () => {

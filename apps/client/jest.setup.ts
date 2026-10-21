@@ -62,6 +62,7 @@ jest.mock('expo-secure-store', () => {
 jest.mock('expo-audio', () => ({
   AudioQuality: { MIN: 0, LOW: 32, MEDIUM: 64, HIGH: 96, MAX: 127 },
   IOSOutputFormat: { MPEG4AAC: 'aac ', LINEARPCM: 'lpcm' },
+  getRecordingPermissionsAsync: jest.fn(async () => ({ granted: false, canAskAgain: true, status: 'undetermined', expires: 'never' })),
   requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: false, canAskAgain: true, status: 'undetermined', expires: 'never' })),
   setAudioModeAsync: jest.fn(async () => undefined),
   useAudioRecorder: jest.fn(() => ({
