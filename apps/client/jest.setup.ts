@@ -56,6 +56,23 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
+// expo-audio extends a native shared-object class at import time, which the
+// Jest native-module mocks do not provide. Screens with a composer import it,
+// so a recorder that never records stands in; voice tests mock the adapter.
+jest.mock('expo-audio', () => ({
+  AudioQuality: { MIN: 0, LOW: 32, MEDIUM: 64, HIGH: 96, MAX: 127 },
+  IOSOutputFormat: { MPEG4AAC: 'aac ', LINEARPCM: 'lpcm' },
+  requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: false, canAskAgain: true, status: 'undetermined', expires: 'never' })),
+  setAudioModeAsync: jest.fn(async () => undefined),
+  useAudioRecorder: jest.fn(() => ({
+    uri: null,
+    prepareToRecordAsync: jest.fn(async () => undefined),
+    record: jest.fn(),
+    stop: jest.fn(async () => undefined),
+    getStatus: jest.fn(() => ({ canRecord: false, isRecording: false, durationMillis: 0, mediaServicesDidReset: false, url: null })),
+  })),
+}));
+
 // React Native 0.86.2's getDevServer() reads NativeSourceCode's scriptURL and
 // calls .match() on it with no null guard. Jest's default native-module mock
 // resolves scriptURL to null, so any module that calls getDevServer() as an

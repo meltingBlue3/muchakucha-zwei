@@ -6,11 +6,12 @@ import { sessionApiClient } from '../auth/session-runtime';
 import { Banner, Button, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 import { AssistantBoundary, assistantPath, type AssistantHouseholdProps } from './assistant-boundary';
-import { useAssistantOperation, useAssistantQuery } from './assistant-runtime';
+import { chatProviders, transcriptionProvider, useAssistantOperation, useAssistantQuery } from './assistant-runtime';
 import { AssistantWorkspace } from './assistant-workspace';
 import { AssistantComposer, PromptSuggestions } from './assistant-composer';
 import { queueFirstMessage } from './first-message';
 import { AssistantModelPicker } from './model-picker';
+import { useAssistantVoiceInput } from './use-assistant-voice-input';
 
 function AssistantHome({ householdId, householdName, writable }: AssistantHouseholdProps) {
   const router = useRouter();
@@ -25,12 +26,15 @@ function AssistantHome({ householdId, householdName, writable }: AssistantHouseh
   }, [householdId]);
   const query = useAssistantQuery(load);
   const operation = useAssistantOperation();
-  const providers = query.data?.providers ?? [];
+  const providers = chatProviders(query.data?.providers ?? []);
+  const transcription = transcriptionProvider(query.data?.providers ?? []);
   const selected = providers.find(item => item.id === selectedId) ?? providers.find(item => item.hasCredential);
+  const blocked = operation.busy || !writable || query.loading || !selected?.hasCredential;
+  const voice = useAssistantVoiceInput({ householdId, providerId: transcription?.id ?? null, value: message, onChangeText: setMessage, blocked });
   // The conversation exists only once there is something to say; the conversation screen sends this first message.
   const start = async () => {
     const text = message.trim();
-    if (!writable || !selected?.hasCredential || query.loading || !text) return;
+    if (blocked || voice.engaged || !selected || !text) return;
     const result = await operation.run(token => sessionApiClient.createAssistantConversation(token, householdId, { providerId: selected.id }));
     if (!result) return;
     queueFirstMessage(result.value.id, text);
@@ -50,14 +54,15 @@ function AssistantHome({ householdId, householdName, writable }: AssistantHouseh
         <Text color="inkMuted">查安排、记任务、整理笔记。{'\n'}说说你想做什么，我们一起安排好。</Text>
         {query.data ? selected ? <Stack gap={3}>
           <AssistantComposer label="开始新对话" value={message} onChangeText={setMessage} onSend={() => { void start(); }} busy={operation.busy}
-            blocked={operation.busy || !writable || query.loading || !selected.hasCredential}
+            blocked={blocked} voice={voice}
             modelControl={<AssistantModelPicker householdId={householdId} providers={providers} selectedId={selected.id} busy={operation.busy} onSelect={setSelectedId} />} />
-          <PromptSuggestions disabled={operation.busy || !writable} onPick={setMessage} />
+          <PromptSuggestions disabled={operation.busy || !writable || voice.engaged} onPick={setMessage} />
           <Text variant="caption">内容修改前，由你确认。其他家人看不到你的对话。</Text>
           {/* Whoever runs the endpoint sees what is sent to it; for a shared model that is the configuration owner's choice. */}
           <Text variant="caption">{selected.ownedByMe
             ? `对话及相关家庭数据会发送至 ${selected.baseUrl}。`
             : `这是家人共享的模型：对话及相关家庭数据会发送至配置者填写的 ${selected.baseUrl}，该服务能看到这些内容。`}</Text>
+          {voice.available && transcription ? <Text variant="caption">语音输入的录音会发送至 {transcription.baseUrl} 转为文字，本应用不保存录音。</Text> : null}
         </Stack> : <Stack gap={3}>
           <Text variant="bodySm">先添加自己的模型，或请家人共享一个配置。</Text>
           <Button label="添加模型配置" disabled={!writable} onPress={() => router.push(`${assistantPath(householdId)}/providers/new`)} style={{ alignSelf: 'flex-start' }} />

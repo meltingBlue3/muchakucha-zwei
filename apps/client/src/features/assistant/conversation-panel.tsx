@@ -11,6 +11,7 @@ import { scrollKeyboardDismissMode } from '../../ui/keyboard-area';
 import { theme } from '../../ui/theme';
 import { assistantConversationRecords, type AssistantConversationRecord, type AssistantSource } from './conversation-records';
 import { AssistantComposer, PromptSuggestions } from './assistant-composer';
+import { useAssistantVoiceInput } from './use-assistant-voice-input';
 import { MarkdownBody } from '../notes/markdown-body';
 
 const sectionNames = { events: '日程', tasks: '任务', notes: '笔记' } as const;
@@ -37,12 +38,14 @@ function QueryRecord({ record, onOpenSource }: { record: AssistantConversationRe
 const userBubble = { alignSelf: 'flex-end', maxWidth: '90%', backgroundColor: theme.colors.surfaceSelected, padding: theme.spacing[4], borderRadius: theme.borderRadii.lg, borderBottomRightRadius: theme.borderRadii.sm } as const;
 
 /** `onSend` resolves false when the message may not have reached the server; its text is then given back. */
-export function AssistantConversationPanel({ conversation, busy, disabled, onSend, modelControl, feedback, pendingPreview, draft, outgoing = null, onOpenSource }: {
+export function AssistantConversationPanel({ conversation, busy, disabled, onSend, modelControl, feedback, pendingPreview, draft, outgoing = null, onOpenSource, voiceInput }: {
   conversation: AssistantConversationResponseDto; busy: boolean; disabled: boolean; onSend: (message: string) => Promise<boolean>;
   modelControl?: ReactNode; feedback?: ReactNode; pendingPreview?: ReactNode; draft?: { value: string; revision: number };
   /** A sent message the transcript does not include yet. */
   outgoing?: string | null;
   onOpenSource?: (link: NonNullable<AssistantSource['link']>) => void;
+  /** The transcription configuration voice input sends recordings to; without one there is no microphone. */
+  voiceInput?: { householdId: string; providerId: string | null };
 }) {
   const [message, setMessage] = useState('');
   const scroll = useRef<ScrollView>(null);
@@ -50,10 +53,11 @@ export function AssistantConversationPanel({ conversation, busy, disabled, onSen
   const followEnd = useRef(true);
   const sending = useRef(false);
   const blocked = busy || disabled || conversation.pendingActions.length > 0 || conversation.state === 'running';
+  const voice = useAssistantVoiceInput({ householdId: voiceInput?.householdId ?? '', providerId: voiceInput?.providerId ?? null, value: message, onChangeText: setMessage, blocked });
   useEffect(() => { if (draft) { setMessage(draft.value); input.current?.focus(); } }, [draft]);
   const send = async () => {
     const text = message.trim();
-    if (blocked || !text || sending.current) return;
+    if (blocked || voice.engaged || !text || sending.current) return;
     sending.current = true;
     followEnd.current = true;
     setMessage('');
@@ -69,7 +73,7 @@ export function AssistantConversationPanel({ conversation, busy, disabled, onSen
       contentContainerStyle={{ flexGrow: 1, padding: theme.spacing[5], gap: theme.spacing[5], width: '100%', maxWidth: theme.layout.assistantReadingWidth, alignSelf: 'center' }}>
       {records.length === 0 && !outgoing ? <Stack gap={4} style={{ flex: 1, justifyContent: 'center', paddingVertical: theme.spacing[8] }}>
         <Sparkles size={theme.spacing[8]} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} /><Heading variant="heading" level={2}>今天，想一起安排什么？</Heading><Text color="inkMuted">从一个问题开始，或让我帮你记下要做的事。</Text>
-        <PromptSuggestions disabled={blocked} onPick={prompt => { setMessage(prompt); input.current?.focus(); }} />
+        <PromptSuggestions disabled={blocked || voice.engaged} onPick={prompt => { setMessage(prompt); input.current?.focus(); }} />
       </Stack> : records.map((item, index) => item.kind === 'query' ? <QueryRecord key={index} record={item} onOpenSource={onOpenSource} /> : <Stack key={index} gap={2} style={item.kind === 'user'
         ? userBubble
         : item.kind === 'operation' ? { padding: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: item.failed ? theme.colors.destructiveSoft : theme.colors.successSoft }
@@ -84,7 +88,7 @@ export function AssistantConversationPanel({ conversation, busy, disabled, onSen
     <Stack gap={2} style={{ paddingHorizontal: theme.spacing[4], paddingTop: theme.spacing[2], paddingBottom: theme.spacing[3], width: '100%', maxWidth: theme.layout.assistantReadingWidth, alignSelf: 'center' }}>
       {feedback}
       {conversation.pendingActions.length ? <Text variant="caption">请先查看并确认操作，或取消后继续对话。</Text> : null}
-      <AssistantComposer ref={input} value={message} onChangeText={setMessage} onSend={() => { void send(); }} blocked={blocked} busy={busy} modelControl={modelControl} />
+      <AssistantComposer ref={input} value={message} onChangeText={setMessage} onSend={() => { void send(); }} blocked={blocked} busy={busy} voice={voice} modelControl={modelControl} />
     </Stack>
   </View>;
 }

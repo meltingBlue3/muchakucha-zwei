@@ -8,7 +8,7 @@ import { AppDialog } from '../../ui/app-dialog';
 import { theme } from '../../ui/theme';
 import { Banner, Button, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { AssistantBoundary, assistantPath, type AssistantHouseholdProps } from './assistant-boundary';
-import { assistantToken, useAssistantOperation, useAssistantQuery } from './assistant-runtime';
+import { assistantToken, chatProviders, transcriptionProvider, useAssistantOperation, useAssistantQuery } from './assistant-runtime';
 import { AssistantConversationPanel } from './conversation-panel';
 import { AssistantActionsPreview } from './action-preview';
 import { AssistantWorkspace } from './assistant-workspace';
@@ -128,7 +128,8 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
         outgoing={outgoing && conversation.messages.length <= outgoing.baseline ? outgoing.text : null}
         onOpenSource={link => router.push(`/households/${encodeURIComponent(householdId)}/${link.section}/${encodeURIComponent(link.id)}`)}
         {...(draft ? { draft } : {})} pendingPreview={inspector ? null : previewLink}
-        modelControl={<AssistantModelPicker householdId={householdId} providers={query.data?.providers ?? []} selectedId={conversation.providerId} busy={operation.busy || !writable || pending.length > 0 || conversation.state === 'running'} newConversation onSelect={id => { void start(id); }} />} /> : <ScrollView contentContainerStyle={{ padding: theme.spacing[5] }}>{feedback}</ScrollView>}
+        voiceInput={{ householdId, providerId: transcriptionProvider(query.data?.providers ?? [])?.id ?? null }}
+        modelControl={<AssistantModelPicker householdId={householdId} providers={chatProviders(query.data?.providers ?? [])} selectedId={conversation.providerId} busy={operation.busy || !writable || pending.length > 0 || conversation.state === 'running'} newConversation onSelect={id => { void start(id); }} />} /> : <ScrollView contentContainerStyle={{ padding: theme.spacing[5] }}>{feedback}</ScrollView>}
       {inspector && preview ? <ScrollView testID="assistant-inspector" style={{ width: theme.layout.assistantInspectorWidth, flexGrow: 0, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator, backgroundColor: theme.colors.surface }} contentContainerStyle={{ padding: theme.spacing[5] }}>{preview}</ScrollView> : null}
     </View>
     {!inspector && previewOpen && preview ? <AppDialog title="操作预览" size="sheet" trigger={trigger} busy={operation.busy} onClose={() => setPreviewOpen(false)}>{operation.error ? <Banner>{operation.error} 已尝试同步对话，请查看最新结果。</Banner> : null}{preview}</AppDialog> : null}

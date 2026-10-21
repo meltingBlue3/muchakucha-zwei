@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiClientError } from '@muchakucha/api-client';
+import { ApiClientError, type AssistantProviderResponseDto } from '@muchakucha/api-client';
 import { sessionTransport } from '../auth/session-runtime';
 
 const errorMessages: Record<string, string> = {
@@ -28,7 +28,23 @@ const errorMessages: Record<string, string> = {
   ASSISTANT_PROVIDER_RESPONSE_INVALID: '模型返回了无法识别的结果，这个服务可能与所选协议不完全兼容。',
   ASSISTANT_PROVIDER_OUTPUT_TRUNCATED: '模型输出达到长度上限，没能完成。',
   ASSISTANT_PROVIDER_REFUSED: '模型拒绝处理这个请求。',
+  ASSISTANT_PROVIDER_PURPOSE_MISMATCH: '这项配置的用途不符：语音转写配置只能用于语音输入，对话请选择对话模型。',
 };
+
+/** A configuration's protocol fixes its use: conversations run on chat models, voice input on a transcription service. */
+export function isTranscriptionProvider(provider: Pick<AssistantProviderResponseDto, 'protocol'>): boolean {
+  return provider.protocol === 'qwen-asr';
+}
+
+export function chatProviders(providers: AssistantProviderResponseDto[]): AssistantProviderResponseDto[] {
+  return providers.filter(provider => !isTranscriptionProvider(provider));
+}
+
+/** The transcription configuration voice input uses: the user's own first, then one shared with the household. */
+export function transcriptionProvider(providers: AssistantProviderResponseDto[]): AssistantProviderResponseDto | null {
+  const usable = providers.filter(provider => isTranscriptionProvider(provider) && provider.hasCredential);
+  return usable.find(provider => provider.ownedByMe) ?? usable[0] ?? null;
+}
 
 export function assistantError(error: unknown, fallback = '这次操作未能完成，请检查网络后重试。'): string {
   if (error instanceof ApiClientError) {
@@ -44,6 +60,19 @@ export function assistantError(error: unknown, fallback = '这次操作未能完
     if (error.status === 400) return '请检查填写的内容、模型地址和模型名称后重试。';
   }
   return error instanceof Error && error.message === '登录已过期，请重新登录。' ? error.message : fallback;
+}
+
+const transcriptionMessages: Record<string, string> = {
+  ASSISTANT_PROVIDER_REJECTED: '语音转写服务拒绝了这次请求，请确认模型名称（例如 qwen3-asr-flash）正确，或稍后重录。',
+  ASSISTANT_PROVIDER_RESPONSE_INVALID: '语音转写服务返回了无法识别的结果，请确认服务地址是百炼的 OpenAI 兼容地址。',
+  ASSISTANT_PROVIDER_ENDPOINT_NOT_FOUND: '语音转写服务找不到这个地址或模型，请检查服务地址和模型名称。',
+  ASSISTANT_PROVIDER_TIMEOUT: '语音转写服务响应超时，请稍后重试。',
+};
+
+/** Chat wording speaks of tool calls; a transcription failure is about the recording and the service. */
+export function transcriptionError(error: unknown, fallback: string): string {
+  const code = error instanceof ApiClientError ? (error.body as { error?: { code?: string } } | null)?.error?.code : undefined;
+  return code !== undefined && Object.hasOwn(transcriptionMessages, code) ? transcriptionMessages[code]! : assistantError(error, fallback);
 }
 
 export async function assistantToken(): Promise<string> {

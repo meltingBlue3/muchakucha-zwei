@@ -10,7 +10,7 @@ import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../
 import { SettingsSection } from '../../ui/settings-section';
 import { theme } from '../../ui/theme';
 import { AssistantBoundary, assistantPath, type AssistantHouseholdProps } from './assistant-boundary';
-import { useAssistantQuery } from './assistant-runtime';
+import { isTranscriptionProvider, useAssistantQuery } from './assistant-runtime';
 
 /** Token counts in the units people read: 8500 or 3.2 万. */
 export function formatTokens(count: number): string {
@@ -41,15 +41,16 @@ function AssistantProviders({ householdId, householdName, writable }: AssistantH
       <Text variant="bodySm" color="inkMuted">{householdName} · 配置由创建者管理</Text>
       <Text variant="bodySm">家庭可用的配置允许家人调用你的模型并使用你的额度。密钥不会显示给其他成员，也不会随配置返回到客户端。</Text>
       {query.error ? <LoadError message={query.error} retrying={query.loading} onRetry={() => { void query.reload(); }} /> : null}
+      <Text variant="bodySm" color="inkMuted">添加用途为「语音转写」的配置后，助手输入框会出现麦克风，说的话转为文字后由你检查再发送。</Text>
       {query.loading && query.data === null ? <LoadingState label="正在加载模型配置" /> : null}
-      {query.data?.providers.length === 0 ? <EmptyState message="还没有模型配置。添加支持工具调用的模型后即可使用助手。" /> : null}
+      {query.data?.providers.length === 0 ? <EmptyState message="还没有模型配置。添加支持工具调用的对话模型后即可使用助手。" /> : null}
       {query.data?.providers.map(provider => <SettingsSection key={provider.id} title={provider.name} icon={<Settings color={theme.colors.inkMuted} size={theme.controlSizes.icon} />} detail={provider.ownedByMe ? '由你管理' : '家人共享'}
         action={provider.ownedByMe ? <CardActionsMenu subject={`模型配置：${provider.name}`} disabled={!writable} actions={[
           { kind: 'edit', accessibilityLabel: `编辑模型配置：${provider.name}`, onPress: () => router.push(`${root}/providers/${encodeURIComponent(provider.id)}/edit`) },
           { kind: 'delete', accessibilityLabel: `删除模型配置：${provider.name}`, onPress: () => router.push(`${root}/providers/${encodeURIComponent(provider.id)}/delete`) },
         ]} /> : null}>
         <Stack gap={1}>
-          <Text>{provider.model}</Text>
+          <Text>{isTranscriptionProvider(provider) ? '语音转写' : '对话'} · {provider.model}</Text>
           <Text variant="bodySm" color="inkMuted">{provider.baseUrl}</Text>
           <Text variant="bodySm">{provider.visibility === 'private' ? '仅自己可用' : '本家庭成员可用'} · {provider.hasCredential ? '已配置密钥' : provider.ownedByMe ? '密钥无法读取，请编辑后重新填写' : '密钥无法读取，请联系配置创建者'}</Text>
         </Stack>

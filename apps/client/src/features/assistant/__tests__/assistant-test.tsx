@@ -89,6 +89,34 @@ test('model protocol switches to the complete Anthropic API base path', async ()
   expect(view.getByLabelText('服务地址').props.value).toBe('https://api.anthropic.com/v1');
 });
 
+test('a voice transcription configuration uses Qwen-ASR defaults and its check reports transcription', async () => {
+  const submit = jest.fn().mockResolvedValue(undefined);
+  const check = jest.fn().mockResolvedValue({ toolCalling: false, transcription: true });
+  const view = await render(<MuchakuchaThemeProvider><AssistantProviderForm busy={false} onSubmit={submit} onCancel={jest.fn()} onCheck={check} /></MuchakuchaThemeProvider>);
+  await fireEvent.press(view.getByRole('radio', { name: '语音转写' }));
+  expect(view.queryByRole('radio', { name: 'Anthropic' })).toBeNull();
+  expect(view.getByLabelText('服务地址').props.value).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1');
+  expect(view.getByLabelText('模型名称').props.value).toBe('qwen3-asr-flash');
+  expect(view.getByText(/录音会发送到所选服务地址转为文字/)).toBeTruthy();
+  await fireEvent.changeText(view.getByLabelText('API 密钥'), 'sk-bailian');
+  await fireEvent.press(view.getByRole('button', { name: '测试连接' }));
+  await view.findByText('连接正常，可以把语音转为文字。');
+  await fireEvent.changeText(view.getByLabelText('配置名称'), '语音转写');
+  await fireEvent.press(view.getByRole('button', { name: '创建' }));
+  expect(submit).toHaveBeenCalledWith({ name: '语音转写', protocol: 'qwen-asr', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3-asr-flash', visibility: 'private', apiKey: 'sk-bailian' });
+  // Changing back before saving restores the chat defaults instead of keeping the transcription service.
+  await fireEvent.press(view.getByRole('radio', { name: '对话' }));
+  expect(view.getByLabelText('服务地址').props.value).toBe('https://api.openai.com/v1');
+  expect(view.getByLabelText('模型名称').props.value).toBe('');
+});
+
+test('a saved configuration keeps the use it was created for', async () => {
+  const view = await render(<MuchakuchaThemeProvider><AssistantProviderForm initial={{ ...provider, protocol: 'qwen-asr', model: 'qwen3-asr-flash' }} busy={false} onSubmit={jest.fn()} onCancel={jest.fn()} /></MuchakuchaThemeProvider>);
+  expect(view.getByText('用途：语音转写')).toBeTruthy();
+  expect(view.queryByRole('radio', { name: '对话' })).toBeNull();
+  expect(view.queryByRole('radio', { name: 'OpenAI 兼容' })).toBeNull();
+});
+
 test('a failed message preserves the draft; a successful send clears it', async () => {
   const send = jest.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
   const view = await render(<MuchakuchaThemeProvider><AssistantConversationPanel conversation={conversation} busy={false} disabled={false} onSend={send} /></MuchakuchaThemeProvider>);

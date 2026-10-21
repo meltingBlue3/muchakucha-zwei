@@ -7,11 +7,12 @@ const userId = '33333333-3333-4333-8333-333333333333';
 const noteId = '44444444-4444-4444-8444-444444444444';
 const providerId = '55555555-5555-4555-8555-555555555555';
 const conversationId = '66666666-6666-4666-8666-666666666666';
+const asrProviderId = '88888888-8888-4888-8888-888888888888';
 const version = '2030-06-15T04:00:00.000Z';
 const base = `/households/${householdId}`;
 
 interface Provider {
-  id: string; name: string; protocol: 'openai-compatible' | 'anthropic'; baseUrl: string; model: string;
+  id: string; name: string; protocol: 'openai-compatible' | 'anthropic' | 'qwen-asr'; baseUrl: string; model: string;
   visibility: 'private' | 'household'; ownedByMe: boolean; hasCredential: boolean; updatedAt: string;
 }
 interface Conversation {
@@ -27,7 +28,7 @@ function deferred() {
   return { promise, release };
 }
 
-async function mockAssistant(page: Page, options: { empty?: boolean } = {}) {
+async function mockAssistant(page: Page, options: { empty?: boolean; voice?: boolean } = {}) {
   let serial = 10;
   const id = () => `77777777-7777-4777-8777-${String(serial++).padStart(12, '0')}`;
   const provider = (name: string): Provider => ({
@@ -40,7 +41,9 @@ async function mockAssistant(page: Page, options: { empty?: boolean } = {}) {
   });
   const families = new Map([
     [householdId, {
-      name: '周末的家', providers: options.empty ? [] : [provider('我的日常助手')],
+      name: '周末的家', providers: options.empty ? [] : [provider('我的日常助手'), ...(options.voice ? [{
+        ...provider('语音转写'), id: asrProviderId, protocol: 'qwen-asr' as const, baseUrl: 'https://dashscope.example.com/compatible-mode/v1', model: 'qwen3-asr-flash',
+      }] : [])],
       conversations: options.empty ? [] : [conversation('周末准备清单', '根据家庭旅行清单，记得带野餐垫和水。')],
       notes: [{ id: noteId, householdId, title: '家庭旅行清单', body: '野餐垫、水和水果。', createdBy: userId, createdAt: version, updatedAt: version }],
       tasks: [] as Array<Record<string, unknown>>,
@@ -56,6 +59,8 @@ async function mockAssistant(page: Page, options: { empty?: boolean } = {}) {
     providerGate: null as Promise<void> | null, failProviderLoad: false,
     nextSend: 'normal' as 'normal' | 'fail' | 'lost-response',
     decisionGate: null as Promise<void> | null,
+    transcriptions: [] as Array<Record<string, unknown>>,
+    nextTranscription: 'normal' as 'normal' | 'fail',
   };
   await page.clock.setFixedTime(new Date(version));
   await page.route('**/api/v1/**', async route => {
@@ -97,6 +102,10 @@ async function mockAssistant(page: Page, options: { empty?: boolean } = {}) {
         body = result;
         status = method === 'POST' ? 201 : 200;
       } else throw new Error(`Unexpected provider request ${method} ${path}`);
+    } else if (family && parts[4] === 'assistant' && parts[5] === 'transcriptions' && method === 'POST') {
+      state.transcriptions.push(input);
+      if (state.nextTranscription === 'fail') { state.nextTranscription = 'normal'; await fail(502, 'ASSISTANT_PROVIDER_AUTH_FAILED'); return; }
+      body = { text: '明天下午3点接孩子。' };
     } else if (family && parts[4] === 'assistant' && parts[5] === 'conversations') {
       const selected = family.conversations.find(item => item.id === parts[6]);
       if (parts.length === 6 && method === 'GET') body = { conversations: family.conversations.map(({ id: key, title, updatedAt }) => ({ id: key, title, updatedAt })) };
@@ -204,6 +213,134 @@ async function checkLayout(page: Page, region: Locator) {
   const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   expect(violations).toEqual([]);
 }
+
+/** A microphone that plays a tone into the real MediaRecorder, installed before the app loads.
+ * `live` counts tracks still open, so a test can prove the microphone was released. */
+async function mockMicrophone(page: Page) {
+  await page.addInitScript(() => {
+    const microphone = { opened: 0, live: 0 };
+    (window as Window & { testMicrophone?: typeof microphone }).testMicrophone = microphone;
+    navigator.mediaDevices.getUserMedia = async () => {
+      const context = new AudioContext();
+      const tone = context.createOscillator();
+      const output = context.createMediaStreamDestination();
+      tone.connect(output);
+      tone.start();
+      microphone.opened++;
+      for (const track of output.stream.getTracks()) {
+        microphone.live++;
+        const stop = track.stop.bind(track);
+        let stopped = false;
+        track.stop = () => { if (!stopped) { stopped = true; microphone.live--; } stop(); };
+      }
+      return output.stream;
+    };
+  });
+}
+
+const openMicrophones = (page: Page) => page.evaluate(() => (window as Window & { testMicrophone?: { live: number } }).testMicrophone!.live);
+
+/** Recording length comes from the clock, which these tests hold still. */
+async function speakFor(page: Page, seconds: number) {
+  await page.clock.setFixedTime(new Date(Date.parse(version) + seconds * 1000));
+}
+
+for (const width of [320, 390, 1440]) {
+  test(`voice input appends the transcript to the draft and sends only on request at ${width}px`, async ({ page }) => {
+    await mockMicrophone(page);
+    const state = await mockAssistant(page, { voice: true });
+    await page.setViewportSize({ width, height: 900 });
+    await enterAssistant(page);
+    const home = page.getByRole('main', { name: '家庭助手', exact: true });
+    const input = home.getByLabel('开始新对话', { exact: true });
+    await expect(home.getByText(/语音输入的录音会发送至 https:\/\/dashscope\.example\.com/)).toBeVisible();
+    await input.fill('请帮我安排');
+    await home.getByRole('button', { name: '语音输入', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(home.getByText('正在录音', { exact: true })).toBeVisible();
+    const finish = home.getByRole('button', { name: '完成录音', exact: true });
+    await expect(finish).toBeFocused();
+    await expect(input).not.toBeEditable();
+    await expect(home.getByRole('button', { name: '发送', exact: true })).toHaveCount(0);
+    await speakFor(page, 3);
+    await expect(home.getByText('0:03', { exact: true })).toBeVisible();
+    await checkLayout(page, home);
+    await page.screenshot({ path: `test-results/assistant-voice-${width}.png`, fullPage: true });
+    await page.keyboard.press('Enter');
+    await expect(input).toHaveValue('请帮我安排\n明天下午3点接孩子。');
+    await expect(input).toBeFocused();
+    expect(await openMicrophones(page)).toBe(0);
+    const [transcription] = state.transcriptions;
+    expect(transcription).toMatchObject({ providerId: asrProviderId, mimeType: 'audio/webm' });
+    expect(String(transcription?.audio)).toMatch(/^[A-Za-z0-9+/]{100,}={0,2}$/);
+    expect(state.requests.filter(request => request.method === 'POST' && request.path.endsWith('/assistant/conversations'))).toHaveLength(0);
+
+    await input.fill('明天下午4点接孩子。');
+    await home.getByRole('button', { name: '发送', exact: true }).click();
+    const conversation = page.getByRole('main', { name: '助手对话', exact: true });
+    await expect(conversation.getByTestId('assistant-transcript').getByText('明天下午4点接孩子。', { exact: true })).toBeVisible();
+    expect(state.requests.filter(request => request.path.endsWith('/messages')).map(request => request.body.message)).toEqual(['明天下午4点接孩子。']);
+    // The conversation composer offers the same microphone; cancelling keeps the draft and sends nothing.
+    const reply = conversation.getByLabel('发送给助手', { exact: true });
+    await reply.fill('保留这段原文');
+    await conversation.getByRole('button', { name: '语音输入', exact: true }).click();
+    await expect(conversation.getByText('正在录音', { exact: true })).toBeVisible();
+    await checkLayout(page, conversation);
+    await conversation.getByRole('button', { name: '取消语音输入', exact: true }).click();
+    await expect(reply).toHaveValue('保留这段原文');
+    expect(state.transcriptions).toHaveLength(1);
+    await expect.poll(() => openMicrophones(page)).toBe(0);
+  });
+}
+
+test('a transcription failure keeps the draft, and leaving the conversation releases the microphone', async ({ page }) => {
+  await mockMicrophone(page);
+  const state = await mockAssistant(page, { voice: true });
+  await openExistingConversation(page);
+  const screen = page.getByRole('main', { name: '助手对话', exact: true });
+  const input = screen.getByLabel('发送给助手', { exact: true });
+  await input.fill('原草稿');
+  state.nextTranscription = 'fail';
+  await screen.getByRole('button', { name: '语音输入', exact: true }).click();
+  await expect(screen.getByText('正在录音', { exact: true })).toBeVisible();
+  await speakFor(page, 2);
+  await screen.getByRole('button', { name: '完成录音', exact: true }).click();
+  await expect(screen.getByText('模型服务拒绝了 API 密钥，请检查或更新密钥。', { exact: true })).toBeVisible();
+  await expect(input).toHaveValue('原草稿');
+  await expect(input).toBeEditable();
+
+  await screen.getByRole('button', { name: '语音输入', exact: true }).click();
+  await expect(screen.getByText('正在录音', { exact: true })).toBeVisible();
+  expect(await openMicrophones(page)).toBe(1);
+  // SPA navigation, so a document reload cannot stand in for the hook's cleanup.
+  await screen.getByRole('button', { name: '返回', exact: true }).click();
+  await expect(page).toHaveURL(`${base}/assistant`);
+  await expect.poll(() => openMicrophones(page)).toBe(0);
+  expect(state.transcriptions).toHaveLength(1);
+});
+
+test('without a transcription configuration there is no microphone', async ({ page }) => {
+  await mockMicrophone(page);
+  await mockAssistant(page);
+  await enterAssistant(page);
+  const home = page.getByRole('main', { name: '家庭助手', exact: true });
+  await expect(home.getByRole('button', { name: '发送', exact: true })).toBeVisible();
+  await expect(home.getByRole('button', { name: '语音输入', exact: true })).toHaveCount(0);
+  await home.getByLabel('开始新对话', { exact: true }).fill('继续使用文字');
+  await expect(home.getByRole('button', { name: '发送', exact: true })).toBeEnabled();
+});
+
+test('a transcription configuration is never offered as a chat model', async ({ page }) => {
+  await mockMicrophone(page);
+  await mockAssistant(page, { voice: true });
+  await enterAssistant(page);
+  const home = page.getByRole('main', { name: '家庭助手', exact: true });
+  await expect(home.getByRole('button', { name: '语音输入', exact: true })).toBeVisible();
+  await home.getByRole('button', { name: /^选择模型：/ }).click();
+  const picker = page.getByRole('dialog', { name: '选择模型' });
+  await expect(picker.getByRole('button', { name: '选择 我的日常助手', exact: true })).toBeVisible();
+  await expect(picker.getByRole('button', { name: '选择 语音转写', exact: true })).toHaveCount(0);
+});
 
 for (const width of [320, 390, 1440]) {
   test(`assistant workspace keeps the composer visible and uses contextual confirmation at ${width}px`, async ({ page }) => {
