@@ -9,6 +9,7 @@ import { AssistantCredentials } from './assistant-credentials.js';
 import { AssistantProvider } from './assistant-provider.js';
 import { AssistantSettingsService } from './assistant-settings.service.js';
 import { AssistantToolsService } from './assistant-tools.service.js';
+import { AssistantTranscriber } from './assistant-transcription.js';
 import { AssistantService } from './assistant.service.js';
 
 @Module({})
@@ -17,7 +18,7 @@ export class AssistantModule {
     return { module: AssistantModule,
       imports: [EventsModule, TasksModule, NotesModule, LabelsModule],
       controllers: [AssistantController],
-      providers: [HouseholdsService, AssistantSettingsService, AssistantService, AssistantToolsService, AssistantProvider,
+      providers: [HouseholdsService, AssistantSettingsService, AssistantService, AssistantToolsService, AssistantProvider, AssistantTranscriber,
         { provide: AssistantCredentials, useFactory: () => new AssistantCredentials(environment.ASSISTANT_ENCRYPTION_KEY) }],
     };
   }

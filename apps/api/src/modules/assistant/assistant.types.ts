@@ -26,11 +26,36 @@ export interface AssistantMessage {
   replay?: AssistantReplay;
 }
 
+export const ASSISTANT_CHAT_PROTOCOLS = ['openai-compatible', 'anthropic'] as const;
+export const ASSISTANT_TRANSCRIPTION_PROTOCOLS = ['qwen-asr'] as const;
+export const ASSISTANT_PROTOCOLS = [...ASSISTANT_CHAT_PROTOCOLS, ...ASSISTANT_TRANSCRIPTION_PROTOCOLS] as const;
+export type AssistantChatProtocol = typeof ASSISTANT_CHAT_PROTOCOLS[number];
+/** A configuration's protocol fixes its use: chat drives conversations, transcription turns voice input into text. */
+export type AssistantProtocol = typeof ASSISTANT_PROTOCOLS[number];
+
+export function isTranscriptionProtocol(protocol: string): protocol is typeof ASSISTANT_TRANSCRIPTION_PROTOCOLS[number] {
+  return (ASSISTANT_TRANSCRIPTION_PROTOCOLS as readonly string[]).includes(protocol);
+}
+
 export interface AssistantProviderConfig {
-  protocol: 'openai-compatible' | 'anthropic';
+  protocol: AssistantProtocol;
   baseUrl: string;
   model: string;
   apiKey: string;
+}
+
+export const ASSISTANT_AUDIO_TYPES = ['audio/mp4', 'audio/aac', 'audio/webm', 'audio/ogg', 'audio/wav', 'audio/mpeg'] as const;
+
+/** A short recording held in memory only; it is never written to disk or the database. */
+export interface AssistantAudio {
+  /** Base64, without a data: prefix. */
+  data: string;
+  mimeType: typeof ASSISTANT_AUDIO_TYPES[number];
+}
+
+export interface AssistantTranscription {
+  text: string;
+  usage?: { inputTokens: number; outputTokens: number };
 }
 
 export interface AssistantCompletion {

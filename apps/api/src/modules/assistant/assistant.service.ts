@@ -6,9 +6,14 @@ import { AssistantProvider } from './assistant-provider.js';
 import { AssistantProviderFailure } from './assistant-transport.js';
 import { AssistantSettingsService } from './assistant-settings.service.js';
 import { AssistantToolsService } from './assistant-tools.service.js';
-import type { AssistantActor, AssistantCompletion, AssistantMessage, AssistantToolActor, AssistantToolCall, AssistantToolDefinition } from './assistant.types.js';
+import { AssistantTranscriber, silentWav } from './assistant-transcription.js';
+import {
+  isTranscriptionProtocol, type AssistantActor, type AssistantCompletion, type AssistantMessage, type AssistantToolActor, type AssistantToolCall,
+  type AssistantToolDefinition,
+} from './assistant.types.js';
 import type {
-  AssistantConversationResponseDto, AssistantProviderCheckResponseDto, CheckAssistantProviderDto, DecideAssistantActionDto, SendAssistantMessageDto,
+  AssistantConversationResponseDto, AssistantProviderCheckResponseDto, AssistantTranscriptionResponseDto, CheckAssistantProviderDto,
+  DecideAssistantActionDto, SendAssistantMessageDto, TranscribeAssistantAudioDto,
 } from './dto/assistant.dto.js';
 
 /** Serialized size of what the model receives; earlier turns are shortened by modelContext. */
@@ -122,7 +127,7 @@ export class AssistantService {
   private readonly logger = new Logger(AssistantService.name);
 
   constructor(private readonly prisma: PrismaService, private readonly settings: AssistantSettingsService,
-    private readonly provider: AssistantProvider, private readonly tools: AssistantToolsService) {}
+    private readonly provider: AssistantProvider, private readonly tools: AssistantToolsService, private readonly transcriber: AssistantTranscriber) {}
 
   async list(actor: AssistantActor) {
     await this.settings.requireMember(actor);
@@ -132,6 +137,7 @@ export class AssistantService {
 
   async create(actor: AssistantActor, providerId: string) {
     const provider = await this.settings.requireProvider(actor, providerId);
+    this.settings.requirePurpose(provider, 'chat');
     // A conversation nobody wrote in holds nothing; starting another one replaces it instead of piling up in the history.
     await this.prisma.assistantConversation.deleteMany({ where: { householdId: actor.householdId, userId: actor.userId, state: 'idle', messages: { equals: [] } } });
     if (await this.prisma.assistantConversation.count({ where: { householdId: actor.householdId, userId: actor.userId } }) >= 100) {
@@ -173,6 +179,10 @@ export class AssistantService {
     const config = await this.settings.checkable(actor, input);
     const request: AssistantMessage[] = [{ role: 'user', content: 'connection check' }];
     try {
+      if (isTranscriptionProtocol(config.protocol)) {
+        await this.transcriber.transcribe(config, silentWav());
+        return { toolCalling: false, transcription: true };
+      }
       const first = await this.provider.complete(config, CONNECTION_CHECK_PROMPT, request, [CONNECTION_CHECK_TOOL]);
       if (!first.toolCalls.some(call => call.name === CONNECTION_CHECK_TOOL.name)) return { toolCalling: false };
       const results = first.toolCalls.map(call => ({ role: 'tool' as const, toolCallId: call.id, content: JSON.stringify({ ok: true, tool: call.name, data: { connected: true } }) }));
@@ -181,6 +191,20 @@ export class AssistantService {
       return { toolCalling: true };
     } catch (error) {
       this.logger.warn(`provider check failed: ${toolFailure(error, 'CHECK_FAILED')}${error instanceof AssistantProviderFailure ? ` (${error.diagnostic})` : ''}`);
+      throw error;
+    }
+  }
+
+  /** Voice input: the recording goes to the chosen transcription service and the text comes back for the
+   * user to review. Nothing is stored except the usage count; neither the audio nor the text is logged. */
+  async transcribe(actor: AssistantActor, input: TranscribeAssistantAudioDto): Promise<AssistantTranscriptionResponseDto> {
+    const config = await this.settings.resolveTranscription(actor, input.providerId);
+    try {
+      const result = await this.transcriber.transcribe(config, { data: input.audio, mimeType: input.mimeType });
+      await this.settings.recordUsage(input.providerId, actor.userId, result.usage);
+      return { text: result.text };
+    } catch (error) {
+      this.logger.warn(`transcription failed: ${toolFailure(error, 'TRANSCRIPTION_FAILED')}${error instanceof AssistantProviderFailure ? ` (${error.diagnostic})` : ''}`);
       throw error;
     }
   }

@@ -2368,6 +2368,53 @@
         ]
       }
     },
+    "/api/v1/households/{householdId}/assistant/transcriptions": {
+      "post": {
+        "operationId": "transcribeAssistantAudio",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranscribeAssistantAudioDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantTranscriptionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
     "/api/v1/households/{householdId}/assistant/conversations": {
       "get": {
         "operationId": "listAssistantConversations",
@@ -4307,8 +4354,10 @@
             "type": "string",
             "enum": [
               "openai-compatible",
-              "anthropic"
-            ]
+              "anthropic",
+              "qwen-asr"
+            ],
+            "description": "qwen-asr transcribes voice input; the other protocols drive conversations. The use is fixed when the configuration is created."
           },
           "baseUrl": {
             "type": "string"
@@ -4380,8 +4429,10 @@
             "type": "string",
             "enum": [
               "openai-compatible",
-              "anthropic"
-            ]
+              "anthropic",
+              "qwen-asr"
+            ],
+            "description": "qwen-asr transcribes voice input; the other protocols drive conversations. The use is fixed when the configuration is created."
           },
           "baseUrl": {
             "type": "string"
@@ -4421,8 +4472,10 @@
             "type": "string",
             "enum": [
               "openai-compatible",
-              "anthropic"
-            ]
+              "anthropic",
+              "qwen-asr"
+            ],
+            "description": "qwen-asr transcribes voice input; the other protocols drive conversations. The use is fixed when the configuration is created."
           },
           "baseUrl": {
             "type": "string"
@@ -4446,7 +4499,11 @@
         "properties": {
           "toolCalling": {
             "type": "boolean",
-            "description": "The model called the check tool and the service accepted the follow-up request carrying its result, as every assistant step requires."
+            "description": "The model called the check tool and the service accepted the follow-up request carrying its result, as every assistant step requires. Always false for a transcription configuration."
+          },
+          "transcription": {
+            "type": "boolean",
+            "description": "Present for a transcription configuration: the service accepted one second of silence and returned a transcript."
           }
         },
         "required": [
@@ -4463,8 +4520,10 @@
             "type": "string",
             "enum": [
               "openai-compatible",
-              "anthropic"
-            ]
+              "anthropic",
+              "qwen-asr"
+            ],
+            "description": "qwen-asr transcribes voice input; the other protocols drive conversations. The use is fixed when the configuration is created."
           },
           "baseUrl": {
             "type": "string"
@@ -4489,6 +4548,50 @@
         },
         "required": [
           "expectedUpdatedAt"
+        ]
+      },
+      "TranscribeAssistantAudioDto": {
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A transcription (qwen-asr) configuration the caller may use."
+          },
+          "mimeType": {
+            "type": "string",
+            "enum": [
+              "audio/mp4",
+              "audio/aac",
+              "audio/webm",
+              "audio/ogg",
+              "audio/wav",
+              "audio/mpeg"
+            ]
+          },
+          "audio": {
+            "type": "string",
+            "writeOnly": true,
+            "maxLength": 880000,
+            "description": "Base64 recording without a data: prefix. Held in memory only, never stored or logged."
+          }
+        },
+        "required": [
+          "providerId",
+          "mimeType",
+          "audio"
+        ]
+      },
+      "AssistantTranscriptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The recognized text, trimmed; empty when nothing was recognized."
+          }
+        },
+        "required": [
+          "text"
         ]
       },
       "AssistantConversationSummaryDto": {

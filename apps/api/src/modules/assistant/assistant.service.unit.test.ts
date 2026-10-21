@@ -5,6 +5,7 @@ import type { PrismaService } from '../../infrastructure/prisma/prisma.service.j
 import type { AssistantProvider } from './assistant-provider.js';
 import type { AssistantSettingsService } from './assistant-settings.service.js';
 import type { AssistantToolsService } from './assistant-tools.service.js';
+import type { AssistantTranscriber } from './assistant-transcription.js';
 import { AssistantProviderFailure } from './assistant-transport.js';
 import { AssistantService } from './assistant.service.js';
 import type { AssistantActor, AssistantCompletion, AssistantMessage, AssistantToolCall } from './assistant.types.js';
@@ -51,7 +52,7 @@ function fixture() {
     }),
   } };
   const service = new AssistantService(database as unknown as PrismaService, settings as unknown as AssistantSettingsService,
-    { complete } as unknown as AssistantProvider, tools as unknown as AssistantToolsService);
+    { complete } as unknown as AssistantProvider, tools as unknown as AssistantToolsService, {} as unknown as AssistantTranscriber);
   return { service, row, complete, tools, settings, execute };
 }
 

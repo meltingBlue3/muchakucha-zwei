@@ -407,9 +407,11 @@ export interface TagEntitiesDto {
   labelIds: string[];
 }
 
+/** qwen-asr transcribes voice input; the other protocols drive conversations. */
+export type AssistantProtocol = 'openai-compatible' | 'anthropic' | 'qwen-asr';
 export interface CreateAssistantProviderDto {
   name: string;
-  protocol: 'openai-compatible' | 'anthropic';
+  protocol: AssistantProtocol;
   baseUrl: string;
   model: string;
   visibility: 'private' | 'household';
@@ -420,16 +422,20 @@ export interface UpdateAssistantProviderDto extends Partial<CreateAssistantProvi
 }
 export interface CheckAssistantProviderDto {
   providerId?: string;
-  protocol: 'openai-compatible' | 'anthropic';
+  protocol: AssistantProtocol;
   baseUrl: string;
   model: string;
   apiKey?: string;
 }
-export interface AssistantProviderCheckResponseDto { toolCalling: boolean }
+export interface AssistantProviderCheckResponseDto {
+  toolCalling: boolean;
+  /** Present for a transcription configuration that accepted a short silent recording. */
+  transcription?: boolean;
+}
 export interface AssistantProviderResponseDto {
   id: string;
   name: string;
-  protocol: 'openai-compatible' | 'anthropic';
+  protocol: AssistantProtocol;
   baseUrl: string;
   model: string;
   visibility: 'private' | 'household';
@@ -442,6 +448,13 @@ export interface AssistantUsageMemberDto { userId: string; displayName: string; 
 export interface AssistantProviderUsageDto { month: string; requests: number; inputTokens: number; outputTokens: number; members: AssistantUsageMemberDto[] }
 export interface AssistantProviderListResponseDto { providers: AssistantProviderResponseDto[] }
 export interface CreateAssistantConversationDto { providerId: string }
+export interface TranscribeAssistantAudioDto {
+  providerId: string;
+  mimeType: 'audio/mp4' | 'audio/aac' | 'audio/webm' | 'audio/ogg' | 'audio/wav' | 'audio/mpeg';
+  /** Base64 recording without a data: prefix, at most 880,000 characters. */
+  audio: string;
+}
+export interface AssistantTranscriptionResponseDto { text: string }
 export interface SendAssistantMessageDto { message: string; timeZone: string; expectedVersion: number }
 export interface DecideAssistantActionDto { approvedIds: string[]; expectedVersion: number }
 export interface AssistantVisibleMessageDto { role: 'user' | 'assistant' | 'tool'; content: string }
@@ -466,6 +479,8 @@ import type {
   AssistantProviderResponseDto,
   AssistantProviderListResponseDto,
   CreateAssistantConversationDto,
+  TranscribeAssistantAudioDto,
+  AssistantTranscriptionResponseDto,
   SendAssistantMessageDto,
   DecideAssistantActionDto,
   AssistantConversationListResponseDto,
@@ -1298,6 +1313,10 @@ export class ApiClient {
 
   async deleteAssistantProvider(accessToken: string, householdId: string, providerId: string, signal?: AbortSignal): Promise<void> {
     return this.authenticated<void>('DELETE', \`/api/v1/households/\${encodeURIComponent(householdId)}/assistant/providers/\${encodeURIComponent(providerId)}\`, accessToken, undefined, signal);
+  }
+
+  async transcribeAssistantAudio(accessToken: string, householdId: string, body: TranscribeAssistantAudioDto, signal?: AbortSignal): Promise<AssistantTranscriptionResponseDto> {
+    return this.authenticated<AssistantTranscriptionResponseDto>('POST', \`/api/v1/households/\${encodeURIComponent(householdId)}/assistant/transcriptions\`, accessToken, body, signal);
   }
 
   async listAssistantConversations(accessToken: string, householdId: string, signal?: AbortSignal): Promise<AssistantConversationListResponseDto> {

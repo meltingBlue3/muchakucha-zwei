@@ -4,7 +4,7 @@ import type { AssistantProvider as ProviderRow } from '../../generated/prisma/cl
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AssistantCredentials } from './assistant-credentials.js';
 import { validateAssistantBaseUrl } from './assistant-provider.js';
-import type { AssistantActor, AssistantCompletion, AssistantProviderConfig } from './assistant.types.js';
+import { isTranscriptionProtocol, type AssistantActor, type AssistantCompletion, type AssistantProtocol, type AssistantProviderConfig } from './assistant.types.js';
 import type {
   AssistantProviderResponseDto, AssistantProviderUsageDto, CheckAssistantProviderDto, CreateAssistantProviderDto, UpdateAssistantProviderDto,
 } from './dto/assistant.dto.js';
@@ -35,6 +35,14 @@ export class AssistantSettingsService {
     return provider;
   }
 
+  /** A transcription configuration never drives a conversation, and a chat configuration never receives audio. */
+  requirePurpose(row: ProviderRow, purpose: 'chat' | 'transcription'): void {
+    if (isTranscriptionProtocol(row.protocol) !== (purpose === 'transcription')) {
+      throw new BadRequestException({ code: 'ASSISTANT_PROVIDER_PURPOSE_MISMATCH', message: purpose === 'transcription'
+        ? 'Choose a voice transcription configuration.' : 'Voice transcription configurations cannot hold conversations.' });
+    }
+  }
+
   /** A credential sealed under a replaced server key, or with no key configured, cannot be used. */
   private usable(row: ProviderRow): boolean {
     try {
@@ -46,7 +54,7 @@ export class AssistantSettingsService {
   }
 
   private response(row: ProviderRow, userId: string, usage: AssistantProviderUsageDto | null = null): AssistantProviderResponseDto {
-    return { id: row.id, name: row.name, protocol: row.protocol as AssistantProviderConfig['protocol'], baseUrl: row.baseUrl, model: row.model,
+    return { id: row.id, name: row.name, protocol: row.protocol as AssistantProtocol, baseUrl: row.baseUrl, model: row.model,
       visibility: row.visibility as 'private' | 'household', ownedByMe: row.ownerId === userId, hasCredential: this.usable(row), updatedAt: row.updatedAt.toISOString(), usage };
   }
 
@@ -114,6 +122,9 @@ export class AssistantSettingsService {
   async update(actor: AssistantActor, id: string, input: UpdateAssistantProviderDto) {
     const row = await this.requireProvider(actor, id);
     if (row.ownerId !== actor.userId) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the configuration owner can edit it.' });
+    if (input.protocol !== undefined && isTranscriptionProtocol(input.protocol) !== isTranscriptionProtocol(row.protocol)) {
+      throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'A configuration keeps the use it was created for.', details: [{ field: 'protocol', codes: ['purpose'] }] });
+    }
     const baseUrl = input.baseUrl === undefined ? undefined : validateAssistantBaseUrl(input.baseUrl).toString().replace(/\/$/, '');
     // Only a new destination ends existing conversations: their history must not follow it to another service.
     const moved = (input.protocol !== undefined && input.protocol !== row.protocol) || (baseUrl !== undefined && baseUrl !== row.baseUrl);
@@ -153,10 +164,22 @@ export class AssistantSettingsService {
   /** `expectedDestination` is the destination version a conversation was started with. */
   async resolve(actor: AssistantActor, id: string, expectedDestination?: Date): Promise<AssistantProviderConfig> {
     const row = await this.requireProvider(actor, id);
+    this.requirePurpose(row, 'chat');
     if (expectedDestination && row.destinationUpdatedAt.getTime() !== expectedDestination.getTime()) {
       throw new ConflictException({ code: 'ASSISTANT_PROVIDER_CHANGED', message: 'The model configuration changed. Start a new conversation after reviewing the destination.' });
     }
-    return { protocol: row.protocol as AssistantProviderConfig['protocol'], baseUrl: row.baseUrl, model: row.model,
+    return this.config(row);
+  }
+
+  /** The transcription configuration voice input sends its recording to. */
+  async resolveTranscription(actor: AssistantActor, id: string): Promise<AssistantProviderConfig> {
+    const row = await this.requireProvider(actor, id);
+    this.requirePurpose(row, 'transcription');
+    return this.config(row);
+  }
+
+  private config(row: ProviderRow): AssistantProviderConfig {
+    return { protocol: row.protocol as AssistantProtocol, baseUrl: row.baseUrl, model: row.model,
       apiKey: this.credentials.decrypt(row.encryptedApiKey, `${row.householdId}:${row.ownerId}:${row.id}`) };
   }
 }

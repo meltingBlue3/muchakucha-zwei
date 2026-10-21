@@ -7,8 +7,8 @@ import { AssistantService } from './assistant.service.js';
 import {
   AssistantConversationListResponseDto, AssistantConversationParam, AssistantConversationResponseDto, AssistantHouseholdParam,
   AssistantProviderCheckResponseDto, AssistantProviderListResponseDto, AssistantProviderParam, AssistantProviderResponseDto,
-  CheckAssistantProviderDto, CreateAssistantConversationDto,
-  CreateAssistantProviderDto, DecideAssistantActionDto, SendAssistantMessageDto, UpdateAssistantProviderDto,
+  AssistantTranscriptionResponseDto, CheckAssistantProviderDto, CreateAssistantConversationDto,
+  CreateAssistantProviderDto, DecideAssistantActionDto, SendAssistantMessageDto, TranscribeAssistantAudioDto, UpdateAssistantProviderDto,
 } from './dto/assistant.dto.js';
 
 interface AuthenticatedRequest { auth: AccessTokenClaims }
@@ -56,6 +56,15 @@ export class AssistantController {
   @ApiNoContentResponse()
   deleteProvider(@Req() req: AuthenticatedRequest, @Param() params: AssistantProviderParam) {
     return this.settings.delete({ userId: req.auth.sub, householdId: params.householdId }, params.providerId);
+  }
+
+  @Post('transcriptions')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ operationId: 'transcribeAssistantAudio' })
+  @ApiOkResponse({ type: AssistantTranscriptionResponseDto })
+  transcribe(@Req() req: AuthenticatedRequest, @Param() params: AssistantHouseholdParam, @Body() input: TranscribeAssistantAudioDto) {
+    return this.assistant.transcribe({ userId: req.auth.sub, householdId: params.householdId }, input);
   }
 
   @Get('conversations')

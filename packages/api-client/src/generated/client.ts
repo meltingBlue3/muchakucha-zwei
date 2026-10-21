@@ -7,6 +7,8 @@ import type {
   AssistantProviderResponseDto,
   AssistantProviderListResponseDto,
   CreateAssistantConversationDto,
+  TranscribeAssistantAudioDto,
+  AssistantTranscriptionResponseDto,
   SendAssistantMessageDto,
   DecideAssistantActionDto,
   AssistantConversationListResponseDto,
@@ -839,6 +841,10 @@ export class ApiClient {
 
   async deleteAssistantProvider(accessToken: string, householdId: string, providerId: string, signal?: AbortSignal): Promise<void> {
     return this.authenticated<void>('DELETE', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/providers/${encodeURIComponent(providerId)}`, accessToken, undefined, signal);
+  }
+
+  async transcribeAssistantAudio(accessToken: string, householdId: string, body: TranscribeAssistantAudioDto, signal?: AbortSignal): Promise<AssistantTranscriptionResponseDto> {
+    return this.authenticated<AssistantTranscriptionResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/transcriptions`, accessToken, body, signal);
   }
 
   async listAssistantConversations(accessToken: string, householdId: string, signal?: AbortSignal): Promise<AssistantConversationListResponseDto> {

@@ -1,9 +1,12 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBase64, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min } from 'class-validator';
+import { ASSISTANT_AUDIO_TYPES, ASSISTANT_PROTOCOLS, type AssistantProtocol } from '../assistant.types.js';
+
+const protocolDescription = 'qwen-asr transcribes voice input; the other protocols drive conversations. The use is fixed when the configuration is created.';
 
 export class CreateAssistantProviderDto {
   @ApiProperty() @IsString() @Length(1, 80) name!: string;
-  @ApiProperty({ enum: ['openai-compatible', 'anthropic'] }) @IsIn(['openai-compatible', 'anthropic']) protocol!: 'openai-compatible' | 'anthropic';
+  @ApiProperty({ enum: ASSISTANT_PROTOCOLS, description: protocolDescription }) @IsIn(ASSISTANT_PROTOCOLS) protocol!: AssistantProtocol;
   @ApiProperty() @IsString() @Length(1, 500) baseUrl!: string;
   @ApiProperty() @IsString() @Length(1, 120) model!: string;
   @ApiProperty({ enum: ['private', 'household'] }) @IsIn(['private', 'household']) visibility!: 'private' | 'household';
@@ -17,14 +20,15 @@ export class UpdateAssistantProviderDto extends PartialType(CreateAssistantProvi
 /** Checks unsaved form values. Without apiKey, the owner's saved key for providerId is used. */
 export class CheckAssistantProviderDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID('4') providerId?: string;
-  @ApiProperty({ enum: ['openai-compatible', 'anthropic'] }) @IsIn(['openai-compatible', 'anthropic']) protocol!: 'openai-compatible' | 'anthropic';
+  @ApiProperty({ enum: ASSISTANT_PROTOCOLS, description: protocolDescription }) @IsIn(ASSISTANT_PROTOCOLS) protocol!: AssistantProtocol;
   @ApiProperty() @IsString() @Length(1, 500) baseUrl!: string;
   @ApiProperty() @IsString() @Length(1, 120) model!: string;
   @ApiPropertyOptional({ writeOnly: true }) @IsOptional() @IsString() @Length(1, 4096) apiKey?: string;
 }
 
 export class AssistantProviderCheckResponseDto {
-  @ApiProperty({ description: 'The model called the check tool and the service accepted the follow-up request carrying its result, as every assistant step requires.' }) toolCalling!: boolean;
+  @ApiProperty({ description: 'The model called the check tool and the service accepted the follow-up request carrying its result, as every assistant step requires. Always false for a transcription configuration.' }) toolCalling!: boolean;
+  @ApiPropertyOptional({ description: 'Present for a transcription configuration: the service accepted one second of silence and returned a transcript.' }) transcription?: boolean;
 }
 
 export class AssistantUsageMemberDto {
@@ -46,7 +50,7 @@ export class AssistantProviderUsageDto {
 export class AssistantProviderResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() name!: string;
-  @ApiProperty({ enum: ['openai-compatible', 'anthropic'] }) protocol!: 'openai-compatible' | 'anthropic';
+  @ApiProperty({ enum: ASSISTANT_PROTOCOLS, description: protocolDescription }) protocol!: AssistantProtocol;
   @ApiProperty() baseUrl!: string;
   @ApiProperty() model!: string;
   @ApiProperty({ enum: ['private', 'household'] }) visibility!: 'private' | 'household';
@@ -69,6 +73,20 @@ export class SendAssistantMessageDto {
   @ApiProperty() @IsString() @Length(1, 8000) message!: string;
   @ApiProperty() @IsString() @Length(1, 80) timeZone!: string;
   @ApiProperty() @IsInt() @Min(0) expectedVersion!: number;
+}
+
+/** Fastify accepts request bodies up to 1 MiB; this leaves room for the other fields. About 640 KiB of audio. */
+export const MAX_ASSISTANT_AUDIO_BASE64_LENGTH = 880_000;
+
+export class TranscribeAssistantAudioDto {
+  @ApiProperty({ format: 'uuid', description: 'A transcription (qwen-asr) configuration the caller may use.' }) @IsUUID('4') providerId!: string;
+  @ApiProperty({ enum: ASSISTANT_AUDIO_TYPES }) @IsIn(ASSISTANT_AUDIO_TYPES) mimeType!: typeof ASSISTANT_AUDIO_TYPES[number];
+  @ApiProperty({ writeOnly: true, maxLength: MAX_ASSISTANT_AUDIO_BASE64_LENGTH, description: 'Base64 recording without a data: prefix. Held in memory only, never stored or logged.' })
+  @IsString() @Length(4, MAX_ASSISTANT_AUDIO_BASE64_LENGTH) @IsBase64() audio!: string;
+}
+
+export class AssistantTranscriptionResponseDto {
+  @ApiProperty({ description: 'The recognized text, trimmed; empty when nothing was recognized.' }) text!: string;
 }
 
 export class DecideAssistantActionDto {

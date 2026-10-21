@@ -223,6 +223,7 @@ export async function createApplication(
           '*.pendingProof',
           '*.apiKey',
           '*.encryptedApiKey',
+          '*.audio',
           '*.ASSISTANT_ENCRYPTION_KEY',
         ],
         censor: '[REDACTED]',

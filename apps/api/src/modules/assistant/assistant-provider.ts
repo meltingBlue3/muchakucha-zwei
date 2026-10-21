@@ -3,8 +3,9 @@ import { BadRequestException, HttpException, Inject, Injectable, Optional } from
 import {
   AssistantProviderFailure, assistantProviderFailure, postAssistantJson, validateAssistantBaseUrl, type AssistantTransport,
 } from './assistant-transport.js';
-import type {
-  AssistantCompletion, AssistantMessage, AssistantProviderConfig, AssistantReplay, AssistantToolCall, AssistantToolDefinition,
+import {
+  ASSISTANT_CHAT_PROTOCOLS, type AssistantChatProtocol, type AssistantCompletion, type AssistantMessage, type AssistantProviderConfig,
+  type AssistantReplay, type AssistantToolCall, type AssistantToolDefinition,
 } from './assistant.types.js';
 
 export { validateAssistantBaseUrl } from './assistant-transport.js';
@@ -241,7 +242,7 @@ interface ProtocolAdapter {
 }
 
 // Each provider owns only wire-format translation; permissions and tool execution stay in the runner.
-const adapters: Record<AssistantProviderConfig['protocol'], ProtocolAdapter> = {
+const adapters: Record<AssistantChatProtocol, ProtocolAdapter> = {
   'openai-compatible': {
     path: 'chat/completions',
     // Kimi numbers its calls as functions.<name>:<index>.
@@ -275,15 +276,21 @@ const adapters: Record<AssistantProviderConfig['protocol'], ProtocolAdapter> = {
   },
 };
 
+/** The model and key are sent as headers and body fields, so they must not be able to inject either. */
+export function validConfig(config: AssistantProviderConfig): boolean {
+  return typeof config.model === 'string' && Boolean(config.model.trim()) && config.model.length <= 200
+    && typeof config.apiKey === 'string' && Boolean(config.apiKey) && config.apiKey.length <= 8_192 && !/[\r\n\u0000]/u.test(config.apiKey);
+}
+
 @Injectable()
 export class AssistantProvider {
   constructor(@Optional() @Inject(ASSISTANT_TRANSPORT) private readonly transport: AssistantTransport = postAssistantJson) {}
 
   async complete(config: AssistantProviderConfig, systemPrompt: string, messages: AssistantMessage[], definitions: AssistantToolDefinition[]): Promise<AssistantCompletion> {
     const url = validateAssistantBaseUrl(config.baseUrl);
-    const adapter = adapters[config.protocol];
-    if (!Object.hasOwn(adapters, config.protocol) || !adapter || typeof config.model !== 'string' || !config.model.trim() || config.model.length > 200
-      || typeof config.apiKey !== 'string' || !config.apiKey || config.apiKey.length > 8_192 || /[\r\n\u0000]/u.test(config.apiKey)) {
+    // A transcription configuration has no chat adapter, so it can never drive a conversation.
+    const adapter = (ASSISTANT_CHAT_PROTOCOLS as readonly string[]).includes(config.protocol) ? adapters[config.protocol as AssistantChatProtocol] : undefined;
+    if (!adapter || !validConfig(config)) {
       throw new BadRequestException({ code: 'ASSISTANT_PROVIDER_CONFIG_INVALID', message: 'The model provider configuration is invalid.' });
     }
     url.pathname = `${url.pathname.replace(/\/+$/, '')}/${adapter.path}`;
