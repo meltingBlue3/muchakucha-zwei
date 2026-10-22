@@ -18,6 +18,14 @@
           "enableBackgroundPlayback": false
         }
       ],
+      "./plugins/without-push-entitlement",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#B94736"
+        }
+      ],
       "@react-native-community/datetimepicker",
       "./plugins/with-material3-theme",
       [
@@ -34,6 +42,10 @@
     },
     "android": {
       "package": "app.muchakucha.zwei",
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#FDF7EF"

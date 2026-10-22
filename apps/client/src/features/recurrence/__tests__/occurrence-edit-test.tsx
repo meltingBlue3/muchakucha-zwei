@@ -25,6 +25,7 @@ const common = {
   id: 'item', householdId: 'household', title: '家庭安排', description: null,
   createdBy: 'user', createdAt: rule.updatedAt, updatedAt: rule.updatedAt,
   recurrenceRuleId: rule.id, occurrenceDate: '2026-10-05', labels: [],
+  myReminder: { mode: 'default' as const, minutesBefore: null },
 };
 
 type Kind = 'event' | 'task';
@@ -105,5 +106,5 @@ test('a newly created event still aligns its weekly repeat with its start date',
   await fireEvent.press(view.getByRole('radio', { name: '每周' }));
   await fireEvent.changeText(view.getByLabelText('开始日期'), '2026-10-06');
   await fireEvent.press(view.getByRole('button', { name: '创建' }));
-  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ recurrence: expect.objectContaining({ startsOn: '2026-10-06', byWeekday: [2] }) }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ recurrence: expect.objectContaining({ startsOn: '2026-10-06', byWeekday: [2] }) }), { contentChanged: true });
 });

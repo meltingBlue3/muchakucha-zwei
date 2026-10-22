@@ -13,6 +13,7 @@ import type { CreateEventDto, EventResponseDto, UpdateSeriesDto } from '@muchaku
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { EventForm } from '../../../../../../src/features/events/event-form';
 import { seriesScopeModeFor } from '../../../../../../src/features/recurrence/series-scope-mode';
+import { sameIds, saveOwnReminder } from '../../../../../../src/features/reminders/own-reminder';
 import {
   SeriesScopeContent,
   seriesScopeTitle,
@@ -100,8 +101,26 @@ export default function EditEventRoute() {
   }, [fetchEvent]);
 
   const handleSubmit = useCallback(
-    async (data: CreateEventDto) => {
+    async ({ myReminder, ...data }: CreateEventDto, { contentChanged }: { contentChanged: boolean }) => {
+      if (id === undefined || eventId === undefined) return;
+      setIsSubmitting(true);
+      setError(null);
+      const reminderError = await saveOwnReminder('event', id, eventId, myReminder, event?.myReminder);
+      if (reminderError !== null) {
+        setError(reminderError);
+        setIsSubmitting(false);
+        return;
+      }
+      // Only the reminder changed: nothing shared to save, no occurrences to choose.
+      if (!contentChanged && sameIds(selectedLabelIds, (event?.labels ?? []).map((label) => label.id))) {
+        workspace.clear(draftPrefix);
+        exitAllowed.current = true;
+        exitEdit();
+        setIsSubmitting(false);
+        return;
+      }
       if (event?.recurrenceRuleId != null) {
+        setIsSubmitting(false);
         setSeriesError(null);
         setPendingSeriesAction({
           data,
@@ -110,8 +129,6 @@ export default function EditEventRoute() {
         });
         return;
       }
-      setIsSubmitting(true);
-      setError(null);
       try {
         const token = await sessionTransport.getAccessToken();
         if (token === null) {

@@ -45,7 +45,7 @@ function event(id: string, start: string, end: string): EventResponseDto {
     id, householdId: 'household-1', title: id,
     startTime: new Date(start).toISOString(), endTime: new Date(end).toISOString(),
     allDay: false, location: null, createdBy: 'user-1',
-    createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z', labels: [],
+    createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z', labels: [], myReminder: { mode: 'default', minutesBefore: null },
   };
 }
 
@@ -123,7 +123,7 @@ test('repartitions tasks at midnight even if the refreshed task list is unchange
   jest.setSystemTime(new Date('2026-10-10T23:59:30'));
   const task = (title: string, dueDate: string): TaskResponseDto => ({
     id: title, title, householdId: 'household-1', dueDate: new Date(dueDate).toISOString(),
-    status: 'pending', priority: 'medium', assigneeIds: [], labels: [], createdBy: 'user-1',
+    status: 'pending', priority: 'medium', assigneeIds: [], labels: [], createdBy: 'user-1', myReminder: { mode: 'default', minutesBefore: null },
     createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
   });
   mockListEvents.mockResolvedValue({ events: [] });

@@ -16,6 +16,7 @@ import { sessionApiClient, sessionTransport } from '../../../../../../src/featur
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
 import { TaskForm } from '../../../../../../src/features/tasks/task-form';
 import { seriesScopeModeFor } from '../../../../../../src/features/recurrence/series-scope-mode';
+import { sameIds, saveOwnReminder } from '../../../../../../src/features/reminders/own-reminder';
 import {
   SeriesScopeContent,
   seriesScopeTitle,
@@ -128,9 +129,25 @@ export default function EditTaskRoute() {
     void fetchTask();
   }, [fetchTask]);
 
-  const handleSubmit = useCallback(async (data: CreateTaskDto) => {
+  const handleSubmit = useCallback(async ({ myReminder, ...data }: CreateTaskDto, { contentChanged }: { contentChanged: boolean }) => {
     if (householdId === undefined || householdId === '' || taskId === undefined || taskId === '') return;
+    setSubmitting(true);
+    setSubmitError(null);
+    const reminderError = await saveOwnReminder('task', householdId, taskId, myReminder, task?.myReminder);
+    if (reminderError !== null) {
+      setSubmitError(reminderError);
+      setSubmitting(false);
+      return;
+    }
+    // Only the reminder changed: nothing shared to save, no occurrences to choose.
+    if (!contentChanged && sameIds(selectedLabelIds, (task?.labels ?? []).map((label) => label.id))) {
+      workspace.clear(draftPrefix);
+      exitAllowed.current = true;
+      exitEdit();
+      return;
+    }
     if (task?.recurrenceRuleId != null) {
+      setSubmitting(false);
       setSeriesError(null);
       setPendingSeriesAction({
         data,
@@ -139,8 +156,6 @@ export default function EditTaskRoute() {
       });
       return;
     }
-    setSubmitting(true);
-    setSubmitError(null);
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {

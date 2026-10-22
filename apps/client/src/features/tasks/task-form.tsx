@@ -1,6 +1,6 @@
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import Calendar from 'lucide-react-native/icons/calendar';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
@@ -20,6 +20,9 @@ import { toDateValue, toTimeValue } from '../../ui/date-values';
 import { LabelPicker } from '../labels/label-picker';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 import { RecurrenceField } from '../recurrence/recurrence-field';
+import { useCurrentUser } from '../auth/use-current-user';
+import { ReminderField } from '../reminders/reminder-field';
+import { choiceFromValue, choiceValue, DEFAULT_REMINDER, fitChoice, isOwnTask, type ReminderOptionValue } from '../reminders/reminder-rules';
 import {
   followStartDate,
   recurrenceErrorsFromApi,
@@ -74,13 +77,33 @@ interface TaskFormProps {
   draftKey?: string;
   initial?: TaskResponseDto;
   members: MemberOption[];
-  onSubmit: (data: CreateTaskDto) => Promise<void>;
+  /**
+   * `data.myReminder` carries the person's own reminder. An edit also says
+   * whether anything shared changed, so a reminder alone is not saved as an edit.
+   */
+  onSubmit: (data: CreateTaskDto, edit: { contentChanged: boolean }) => Promise<void>;
   onCancel: () => void;
   submitLabel: string;
   isSubmitting: boolean;
   householdId?: string;
   selectedLabelIds?: string[];
   onLabelChange?: (labelIds: string[]) => void;
+}
+
+/** The form as a saved task opens it. Assignees who left the household are dropped. */
+function taskInputFrom(initial: TaskResponseDto, members: MemberOption[]): TaskInput {
+  // The picker only offers current members, so a stale ID would be invisible
+  // and unremovable yet fail server-side validation on every save.
+  const currentMemberIds = new Set(members.map((m) => m.userId));
+  return {
+    title: initial.title,
+    description: initial.description ?? '',
+    status: initial.status,
+    priority: initial.priority,
+    assigneeIds: (initial.assigneeIds ?? []).filter((uid) => currentMemberIds.has(uid)),
+    ...dueFields(initial.dueDate),
+    recurrence: recurrenceInputFromResponse(initial.recurrence),
+  };
 }
 
 /** Splits a stored due instant into the local date and, unless it is midnight, time. */
@@ -114,25 +137,11 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   });
-  const [form, setForm] = useWorkspaceState<TaskInput>(draftKey, () => {
-    if (initial) {
-      // Drop assignees who are no longer household members — the picker
-      // below only offers current members as choices, so a stale ID here
-      // would be invisible/unremovable in the UI yet still fail server-side
-      // validation on every save, permanently blocking edits to this task.
-      const currentMemberIds = new Set(members.map((m) => m.userId));
-      return {
-        title: initial.title,
-        description: initial.description ?? '',
-        status: initial.status,
-        priority: initial.priority,
-        assigneeIds: (initial.assigneeIds ?? []).filter((uid) => currentMemberIds.has(uid)),
-        ...dueFields(initial.dueDate),
-        recurrence: recurrenceInputFromResponse(initial.recurrence),
-      };
-    }
-    return { ...EMPTY_TASK };
-  });
+  const [form, setForm] = useWorkspaceState<TaskInput>(draftKey, () => initial ? taskInputFrom(initial, members) : { ...EMPTY_TASK });
+  const baseline = useMemo(() => initial ? taskInputFrom(initial, members) : null, [initial, members]);
+  // A draft of its own, so the shape of saved form drafts stays as it was.
+  const [reminder, setReminder] = useWorkspaceState<ReminderOptionValue>(draftKey === undefined ? undefined : `${draftKey}:reminder`, () => choiceValue(initial?.myReminder ?? DEFAULT_REMINDER));
+  const userId = useCurrentUser()?.id ?? '';
   const [error, setError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const titleInput = useRef<TextInput>(null);
@@ -182,8 +191,16 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
       data.dueDate = ''; // clears the due date
     }
 
+    // Without a date the row is hidden and the stored choice is left alone,
+    // since on a recurring task it belongs to the whole series.
+    const firstRule = isCreate ? form.recurrence : null;
+    if (firstRule !== null || form.dueDate !== '') {
+      const myReminder = fitChoice(choiceFromValue(reminder), firstRule !== null ? !firstRule.startTimeLocal : !form.dueTime);
+      if (!isCreate || myReminder.mode !== 'default') data.myReminder = myReminder;
+    }
+
     try {
-      await onSubmit(data);
+      await onSubmit(data, { contentChanged: baseline === null || JSON.stringify(form) !== JSON.stringify(baseline) });
     } catch (submitError: unknown) {
       const fieldErrors = recurrenceErrorsFromApi(submitError);
       if (Object.keys(fieldErrors).length > 0) {
@@ -192,7 +209,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
         setError('保存失败，请检查网络后重试。');
       }
     }
-  }, [form, isCreate, onSubmit, recurrenceStart]);
+  }, [baseline, form, isCreate, onSubmit, recurrenceStart, reminder]);
 
   const setRecurrence = useCallback((next: RecurrenceInput | null) => updateField('recurrence', next), [updateField]);
   const recurringCreate = isCreate && form.recurrence !== null;
@@ -292,6 +309,17 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
           ownStart={isCreate}
           value={form.recurrence}
         />
+        {dueRow.date !== '' ? (
+          <ReminderField
+            kind="task"
+            own={isOwnTask({ assigneeIds: form.assigneeIds, createdBy: initial?.createdBy ?? userId }, userId)}
+            dateOnly={dueRow.time === ''}
+            recurring={form.recurrence !== null}
+            value={choiceFromValue(reminder)}
+            disabled={isSubmitting}
+            onChange={(choice) => setReminder(choiceValue(choice))}
+          />
+        ) : null}
       </FormSection>
 
       <FormSection>

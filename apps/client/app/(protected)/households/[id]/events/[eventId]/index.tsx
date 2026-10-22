@@ -12,6 +12,8 @@ import { formatDateRange } from '../../../../../../src/features/events/calendar-
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
 import { DetailField, DetailPanel } from '../../../../../../src/ui/detail-fields';
+import { ReminderDetailField } from '../../../../../../src/features/reminders/reminder-detail';
+import { DEFAULT_REMINDER } from '../../../../../../src/features/reminders/reminder-rules';
 import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
@@ -88,6 +90,9 @@ export default function EventDetailRoute() {
         </Stack>
         <DetailPanel>
           <DetailField label="时间" value={when} />
+          {!cancelled ? (
+            <ReminderDetailField kind="event" householdId={event.householdId} anchor={event.startTime} dateOnly={event.allDay} own choice={event.myReminder ?? DEFAULT_REMINDER} />
+          ) : null}
           {event.location ? <DetailField label="地点" value={event.location} /> : null}
           {recurrenceSummary ? <DetailField label="重复安排" value={recurrenceSummary.summary} notes={[
             recurrenceSummary.clampNote,

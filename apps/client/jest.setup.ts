@@ -86,6 +86,47 @@ jest.mock('expo-audio', () => ({
   })),
 }));
 
+// expo-notifications registers a push-token listener at import time and warns
+// about Expo Go. Reminders only schedule local notifications, so an in-memory
+// scheduler with a settable permission stands in; `__reset` runs before each test.
+jest.mock('expo-notifications', () => {
+  const scheduled = new Map<string, { identifier: string; content: unknown; trigger: unknown }>();
+  const responseListeners = new Set<(mockResponse: unknown) => void>();
+  let permission = { granted: true, status: 'granted', canAskAgain: true, expires: 'never' };
+  let lastResponse: unknown = null;
+  return {
+    AndroidImportance: { HIGH: 4 },
+    IosAuthorizationStatus: { PROVISIONAL: 3 },
+    SchedulableTriggerInputTypes: { DATE: 'date' },
+    DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
+    __reset: (): void => {
+      scheduled.clear();
+      responseListeners.clear();
+      permission = { granted: true, status: 'granted', canAskAgain: true, expires: 'never' };
+      lastResponse = null;
+    },
+    __setPermission: (next: { granted: boolean; status: string; canAskAgain: boolean }): void => { permission = { ...next, expires: 'never' }; },
+    __respond: (response: unknown): void => { for (const listener of responseListeners) listener(response); },
+    __setLastResponse: (response: unknown): void => { lastResponse = response; },
+    setNotificationHandler: (): void => undefined,
+    setNotificationChannelAsync: async (): Promise<null> => null,
+    getPermissionsAsync: async () => permission,
+    requestPermissionsAsync: async () => permission,
+    getAllScheduledNotificationsAsync: async () => [...scheduled.values()],
+    scheduleNotificationAsync: async (request: { identifier: string; content: unknown; trigger: unknown }) => {
+      scheduled.set(request.identifier, request);
+      return request.identifier;
+    },
+    cancelScheduledNotificationAsync: async (identifier: string) => { scheduled.delete(identifier); },
+    addNotificationResponseReceivedListener: (listener: (mockResponse: unknown) => void) => {
+      responseListeners.add(listener);
+      return { remove: () => responseListeners.delete(listener) };
+    },
+    getLastNotificationResponseAsync: async () => lastResponse,
+    clearLastNotificationResponseAsync: async () => { lastResponse = null; },
+  };
+});
+
 // React Native 0.86.2's getDevServer() reads NativeSourceCode's scriptURL and
 // calls .match() on it with no null guard. Jest's default native-module mock
 // resolves scriptURL to null, so any module that calls getDevServer() as an
@@ -132,6 +173,7 @@ Object.defineProperty(window, 'matchMedia', {
 beforeEach(() => {
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
   (jest.requireMock('expo-secure-store') as MockSecureStore).__reset();
+  (jest.requireMock('expo-notifications') as MockSecureStore).__reset();
   unmockedFetch.mockReset().mockImplementation(rejectUnmockedRequest);
   mediaPreferences.set('(forced-colors: active)', false);
   mediaPreferences.set('(prefers-reduced-motion: reduce)', false);

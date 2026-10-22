@@ -30,7 +30,7 @@ describe('task form choice rows', () => {
     await fireEvent.press(view.getByRole('radio', { name: '进行中' }));
     await fireEvent.press(view.getByLabelText('创建'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: '整理旅行用品', priority: 'urgent', status: 'in_progress', assigneeIds: [] }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: '整理旅行用品', priority: 'urgent', status: 'in_progress', assigneeIds: [] }), { contentChanged: true });
   });
 
   test('assignees are confirmed with 完成, and 未分配 clears the selection', async () => {
@@ -54,7 +54,7 @@ describe('task form choice rows', () => {
     await fireEvent.press(view.getByRole('button', { name: '完成' }));
     await fireEvent.press(view.getByLabelText('创建'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ assigneeIds: ['u2'] }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ assigneeIds: ['u2'] }), { contentChanged: true });
   });
 
   test('a missing title is reported on the title itself until the title is filled', async () => {

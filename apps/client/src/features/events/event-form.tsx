@@ -1,6 +1,6 @@
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { Switch, TextInput, View } from 'react-native';
 import Clock from 'lucide-react-native/icons/clock';
 import MapPin from 'lucide-react-native/icons/map-pin';
@@ -22,6 +22,8 @@ import {
 } from '../recurrence/recurrence-options';
 import { RecurrenceField } from '../recurrence/recurrence-field';
 import { toDateIso } from './calendar-utils';
+import { ReminderField } from '../reminders/reminder-field';
+import { choiceFromValue, choiceValue, DEFAULT_REMINDER, fitChoice, type ReminderOptionValue } from '../reminders/reminder-rules';
 
 type EventInput = Omit<CreateEventDto, 'startTime' | 'endTime' | 'allDay' | 'recurrence'> & {
   startDate: string;
@@ -73,13 +75,34 @@ interface EventFormProps {
   draftKey?: string;
   initial?: EventResponseDto;
   defaultDate?: string;
-  onSubmit: (data: CreateEventDto) => Promise<void>;
+  /**
+   * `data.myReminder` carries the person's own reminder. An edit also says
+   * whether anything shared changed, so a reminder alone is not saved as an edit.
+   */
+  onSubmit: (data: CreateEventDto, edit: { contentChanged: boolean }) => Promise<void>;
   onCancel: () => void;
   submitLabel: string;
   isSubmitting: boolean;
   householdId?: string;
   selectedLabelIds?: string[];
   onLabelChange?: (labelIds: string[]) => void;
+}
+
+/** The form as a saved event opens it. */
+function eventInputFrom(initial: EventResponseDto): EventInput {
+  const start = new Date(initial.startTime);
+  const end = new Date(initial.endTime);
+  return {
+    title: initial.title,
+    description: initial.description ?? '',
+    startDate: toDateIso(start),
+    startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
+    endDate: toDateIso(end),
+    endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
+    allDay: initial.allDay,
+    location: initial.location ?? '',
+    recurrence: recurrenceInputFromResponse(initial.recurrence),
+  };
 }
 
 export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: EventFormProps) {
@@ -92,24 +115,13 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
   // the rule detail screen is the real way to stop it.
   const isExistingRecurring = initial !== undefined && initial.recurrence !== null;
   const [form, setForm] = useWorkspaceState<EventInput>(draftKey, () => {
-    if (initial) {
-      const start = new Date(initial.startTime);
-      const end = new Date(initial.endTime);
-      return {
-        title: initial.title,
-        description: initial.description ?? '',
-        startDate: toDateIso(start),
-        startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
-        endDate: toDateIso(end),
-        endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
-        allDay: initial.allDay,
-        location: initial.location ?? '',
-        recurrence: recurrenceInputFromResponse(initial.recurrence),
-      };
-    }
+    if (initial) return eventInputFrom(initial);
     const date = defaultDate ?? toDateIso(new Date());
     return { ...EMPTY_INPUT, startDate: date, endDate: date };
   });
+  const baseline = useMemo(() => initial ? eventInputFrom(initial) : null, [initial]);
+  // A draft of its own, so the shape of saved form drafts stays as it was.
+  const [reminder, setReminder] = useWorkspaceState<ReminderOptionValue>(draftKey === undefined ? undefined : `${draftKey}:reminder`, () => choiceValue(initial?.myReminder ?? DEFAULT_REMINDER));
   // An existing series keeps its own anchor when just this occurrence moves.
   // New repeats still follow the event's first date.
   const recurrenceStart = initial?.recurrence?.startsOn ?? form.startDate;
@@ -195,9 +207,11 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
     // (the update endpoint treats absent/undefined as "no change").
     data.description = (form.description ?? '').trim();
     data.location = (form.location ?? '').trim();
+    const myReminder = fitChoice(choiceFromValue(reminder), form.allDay);
+    if (initial !== undefined || myReminder.mode !== 'default') data.myReminder = myReminder;
 
     try {
-      await onSubmit(data);
+      await onSubmit(data, { contentChanged: baseline === null || JSON.stringify(form) !== JSON.stringify(baseline) });
     } catch (submitError: unknown) {
       const fieldErrors = recurrenceErrorsFromApi(submitError);
       if (Object.keys(fieldErrors).length > 0) {
@@ -206,7 +220,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
         setError('保存失败，请检查网络后重试。');
       }
     }
-  }, [form, onSubmit, recurrenceStart]);
+  }, [baseline, form, initial, onSubmit, recurrenceStart, reminder]);
 
   return (
     <Stack gap={0}>
@@ -265,6 +279,15 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
           onChange={setRecurrence}
           startDate={recurrenceStart}
           value={form.recurrence}
+        />
+        <ReminderField
+          kind="event"
+          own
+          dateOnly={form.allDay}
+          recurring={form.recurrence !== null}
+          value={choiceFromValue(reminder)}
+          disabled={isSubmitting}
+          onChange={(choice) => setReminder(choiceValue(choice))}
         />
       </FormSection>
 

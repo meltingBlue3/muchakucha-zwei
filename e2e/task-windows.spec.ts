@@ -14,6 +14,7 @@ async function setup(page: Page) {
     const household = { id: householdId, name: '周末的家', role: 'OWNER', memberCount: 1, ownerMembershipId: 'member' };
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'mock-only' };
     else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '小林', hasHousehold: true };
+    else if (path.endsWith('/users/me/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', households: [] };
     else if (path === '/api/v1/households') body = [household];
     else if (path.endsWith('/' + householdId)) body = { ...household, members: [{ membershipId: 'member', userId: 'user', displayName: '小林', username: 'review', role: 'OWNER', isCurrentUser: true }] };
     else if (path.endsWith('/tasks/' + taskId)) {

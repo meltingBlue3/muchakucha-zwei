@@ -2,7 +2,10 @@ import { draftWorkspace } from '../../ui/workspace-runtime';
 import { ApiClient } from '@muchakucha/api-client';
 import { Platform } from 'react-native';
 
+import { notifyAfterSuccess } from '../../api/notify-after-success';
 import { withSessionRetry } from '../../api/session-retry';
+import { cancelAllReminders } from '../../platform/reminders/reminder-notifications';
+import { REMINDER_INPUT_CALLS, remindersMayHaveChanged } from '../reminders/reminder-signal';
 import { createSessionStateStore } from './session-state';
 import { createNativeSessionTransport } from '../../platform/session/session-transport.native';
 import { createWebSessionTransport } from '../../platform/session/session-transport.web';
@@ -23,7 +26,8 @@ export function setSessionLostHandler(handler: (() => void) | null): void {
   sessionLostHandler = handler;
 }
 
-export const sessionApiClient = withSessionRetry(rawApiClient, {
+// Successful writes that can move a reminder mark this phone's reminders stale.
+export const sessionApiClient = notifyAfterSuccess(withSessionRetry(rawApiClient, {
   getAccessToken: () => sessionTransport.getAccessToken(),
   refresh: async () => {
     const outcome = await sessionTransport.refresh();
@@ -35,7 +39,7 @@ export const sessionApiClient = withSessionRetry(rawApiClient, {
     sessionStateStore.enterReauthenticationRequired(outcome.kind === 'reauthRequired' ? outcome.reason : 'expired');
     sessionLostHandler?.();
   },
-});
+}), REMINDER_INPUT_CALLS, remindersMayHaveChanged);
 
 // Session changes are synchronous: account drafts are loaded before protected
 // forms mount, and sign-out clears them even when navigating outside that tree.
@@ -48,5 +52,7 @@ sessionStateStore.subscribe((state) => {
     draftWorkspace.suspendSession();
   } else if (state.kind === 'unauthenticated' || state.kind === 'reauthRequired') {
     draftWorkspace.endSession();
+    // A signed-out phone shows no family content on its lock screen.
+    void cancelAllReminders().catch(() => undefined);
   }
 });

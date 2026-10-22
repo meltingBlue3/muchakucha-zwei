@@ -8,6 +8,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { sessionApiClient, sessionTransport } from '../../src/features/auth/session-runtime';
 import { createHouseholdProvider, useHouseholdContext } from '../../src/features/households/household-context';
+import { ReminderSync } from '../../src/features/reminders/reminder-sync';
 import { AppShell } from '../../src/ui/household-components';
 import { Spinner, Text, Stack as UIStack } from '../../src/ui/primitives';
 import { theme } from '../../src/ui/theme';
@@ -80,6 +81,7 @@ export default function ProtectedLayout() {
   return React.createElement(
     HouseholdProvider,
     null,
+    React.createElement(ReminderSync),
     React.createElement(
       ResolvingGate,
       null,

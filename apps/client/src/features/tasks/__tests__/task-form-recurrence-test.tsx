@@ -28,7 +28,7 @@ describe('task form recurrence integration', () => {
     await fireEvent.changeText(view.getByLabelText('任务标题'), '普通任务');
     await fireEvent.press(view.getByLabelText('保存'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit).toHaveBeenCalledWith(expect.not.objectContaining({ recurrence: expect.anything() }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.not.objectContaining({ recurrence: expect.anything() }), { contentChanged: true });
   });
 
   test('a one-off task can carry a due time', async () => {
@@ -99,7 +99,7 @@ describe('task form recurrence integration', () => {
   test('editing keeps an existing due time', async () => {
     const onSubmit = jest.fn().mockResolvedValue(undefined);
     const dueDate = new Date('2030-10-01T12:00:00').toISOString();
-    const initial = { id: 't', householdId: 'h', title: '交水费', description: null, status: 'pending', priority: 'medium', assigneeIds: [], dueDate, recurrenceRuleId: null, occurrenceDate: null, recurrence: null, createdBy: 'u', createdAt: dueDate, updatedAt: dueDate, labels: [] } as TaskResponseDto;
+    const initial = { id: 't', householdId: 'h', title: '交水费', description: null, status: 'pending', priority: 'medium', assigneeIds: [], dueDate, recurrenceRuleId: null, occurrenceDate: null, recurrence: null, createdBy: 'u', createdAt: dueDate, updatedAt: dueDate, labels: [], myReminder: { mode: 'default', minutesBefore: null } } as TaskResponseDto;
     const view = await render(
       <MuchakuchaThemeProvider>
         <TaskForm initial={initial} isSubmitting={false} members={[]} onCancel={jest.fn()} onSubmit={onSubmit} submitLabel="保存" />
@@ -159,6 +159,7 @@ describe('task form recurrence integration', () => {
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-01T00:00:00.000Z',
       labels: [],
+      myReminder: { mode: 'default', minutesBefore: null },
     };
     const onSubmit = jest.fn().mockResolvedValue(undefined);
     const view = await render(
@@ -185,6 +186,7 @@ describe('task form recurrence integration', () => {
         status: 'pending',
         recurrence: expect.objectContaining({ freq: 'weekly', count: 10 }),
       }),
+      { contentChanged: true },
     );
   });
 
@@ -220,6 +222,7 @@ describe('task form recurrence integration', () => {
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-01T00:00:00.000Z',
       labels: [],
+      myReminder: { mode: 'default', minutesBefore: null },
     };
     const onSubmit = jest.fn().mockResolvedValue(undefined);
     const view = await render(
@@ -272,6 +275,7 @@ describe('task form recurrence integration', () => {
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-01T00:00:00.000Z',
       labels: [],
+      myReminder: { mode: 'default', minutesBefore: null },
     };
     const view = await render(
       <MuchakuchaThemeProvider>

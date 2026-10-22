@@ -10,6 +10,10 @@ import type { GetHouseholdMemberDto, TaskResponseDto } from '@muchakucha/api-cli
 import { ApiClientError } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
+import { useCurrentUser } from '../../../../../../src/features/auth/use-current-user';
+import { ReminderDetailField } from '../../../../../../src/features/reminders/reminder-detail';
+import { DEFAULT_REMINDER, isOwnTask } from '../../../../../../src/features/reminders/reminder-rules';
+import { toTimeValue } from '../../../../../../src/ui/date-values';
 import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
@@ -30,6 +34,7 @@ export default function TaskDetailRoute() {
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId: string }>();
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
+  const userId = useCurrentUser()?.id ?? '';
   const [task, setTask] = useState<TaskResponseDto | null>(null);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +156,17 @@ export default function TaskDetailRoute() {
         </Stack>
         <DetailPanel>
           <DetailField label="截止日期" value={task.dueDate ? formatDueDate(task.dueDate) : '未设置'} urgent={overdue} />
+          {/* A finished task reminds nobody, so it shows no reminder. */}
+          {task.dueDate && (task.status === 'pending' || task.status === 'in_progress') ? (
+            <ReminderDetailField
+              kind="task"
+              householdId={task.householdId}
+              anchor={task.dueDate}
+              dateOnly={toTimeValue(new Date(task.dueDate)) === '00:00'}
+              own={isOwnTask(task, userId)}
+              choice={task.myReminder ?? DEFAULT_REMINDER}
+            />
+          ) : null}
           <DetailField label="负责人" value={assigneeNames.join('、') || '未分配'} />
           <DetailField label="优先级" value={priorityLabel(task.priority)} urgent={task.priority === 'urgent'} />
           {recurrenceSummary ? <DetailField label="重复安排" value={recurrenceSummary.summary} notes={[

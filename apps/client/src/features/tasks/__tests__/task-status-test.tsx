@@ -30,6 +30,7 @@ function task(overrides: Partial<TaskResponseDto>): TaskResponseDto {
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
     labels: [],
+    myReminder: { mode: 'default', minutesBefore: null },
     ...overrides,
   };
 }

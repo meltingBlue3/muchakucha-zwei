@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
+import Bell from 'lucide-react-native/icons/bell';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import CircleUserRound from 'lucide-react-native/icons/circle-user-round';
 import House from 'lucide-react-native/icons/house';
@@ -20,6 +21,7 @@ import { theme } from '../../src/ui/theme';
 const LINKS = [
   { key: 'inbox', label: '收件箱', description: '查看和处理收到的家庭邀请', icon: Inbox, path: '/inbox' },
   { key: 'households', label: '我的家庭', description: '查看家庭安排，或创建、加入一个家庭', icon: House, path: '/household-handoff' },
+  { key: 'reminders', label: '提醒', description: '任务到期和日程开始前提醒你', icon: Bell, path: '/reminders' },
 ] as const;
 
 /** One fact of the profile: its name in the left column, the value, and an optional action. */

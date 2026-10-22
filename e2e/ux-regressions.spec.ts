@@ -35,6 +35,7 @@ async function setup(page: Page) {
     let status = 200;
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'mock-only' };
     else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '检查用户', hasHousehold: true };
+    else if (path.endsWith('/users/me/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', households: [] };
     else if (path === '/api/v1/households') body = [household(a), household(b)];
     else if (path.endsWith('/invitations/inbox')) {
       invitationAttempts++;
