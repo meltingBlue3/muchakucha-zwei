@@ -94,7 +94,11 @@ test('calendar filters have visible summaries and Today restores the current mon
   await showMonth(page);
   await page.getByRole('button', { name: '下一个月' }).click();
   await expect(page.getByText('2030年7月', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '回到今天' }).click();
+  const today = page.getByRole('button', { name: '回到今天' });
+  // Title-row actions stay within the title line: on a phone the scroll area clips anything above it.
+  const [todayBox, titleBox] = await Promise.all([today.boundingBox(), page.getByRole('heading', { name: '日历', exact: true }).boundingBox()]);
+  expect(todayBox!.y).toBeGreaterThanOrEqual(titleBox!.y);
+  await today.click();
   await expect(page.getByRole('button', { name: /^2030年6月15日/ })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '筛选日程', exact: true }).click();
   const filter = page.getByRole('dialog', { name: '筛选日程', exact: true });

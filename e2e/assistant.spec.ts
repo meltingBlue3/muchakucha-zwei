@@ -253,7 +253,6 @@ for (const width of [320, 390, 1440]) {
     await enterAssistant(page);
     const home = page.getByRole('main', { name: '家庭助手', exact: true });
     const input = home.getByLabel('开始新对话', { exact: true });
-    await expect(home.getByText(/语音输入的录音会发送至 https:\/\/dashscope\.example\.com/)).toBeVisible();
     await input.fill('请帮我安排');
     await home.getByRole('button', { name: '语音输入', exact: true }).focus();
     await page.keyboard.press('Enter');

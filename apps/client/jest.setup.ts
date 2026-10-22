@@ -29,6 +29,15 @@ jest.mock('expo-secure-store', () => {
     }
   };
 
+  // The native module rejects these keys, so the mock does too.
+  const requireValidKey = (key: string): void => {
+    if (!/^[\w.-]+$/.test(key)) {
+      throw new Error(
+        'Invalid key provided to SecureStore. Keys must not be empty and contain only alphanumeric characters, ".", "-", and "_".',
+      );
+    }
+  };
+
   return {
     AFTER_FIRST_UNLOCK: 0,
     AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 1,
@@ -40,10 +49,12 @@ jest.mock('expo-secure-store', () => {
     __reset: (): void => storedSecrets.clear(),
     deleteItemAsync: jest.fn(async (key: string): Promise<void> => {
       requireNativePlatform();
+      requireValidKey(key);
       storedSecrets.delete(key);
     }),
     getItemAsync: jest.fn(async (key: string): Promise<string | null> => {
       requireNativePlatform();
+      requireValidKey(key);
       return storedSecrets.get(key) ?? null;
     }),
     isAvailableAsync: jest.fn(
@@ -51,6 +62,7 @@ jest.mock('expo-secure-store', () => {
     ),
     setItemAsync: jest.fn(async (key: string, value: string): Promise<void> => {
       requireNativePlatform();
+      requireValidKey(key);
       storedSecrets.set(key, value);
     }),
   };

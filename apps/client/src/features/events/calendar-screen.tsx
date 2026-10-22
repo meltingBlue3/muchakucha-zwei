@@ -207,7 +207,7 @@ export default function CalendarScreen() {
           title="日历"
           {...(filterSummary ? { subtitle: filterSummary } : {})}
           action={<>
-            {!selectedIsToday ? <Button label="今天" accessibilityLabel="回到今天" tone="secondary" onPress={() => handleSelectDate(toDateIso(new Date()))} /> : null}
+            {!selectedIsToday ? <Button label="今天" accessibilityLabel="回到今天" tone="secondary" size="compact" onPress={() => handleSelectDate(toDateIso(new Date()))} /> : null}
             <FilterButton ref={filterTrigger} label="筛选日程" count={activeFilterCount} onPress={() => setFiltersOpen(true)} />
           </>}
         />

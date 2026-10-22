@@ -1,8 +1,10 @@
 import * as SecureStore from 'expo-secure-store';
 import type { CurrentHouseholdStore } from './current-household';
 
-const CURRENT_ID_KEY = 'muchakucha:currentHouseholdId';
-const ACCESS_TIMESTAMPS_KEY = 'muchakucha:householdAccessTimestamps';
+// SecureStore keys allow only letters, digits, ".", "-" and "_"; any other
+// character throws, and the store below swallows that as "unavailable".
+const CURRENT_ID_KEY = 'muchakucha.household.current.v1';
+const ACCESS_TIMESTAMPS_KEY = 'muchakucha.household.accessTimestamps.v1';
 
 async function readStore(key: string): Promise<string | null> {
   try {

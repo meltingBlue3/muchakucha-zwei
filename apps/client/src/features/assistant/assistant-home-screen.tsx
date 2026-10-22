@@ -57,12 +57,6 @@ function AssistantHome({ householdId, householdName, writable }: AssistantHouseh
             blocked={blocked} voice={voice}
             modelControl={<AssistantModelPicker householdId={householdId} providers={providers} selectedId={selected.id} busy={operation.busy} onSelect={setSelectedId} />} />
           <PromptSuggestions disabled={operation.busy || !writable || voice.engaged} onPick={setMessage} />
-          <Text variant="caption">内容修改前，由你确认。其他家人看不到你的对话。</Text>
-          {/* Whoever runs the endpoint sees what is sent to it; for a shared model that is the configuration owner's choice. */}
-          <Text variant="caption">{selected.ownedByMe
-            ? `对话及相关家庭数据会发送至 ${selected.baseUrl}。`
-            : `这是家人共享的模型：对话及相关家庭数据会发送至配置者填写的 ${selected.baseUrl}，该服务能看到这些内容。`}</Text>
-          {voice.available && transcription ? <Text variant="caption">语音输入的录音会发送至 {transcription.baseUrl} 转为文字，本应用不保存录音。</Text> : null}
         </Stack> : <Stack gap={3}>
           <Text variant="bodySm">先添加自己的模型，或请家人共享一个配置。</Text>
           <Button label="添加模型配置" disabled={!writable} onPress={() => router.push(`${assistantPath(householdId)}/providers/new`)} style={{ alignSelf: 'flex-start' }} />

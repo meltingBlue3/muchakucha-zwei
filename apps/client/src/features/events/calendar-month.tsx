@@ -89,8 +89,12 @@ export function CalendarMonth({
     </Pressable>
   );
 
+  // Android flattens a View with no background away, and when a later update
+  // gives it a color, rebuilds it from that update alone: the radius is lost
+  // and the mark turns square. Keeping the mark a real view keeps its radius.
   const dayMark = (day: CalendarDay, selected: boolean, pressed: boolean) => (
     <View
+      collapsable={false}
       style={{
         width: cellSize,
         height: cellSize,
@@ -159,7 +163,7 @@ export function CalendarMonth({
                   {titles.length > TITLES_PER_DAY ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: activeTheme.spacing[1] }}>{`还有 ${titles.length - TITLES_PER_DAY} 项`}</Text> : null}
                 </> : <>
                   {dayMark(day, selected, pressed)}
-                  <View style={{ width: activeTheme.spacing[1] + 1, height: activeTheme.spacing[1] + 1, marginTop: activeTheme.spacing[1], borderRadius: activeTheme.borderRadii.full, backgroundColor: eventCount > 0 ? (titles[0]?.color ?? activeTheme.colors.inkFaint) : activeTheme.colors.transparent }} />
+                  <View collapsable={false} style={{ width: activeTheme.spacing[1] + 1, height: activeTheme.spacing[1] + 1, marginTop: activeTheme.spacing[1], borderRadius: activeTheme.borderRadii.full, backgroundColor: eventCount > 0 ? (titles[0]?.color ?? activeTheme.colors.inkFaint) : activeTheme.colors.transparent }} />
                 </>}
               </Pressable>
             );
