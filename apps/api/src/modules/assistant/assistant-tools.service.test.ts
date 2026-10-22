@@ -16,10 +16,12 @@ const note = { id: recordId, householdId: actor.householdId, title: '购物计�
 const event = {
   ...note, description: '晚饭', startTime: '2026-10-04T12:00:00.000Z', endTime: '2026-10-04T13:00:00.000Z',
   allDay: false, location: null, recurrenceRuleId: null, occurrenceDate: null, cancelledAt: null, recurrence: null, labels: [],
+  myReminder: { mode: 'default' as const, minutesBefore: null },
 };
 const task = {
   ...note, description: '洗碗', status: 'pending' as const, priority: 'medium' as const, assigneeIds: [], dueDate: null,
   recurrenceRuleId: null, occurrenceDate: null, recurrence: null, labels: [],
+  myReminder: { mode: 'default' as const, minutesBefore: null },
 };
 const label = { id: recordId, householdId: actor.householdId, name: '家务', color: '#EF4444', createdBy: actor.userId, createdAt: version };
 

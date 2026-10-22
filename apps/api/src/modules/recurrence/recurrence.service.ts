@@ -1,5 +1,6 @@
 import { lockTaskAssignments } from '../shared/task-assignment.js';
 import { assertEditVersion, lockContent, lockRule, nextEditTime } from '../shared/edit-version.js';
+import { copyRuleReminders } from '../shared/reminder-overrides.js';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
@@ -409,6 +410,7 @@ export class RecurrenceService {
           materializedThrough: null,
         },
       });
+      await copyRuleReminders(tx, occurrence.rule.id, createdRule.id);
 
       if (kind === 'task') {
         const template = taskSource!;
@@ -624,6 +626,7 @@ export class RecurrenceService {
           materializedThrough: null,
         },
       });
+      await copyRuleReminders(tx, rule.id, createdRule.id);
 
       // Path B fallback for the two things the rule has no template column
       // for. Prefer the earliest instance at or after the anchor (the very

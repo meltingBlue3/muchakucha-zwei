@@ -179,6 +179,7 @@ export interface CreateEventDto {
   allDay?: boolean;
   location?: string;
   recurrence?: RecurrenceDto;
+  myReminder?: ReminderChoiceDto;
 }
 
 export interface UpdateEventDto {
@@ -296,6 +297,8 @@ export interface EventResponseDto {
   createdAt: string;
   updatedAt: string;
   labels: LabelResponseDto[];
+  /** Your own reminder; a recurring occurrence reports its series. */
+  myReminder: ReminderChoiceDto;
 }
 
 export interface EventListResponseDto {
@@ -312,6 +315,7 @@ export interface CreateTaskDto {
   assigneeIds?: string[];
   dueDate?: string;
   recurrence?: RecurrenceDto;
+  myReminder?: ReminderChoiceDto;
 }
 
 export interface UpdateTaskDto {
@@ -344,6 +348,8 @@ export interface TaskResponseDto {
   createdAt: string;
   updatedAt: string;
   labels: LabelResponseDto[];
+  /** Your own reminder; a recurring occurrence reports its series. */
+  myReminder: ReminderChoiceDto;
 }
 
 export interface TaskListResponseDto {
@@ -408,6 +414,64 @@ export interface TagEntitiesDto {
 }
 
 /** qwen-asr transcribes voice input; the other protocols drive conversations. */
+export type ReminderMode = 'default' | 'off' | 'before';
+
+/**
+ * Your own reminder for one task or event. \`default\` follows your settings,
+ * \`off\` silences it, \`before\` fires \`minutesBefore\` ahead (0 to 10080).
+ */
+export interface ReminderChoiceDto {
+  mode: ReminderMode;
+  /** Required with mode "before"; null otherwise. */
+  minutesBefore?: number | null;
+}
+
+export interface ReminderSettingsHouseholdDto {
+  id: string;
+  name: string;
+  muted: boolean;
+}
+
+export interface ReminderSettingsDto {
+  /** Minutes before a task is due; null means no task reminders. */
+  taskMinutesBefore: number | null;
+  /** Minutes before an event starts; null means no event reminders. */
+  eventMinutesBefore: number | null;
+  /** Local HH:MM used for date-only tasks and all-day events. */
+  dateOnlyTime: string;
+  households: ReminderSettingsHouseholdDto[];
+}
+
+/** Replaces all settings at once, so null means "off" rather than "unchanged". */
+export interface UpdateReminderSettingsDto {
+  taskMinutesBefore: number | null;
+  eventMinutesBefore: number | null;
+  dateOnlyTime: string;
+  mutedHouseholdIds: string[];
+}
+
+export interface UpcomingReminderDto {
+  /** Stable across edits of the same occurrence; a series occurrence is keyed by rule and date. */
+  key: string;
+  kind: 'task' | 'event';
+  householdId: string;
+  householdName: string;
+  /** Null for a series occurrence that has no row yet. */
+  itemId: string | null;
+  occurrenceDate: string | null;
+  title: string;
+  /** The due or start time. */
+  at: string;
+  /** A task without a time, or an all-day event. */
+  dateOnly: boolean;
+  fireAt: string;
+  location: string | null;
+}
+
+export interface UpcomingReminderListDto {
+  reminders: UpcomingReminderDto[];
+}
+
 export type AssistantProtocol = 'openai-compatible' | 'anthropic' | 'qwen-asr';
 export interface CreateAssistantProviderDto {
   name: string;
@@ -531,6 +595,10 @@ import type {
   RecurrenceRuleListItemDto,
   RecurrenceRuleListResponseDto,
   UpdateRecurrenceRuleDto,
+  ReminderChoiceDto,
+  ReminderSettingsDto,
+  UpdateReminderSettingsDto,
+  UpcomingReminderListDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -1295,6 +1363,26 @@ export class ApiClient {
     );
   }
 
+  async getReminderSettings(accessToken: string, signal?: AbortSignal): Promise<ReminderSettingsDto> {
+    return this.authenticated<ReminderSettingsDto>('GET', '/api/v1/users/me/reminder-settings', accessToken, undefined, signal);
+  }
+
+  async updateReminderSettings(accessToken: string, body: UpdateReminderSettingsDto, signal?: AbortSignal): Promise<ReminderSettingsDto> {
+    return this.authenticated<ReminderSettingsDto>('PUT', '/api/v1/users/me/reminder-settings', accessToken, body, signal);
+  }
+
+  async listUpcomingReminders(accessToken: string, timeZone: string, signal?: AbortSignal): Promise<UpcomingReminderListDto> {
+    return this.authenticated<UpcomingReminderListDto>('GET', \`/api/v1/users/me/reminders?timeZone=\${encodeURIComponent(timeZone)}\`, accessToken, undefined, signal);
+  }
+
+  async setTaskReminder(accessToken: string, householdId: string, taskId: string, body: ReminderChoiceDto, signal?: AbortSignal): Promise<ReminderChoiceDto> {
+    return this.authenticated<ReminderChoiceDto>('PUT', \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}/my-reminder\`, accessToken, body, signal);
+  }
+
+  async setEventReminder(accessToken: string, householdId: string, eventId: string, body: ReminderChoiceDto, signal?: AbortSignal): Promise<ReminderChoiceDto> {
+    return this.authenticated<ReminderChoiceDto>('PUT', \`/api/v1/households/\${encodeURIComponent(householdId)}/events/\${encodeURIComponent(eventId)}/my-reminder\`, accessToken, body, signal);
+  }
+
   async listAssistantProviders(accessToken: string, householdId: string, signal?: AbortSignal): Promise<AssistantProviderListResponseDto> {
     return this.authenticated<AssistantProviderListResponseDto>('GET', \`/api/v1/households/\${encodeURIComponent(householdId)}/assistant/providers\`, accessToken, undefined, signal);
   }
@@ -1547,6 +1635,19 @@ async function generate(): Promise<void> {
       Array.isArray(parameters) && parameters.some((parameter) => (parameter as { name?: string }).name === 'recurring');
     if (!hasRecurringParam(listTasksParams) || !hasRecurringParam(listEventsParams)) {
       throw new Error('OpenAPI recurring list filter parameters are missing or unstable.');
+    }
+
+    const reminderSettingsPath = document.paths['/api/v1/users/me/reminder-settings'];
+    if (reminderSettingsPath?.get?.operationId !== 'getReminderSettings'
+      || reminderSettingsPath.put?.operationId !== 'updateReminderSettings'
+      || document.paths['/api/v1/users/me/reminders']?.get?.operationId !== 'listUpcomingReminders'
+      || document.paths['/api/v1/households/{householdId}/tasks/{taskId}/my-reminder']?.put?.operationId !== 'setTaskReminder'
+      || document.paths['/api/v1/households/{householdId}/events/{eventId}/my-reminder']?.put?.operationId !== 'setEventReminder'
+      || document.components?.schemas?.ReminderChoiceDto === undefined
+      || document.components.schemas.ReminderSettingsDto === undefined
+      || document.components.schemas.UpdateReminderSettingsDto === undefined
+      || document.components.schemas.UpcomingReminderListDto === undefined) {
+      throw new Error('OpenAPI reminder operations or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

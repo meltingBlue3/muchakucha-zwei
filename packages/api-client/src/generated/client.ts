@@ -59,6 +59,10 @@ import type {
   RecurrenceRuleListItemDto,
   RecurrenceRuleListResponseDto,
   UpdateRecurrenceRuleDto,
+  ReminderChoiceDto,
+  ReminderSettingsDto,
+  UpdateReminderSettingsDto,
+  UpcomingReminderListDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -821,6 +825,26 @@ export class ApiClient {
       undefined,
       signal,
     );
+  }
+
+  async getReminderSettings(accessToken: string, signal?: AbortSignal): Promise<ReminderSettingsDto> {
+    return this.authenticated<ReminderSettingsDto>('GET', '/api/v1/users/me/reminder-settings', accessToken, undefined, signal);
+  }
+
+  async updateReminderSettings(accessToken: string, body: UpdateReminderSettingsDto, signal?: AbortSignal): Promise<ReminderSettingsDto> {
+    return this.authenticated<ReminderSettingsDto>('PUT', '/api/v1/users/me/reminder-settings', accessToken, body, signal);
+  }
+
+  async listUpcomingReminders(accessToken: string, timeZone: string, signal?: AbortSignal): Promise<UpcomingReminderListDto> {
+    return this.authenticated<UpcomingReminderListDto>('GET', `/api/v1/users/me/reminders?timeZone=${encodeURIComponent(timeZone)}`, accessToken, undefined, signal);
+  }
+
+  async setTaskReminder(accessToken: string, householdId: string, taskId: string, body: ReminderChoiceDto, signal?: AbortSignal): Promise<ReminderChoiceDto> {
+    return this.authenticated<ReminderChoiceDto>('PUT', `/api/v1/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}/my-reminder`, accessToken, body, signal);
+  }
+
+  async setEventReminder(accessToken: string, householdId: string, eventId: string, body: ReminderChoiceDto, signal?: AbortSignal): Promise<ReminderChoiceDto> {
+    return this.authenticated<ReminderChoiceDto>('PUT', `/api/v1/households/${encodeURIComponent(householdId)}/events/${encodeURIComponent(eventId)}/my-reminder`, accessToken, body, signal);
   }
 
   async listAssistantProviders(accessToken: string, householdId: string, signal?: AbortSignal): Promise<AssistantProviderListResponseDto> {

@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import { IsBoolean, IsDateString, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { LabelResponseDto } from '../../labels/dto/create-label.dto.js';
 import { RecurrenceDto, RecurrenceResponseDto } from '../../recurrence/dto/recurrence.dto.js';
+import { ReminderChoiceDto } from '../../reminders/dto/reminder.dto.js';
 
 export class CreateEventDto {
   @ApiProperty({ description: 'Event title', minLength: 1, maxLength: 200 })
@@ -40,6 +41,12 @@ export class CreateEventDto {
   @ValidateNested()
   @Type(() => RecurrenceDto)
   recurrence?: RecurrenceDto;
+
+  @ApiPropertyOptional({ description: '创建者自己的提醒；省略即跟随个人设置', type: () => ReminderChoiceDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ReminderChoiceDto)
+  myReminder?: ReminderChoiceDto;
 }
 
 export class EventResponseDto {
@@ -90,6 +97,9 @@ export class EventResponseDto {
 
   @ApiProperty({ type: [LabelResponseDto] })
   labels!: LabelResponseDto[];
+
+  @ApiProperty({ type: () => ReminderChoiceDto, description: 'Your own reminder; a recurring occurrence reports its series.' })
+  myReminder!: ReminderChoiceDto;
 }
 
 export class EventListResponseDto {

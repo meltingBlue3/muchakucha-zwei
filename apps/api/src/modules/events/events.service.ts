@@ -1,4 +1,6 @@
 import { lockContent, replaceLabels } from '../shared/edit-version.js';
+import { readReminderChoice, readReminderChoices, writeReminderChoice } from '../shared/reminder-overrides.js';
+import type { ReminderChoiceDto } from '../reminders/dto/reminder.dto.js';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
@@ -264,6 +266,9 @@ export class EventsService {
             occurrenceDate: new Date(`${occurrenceDate}T00:00:00.000Z`),
           },
         });
+        if (input.myReminder !== undefined) {
+          await writeReminderChoice(tx, actorId, 'event', { id: template.id, recurrenceRuleId: rule.id }, input.myReminder);
+        }
         return { eventId: template.id, ruleId: rule.id };
       });
 
@@ -283,24 +288,30 @@ export class EventsService {
         where: { id: created.eventId },
         include: { labels: { include: { label: true } }, recurrenceRule: true },
       });
-      return this.toResponse(event);
+      return this.toResponse(event, await readReminderChoice(this.prisma, actorId, 'event', event));
     }
 
-    const event = await this.prisma.event.create({
-      data: {
-        householdId,
-        title: trimmedTitle,
-        description: input.description?.trim() || null,
-        startTime: start,
-        endTime: end,
-        allDay: input.allDay ?? false,
-        location: input.location?.trim() || null,
-        createdBy: actorId,
-      },
-      include: { labels: { include: { label: true } }, recurrenceRule: true },
+    const event = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.event.create({
+        data: {
+          householdId,
+          title: trimmedTitle,
+          description: input.description?.trim() || null,
+          startTime: start,
+          endTime: end,
+          allDay: input.allDay ?? false,
+          location: input.location?.trim() || null,
+          createdBy: actorId,
+        },
+        include: { labels: { include: { label: true } }, recurrenceRule: true },
+      });
+      if (input.myReminder !== undefined) {
+        await writeReminderChoice(tx, actorId, 'event', created, input.myReminder);
+      }
+      return created;
     });
 
-    return this.toResponse(event);
+    return this.toResponse(event, await readReminderChoice(this.prisma, actorId, 'event', event));
   }
 
   async list(
@@ -383,8 +394,9 @@ export class EventsService {
       }),
     ]);
 
+    const reminders = await readReminderChoices(this.prisma, actorId, 'event', events);
     return {
-      events: events.map((e) => this.toResponse(e)),
+      events: events.map((e) => this.toResponse(e, reminders.get(e.id)!)),
       total,
       materializedThrough: watermark._min.materializedThrough?.toISOString().slice(0, 10) ?? null,
     };
@@ -405,7 +417,7 @@ export class EventsService {
     if (event === null || event.householdId !== householdId) {
       throw new NotFoundException({ code: 'EVENT_NOT_FOUND', message: 'Event not found.' });
     }
-    return this.toResponse(event);
+    return this.toResponse(event, await readReminderChoice(this.prisma, actorId, 'event', event));
   }
 
   async update(
@@ -449,7 +461,7 @@ export class EventsService {
       });
     });
 
-    return this.toResponse(updated);
+    return this.toResponse(updated, await readReminderChoice(this.prisma, actorId, 'event', updated));
   }
 
   async delete(
@@ -485,7 +497,7 @@ export class EventsService {
 
   // ---- Mapping ----
 
-  private toResponse(row: EventRow): EventResponseDto {
+  private toResponse(row: EventRow, myReminder: ReminderChoiceDto): EventResponseDto {
     return {
       id: row.id,
       householdId: row.householdId,
@@ -523,6 +535,7 @@ export class EventsService {
         createdBy: el.label.createdBy,
         createdAt: el.label.createdAt.toISOString(),
       })),
+      myReminder,
     };
   }
 }

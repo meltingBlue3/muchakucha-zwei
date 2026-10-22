@@ -2146,6 +2146,213 @@
         ]
       }
     },
+    "/api/v1/users/me/reminder-settings": {
+      "get": {
+        "operationId": "getReminderSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderSettingsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "reminders"
+        ]
+      },
+      "put": {
+        "operationId": "updateReminderSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReminderSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderSettingsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
+    "/api/v1/users/me/reminders": {
+      "get": {
+        "operationId": "listUpcomingReminders",
+        "parameters": [
+          {
+            "name": "timeZone",
+            "required": true,
+            "in": "query",
+            "description": "IANA time zone of the device, e.g. Asia/Shanghai.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpcomingReminderListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
+    "/api/v1/households/{householdId}/tasks/{taskId}/my-reminder": {
+      "put": {
+        "operationId": "setTaskReminder",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReminderChoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderChoiceDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
+    "/api/v1/households/{householdId}/events/{eventId}/my-reminder": {
+      "put": {
+        "operationId": "setEventReminder",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReminderChoiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderChoiceDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
     "/api/v1/households/{householdId}/assistant/providers": {
       "get": {
         "operationId": "listAssistantProviders",
@@ -3567,6 +3774,29 @@
           "recurrence"
         ]
       },
+      "ReminderChoiceDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "default",
+              "off",
+              "before"
+            ]
+          },
+          "minutesBefore": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 10080,
+            "description": "Required with mode \"before\"; null otherwise."
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
       "CreateEventDto": {
         "type": "object",
         "properties": {
@@ -3603,6 +3833,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/RecurrenceDto"
+              }
+            ]
+          },
+          "myReminder": {
+            "description": "创建者自己的提醒；省略即跟随个人设置",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReminderChoiceDto"
               }
             ]
           }
@@ -3775,6 +4013,14 @@
             "items": {
               "$ref": "#/components/schemas/LabelResponseDto"
             }
+          },
+          "myReminder": {
+            "description": "Your own reminder; a recurring occurrence reports its series.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReminderChoiceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -3791,7 +4037,8 @@
           "createdBy",
           "createdAt",
           "updatedAt",
-          "labels"
+          "labels",
+          "myReminder"
         ]
       },
       "EventListResponseDto": {
@@ -3927,6 +4174,14 @@
                 "$ref": "#/components/schemas/RecurrenceDto"
               }
             ]
+          },
+          "myReminder": {
+            "description": "创建者自己的提醒；省略即跟随个人设置",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReminderChoiceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -4008,6 +4263,14 @@
             "items": {
               "$ref": "#/components/schemas/LabelResponseDto"
             }
+          },
+          "myReminder": {
+            "description": "Your own reminder; a recurring occurrence reports its series.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReminderChoiceDto"
+              }
+            ]
           }
         },
         "required": [
@@ -4025,7 +4288,8 @@
           "createdBy",
           "createdAt",
           "updatedAt",
-          "labels"
+          "labels",
+          "myReminder"
         ]
       },
       "TaskListResponseDto": {
@@ -4281,6 +4545,166 @@
         },
         "required": [
           "labelIds"
+        ]
+      },
+      "ReminderSettingsHouseholdDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "muted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "muted"
+        ]
+      },
+      "ReminderSettingsDto": {
+        "type": "object",
+        "properties": {
+          "taskMinutesBefore": {
+            "type": "number",
+            "nullable": true,
+            "description": "Minutes before a task is due; null means no task reminders."
+          },
+          "eventMinutesBefore": {
+            "type": "number",
+            "nullable": true,
+            "description": "Minutes before an event starts; null means no event reminders."
+          },
+          "dateOnlyTime": {
+            "type": "string",
+            "description": "Local HH:MM used for date-only tasks and all-day events."
+          },
+          "households": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReminderSettingsHouseholdDto"
+            }
+          }
+        },
+        "required": [
+          "taskMinutesBefore",
+          "eventMinutesBefore",
+          "dateOnlyTime",
+          "households"
+        ]
+      },
+      "UpdateReminderSettingsDto": {
+        "type": "object",
+        "properties": {
+          "taskMinutesBefore": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 10080
+          },
+          "eventMinutesBefore": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 10080
+          },
+          "dateOnlyTime": {
+            "type": "string",
+            "example": "09:00"
+          },
+          "mutedHouseholdIds": {
+            "description": "Households of the caller that send no reminders.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "taskMinutesBefore",
+          "eventMinutesBefore",
+          "dateOnlyTime",
+          "mutedHouseholdIds"
+        ]
+      },
+      "UpcomingReminderDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Stable across edits of the same occurrence; a series occurrence is keyed by rule and date."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "task",
+              "event"
+            ]
+          },
+          "householdId": {
+            "type": "string"
+          },
+          "householdName": {
+            "type": "string"
+          },
+          "itemId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null for a series occurrence that has no row yet."
+          },
+          "occurrenceDate": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "description": "The due or start time."
+          },
+          "dateOnly": {
+            "type": "boolean",
+            "description": "A task without a time, or an all-day event."
+          },
+          "fireAt": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "householdId",
+          "householdName",
+          "itemId",
+          "occurrenceDate",
+          "title",
+          "at",
+          "dateOnly",
+          "fireAt",
+          "location"
+        ]
+      },
+      "UpcomingReminderListDto": {
+        "type": "object",
+        "properties": {
+          "reminders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpcomingReminderDto"
+            }
+          }
+        },
+        "required": [
+          "reminders"
         ]
       },
       "AssistantUsageMemberDto": {

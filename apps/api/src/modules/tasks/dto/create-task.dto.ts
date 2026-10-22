@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import { IsArray, IsIn, IsOptional, IsString, IsUUID, Length, MaxLength, ValidateNested } from 'class-validator';
 import { LabelResponseDto } from '../../labels/dto/create-label.dto.js';
 import { RecurrenceDto, RecurrenceResponseDto } from '../../recurrence/dto/recurrence.dto.js';
+import { ReminderChoiceDto } from '../../reminders/dto/reminder.dto.js';
 
 export const TASK_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -50,6 +51,12 @@ export class CreateTaskDto {
   @ValidateNested()
   @Type(() => RecurrenceDto)
   recurrence?: RecurrenceDto;
+
+  @ApiPropertyOptional({ description: '创建者自己的提醒；省略即跟随个人设置', type: () => ReminderChoiceDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ReminderChoiceDto)
+  myReminder?: ReminderChoiceDto;
 }
 
 export class TaskResponseDto {
@@ -70,6 +77,9 @@ export class TaskResponseDto {
 
   @ApiProperty({ type: [LabelResponseDto] })
   labels!: LabelResponseDto[];
+
+  @ApiProperty({ type: () => ReminderChoiceDto, description: 'Your own reminder; a recurring occurrence reports its series.' })
+  myReminder!: ReminderChoiceDto;
 }
 
 export class TaskListResponseDto {

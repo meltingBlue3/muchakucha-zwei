@@ -171,6 +171,7 @@ export interface CreateEventDto {
   allDay?: boolean;
   location?: string;
   recurrence?: RecurrenceDto;
+  myReminder?: ReminderChoiceDto;
 }
 
 export interface UpdateEventDto {
@@ -288,6 +289,8 @@ export interface EventResponseDto {
   createdAt: string;
   updatedAt: string;
   labels: LabelResponseDto[];
+  /** Your own reminder; a recurring occurrence reports its series. */
+  myReminder: ReminderChoiceDto;
 }
 
 export interface EventListResponseDto {
@@ -304,6 +307,7 @@ export interface CreateTaskDto {
   assigneeIds?: string[];
   dueDate?: string;
   recurrence?: RecurrenceDto;
+  myReminder?: ReminderChoiceDto;
 }
 
 export interface UpdateTaskDto {
@@ -336,6 +340,8 @@ export interface TaskResponseDto {
   createdAt: string;
   updatedAt: string;
   labels: LabelResponseDto[];
+  /** Your own reminder; a recurring occurrence reports its series. */
+  myReminder: ReminderChoiceDto;
 }
 
 export interface TaskListResponseDto {
@@ -400,6 +406,64 @@ export interface TagEntitiesDto {
 }
 
 /** qwen-asr transcribes voice input; the other protocols drive conversations. */
+export type ReminderMode = 'default' | 'off' | 'before';
+
+/**
+ * Your own reminder for one task or event. `default` follows your settings,
+ * `off` silences it, `before` fires `minutesBefore` ahead (0 to 10080).
+ */
+export interface ReminderChoiceDto {
+  mode: ReminderMode;
+  /** Required with mode "before"; null otherwise. */
+  minutesBefore?: number | null;
+}
+
+export interface ReminderSettingsHouseholdDto {
+  id: string;
+  name: string;
+  muted: boolean;
+}
+
+export interface ReminderSettingsDto {
+  /** Minutes before a task is due; null means no task reminders. */
+  taskMinutesBefore: number | null;
+  /** Minutes before an event starts; null means no event reminders. */
+  eventMinutesBefore: number | null;
+  /** Local HH:MM used for date-only tasks and all-day events. */
+  dateOnlyTime: string;
+  households: ReminderSettingsHouseholdDto[];
+}
+
+/** Replaces all settings at once, so null means "off" rather than "unchanged". */
+export interface UpdateReminderSettingsDto {
+  taskMinutesBefore: number | null;
+  eventMinutesBefore: number | null;
+  dateOnlyTime: string;
+  mutedHouseholdIds: string[];
+}
+
+export interface UpcomingReminderDto {
+  /** Stable across edits of the same occurrence; a series occurrence is keyed by rule and date. */
+  key: string;
+  kind: 'task' | 'event';
+  householdId: string;
+  householdName: string;
+  /** Null for a series occurrence that has no row yet. */
+  itemId: string | null;
+  occurrenceDate: string | null;
+  title: string;
+  /** The due or start time. */
+  at: string;
+  /** A task without a time, or an all-day event. */
+  dateOnly: boolean;
+  fireAt: string;
+  location: string | null;
+}
+
+export interface UpcomingReminderListDto {
+  reminders: UpcomingReminderDto[];
+}
+
 export type AssistantProtocol = 'openai-compatible' | 'anthropic' | 'qwen-asr';
 export interface CreateAssistantProviderDto {
   name: string;

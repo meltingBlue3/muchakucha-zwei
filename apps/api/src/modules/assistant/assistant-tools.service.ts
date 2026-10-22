@@ -163,13 +163,19 @@ function assertDateRange(from: string | undefined, through: string | undefined):
   if (from !== undefined && through !== undefined && from > through) invalid('dateRange', 'end_before_start');
 }
 
-function withEventTimes<T extends { startTime: string; endTime: string; allDay: boolean }>(event: T, timeZone: string) {
-  const mode = event.allDay ? 'date' : 'datetime';
-  return { ...event, startLocal: localStamp(event.startTime, timeZone, mode), endLocal: localStamp(event.endTime, timeZone, mode) };
+// The caller's own reminder is a personal setting, not content the assistant reads or edits.
+function withoutReminder<T extends { myReminder?: unknown }>(item: T): Omit<T, 'myReminder'> {
+  const { myReminder: _personal, ...content } = item;
+  return content;
 }
 
-function withDueTime<T extends { dueDate?: string | null }>(task: T, timeZone: string) {
-  return { ...task, dueLocal: task.dueDate ? localStamp(task.dueDate, timeZone, 'due') : null };
+function withEventTimes<T extends { startTime: string; endTime: string; allDay: boolean; myReminder?: unknown }>(event: T, timeZone: string) {
+  const mode = event.allDay ? 'date' : 'datetime';
+  return { ...withoutReminder(event), startLocal: localStamp(event.startTime, timeZone, mode), endLocal: localStamp(event.endTime, timeZone, mode) };
+}
+
+function withDueTime<T extends { dueDate?: string | null; myReminder?: unknown }>(task: T, timeZone: string) {
+  return { ...withoutReminder(task), dueLocal: task.dueDate ? localStamp(task.dueDate, timeZone, 'due') : null };
 }
 
 /** An impossible date such as 2026-02-30 is left as is for validateDueDate to reject. */

@@ -1,5 +1,7 @@
 import { lockTaskAssignments } from '../shared/task-assignment.js';
 import { lockContent, replaceLabels } from '../shared/edit-version.js';
+import { readReminderChoice, readReminderChoices, writeReminderChoice } from '../shared/reminder-overrides.js';
+import type { ReminderChoiceDto } from '../reminders/dto/reminder.dto.js';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
@@ -258,6 +260,9 @@ export class TasksService {
             assignees: { create: assigneeIds.map((userId) => ({ userId })) },
           },
         });
+        if (input.myReminder !== undefined) {
+          await writeReminderChoice(tx, actorId, 'task', { id: task.id, recurrenceRuleId: rule.id }, input.myReminder);
+        }
         return { taskId: task.id, ruleId: rule.id };
       });
       // See EventsService.create: the series is already committed, so a
@@ -274,19 +279,23 @@ export class TasksService {
         where: { id: created.taskId },
           include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
       });
-      return this.toResponse(task);
+      return this.toResponse(task, await readReminderChoice(this.prisma, actorId, 'task', task));
     }
 
     const task = await this.prisma.$transaction(async (tx) => {
       await lockTaskAssignments(tx, householdId);
       await this.validateAssigneeIds(tx, householdId, assigneeIds);
-      return tx.task.create({
+      const created = await tx.task.create({
         data: { householdId, title: trimmedTitle, description: input.description?.trim() || null, status: input.status ?? 'pending', priority: input.priority ?? 'medium', dueDate, createdBy: actorId, assignees: { create: assigneeIds.map((userId) => ({ userId })) } },
         include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
       });
+      if (input.myReminder !== undefined) {
+        await writeReminderChoice(tx, actorId, 'task', created, input.myReminder);
+      }
+      return created;
     });
 
-    return this.toResponse(task);
+    return this.toResponse(task, await readReminderChoice(this.prisma, actorId, 'task', task));
   }
 
   async list(
@@ -321,8 +330,9 @@ export class TasksService {
       }),
     ]);
 
+    const reminders = await readReminderChoices(this.prisma, actorId, 'task', tasks);
     return {
-      tasks: tasks.map((t) => this.toResponse(t)),
+      tasks: tasks.map((t) => this.toResponse(t, reminders.get(t.id)!)),
       total,
       materializedThrough: watermark._min.materializedThrough?.toISOString().slice(0, 10) ?? null,
     };
@@ -343,7 +353,7 @@ export class TasksService {
     if (task === null || task.householdId !== householdId) {
       throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found.' });
     }
-    return this.toResponse(task);
+    return this.toResponse(task, await readReminderChoice(this.prisma, actorId, 'task', task));
   }
 
   async update(
@@ -436,7 +446,7 @@ export class TasksService {
       });
     });
 
-    return this.toResponse(updated);
+    return this.toResponse(updated, await readReminderChoice(this.prisma, actorId, 'task', updated));
   }
 
   async delete(
@@ -476,7 +486,7 @@ export class TasksService {
 
   // ---- Mapping ----
 
-  private toResponse(row: TaskRow): TaskResponseDto {
+  private toResponse(row: TaskRow, myReminder: ReminderChoiceDto): TaskResponseDto {
     return {
       id: row.id,
       householdId: row.householdId,
@@ -513,6 +523,7 @@ export class TasksService {
         createdBy: tl.label.createdBy,
         createdAt: tl.label.createdAt.toISOString(),
       })),
+      myReminder,
     };
   }
 }
