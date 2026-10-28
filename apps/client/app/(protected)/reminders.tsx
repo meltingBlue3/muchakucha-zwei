@@ -74,7 +74,7 @@ function SwitchRow({ label, value, disabled, onChange, children }: { label: stri
  */
 export default function RemindersRoute() {
   const { settings, status, reload, save } = useReminderSettings();
-  const { permission, enable } = useNotificationPermission();
+  const { permission, error: permissionError, enable } = useNotificationPermission();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [choosing, setChoosing] = useState<Choosing | null>(null);
@@ -125,6 +125,7 @@ export default function RemindersRoute() {
       <Stack gap={6}>
         <PageIntro title="提醒" />
         {error !== null ? <Banner>{error}</Banner> : null}
+        {permissionError !== null ? <Banner>{permissionError}</Banner> : null}
 
         {remindersSupported && permission !== null ? (
           <SettingsSection title="本机通知" icon={sectionIcon(Smartphone)}>

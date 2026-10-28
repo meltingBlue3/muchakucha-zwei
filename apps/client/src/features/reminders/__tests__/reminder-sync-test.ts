@@ -1,5 +1,5 @@
 import type { UpcomingReminderDto } from '@muchakucha/api-client';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from '../../../platform/reminders/local-notifications';
 import { syncReminders } from '../reminder-sync';
 
 const mockListUpcomingReminders = jest.fn();

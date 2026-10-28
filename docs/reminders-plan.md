@@ -134,7 +134,8 @@ Web 端不显示第 1 部分，页尾说明改为「网页不会弹出提醒，�
 
 - `app.json` 加了 `expo-notifications` 插件（图标、颜色），以及 Android 权限 `SCHEDULE_EXACT_ALARM`、`USE_EXACT_ALARM`。`expo-notifications` 只有在系统允许精确闹钟时才用 `setExactAndAllowWhileIdle`，否则退回到可能推迟几分钟的普通闹钟。Android 13 起 `USE_EXACT_ALARM` 安装即授予，适合日历和提醒类应用；Android 12 用 `SCHEDULE_EXACT_ALARM`。插件自带 `RECEIVE_BOOT_COMPLETED` 和 `POST_NOTIFICATIONS`。
 - 新增 [without-push-entitlement.js](../apps/client/plugins/without-push-entitlement.js)：`expo-notifications` 插件总会加上 iOS 推送权利 `aps-environment`，而它需要 Apple 账号开通 Push Notifications 能力。本地通知用不到它，所以去掉。这个插件在 `app.json` 里排在 `expo-notifications` 前面，因为插件的修改按注册的倒序执行。
-- Expo Go：插件源码显示，Android 版 Expo Go 导入时只警告远程推送不可用，本地通知仍然可用。还没有在设备上确认。
+- 本地通知的 SDK 入口集中在 [local-notifications.ts](../apps/client/src/platform/reminders/local-notifications.ts)，不要从 `expo-notifications` 总入口导入运行时值。`57.0.23` 的总入口会立即加载远程推送的 `ExpoTopicSubscriptionModule`；Android Expo Go `57.0.2` 没有这个原生模块，会在应用启动时抛错，连登录页也无法打开。只导入本地通知接口可避免这个不需要的依赖；升级 SDK 时要重新验证这些 `build/` 子路径。
+- 2026-10-27 在小米 M2012K11AC（Android 13）、Expo Go `57.0.2` 上进一步实测：“开启”调用 `ExpoNotificationChannelManager.setNotificationChannelAsync` 时，原生 `NotificationsChannelsProvider` 为空，权限申请尚未发出就失败。避开总入口只解决启动，不代表 Expo Go 能完成提醒。当前组合需改用包含本项目原生模块的独立安装包；权限申请失败会在页面或表单中显示可重试的中文提示，不再产生未处理的 Promise 异常。
 
 ## 验证记录（2026-10-22）
 

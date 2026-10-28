@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import * as device from '../../platform/reminders/reminder-notifications';
 import type { NotificationPermission } from '../../platform/reminders/reminder-types';
-import { Button, Inline, Text } from '../../ui/primitives';
+import { Banner, Button, Inline, Stack, Text } from '../../ui/primitives';
 import { requestReminderSync } from './reminder-sync';
 
 /** This phone's notification permission, checked again whenever the app returns from the system settings. */
-export function useNotificationPermission(): { permission: NotificationPermission | null; enable(): Promise<void> } {
+export function useNotificationPermission(): { permission: NotificationPermission | null; error: string | null; enable(): Promise<void> } {
   const [permission, setPermission] = useState<NotificationPermission | null>(device.remindersSupported ? null : 'unsupported');
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try { setPermission(await device.notificationPermission()); } catch { setPermission('undetermined'); }
@@ -21,16 +22,23 @@ export function useNotificationPermission(): { permission: NotificationPermissio
   }, [refresh]);
 
   const enable = useCallback(async () => {
-    if (permission === 'blocked') {
-      await device.openNotificationSettings();
-      return;
+    setError(null);
+    try {
+      if (permission === 'blocked') {
+        await device.openNotificationSettings();
+        return;
+      }
+      const next = await device.requestNotificationPermission();
+      setPermission(next);
+      if (next === 'granted') requestReminderSync(0);
+    } catch {
+      setError(permission === 'blocked'
+        ? '无法打开系统设置，请在手机设置中开启通知。'
+        : '无法开启通知，请更新安装包后重试。');
     }
-    const next = await device.requestNotificationPermission();
-    setPermission(next);
-    if (next === 'granted') requestReminderSync(0);
   }, [permission]);
 
-  return { permission, enable };
+  return { permission, error, enable };
 }
 
 /** The action that turns notifications on: ask, or send the person to the settings once the system stops asking. */
@@ -42,12 +50,15 @@ export function EnableNotificationsButton({ permission, onPress }: { permission:
 
 /** Shown in the 提醒我 step on a phone that would not show the reminder. */
 export function NotificationPermissionNotice() {
-  const { permission, enable } = useNotificationPermission();
+  const { permission, error, enable } = useNotificationPermission();
   if (permission === null || permission === 'granted' || permission === 'unsupported') return null;
   return (
-    <Inline gap={3} style={{ alignItems: 'center' }}>
-      <Text variant="bodySm" style={{ flex: 1 }}>这台手机的通知未开启，提醒不会出现。</Text>
-      <EnableNotificationsButton permission={permission} onPress={() => void enable()} />
-    </Inline>
+    <Stack gap={3}>
+      <Inline gap={3} style={{ alignItems: 'center' }}>
+        <Text variant="bodySm" style={{ flex: 1 }}>这台手机的通知未开启，提醒不会出现。</Text>
+        <EnableNotificationsButton permission={permission} onPress={() => void enable()} />
+      </Inline>
+      {error !== null ? <Banner>{error}</Banner> : null}
+    </Stack>
   );
 }

@@ -1,4 +1,4 @@
-import * as Notifications from 'expo-notifications';
+import * as Notifications from './local-notifications';
 import { Linking, Platform } from 'react-native';
 import { REMINDER_ID_PREFIX, type NotificationPermission, type ReminderNotification } from './reminder-types';
 

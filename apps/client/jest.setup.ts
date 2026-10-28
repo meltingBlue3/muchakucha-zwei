@@ -86,10 +86,9 @@ jest.mock('expo-audio', () => ({
   })),
 }));
 
-// expo-notifications registers a push-token listener at import time and warns
-// about Expo Go. Reminders only schedule local notifications, so an in-memory
-// scheduler with a settable permission stands in; `__reset` runs before each test.
-jest.mock('expo-notifications', () => {
+// Feature tests use an in-memory local scheduler. The platform regression test
+// loads the real SDK entry points to cover missing remote native modules.
+jest.mock('./src/platform/reminders/local-notifications', () => {
   const scheduled = new Map<string, { identifier: string; content: unknown; trigger: unknown }>();
   const responseListeners = new Set<(mockResponse: unknown) => void>();
   let permission = { granted: true, status: 'granted', canAskAgain: true, expires: 'never' };
@@ -173,7 +172,7 @@ Object.defineProperty(window, 'matchMedia', {
 beforeEach(() => {
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
   (jest.requireMock('expo-secure-store') as MockSecureStore).__reset();
-  (jest.requireMock('expo-notifications') as MockSecureStore).__reset();
+  (jest.requireMock('./src/platform/reminders/local-notifications') as MockSecureStore).__reset();
   unmockedFetch.mockReset().mockImplementation(rejectUnmockedRequest);
   mediaPreferences.set('(forced-colors: active)', false);
   mediaPreferences.set('(prefers-reduced-motion: reduce)', false);
