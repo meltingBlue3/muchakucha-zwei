@@ -61,11 +61,13 @@ async function setup(page: Page): Promise<Writes> {
 }
 
 for (const width of [320, 390, 1440]) {
-  test(`the 提醒 page is reached from 个人中心 and saves each change at once at ${width}px`, async ({ page }, testInfo) => {
+  test(`the 提醒 page is reached from the account menu and saves each change at once at ${width}px`, async ({ page }, testInfo) => {
     const writes = await setup(page);
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/profile');
-    await page.getByRole('button', { name: '提醒', exact: true }).click();
+    // From a household page, as a person finds it: nothing links to 个人中心 any more.
+    await page.goto(`${base}/tasks`);
+    await page.getByRole('button', { name: '个人中心', exact: true }).click();
+    await page.getByRole('menuitem', { name: '提醒', exact: true }).click();
     await expect(page).toHaveURL('/reminders');
     await expect(page.getByRole('heading', { name: '提醒', exact: true })).toBeVisible();
     // A browser schedules nothing, and says so instead of offering notifications.

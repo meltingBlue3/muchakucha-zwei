@@ -146,6 +146,8 @@ for (const width of [320, 390, 1440]) {
     await expect(page.getByRole('menuitem', { name: '个人资料' })).toBeFocused();
     await page.screenshot({ path: `test-results/account-menu-${width}.png` });
     await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menuitem', { name: '提醒' })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('menuitem', { name: '退出登录' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menu')).toHaveCount(0);

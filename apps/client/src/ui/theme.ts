@@ -233,7 +233,7 @@ export const theme = createTheme({
     switcherMaxHeight: 480,
     settingsNavWidth: 280,
     accountMenuWidth: 200,
-    accountMenuHeight: 168,
+    accountMenuHeight: 216,
     dialogMaxWidth: 440,
     editorDialogMaxWidth: 640,
     editorSheetBreakpoint: 600,

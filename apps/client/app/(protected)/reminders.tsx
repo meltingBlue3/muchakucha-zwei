@@ -152,7 +152,7 @@ export default function RemindersRoute() {
                     <Text variant="meta">
                       {canCover === false
                         ? '系统未允许，锁屏时闹铃只响铃、不弹出画面。'
-                        : '如果锁屏时闹铃只响、不弹出画面，在设置里允许「锁屏显示」和「后台弹出界面」。'}
+                        : '如果锁屏时闹铃只响、不弹出画面，在设置里允许「锁屏显示」和「后台弹出界面」，并把「省电策略」设为「无限制」。'}
                     </Text>
                   </View>
                   <Button size="compact" tone="secondary" label="去设置" accessibilityLabel="打开系统设置，允许闹铃在锁屏时弹出" onPress={() => void openSettings()} />
