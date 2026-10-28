@@ -44,7 +44,9 @@ class AlarmActivity : Activity() {
     @Suppress("DEPRECATION")
     window.statusBarColor = CANVAS
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-      window.insetsController?.setSystemBarsAppearance(WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
+      // Through the decor view, which this creates: MIUI's window.insetsController
+      // reads it without creating it and throws before setContentView.
+      window.decorView.windowInsetsController?.setSystemBarsAppearance(WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
     } else {
       @Suppress("DEPRECATION")
       window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
