@@ -84,7 +84,8 @@ export function DateField({
         mode,
         design: 'material',
         title: PICKER_TITLES[mode],
-        is24Hour: true,
+        // No is24Hour: the dialog then follows the phone's 12/24-hour setting, so
+        // someone who reads 11:41 at night picks 11 PM rather than 11 in the morning.
         firstDayOfWeek: 1,
         positiveButton: { label: '确定' },
         negativeButton: { label: '取消' },

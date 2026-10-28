@@ -159,7 +159,7 @@
 
 窄于 `theme.layout.editorSheetBreakpoint` 时，`editor` 窗口改为参考谷歌日历移动端的全屏面板：左上角关闭，右上角放主操作。表单里的 `FormActions` 会自动把提交按钮交给面板标题栏，取消统一走关闭按钮，调用方不需要分别适配。日程和任务表单采用“图标列 + 无边框内容行”的分组布局，各组之间用 `separator` 分隔，共用 [compose-rows.tsx](../apps/client/src/ui/compose-rows.tsx)。有固定选项的字段（重复、负责人、状态、优先级）显示为一行摘要，点开后在步骤窗口里列出选项：单选选中即生效，多选用「完成」确认。
 
-窗口内的选择控件通过 `useWindowStep`（[window-step.ts](../apps/client/src/ui/window-step.ts)）在同一窗口里打开步骤窗口，编辑内容保持挂载，关闭后焦点回到触发行。日期和时间参考谷歌日历，各平台用各自的方案：Android 用系统 Material 3 对话框（需要 `plugins/with-material3-theme.js` 把应用主题设成 Material3）；iOS 在步骤窗口里显示原生日历或滚轮；Web 用 [picker-panels.tsx](../apps/client/src/ui/picker-panels.tsx) 里的日历面板和按 15 分钟排列的时间列表。日历面板与日历页使用同一套标记：墨色实心圆是选中，朱色是今天，两者重合时是朱色实心圆。步骤窗口内部不能再嵌套步骤；其中的日期字段（如自定义重复的截止日期）改为在上层叠加一个标准 `AppDialog`，不挤占当前窗口的空间。这是“不叠加遮罩”规则的唯一例外。Web 端只有最上层的弹窗响应 Esc 和 Tab。
+窗口内的选择控件通过 `useWindowStep`（[window-step.ts](../apps/client/src/ui/window-step.ts)）在同一窗口里打开步骤窗口，编辑内容保持挂载，关闭后焦点回到触发行。日期和时间参考谷歌日历，各平台用各自的方案：Android 用系统 Material 3 对话框（需要 `plugins/with-material3-theme.js` 把应用主题设成 Material3），时间按手机的 12/24 小时设置显示；iOS 在步骤窗口里显示原生日历或滚轮；Web 用 [picker-panels.tsx](../apps/client/src/ui/picker-panels.tsx) 里的日历面板和按 15 分钟排列的时间列表。日历面板与日历页使用同一套标记：墨色实心圆是选中，朱色是今天，两者重合时是朱色实心圆。步骤窗口内部不能再嵌套步骤；其中的日期字段（如自定义重复的截止日期）改为在上层叠加一个标准 `AppDialog`，不挤占当前窗口的空间。这是“不叠加遮罩”规则的唯一例外。Web 端只有最上层的弹窗响应 Esc 和 Tab。
 
 `AppDialog` 统一拥有背景模糊与遮罩、最大宽度、圆角、内边距、标题层级、关闭按钮、键盘避让和内容滚动；同时处理初始聚焦、Tab 循环、Esc／外部点击关闭、忙碌时禁止关闭，以及关闭后恢复焦点。背景采样由 `AppShell` 的 `DialogBackground` 提供。业务组件不再复制这些结构或独立实现另一套外壳。
 
