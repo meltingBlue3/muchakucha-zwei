@@ -42,12 +42,19 @@ class AlarmService : Service() {
       ACTION_DISMISS -> current?.let { stop(it, unanswered = false) }
       ACTION_SNOOZE -> current?.let(::snooze)
     }
-    if (ringing == null) stopSelf()
+    if (ringing == null) {
+      // A button on a ringing notification outlived by its process.
+      AlarmNotifications.cancelRinging(this)
+      stopSelf()
+    }
     return START_NOT_STICKY
   }
 
+  // Stopped by the system while ringing: what rang stays behind as a reminder.
   override fun onDestroy() {
     quiet()
+    ringing?.let { AlarmNotifications.leave(this, it) }
+    AlarmNotifications.cancelRinging(this)
     ringing = null
     AlarmActivity.refresh()
     super.onDestroy()
@@ -57,6 +64,10 @@ class AlarmService : Service() {
     ringing?.let { AlarmNotifications.leave(this, it) }
     ringing = alarm
     val notification = AlarmNotifications.ringing(this, alarm)
+    // Posted on its own first: HyperOS turns down startForeground for an app it
+    // counts as idle without throwing, and the alarm keeps ringing with neither
+    // its buttons nor its screen.
+    AlarmNotifications.showRinging(this, notification)
     try {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         startForeground(AlarmNotifications.RINGING_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)

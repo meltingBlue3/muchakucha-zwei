@@ -78,6 +78,10 @@ internal object AlarmNotifications {
     manager(context).notify(id, notification)
   }
 
+  fun showRinging(context: Context, notification: Notification) {
+    manager(context).notify(RINGING_ID, notification)
+  }
+
   fun cancelRinging(context: Context) {
     manager(context).cancel(RINGING_ID)
   }

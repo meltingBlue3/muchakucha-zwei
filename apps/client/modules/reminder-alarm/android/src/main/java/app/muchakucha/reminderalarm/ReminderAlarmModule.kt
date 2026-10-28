@@ -1,6 +1,7 @@
 package app.muchakucha.reminderalarm
 
 import android.app.NotificationManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -58,18 +59,33 @@ class ReminderAlarmModule : Module() {
       canUseFullScreen()
     }
 
-    // Where the person lets an alarm cover the lock screen: Android 14's own page, else the app's
-    // details, where Chinese systems keep 锁屏显示 and 后台弹出界面.
+    // Where the person lets an alarm cover the lock screen: Android 14's own page; on Xiaomi
+    // 权限管理, one tap above 其他权限 with 锁屏显示 and 后台弹出界面, which apps cannot open;
+    // else the app's details, where other Chinese systems keep them.
     AsyncFunction("openAlarmSettings") {
       val packageUri = Uri.parse("package:${context.packageName}")
-      val action = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !canUseFullScreen()) {
-        Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT
+      val intents = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !canUseFullScreen()) {
+        listOf(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, packageUri))
       } else {
-        Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+        listOf(
+          Intent("miui.intent.action.APP_PERM_EDITOR")
+            .setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+            .putExtra("extra_pkgname", context.packageName),
+          Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri),
+        )
       }
       val activity = appContext.currentActivity
-      val intent = Intent(action, packageUri)
-      if (activity != null) activity.startActivity(intent) else context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      val opened = intents.any { intent ->
+        try {
+          if (activity != null) activity.startActivity(intent) else context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+          true
+        } catch (error: ActivityNotFoundException) {
+          false
+        } catch (error: SecurityException) {
+          false
+        }
+      }
+      if (!opened) throw Exceptions.MissingActivity()
     }
   }
 }
