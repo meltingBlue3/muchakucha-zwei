@@ -1,5 +1,6 @@
 import * as Notifications from './local-notifications';
 import { Linking, Platform } from 'react-native';
+import * as alarms from './reminder-alarm';
 import { REMINDER_ID_PREFIX, type NotificationPermission, type ReminderNotification } from './reminder-types';
 
 export { REMINDER_ID_PREFIX, type NotificationPermission, type ReminderNotification } from './reminder-types';
@@ -47,12 +48,22 @@ export async function openNotificationSettings(): Promise<void> {
   await Linking.openSettings();
 }
 
-export async function scheduledReminderIds(): Promise<string[]> {
+async function notificationIds(): Promise<string[]> {
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   return scheduled.map(request => request.identifier).filter(id => id.startsWith(REMINDER_ID_PREFIX));
 }
 
+/** Notifications and alarms alike; an alarm's id never names a notification. */
+export async function scheduledReminderIds(): Promise<string[]> {
+  return [...await notificationIds(), ...await alarms.scheduledAlarmIds()];
+}
+
 export async function scheduleReminder(notification: ReminderNotification): Promise<void> {
+  // A phone that cannot ring shows a reminder that should as a notification.
+  if (notification.alarm && alarms.alarmsSupported) {
+    await alarms.scheduleAlarm(notification);
+    return;
+  }
   await ensureChannels();
   await Notifications.scheduleNotificationAsync({
     identifier: notification.id,
@@ -61,12 +72,13 @@ export async function scheduleReminder(notification: ReminderNotification): Prom
   });
 }
 
+// Cancelling an id where nothing holds it does nothing, so both are asked.
 export async function cancelReminder(id: string): Promise<void> {
-  await Notifications.cancelScheduledNotificationAsync(id);
+  await Promise.all([Notifications.cancelScheduledNotificationAsync(id), alarms.cancelAlarm(id)]);
 }
 
 export async function cancelAllReminders(): Promise<void> {
-  await Promise.all((await scheduledReminderIds()).map(cancelReminder));
+  await Promise.all([...(await notificationIds()).map(id => Notifications.cancelScheduledNotificationAsync(id)), alarms.cancelAllAlarms()]);
 }
 
 // A tap that launches the app can reach both the listener and the launch

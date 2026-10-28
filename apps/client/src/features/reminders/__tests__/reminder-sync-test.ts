@@ -17,7 +17,7 @@ const notifications = Notifications as typeof Notifications & {
 function upcoming(key: string, title: string, at: string): UpcomingReminderDto {
   return {
     key, kind: 'task', householdId: 'h1', householdName: '小林之家', itemId: key.split(':')[1] ?? null, occurrenceDate: null,
-    title, at, dateOnly: false, fireAt: at, location: null,
+    title, at, dateOnly: false, fireAt: at, location: null, alarm: false,
   };
 }
 

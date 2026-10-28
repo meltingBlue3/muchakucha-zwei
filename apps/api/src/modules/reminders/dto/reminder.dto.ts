@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsIn, IsInt, IsUUID, Matches, Max, Min, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsUUID, Matches, Max, Min, ValidateIf } from 'class-validator';
 
 /** Seven days: the furthest a reminder can come before its due or start time. */
 export const REMINDER_MAX_MINUTES = 10_080;
@@ -9,7 +9,8 @@ export type ReminderMode = (typeof REMINDER_MODES)[number];
 
 /**
  * The caller's own reminder for one task or event. `default` follows their
- * settings, `off` silences it, `before` fires `minutesBefore` ahead. On a
+ * settings, `off` silences it, `before` fires `minutesBefore` ahead. `alarm`
+ * chooses separately whether it rings, null following the settings. On a
  * recurring occurrence it applies to the whole series.
  */
 export class ReminderChoiceDto {
@@ -23,6 +24,11 @@ export class ReminderChoiceDto {
   @Min(0)
   @Max(REMINDER_MAX_MINUTES)
   minutesBefore?: number | null;
+
+  @ApiPropertyOptional({ type: Boolean, nullable: true, description: 'Ring like an alarm clock until dismissed; null or omitted follows the settings. Always null with mode "off".' })
+  @ValidateIf((choice: ReminderChoiceDto) => choice.alarm !== undefined && choice.alarm !== null)
+  @IsBoolean()
+  alarm?: boolean | null;
 }
 
 export class ReminderSettingsHouseholdDto {
@@ -40,6 +46,9 @@ export class ReminderSettingsDto {
 
   @ApiProperty({ description: 'Local HH:MM used for date-only tasks and all-day events.' })
   dateOnlyTime!: string;
+
+  @ApiProperty({ description: 'Reminders ring like an alarm clock until dismissed, on phones that can.' })
+  alarm!: boolean;
 
   @ApiProperty({ type: [ReminderSettingsHouseholdDto] })
   households!: ReminderSettingsHouseholdDto[];
@@ -64,6 +73,10 @@ export class UpdateReminderSettingsDto {
   @ApiProperty({ example: '09:00' })
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
   dateOnlyTime!: string;
+
+  @ApiProperty()
+  @IsBoolean()
+  alarm!: boolean;
 
   @ApiProperty({ type: [String], description: 'Households of the caller that send no reminders.' })
   @IsArray()
@@ -97,6 +110,9 @@ export class UpcomingReminderDto {
   dateOnly!: boolean;
 
   @ApiProperty() fireAt!: string;
+
+  @ApiProperty({ description: 'Ring like an alarm clock until dismissed, where the phone can; otherwise a notification.' })
+  alarm!: boolean;
 
   @ApiProperty({ type: String, nullable: true })
   location!: string | null;

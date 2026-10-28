@@ -15,14 +15,14 @@ interface Writes {
 async function setup(page: Page): Promise<Writes> {
   const writes: Writes = { settings: [], reminders: [], tasks: [] };
   let settings = {
-    taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00',
+    taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false,
     households: [{ id: householdId, name: '小林之家', muted: false }, { id: parentsId, name: '爸妈家', muted: false }],
   };
   let task = {
     id: taskId, householdId, title: '交水费', description: null, status: 'pending', priority: 'medium',
     dueDate: new Date('2026-10-24T18:00:00').toISOString(), assigneeIds: ['user'], labels: [], recurrenceRuleId: null, recurrence: null,
     occurrenceDate: null, createdBy: 'user', createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z',
-    myReminder: { mode: 'default', minutesBefore: null },
+    myReminder: { mode: 'default', minutesBefore: null, alarm: null },
   };
   await page.route('**/api/v1/**', async route => {
     const path = new URL(route.request().url()).pathname;
@@ -33,10 +33,10 @@ async function setup(page: Page): Promise<Writes> {
     else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '小林', hasHousehold: true };
     else if (path.endsWith('/users/me/reminder-settings')) {
       if (method === 'PUT') {
-        const next = route.request().postDataJSON() as { taskMinutesBefore: number | null; eventMinutesBefore: number | null; dateOnlyTime: string; mutedHouseholdIds: string[] };
+        const next = route.request().postDataJSON() as { taskMinutesBefore: number | null; eventMinutesBefore: number | null; dateOnlyTime: string; alarm: boolean; mutedHouseholdIds: string[] };
         writes.settings.push(next);
         settings = {
-          taskMinutesBefore: next.taskMinutesBefore, eventMinutesBefore: next.eventMinutesBefore, dateOnlyTime: next.dateOnlyTime,
+          taskMinutesBefore: next.taskMinutesBefore, eventMinutesBefore: next.eventMinutesBefore, dateOnlyTime: next.dateOnlyTime, alarm: next.alarm,
           households: settings.households.map(item => ({ ...item, muted: next.mutedHouseholdIds.includes(item.id) })),
         };
       }
@@ -85,9 +85,15 @@ for (const width of [320, 390, 1440]) {
 
     await page.getByRole('switch', { name: '接收爸妈家的提醒' }).click();
     await expect(page.getByRole('switch', { name: '接收爸妈家的提醒' })).not.toBeChecked();
+
+    // A browser cannot ring, but the choice reaches the phone.
+    await expect(page.getByText('到时间像闹钟一样一直响，直到按「知道了」。只在 Android 手机上响。')).toBeVisible();
+    await page.getByRole('switch', { name: '用闹铃提醒' }).click();
+    await expect(page.getByRole('switch', { name: '用闹铃提醒' })).toBeChecked();
     expect(writes.settings).toEqual([
-      { taskMinutesBefore: 0, eventMinutesBefore: 30, dateOnlyTime: '09:00', mutedHouseholdIds: [] },
-      { taskMinutesBefore: 0, eventMinutesBefore: 30, dateOnlyTime: '09:00', mutedHouseholdIds: [parentsId] },
+      { taskMinutesBefore: 0, eventMinutesBefore: 30, dateOnlyTime: '09:00', alarm: false, mutedHouseholdIds: [] },
+      { taskMinutesBefore: 0, eventMinutesBefore: 30, dateOnlyTime: '09:00', alarm: false, mutedHouseholdIds: [parentsId] },
+      { taskMinutesBefore: 0, eventMinutesBefore: 30, dateOnlyTime: '09:00', alarm: true, mutedHouseholdIds: [parentsId] },
     ]);
   });
 }
@@ -108,6 +114,23 @@ test('a task shows when its reminder comes, and changing only the reminder saves
   await edit.getByRole('button', { name: '保存', exact: true }).click();
   await expect(detail).toBeVisible();
   await expect(detail.getByText('17:00（提前 1 小时）', { exact: true })).toBeVisible();
-  expect(writes.reminders).toEqual([{ mode: 'before', minutesBefore: 60 }]);
+  expect(writes.reminders).toEqual([{ mode: 'before', minutesBefore: 60, alarm: null }]);
+  expect(writes.tasks).toEqual([]);
+});
+
+test('a task can ring on its own, and the detail says so', async ({ page }) => {
+  const writes = await setup(page);
+  await page.goto(`${base}/tasks/${taskId}`);
+  const detail = page.getByRole('dialog', { name: '任务详情', exact: true });
+  await detail.getByRole('button', { name: '编辑任务', exact: true }).click();
+  const edit = page.getByRole('dialog', { name: '编辑任务', exact: true });
+  await edit.getByRole('button', { name: '闹铃，普通提醒（默认）', exact: true }).click();
+  await expect(page.getByText('只改你自己的提醒，家人不受影响。闹铃只在 Android 手机上响，这台设备上仍是普通提醒。')).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.getByRole('radio', { name: '闹铃提醒', exact: true }).click();
+  await expect(edit.getByRole('button', { name: '闹铃，闹铃提醒', exact: true })).toBeFocused();
+  await edit.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(detail.getByText('18:00（准时） · 闹铃', { exact: true })).toBeVisible();
+  expect(writes.reminders).toEqual([{ mode: 'default', minutesBefore: null, alarm: true }]);
   expect(writes.tasks).toEqual([]);
 });

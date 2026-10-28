@@ -5,7 +5,7 @@ function reminder(overrides: Partial<UpcomingReminderDto>): UpcomingReminderDto 
   return {
     key: 'task:t1', kind: 'task', householdId: 'h1', householdName: '小林之家', itemId: 't1', occurrenceDate: null,
     title: '交水费', at: new Date('2026-10-24T18:00:00').toISOString(), dateOnly: false,
-    fireAt: new Date('2026-10-24T18:00:00').toISOString(), location: null,
+    fireAt: new Date('2026-10-24T18:00:00').toISOString(), location: null, alarm: false,
     ...overrides,
   };
 }
@@ -39,6 +39,13 @@ describe('reminderNotification', () => {
     expect(reminderNotification(reminder({ title: '交电费' }), { showHousehold: false }).id).not.toBe(first.id);
     expect(reminderNotification(reminder({ fireAt: new Date('2026-10-24T17:30:00').toISOString() }), { showHousehold: false }).id).not.toBe(first.id);
     expect(reminderNotification(reminder({}), { showHousehold: true }).id).not.toBe(first.id);
+  });
+
+  test('carries whether it rings, which also takes a new id', () => {
+    const plain = reminderNotification(reminder({}), { showHousehold: false });
+    const ringing = reminderNotification(reminder({ alarm: true }), { showHousehold: false });
+    expect([plain.alarm, ringing.alarm]).toEqual([false, true]);
+    expect(ringing.id).not.toBe(plain.id);
   });
 });
 

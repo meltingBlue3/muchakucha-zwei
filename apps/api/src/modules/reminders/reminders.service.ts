@@ -10,7 +10,7 @@ import {
   walkOccurrences,
   type CalendarDate,
 } from '../recurrence/recurrence-date.js';
-import { writeReminderChoice } from '../shared/reminder-overrides.js';
+import { choiceFromRow, DEFAULT_REMINDER, writeReminderChoice } from '../shared/reminder-overrides.js';
 import type {
   ReminderChoiceDto,
   ReminderSettingsDto,
@@ -73,6 +73,7 @@ export class RemindersService {
       taskMinutesBefore: defaults.taskMinutesBefore,
       eventMinutesBefore: defaults.eventMinutesBefore,
       dateOnlyTime: defaults.dateOnlyTime,
+      alarm: defaults.alarm,
       households: memberships.map(membership => ({
         id: membership.householdId,
         name: membership.household.name,
@@ -87,6 +88,7 @@ export class RemindersService {
       taskMinutesBefore: input.taskMinutesBefore,
       eventMinutesBefore: input.eventMinutesBefore,
       dateOnlyTime: input.dateOnlyTime,
+      alarm: input.alarm,
     };
     await this.prisma.$transaction(async (tx) => {
       const memberOf = await tx.membership.count({ where: { userId, householdId: { in: muted } } });
@@ -173,7 +175,7 @@ export class RemindersService {
       }),
     ]);
 
-    const candidates: Array<Omit<ReminderCandidate, 'minutesBefore'> & { ruleId: string | null }> = [];
+    const candidates: Array<Omit<ReminderCandidate, 'minutesBefore' | 'alarm'> & { ruleId: string | null }> = [];
     for (const task of tasks) {
       if (task.dueDate === null) continue;
       const occurrenceDate = task.occurrenceDate === null ? null : formatIsoDate(calendarDate(task.occurrenceDate));
@@ -240,12 +242,13 @@ export class RemindersService {
     const overrides = await this.prisma.reminderOverride.findMany({
       where: { userId, OR: [{ recurrenceRuleId: { in: ruleIds } }, { taskId: { in: taskIds } }, { eventId: { in: eventIds } }] },
     });
-    const personal = new Map(overrides.map(override => [override.recurrenceRuleId ?? override.taskId ?? override.eventId, override.minutesBefore]));
+    const personal = new Map(overrides.map(override => [override.recurrenceRuleId ?? override.taskId ?? override.eventId, choiceFromRow(override)]));
 
     const planned = planReminders(
       candidates.map(({ ruleId, ...candidate }) => {
-        const target = ruleId ?? candidate.itemId!;
-        return { ...candidate, minutesBefore: personal.has(target) ? personal.get(target) ?? null : undefined };
+        const choice = personal.get(ruleId ?? candidate.itemId!) ?? DEFAULT_REMINDER;
+        const minutesBefore = choice.mode === 'default' ? undefined : choice.mode === 'off' ? null : choice.minutesBefore ?? 0;
+        return { ...candidate, minutesBefore, alarm: choice.alarm ?? null };
       }),
       settings ?? DEFAULT_REMINDER_SETTINGS,
       { now, timeZone },
@@ -263,6 +266,7 @@ export class RemindersService {
         dateOnly: reminder.dateOnly,
         fireAt: reminder.fireAt.toISOString(),
         location: reminder.location,
+        alarm: reminder.alarm,
       })),
     };
   }

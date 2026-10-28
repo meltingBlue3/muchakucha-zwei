@@ -2,9 +2,9 @@ import type { ReminderChoiceDto, ReminderSettingsDto } from '@muchakucha/api-cli
 import { formatDateTime, toDateValue, toTimeValue } from '../../ui/date-values';
 
 export type ReminderKind = 'task' | 'event';
-export type ReminderDefaults = Pick<ReminderSettingsDto, 'taskMinutesBefore' | 'eventMinutesBefore' | 'dateOnlyTime'>;
+export type ReminderDefaults = Pick<ReminderSettingsDto, 'taskMinutesBefore' | 'eventMinutesBefore' | 'dateOnlyTime' | 'alarm'>;
 
-export const DEFAULT_REMINDER: ReminderChoiceDto = { mode: 'default', minutesBefore: null };
+export const DEFAULT_REMINDER: ReminderChoiceDto = { mode: 'default', minutesBefore: null, alarm: null };
 
 /** What a reminder can be set to. Minutes count back from the due or start time, or from the date-only time on that day. */
 export const TIMED_REMINDER_MINUTES = [0, 5, 15, 30, 60, 1440] as const;
@@ -12,6 +12,9 @@ export const DATE_ONLY_REMINDER_MINUTES = [0, 1440] as const;
 
 /** A choice as an option value: 'default', 'off' or the minutes before. */
 export type ReminderOptionValue = 'default' | 'off' | `${number}`;
+
+/** Whether it rings, as an option value: follow the default, ring like an alarm clock, or only notify. */
+export type AlarmOptionValue = 'default' | 'on' | 'off';
 
 function span(minutes: number): string {
   if (minutes % 1440 === 0) return `${minutes / 1440} 天`;
@@ -43,20 +46,28 @@ export function choiceValue(choice: ReminderChoiceDto): ReminderOptionValue {
   return choice.mode;
 }
 
-export function choiceFromValue(value: ReminderOptionValue): ReminderChoiceDto {
-  if (value === 'default' || value === 'off') return { mode: value, minutesBefore: null };
-  return { mode: 'before', minutesBefore: Number(value) };
+export function alarmValue(choice: ReminderChoiceDto): AlarmOptionValue {
+  if (choice.alarm === true) return 'on';
+  return choice.alarm === false ? 'off' : 'default';
+}
+
+/** No reminder has nothing to ring, so 不提醒 drops the alarm choice, as the server does. */
+export function choiceFromValue(value: ReminderOptionValue, alarm: AlarmOptionValue = 'default'): ReminderChoiceDto {
+  if (value === 'off') return { mode: 'off', minutesBefore: null, alarm: null };
+  const rings = alarm === 'default' ? null : alarm === 'on';
+  if (value === 'default') return { mode: 'default', minutesBefore: null, alarm: rings };
+  return { mode: 'before', minutesBefore: Number(value), alarm: rings };
 }
 
 export function sameChoice(left: ReminderChoiceDto, right: ReminderChoiceDto): boolean {
-  return choiceValue(left) === choiceValue(right);
+  return choiceValue(left) === choiceValue(right) && alarmValue(left) === alarmValue(right);
 }
 
-/** A choice the current options cannot show — 15 minutes on what became a date-only task — goes back to the default. */
+/** A choice the current options cannot show — 15 minutes on what became a date-only task — goes back to the default time. */
 export function fitChoice(choice: ReminderChoiceDto, dateOnly: boolean): ReminderChoiceDto {
   if (choice.mode !== 'before') return choice;
   const allowed: readonly number[] = dateOnly ? DATE_ONLY_REMINDER_MINUTES : TIMED_REMINDER_MINUTES;
-  return allowed.includes(choice.minutesBefore ?? 0) ? choice : DEFAULT_REMINDER;
+  return allowed.includes(choice.minutesBefore ?? 0) ? choice : { ...DEFAULT_REMINDER, alarm: choice.alarm ?? null };
 }
 
 /** Whether a task's defaults speak for this person: it is theirs, or nobody's and they created it. */
@@ -117,6 +128,32 @@ export function reminderOptions(context: ReminderContext): Array<{ value: Remind
   ];
 }
 
+export function effectiveAlarm(choice: ReminderChoiceDto, defaults: Pick<ReminderDefaults, 'alarm'>): boolean {
+  return choice.alarm ?? defaults.alarm;
+}
+
+function alarmLabel(rings: boolean): string {
+  return rings ? '闹铃提醒' : '普通提醒';
+}
+
+/** The 闹铃 row's summary, readable without a field name: "闹铃提醒（默认）", "普通提醒". */
+export function alarmSummary(choice: ReminderChoiceDto, defaults: Pick<ReminderDefaults, 'alarm'> | null): string {
+  if (choice.alarm !== null && choice.alarm !== undefined) return alarmLabel(choice.alarm);
+  return defaults === null ? '默认提醒方式' : `${alarmLabel(defaults.alarm)}（默认）`;
+}
+
+export const ALARM_DETAIL = '像闹钟一样一直响，直到按「知道了」';
+export const NOTIFICATION_DETAIL = '弹出通知，响一声';
+
+/** The options of the 闹铃 step: default, then ringing or only notifying. */
+export function alarmOptions(defaults: Pick<ReminderDefaults, 'alarm'> | null): Array<{ value: AlarmOptionValue; label: string; detail?: string }> {
+  return [
+    { value: 'default', label: defaults === null ? '默认' : `默认（${alarmLabel(defaults.alarm)}）` },
+    { value: 'on', label: alarmLabel(true), detail: ALARM_DETAIL },
+    { value: 'off', label: alarmLabel(false), detail: NOTIFICATION_DETAIL },
+  ];
+}
+
 /** When the reminder fires, on this device's clock. */
 export function reminderMoment(anchor: Date, minutes: number, dateOnly: boolean, dateOnlyTime: string): Date {
   const base = dateOnly ? new Date(`${toDateValue(anchor)}T${dateOnlyTime}:00`) : anchor;
@@ -133,5 +170,5 @@ export function reminderDetail(anchor: Date, choice: ReminderChoiceDto, context:
   const rule = context.dateOnly
     ? minutes === 0 ? '当天' : minutes === 1440 ? '前一天' : `提前 ${span(minutes)}`
     : minutesLabel(minutes, context.kind, false, context.defaults.dateOnlyTime);
-  return `${when}（${rule}）`;
+  return `${when}（${rule}）${effectiveAlarm(choice, context.defaults) ? ' · 闹铃' : ''}`;
 }

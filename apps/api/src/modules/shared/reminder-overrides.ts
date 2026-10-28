@@ -9,10 +9,23 @@ export interface ReminderItem {
   recurrenceRuleId: string | null;
 }
 
-export const DEFAULT_REMINDER: ReminderChoiceDto = { mode: 'default', minutesBefore: null };
+export const DEFAULT_REMINDER: ReminderChoiceDto = { mode: 'default', minutesBefore: null, alarm: null };
 
-export function choiceFromMinutes(minutesBefore: number | null): ReminderChoiceDto {
-  return minutesBefore === null ? { mode: 'off', minutesBefore: null } : { mode: 'before', minutesBefore };
+interface StoredChoice {
+  mode: string;
+  minutesBefore: number | null;
+  alarm: boolean | null;
+}
+
+export function choiceFromRow(row: StoredChoice): ReminderChoiceDto {
+  if (row.mode === 'before') return { mode: 'before', minutesBefore: row.minutesBefore ?? 0, alarm: row.alarm };
+  return { mode: row.mode === 'off' ? 'off' : 'default', minutesBefore: null, alarm: row.alarm };
+}
+
+/** The row a choice is stored as: no minutes outside `before`, nothing to ring when off. */
+function rowFromChoice(choice: ReminderChoiceDto): StoredChoice {
+  if (choice.mode === 'off') return { mode: 'off', minutesBefore: null, alarm: null };
+  return { mode: choice.mode, minutesBefore: choice.mode === 'before' ? choice.minutesBefore ?? 0 : null, alarm: choice.alarm ?? null };
 }
 
 // A recurring occurrence's reminder lives on its series: occurrences are
@@ -42,10 +55,10 @@ export async function readReminderChoices(
       ],
     },
   });
-  const byTarget = new Map(overrides.map(override => [override.recurrenceRuleId ?? override.taskId ?? override.eventId, override.minutesBefore]));
+  const byTarget = new Map(overrides.map(override => [override.recurrenceRuleId ?? override.taskId ?? override.eventId, override]));
   for (const item of items) {
-    const key = item.recurrenceRuleId ?? item.id;
-    choices.set(item.id, byTarget.has(key) ? choiceFromMinutes(byTarget.get(key) ?? null) : DEFAULT_REMINDER);
+    const row = byTarget.get(item.recurrenceRuleId ?? item.id);
+    choices.set(item.id, row === undefined ? DEFAULT_REMINDER : choiceFromRow(row));
   }
   return choices;
 }
@@ -62,13 +75,13 @@ export async function writeReminderChoice(
   choice: ReminderChoiceDto,
 ): Promise<ReminderChoiceDto> {
   const where = { userId, ...target(kind, item) };
-  if (choice.mode === 'default') {
+  const row = rowFromChoice(choice);
+  if (row.mode === 'default' && row.alarm === null) {
     await db.reminderOverride.deleteMany({ where });
     return DEFAULT_REMINDER;
   }
-  const minutesBefore = choice.mode === 'off' ? null : choice.minutesBefore ?? 0;
-  await db.reminderOverride.upsert({ where: uniqueTarget(where), create: { ...where, minutesBefore }, update: { minutesBefore } });
-  return choiceFromMinutes(minutesBefore);
+  await db.reminderOverride.upsert({ where: uniqueTarget(where), create: { ...where, ...row }, update: row });
+  return choiceFromRow(row);
 }
 
 function uniqueTarget(where: { userId: string } & ReturnType<typeof target>): Prisma.ReminderOverrideWhereUniqueInput {
@@ -82,7 +95,7 @@ export async function copyRuleReminders(tx: Prisma.TransactionClient, fromRuleId
   const overrides = await tx.reminderOverride.findMany({ where: { recurrenceRuleId: fromRuleId } });
   if (overrides.length === 0) return;
   await tx.reminderOverride.createMany({
-    data: overrides.map(({ userId, minutesBefore }) => ({ userId, recurrenceRuleId: toRuleId, minutesBefore })),
+    data: overrides.map(({ userId, mode, minutesBefore, alarm }) => ({ userId, recurrenceRuleId: toRuleId, mode, minutesBefore, alarm })),
     skipDuplicates: true,
   });
 }

@@ -22,7 +22,7 @@ import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 import { RecurrenceField } from '../recurrence/recurrence-field';
 import { useCurrentUser } from '../auth/use-current-user';
 import { ReminderField } from '../reminders/reminder-field';
-import { choiceFromValue, choiceValue, DEFAULT_REMINDER, fitChoice, isOwnTask, type ReminderOptionValue } from '../reminders/reminder-rules';
+import { alarmValue, choiceFromValue, choiceValue, DEFAULT_REMINDER, fitChoice, isOwnTask, sameChoice, type AlarmOptionValue, type ReminderOptionValue } from '../reminders/reminder-rules';
 import {
   followStartDate,
   recurrenceErrorsFromApi,
@@ -139,8 +139,9 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
   });
   const [form, setForm] = useWorkspaceState<TaskInput>(draftKey, () => initial ? taskInputFrom(initial, members) : { ...EMPTY_TASK });
   const baseline = useMemo(() => initial ? taskInputFrom(initial, members) : null, [initial, members]);
-  // A draft of its own, so the shape of saved form drafts stays as it was.
+  // Drafts of their own, so the shape of saved form drafts stays as it was.
   const [reminder, setReminder] = useWorkspaceState<ReminderOptionValue>(draftKey === undefined ? undefined : `${draftKey}:reminder`, () => choiceValue(initial?.myReminder ?? DEFAULT_REMINDER));
+  const [alarm, setAlarm] = useWorkspaceState<AlarmOptionValue>(draftKey === undefined ? undefined : `${draftKey}:alarm`, () => alarmValue(initial?.myReminder ?? DEFAULT_REMINDER));
   const userId = useCurrentUser()?.id ?? '';
   const [error, setError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -195,8 +196,8 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
     // since on a recurring task it belongs to the whole series.
     const firstRule = isCreate ? form.recurrence : null;
     if (firstRule !== null || form.dueDate !== '') {
-      const myReminder = fitChoice(choiceFromValue(reminder), firstRule !== null ? !firstRule.startTimeLocal : !form.dueTime);
-      if (!isCreate || myReminder.mode !== 'default') data.myReminder = myReminder;
+      const myReminder = fitChoice(choiceFromValue(reminder, alarm), firstRule !== null ? !firstRule.startTimeLocal : !form.dueTime);
+      if (!isCreate || !sameChoice(myReminder, DEFAULT_REMINDER)) data.myReminder = myReminder;
     }
 
     try {
@@ -209,7 +210,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
         setError('保存失败，请检查网络后重试。');
       }
     }
-  }, [baseline, form, isCreate, onSubmit, recurrenceStart, reminder]);
+  }, [alarm, baseline, form, isCreate, onSubmit, recurrenceStart, reminder]);
 
   const setRecurrence = useCallback((next: RecurrenceInput | null) => updateField('recurrence', next), [updateField]);
   const recurringCreate = isCreate && form.recurrence !== null;
@@ -315,9 +316,9 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
             own={isOwnTask({ assigneeIds: form.assigneeIds, createdBy: initial?.createdBy ?? userId }, userId)}
             dateOnly={dueRow.time === ''}
             recurring={form.recurrence !== null}
-            value={choiceFromValue(reminder)}
+            value={choiceFromValue(reminder, alarm)}
             disabled={isSubmitting}
-            onChange={(choice) => setReminder(choiceValue(choice))}
+            onChange={(choice) => { setReminder(choiceValue(choice)); setAlarm(alarmValue(choice)); }}
           />
         ) : null}
       </FormSection>

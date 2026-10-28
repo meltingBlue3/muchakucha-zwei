@@ -62,7 +62,7 @@ test('a reminder set in the task form is stored as the person\'s own and schedul
 
   // Stored as a personal choice, without counting as an edit of the task.
   const stored = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/tasks/${taskId}`);
-  expect(stored.body.myReminder).toEqual({ mode: 'before', minutesBefore: 60 });
+  expect(stored.body.myReminder).toEqual({ mode: 'before', minutesBefore: 60, alarm: null });
   expect(stored.body.updatedAt).toBe(created.body.updatedAt);
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const upcoming = await apiCall(owner.accessToken, 'GET', `/users/me/reminders?timeZone=${encodeURIComponent(timeZone)}`);

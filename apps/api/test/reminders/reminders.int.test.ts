@@ -136,11 +136,12 @@ describe('reminder settings', () => {
       taskMinutesBefore: 0,
       eventMinutesBefore: 15,
       dateOnlyTime: '09:00',
+      alarm: false,
       households: [{ id: home, name: '小林之家', muted: false }, { id: parents, name: '爸妈家', muted: false }],
     });
 
     const saved = await api(owner, 'PUT', '/api/v1/users/me/reminder-settings', {
-      taskMinutesBefore: null, eventMinutesBefore: 30, dateOnlyTime: '20:15', mutedHouseholdIds: [parents],
+      taskMinutesBefore: null, eventMinutesBefore: 30, dateOnlyTime: '20:15', alarm: true, mutedHouseholdIds: [parents],
     });
     expect(saved.statusCode).toBe(200);
     const reread = (await api(owner, 'GET', '/api/v1/users/me/reminder-settings')).json();
@@ -148,13 +149,16 @@ describe('reminder settings', () => {
       taskMinutesBefore: null,
       eventMinutesBefore: 30,
       dateOnlyTime: '20:15',
+      alarm: true,
       households: [{ id: home, name: '小林之家', muted: false }, { id: parents, name: '爸妈家', muted: true }],
     });
 
     await api(owner, 'PUT', '/api/v1/users/me/reminder-settings', {
-      taskMinutesBefore: 0, eventMinutesBefore: 30, dateOnlyTime: '20:15', mutedHouseholdIds: [],
+      taskMinutesBefore: 0, eventMinutesBefore: 30, dateOnlyTime: '20:15', alarm: false, mutedHouseholdIds: [],
     });
-    expect((await api(owner, 'GET', '/api/v1/users/me/reminder-settings')).json().households.every((household: { muted: boolean }) => !household.muted)).toBe(true);
+    const cleared = (await api(owner, 'GET', '/api/v1/users/me/reminder-settings')).json();
+    expect(cleared.households.every((household: { muted: boolean }) => !household.muted)).toBe(true);
+    expect(cleared.alarm).toBe(false);
   });
 
   test('reject a household the caller does not belong to, and leave the settings unchanged', async () => {
@@ -164,11 +168,11 @@ describe('reminder settings', () => {
     const foreign = await createHousehold(stranger, '别人家');
 
     const response = await api(owner, 'PUT', '/api/v1/users/me/reminder-settings', {
-      taskMinutesBefore: 5, eventMinutesBefore: 5, dateOnlyTime: '07:00', mutedHouseholdIds: [foreign],
+      taskMinutesBefore: 5, eventMinutesBefore: 5, dateOnlyTime: '07:00', alarm: true, mutedHouseholdIds: [foreign],
     });
     expect(response.statusCode).toBe(400);
     expect(response.json().error.details).toEqual([{ field: 'mutedHouseholdIds', codes: ['not_member'] }]);
-    expect((await api(owner, 'GET', '/api/v1/users/me/reminder-settings')).json().taskMinutesBefore).toBe(0);
+    expect((await api(owner, 'GET', '/api/v1/users/me/reminder-settings')).json()).toMatchObject({ taskMinutesBefore: 0, alarm: false });
     const strangerView = (await api(stranger, 'GET', '/api/v1/users/me/reminder-settings')).json();
     expect(strangerView.households).toEqual([{ id: foreign, name: '别人家', muted: false }]);
   });
@@ -176,10 +180,12 @@ describe('reminder settings', () => {
   test('require every field, so an omitted value is never read as "off"', async () => {
     const owner = await insertActor('settings-shape-owner');
     for (const payload of [
-      { eventMinutesBefore: 15, dateOnlyTime: '09:00', mutedHouseholdIds: [] },
-      { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '24:00', mutedHouseholdIds: [] },
-      { taskMinutesBefore: 10_081, eventMinutesBefore: 15, dateOnlyTime: '09:00', mutedHouseholdIds: [] },
-      { taskMinutesBefore: 1.5, eventMinutesBefore: 15, dateOnlyTime: '09:00', mutedHouseholdIds: [] },
+      { eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, mutedHouseholdIds: [] },
+      { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '24:00', alarm: false, mutedHouseholdIds: [] },
+      { taskMinutesBefore: 10_081, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, mutedHouseholdIds: [] },
+      { taskMinutesBefore: 1.5, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, mutedHouseholdIds: [] },
+      { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', mutedHouseholdIds: [] },
+      { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: 'yes', mutedHouseholdIds: [] },
     ]) {
       const response = await api(owner, 'PUT', '/api/v1/users/me/reminder-settings', payload);
       expect(response.statusCode).toBe(400);
@@ -197,15 +203,15 @@ describe('personal reminders on tasks and events', () => {
     await addMember(householdId, member);
 
     const task = await createTask(owner, householdId, { title: '交水费', dueDate: inHours(5).toISOString(), myReminder: { mode: 'before', minutesBefore: 30 } });
-    expect((await api(owner, 'GET', `${tasksUrl(householdId)}/${task.id}`)).json().myReminder).toEqual({ mode: 'before', minutesBefore: 30 });
-    expect((await api(member, 'GET', `${tasksUrl(householdId)}/${task.id}`)).json().myReminder).toEqual({ mode: 'default', minutesBefore: null });
+    expect((await api(owner, 'GET', `${tasksUrl(householdId)}/${task.id}`)).json().myReminder).toEqual({ mode: 'before', minutesBefore: 30, alarm: null });
+    expect((await api(member, 'GET', `${tasksUrl(householdId)}/${task.id}`)).json().myReminder).toEqual({ mode: 'default', minutesBefore: null, alarm: null });
 
     const silenced = await api(member, 'PUT', `${tasksUrl(householdId)}/${task.id}/my-reminder`, { mode: 'off' });
     expect(silenced.statusCode).toBe(200);
-    expect(silenced.json()).toEqual({ mode: 'off', minutesBefore: null });
+    expect(silenced.json()).toEqual({ mode: 'off', minutesBefore: null, alarm: null });
     const memberList = (await api(member, 'GET', tasksUrl(householdId))).json().tasks;
-    expect(memberList[0].myReminder).toEqual({ mode: 'off', minutesBefore: null });
-    expect((await api(owner, 'GET', tasksUrl(householdId))).json().tasks[0].myReminder).toEqual({ mode: 'before', minutesBefore: 30 });
+    expect(memberList[0].myReminder).toEqual({ mode: 'off', minutesBefore: null, alarm: null });
+    expect((await api(owner, 'GET', tasksUrl(householdId))).json().tasks[0].myReminder).toEqual({ mode: 'before', minutesBefore: 30, alarm: null });
 
     // Back to the default removes the personal row instead of storing a copy of the default.
     await api(member, 'PUT', `${tasksUrl(householdId)}/${task.id}/my-reminder`, { mode: 'default' });
@@ -223,14 +229,14 @@ describe('personal reminders on tasks and events', () => {
     expect(response.statusCode).toBe(200);
     const after = (await api(owner, 'GET', `${eventsUrl(householdId)}/${event.id}`)).json();
     expect(after.updatedAt).toBe(before.updatedAt);
-    expect(after.myReminder).toEqual({ mode: 'before', minutesBefore: 60 });
+    expect(after.myReminder).toEqual({ mode: 'before', minutesBefore: 60, alarm: null });
   });
 
   test('reject malformed choices', async () => {
     const owner = await insertActor('choice-shape-owner');
     const householdId = await createHousehold(owner, '小林之家');
     const task = await createTask(owner, householdId, { title: '交水费' });
-    for (const body of [{ mode: 'before' }, { mode: 'before', minutesBefore: 10_081 }, { mode: 'before', minutesBefore: -1 }, { mode: 'soon' }]) {
+    for (const body of [{ mode: 'before' }, { mode: 'before', minutesBefore: 10_081 }, { mode: 'before', minutesBefore: -1 }, { mode: 'soon' }, { mode: 'default', alarm: 'yes' }]) {
       const response = await api(owner, 'PUT', `${tasksUrl(householdId)}/${task.id}/my-reminder`, body);
       expect(response.statusCode).toBe(400);
     }
@@ -266,19 +272,19 @@ describe('personal reminders on tasks and events', () => {
     const created = await createTask(owner, householdId, {
       title: '倒垃圾',
       recurrence: { freq: 'daily', startsOn, timezone: 'UTC', startTimeLocal: '08:00' },
-      myReminder: { mode: 'before', minutesBefore: 60 },
+      myReminder: { mode: 'before', minutesBefore: 60, alarm: true },
     });
-    const stored = await withDatabase(client => client.query('SELECT "task_id", "recurrence_rule_id", "minutes_before" FROM "reminder_overrides"'));
-    expect(stored.rows).toEqual([{ task_id: null, recurrence_rule_id: created.recurrenceRuleId, minutes_before: 60 }]);
+    const stored = await withDatabase(client => client.query('SELECT "task_id", "recurrence_rule_id", "minutes_before", "alarm" FROM "reminder_overrides"'));
+    expect(stored.rows).toEqual([{ task_id: null, recurrence_rule_id: created.recurrenceRuleId, minutes_before: 60, alarm: true }]);
 
     const occurrences = (await api(owner, 'GET', tasksUrl(householdId))).json().tasks
       .sort((left: { occurrenceDate: string }, right: { occurrenceDate: string }) => left.occurrenceDate.localeCompare(right.occurrenceDate));
     expect(occurrences.length).toBeGreaterThanOrEqual(4);
-    expect(occurrences.every((task: { myReminder: unknown }) => JSON.stringify(task.myReminder) === JSON.stringify({ mode: 'before', minutesBefore: 60 }))).toBe(true);
+    expect(occurrences.every((task: { myReminder: unknown }) => JSON.stringify(task.myReminder) === JSON.stringify({ mode: 'before', minutesBefore: 60, alarm: true }))).toBe(true);
 
     // Changing it on any occurrence changes the series.
-    await api(owner, 'PUT', `${tasksUrl(householdId)}/${occurrences[1].id}/my-reminder`, { mode: 'before', minutesBefore: 15 });
-    expect((await api(owner, 'GET', `${tasksUrl(householdId)}/${occurrences[3].id}`)).json().myReminder).toEqual({ mode: 'before', minutesBefore: 15 });
+    await api(owner, 'PUT', `${tasksUrl(householdId)}/${occurrences[1].id}/my-reminder`, { mode: 'before', minutesBefore: 15, alarm: true });
+    expect((await api(owner, 'GET', `${tasksUrl(householdId)}/${occurrences[3].id}`)).json().myReminder).toEqual({ mode: 'before', minutesBefore: 15, alarm: true });
 
     const split = await api(owner, 'PUT', `${tasksUrl(householdId)}/${occurrences[2].id}/series`, { title: '倒垃圾（新）' });
     expect(split.statusCode).toBe(200);
@@ -286,7 +292,29 @@ describe('personal reminders on tasks and events', () => {
     expect(successor).not.toBe(created.recurrenceRuleId);
     const successorRows = (await api(owner, 'GET', tasksUrl(householdId))).json().tasks.filter((task: { recurrenceRuleId: string }) => task.recurrenceRuleId === successor);
     expect(successorRows.length).toBeGreaterThan(0);
-    expect(successorRows.every((task: { myReminder: unknown }) => JSON.stringify(task.myReminder) === JSON.stringify({ mode: 'before', minutesBefore: 15 }))).toBe(true);
+    expect(successorRows.every((task: { myReminder: unknown }) => JSON.stringify(task.myReminder) === JSON.stringify({ mode: 'before', minutesBefore: 15, alarm: true }))).toBe(true);
+  });
+
+  test('choose whether to ring apart from when, each following the defaults until set', async () => {
+    const owner = await insertActor('choice-alarm-owner');
+    const householdId = await createHousehold(owner, '小林之家');
+    const task = await createTask(owner, householdId, { title: '吃药', dueDate: inHours(5).toISOString(), myReminder: { mode: 'default', alarm: true } });
+    const rows = () => withDatabase(client => client.query('SELECT "mode", "minutes_before", "alarm" FROM "reminder_overrides" WHERE "task_id" = $1', [task.id]));
+    expect((await api(owner, 'GET', `${tasksUrl(householdId)}/${task.id}`)).json().myReminder).toEqual({ mode: 'default', minutesBefore: null, alarm: true });
+    expect((await rows()).rows).toEqual([{ mode: 'default', minutes_before: null, alarm: true }]);
+
+    // No reminder has nothing to ring, so the choice to ring is not kept.
+    const off = await api(owner, 'PUT', `${tasksUrl(householdId)}/${task.id}/my-reminder`, { mode: 'off', alarm: true });
+    expect(off.json()).toEqual({ mode: 'off', minutesBefore: null, alarm: null });
+    expect((await rows()).rows).toEqual([{ mode: 'off', minutes_before: null, alarm: null }]);
+
+    const quiet = await api(owner, 'PUT', `${tasksUrl(householdId)}/${task.id}/my-reminder`, { mode: 'before', minutesBefore: 5, alarm: false });
+    expect(quiet.json()).toEqual({ mode: 'before', minutesBefore: 5, alarm: false });
+
+    // Omitting the alarm follows the default again; with the default time too, the row goes.
+    await api(owner, 'PUT', `${tasksUrl(householdId)}/${task.id}/my-reminder`, { mode: 'default' });
+    expect((await rows()).rowCount).toBe(0);
+    expect((await api(owner, 'GET', `${tasksUrl(householdId)}/${task.id}`)).json().myReminder).toEqual({ mode: 'default', minutesBefore: null, alarm: null });
   });
 
   test('disappear with the content they belong to', async () => {
@@ -334,12 +362,30 @@ describe('upcoming reminders', () => {
     const event = await createEvent(owner, householdId, { title: '打疫苗', startTime: inHours(5).toISOString(), endTime: inHours(6).toISOString(), myReminder: { mode: 'off' } });
     await createEvent(owner, quiet, { title: '爸妈的日程', startTime: inHours(7).toISOString(), endTime: inHours(8).toISOString() });
     await api(owner, 'PUT', '/api/v1/users/me/reminder-settings', {
-      taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', mutedHouseholdIds: [quiet],
+      taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, mutedHouseholdIds: [quiet],
     });
 
     const reminders = await upcoming(owner);
     expect(reminders.map(reminder => [reminder.key, reminder.fireAt])).toEqual([[`task:${task.id}`, new Date(due.getTime() - 1440 * 60_000).toISOString()]]);
     expect(reminders.some(reminder => reminder.key === `event:${event.id}`)).toBe(false);
+  });
+
+  test('ring by each person\'s own choice, or by their default', async () => {
+    const owner = await insertActor('upcoming-alarm-owner');
+    const member = await insertActor('upcoming-alarm-member');
+    const householdId = await createHousehold(owner, '小林之家');
+    await addMember(householdId, member);
+    const event = await createEvent(owner, householdId, { title: '复查', startTime: inHours(5).toISOString(), endTime: inHours(6).toISOString(), myReminder: { mode: 'default', alarm: true } });
+    const quiet = await createEvent(owner, householdId, { title: '买菜', startTime: inHours(7).toISOString(), endTime: inHours(8).toISOString(), myReminder: { mode: 'before', minutesBefore: 30, alarm: false } });
+    const plain = await createEvent(owner, householdId, { title: '散步', startTime: inHours(9).toISOString(), endTime: inHours(10).toISOString() });
+    const ringing = async (actor: ActorFixture) => (await upcoming(actor)).map(reminder => [reminder.key, reminder.alarm]);
+
+    expect(await ringing(owner)).toEqual([[`event:${event.id}`, true], [`event:${quiet.id}`, false], [`event:${plain.id}`, false]]);
+    // The member's reminders follow only the member's defaults.
+    await api(member, 'PUT', '/api/v1/users/me/reminder-settings', { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: true, mutedHouseholdIds: [] });
+    expect(await ringing(member)).toEqual([[`event:${event.id}`, true], [`event:${quiet.id}`, true], [`event:${plain.id}`, true]]);
+    await api(owner, 'PUT', '/api/v1/users/me/reminder-settings', { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: true, mutedHouseholdIds: [] });
+    expect(await ringing(owner)).toEqual([[`event:${event.id}`, true], [`event:${quiet.id}`, false], [`event:${plain.id}`, true]]);
   });
 
   test('time a date-only task by the date-only time on its local day', async () => {
@@ -348,7 +394,7 @@ describe('upcoming reminders', () => {
     const day = addDays(currentCalendarDateIn(SHANGHAI), 2);
     // A date without a time is stored as local midnight, as the task form sends it.
     const task = await createTask(owner, householdId, { title: '体检', dueDate: localDateTimeToInstant(day, 0, 0, SHANGHAI).toISOString() });
-    await api(owner, 'PUT', '/api/v1/users/me/reminder-settings', { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '08:30', mutedHouseholdIds: [] });
+    await api(owner, 'PUT', '/api/v1/users/me/reminder-settings', { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '08:30', alarm: false, mutedHouseholdIds: [] });
 
     const [reminder] = await upcoming(owner);
     expect(reminder).toMatchObject({ key: `task:${task.id}`, dateOnly: true, fireAt: localDateTimeToInstant(day, 8, 30, SHANGHAI).toISOString() });

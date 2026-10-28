@@ -15,7 +15,7 @@ import NotificationScheduler from 'expo-notifications/build/NotificationSchedule
 test('local reminders load and schedule without the remote push native module', async () => {
   const { scheduleReminder } = jest.requireActual<typeof import('../reminder-notifications.native')>('../reminder-notifications.native');
   const fireAt = new Date(Date.now() + 60_000);
-  await scheduleReminder({ id: 'reminder:local-test', kind: 'task', title: '真机提醒测试', body: '今天到期', fireAt, url: '/households/h1/tasks/t1' });
+  await scheduleReminder({ id: 'reminder:local-test', kind: 'task', title: '真机提醒测试', body: '今天到期', fireAt, url: '/households/h1/tasks/t1', alarm: false });
   expect(NotificationScheduler.scheduleNotificationAsync).toHaveBeenCalledWith(
     'reminder:local-test',
     expect.objectContaining({ title: '真机提醒测试' }),

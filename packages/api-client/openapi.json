@@ -3791,6 +3791,11 @@
             "minimum": 0,
             "maximum": 10080,
             "description": "Required with mode \"before\"; null otherwise."
+          },
+          "alarm": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Ring like an alarm clock until dismissed; null or omitted follows the settings. Always null with mode \"off\"."
           }
         },
         "required": [
@@ -4583,6 +4588,10 @@
             "type": "string",
             "description": "Local HH:MM used for date-only tasks and all-day events."
           },
+          "alarm": {
+            "type": "boolean",
+            "description": "Reminders ring like an alarm clock until dismissed, on phones that can."
+          },
           "households": {
             "type": "array",
             "items": {
@@ -4594,6 +4603,7 @@
           "taskMinutesBefore",
           "eventMinutesBefore",
           "dateOnlyTime",
+          "alarm",
           "households"
         ]
       },
@@ -4616,6 +4626,9 @@
             "type": "string",
             "example": "09:00"
           },
+          "alarm": {
+            "type": "boolean"
+          },
           "mutedHouseholdIds": {
             "description": "Households of the caller that send no reminders.",
             "type": "array",
@@ -4628,6 +4641,7 @@
           "taskMinutesBefore",
           "eventMinutesBefore",
           "dateOnlyTime",
+          "alarm",
           "mutedHouseholdIds"
         ]
       },
@@ -4674,6 +4688,10 @@
           "fireAt": {
             "type": "string"
           },
+          "alarm": {
+            "type": "boolean",
+            "description": "Ring like an alarm clock until dismissed, where the phone can; otherwise a notification."
+          },
           "location": {
             "type": "string",
             "nullable": true
@@ -4690,6 +4708,7 @@
           "at",
           "dateOnly",
           "fireAt",
+          "alarm",
           "location"
         ]
       },

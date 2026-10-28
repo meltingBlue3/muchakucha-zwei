@@ -8,9 +8,10 @@ export interface ReminderDefaults {
   taskMinutesBefore: number | null;
   eventMinutesBefore: number | null;
   dateOnlyTime: string;
+  alarm: boolean;
 }
 
-export const DEFAULT_REMINDER_SETTINGS: ReminderDefaults = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00' };
+export const DEFAULT_REMINDER_SETTINGS: ReminderDefaults = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false };
 
 export interface ReminderCandidate {
   key: string;
@@ -27,11 +28,14 @@ export interface ReminderCandidate {
   location: string | null;
   /** Undefined follows the defaults; null is a personal "no reminder". */
   minutesBefore: number | null | undefined;
+  /** Null follows the defaults. */
+  alarm: boolean | null;
 }
 
-export interface PlannedReminder extends Omit<ReminderCandidate, 'minutesBefore' | 'allDay'> {
+export interface PlannedReminder extends Omit<ReminderCandidate, 'minutesBefore' | 'allDay' | 'alarm'> {
   dateOnly: boolean;
   fireAt: Date;
+  alarm: boolean;
 }
 
 /** Calendar date and minutes past midnight of an instant on the wall clock of `timeZone`. */
@@ -60,7 +64,7 @@ export function planReminders(
   const now = options.now.getTime();
   const until = now + (options.windowDays ?? REMINDER_WINDOW_DAYS) * 86_400_000;
   const planned: PlannedReminder[] = [];
-  for (const { minutesBefore, allDay, ...candidate } of candidates) {
+  for (const { minutesBefore, allDay, alarm, ...candidate } of candidates) {
     const clock = wallClock(candidate.at, options.timeZone);
     const dateOnly = candidate.kind === 'event' ? allDay : clock.minutes === 0;
     // The date-only time is itself the default for an item without a time.
@@ -71,7 +75,7 @@ export function planReminders(
     const fireAt = new Date(anchor.getTime() - minutes * 60_000);
     // A reminder whose moment has passed is not sent late.
     if (fireAt.getTime() <= now || fireAt.getTime() > until) continue;
-    planned.push({ ...candidate, dateOnly, fireAt });
+    planned.push({ ...candidate, dateOnly, fireAt, alarm: alarm ?? defaults.alarm });
   }
   return planned
     .sort((left, right) => left.fireAt.getTime() - right.fireAt.getTime() || left.key.localeCompare(right.key))

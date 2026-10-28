@@ -1,4 +1,8 @@
 import {
+  alarmOptions,
+  alarmSummary,
+  alarmValue,
+  choiceFromValue,
   DEFAULT_REMINDER,
   fitChoice,
   isOwnTask,
@@ -6,9 +10,10 @@ import {
   reminderDetail,
   reminderOptions,
   reminderSummary,
+  sameChoice,
 } from '../reminder-rules';
 
-const defaults = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00' };
+const defaults = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false };
 
 describe('minutesLabel', () => {
   test('names a timed reminder by how far ahead it comes, in the words of each kind', () => {
@@ -62,6 +67,35 @@ describe('fitChoice', () => {
     expect(fitChoice({ mode: 'before', minutesBefore: 1440 }, true)).toEqual({ mode: 'before', minutesBefore: 1440 });
     expect(fitChoice({ mode: 'off', minutesBefore: null }, true)).toEqual({ mode: 'off', minutesBefore: null });
   });
+
+  test('keeps the choice to ring when the time goes back to the default', () => {
+    expect(fitChoice({ mode: 'before', minutesBefore: 15, alarm: true }, true)).toEqual({ mode: 'default', minutesBefore: null, alarm: true });
+  });
+});
+
+describe('alarm choices', () => {
+  test('are separate from the time, and dropped with the reminder itself', () => {
+    expect(choiceFromValue('30', 'on')).toEqual({ mode: 'before', minutesBefore: 30, alarm: true });
+    expect(choiceFromValue('default', 'off')).toEqual({ mode: 'default', minutesBefore: null, alarm: false });
+    expect(choiceFromValue('default')).toEqual(DEFAULT_REMINDER);
+    expect(choiceFromValue('off', 'on')).toEqual({ mode: 'off', minutesBefore: null, alarm: null });
+    expect(alarmValue({ mode: 'default', minutesBefore: null })).toBe('default');
+  });
+
+  test('count as a change of their own', () => {
+    expect(sameChoice(DEFAULT_REMINDER, { mode: 'default', minutesBefore: null, alarm: true })).toBe(false);
+    // An older response without the field follows the default, as null does.
+    expect(sameChoice(DEFAULT_REMINDER, { mode: 'default', minutesBefore: null })).toBe(true);
+  });
+
+  test('read on their own, marking the default', () => {
+    expect(alarmSummary(DEFAULT_REMINDER, defaults)).toBe('普通提醒（默认）');
+    expect(alarmSummary(DEFAULT_REMINDER, { alarm: true })).toBe('闹铃提醒（默认）');
+    expect(alarmSummary({ mode: 'before', minutesBefore: 0, alarm: true }, defaults)).toBe('闹铃提醒');
+    expect(alarmSummary({ mode: 'before', minutesBefore: 0, alarm: false }, { alarm: true })).toBe('普通提醒');
+    expect(alarmSummary(DEFAULT_REMINDER, null)).toBe('默认提醒方式');
+    expect(alarmOptions({ alarm: true }).map(option => option.label)).toEqual(['默认（闹铃提醒）', '闹铃提醒', '普通提醒']);
+  });
 });
 
 describe('isOwnTask', () => {
@@ -82,5 +116,12 @@ describe('reminderDetail', () => {
     expect(reminderDetail(new Date('2026-10-24T00:00:00'), DEFAULT_REMINDER, { kind: 'task', own: true, dateOnly: true, defaults })).toBe('09:00（当天）');
     expect(reminderDetail(start, DEFAULT_REMINDER, { kind: 'task', own: false, dateOnly: false, defaults })).toBe('不提醒（默认）');
     expect(reminderDetail(start, { mode: 'off', minutesBefore: null }, { kind: 'event', own: true, dateOnly: false, defaults })).toBe('不提醒');
+  });
+
+  test('says when it rings', () => {
+    const start = new Date('2026-10-24T15:30:00');
+    expect(reminderDetail(start, DEFAULT_REMINDER, { kind: 'event', own: true, dateOnly: false, defaults: { ...defaults, alarm: true } })).toBe('15:15（开始前 15 分钟） · 闹铃');
+    expect(reminderDetail(start, { mode: 'before', minutesBefore: 0, alarm: true }, { kind: 'task', own: true, dateOnly: false, defaults })).toBe('15:30（准时） · 闹铃');
+    expect(reminderDetail(start, { mode: 'before', minutesBefore: 0, alarm: false }, { kind: 'task', own: true, dateOnly: false, defaults: { ...defaults, alarm: true } })).toBe('15:30（准时）');
   });
 });

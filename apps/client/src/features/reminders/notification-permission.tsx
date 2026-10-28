@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
+import { alarmCanCoverLockScreen, alarmsSupported, openAlarmSettings } from '../../platform/reminders/reminder-alarm';
 import * as device from '../../platform/reminders/reminder-notifications';
 import type { NotificationPermission } from '../../platform/reminders/reminder-types';
 import { Banner, Button, Inline, Stack, Text } from '../../ui/primitives';
@@ -39,6 +40,29 @@ export function useNotificationPermission(): { permission: NotificationPermissio
   }, [permission]);
 
   return { permission, error, enable };
+}
+
+/**
+ * Whether a ringing alarm may cover this phone's lock screen, as far as the
+ * system tells, checked again on return from the settings. Chinese systems
+ * keep their own switches for it that no app can read.
+ */
+export function useAlarmLockScreen(): { canCover: boolean | null; error: string | null; openSettings(): Promise<void> } {
+  const [canCover, setCanCover] = useState(alarmCanCoverLockScreen);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!alarmsSupported) return undefined;
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') setCanCover(alarmCanCoverLockScreen()); });
+    return () => subscription.remove();
+  }, []);
+
+  const openSettings = useCallback(async () => {
+    setError(null);
+    try { await openAlarmSettings(); } catch { setError('无法打开系统设置，请在手机设置里找到这个 App 的权限。'); }
+  }, []);
+
+  return { canCover, error, openSettings };
 }
 
 /** The action that turns notifications on: ask, or send the person to the settings once the system stops asking. */

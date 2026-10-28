@@ -350,6 +350,8 @@ model ReminderSettings {
   eventMinutesBefore Int?     @default(15) @map("event_minutes_before")
   /// Local "HH:MM" that stands in for the time of date-only tasks and all-day events.
   dateOnlyTime       String   @default("09:00") @map("date_only_time") @db.VarChar(5)
+  /// Reminders ring like an alarm clock until dismissed, on phones that can.
+  alarm              Boolean  @default(false)
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, map: "reminder_settings_user_fkey")
 
@@ -357,14 +359,19 @@ model ReminderSettings {
 }
 
 /// One person's own reminder for a single task or event, or for a whole
-/// recurring series. Exactly one target is set; null minutes means no reminder.
+/// recurring series. Exactly one target is set. When it fires and whether it
+/// rings are separate choices; a row following the defaults in both is deleted.
 model ReminderOverride {
   id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId           String   @map("user_id") @db.Uuid
   taskId           String?  @map("task_id") @db.Uuid
   eventId          String?  @map("event_id") @db.Uuid
   recurrenceRuleId String?  @map("recurrence_rule_id") @db.Uuid
+  /// 'default', 'off' or 'before'; minutes are set exactly for 'before'.
+  mode             String   @db.VarChar(7)
   minutesBefore    Int?     @map("minutes_before")
+  /// Null follows the person's default; always null when the mode is 'off'.
+  alarm            Boolean?
   updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade, map: "reminder_overrides_user_fkey")
   task           Task?           @relation(fields: [taskId], references: [id], onDelete: Cascade, map: "reminder_overrides_task_fkey")

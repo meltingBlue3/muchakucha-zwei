@@ -419,11 +419,14 @@ export type ReminderMode = 'default' | 'off' | 'before';
 /**
  * Your own reminder for one task or event. \`default\` follows your settings,
  * \`off\` silences it, \`before\` fires \`minutesBefore\` ahead (0 to 10080).
+ * \`alarm\` separately chooses whether it rings; responses always carry it.
  */
 export interface ReminderChoiceDto {
   mode: ReminderMode;
   /** Required with mode "before"; null otherwise. */
   minutesBefore?: number | null;
+  /** Ring like an alarm clock until dismissed; null or omitted follows your settings. Always null with mode "off". */
+  alarm?: boolean | null;
 }
 
 export interface ReminderSettingsHouseholdDto {
@@ -439,6 +442,8 @@ export interface ReminderSettingsDto {
   eventMinutesBefore: number | null;
   /** Local HH:MM used for date-only tasks and all-day events. */
   dateOnlyTime: string;
+  /** Reminders ring like an alarm clock until dismissed, on phones that can. */
+  alarm: boolean;
   households: ReminderSettingsHouseholdDto[];
 }
 
@@ -447,6 +452,7 @@ export interface UpdateReminderSettingsDto {
   taskMinutesBefore: number | null;
   eventMinutesBefore: number | null;
   dateOnlyTime: string;
+  alarm: boolean;
   mutedHouseholdIds: string[];
 }
 
@@ -466,6 +472,8 @@ export interface UpcomingReminderDto {
   dateOnly: boolean;
   fireAt: string;
   location: string | null;
+  /** Ring like an alarm clock until dismissed, where the phone can; otherwise a notification. */
+  alarm: boolean;
 }
 
 export interface UpcomingReminderListDto {

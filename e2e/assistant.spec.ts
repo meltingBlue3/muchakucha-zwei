@@ -81,7 +81,7 @@ async function mockAssistant(page: Page, options: { empty?: boolean; voice?: boo
     let status = 200;
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'ui-only-token' };
     else if (path.endsWith('/users/me')) body = { id: userId, username: 'xiaolin', displayName: '小林', hasHousehold: true };
-    else if (path.endsWith('/users/me/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', households: [] };
+    else if (path.endsWith('/users/me/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, households: [] };
     else if (path.endsWith('/invitations/inbox')) body = { invitations: [] };
     else if (path === '/api/v1/households') body = [...families.keys()].map(household);
     else if (family && parts.length === 4) body = household(targetHouseholdId!);

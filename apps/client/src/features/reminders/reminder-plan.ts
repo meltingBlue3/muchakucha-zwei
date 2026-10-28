@@ -14,7 +14,7 @@ function dayWord(at: Date, fireAt: Date): string {
   return formatDate(at, {}, fireAt);
 }
 
-// Short and stable; any change to what the notification says gives it a new id.
+// Short and stable; any change to what the notification says or does gives it a new id.
 function hash(text: string): string {
   let value = 5381;
   for (let index = 0; index < text.length; index += 1) value = ((value << 5) + value + text.charCodeAt(index)) | 0;
@@ -41,12 +41,14 @@ export function reminderNotification(reminder: UpcomingReminderDto, { showHouseh
     ? `${household}/today`
     : `${household}/${reminder.kind === 'task' ? 'tasks' : 'events'}/${encodeURIComponent(reminder.itemId)}`;
   return {
-    id: `${REMINDER_ID_PREFIX}${reminder.key}@${fireAt.getTime()}#${hash(`${reminder.title}\n${body}\n${url}`)}`,
+    // Ringing or not changes the id too, so a changed choice moves it between notification and alarm.
+    id: `${REMINDER_ID_PREFIX}${reminder.key}@${fireAt.getTime()}#${hash(`${reminder.title}\n${body}\n${url}${reminder.alarm ? '\nalarm' : ''}`)}`,
     kind: reminder.kind,
     title: reminder.title,
     body,
     fireAt,
     url,
+    alarm: reminder.alarm,
   };
 }
 

@@ -14,7 +14,7 @@ jest.mock('../../../ui/date-field', () => ({
 jest.mock('../../auth/use-current-user', () => ({ useCurrentUser: () => ({ id: 'me', username: 'me', displayName: '我', hasHousehold: true }) }));
 jest.mock('../reminder-settings', () => ({
   useReminderSettings: () => ({
-    settings: { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', households: [] },
+    settings: { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, households: [] },
     status: 'ready', reload: jest.fn(), save: jest.fn(),
   }),
 }));
@@ -26,7 +26,7 @@ function savedTask(overrides: Partial<TaskResponseDto> = {}): TaskResponseDto {
   return {
     id: 't', householdId: 'h', title: '交水费', description: null, status: 'pending', priority: 'medium', assigneeIds: [],
     dueDate, recurrenceRuleId: null, occurrenceDate: null, recurrence: null, createdBy: 'me', createdAt: dueDate, updatedAt: dueDate,
-    labels: [], myReminder: { mode: 'default', minutesBefore: null },
+    labels: [], myReminder: { mode: 'default', minutesBefore: null, alarm: null },
     ...overrides,
   };
 }
@@ -65,7 +65,7 @@ describe('提醒我 in the task form', () => {
     expect(view.getByRole('button', { name: '提醒我，提前 30 分钟提醒' })).toBeTruthy();
     await fireEvent.press(view.getByLabelText('创建'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'before', minutesBefore: 30 });
+    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'before', minutesBefore: 30, alarm: null });
   });
 
   test('without a time it offers the day and the day before at the date-only time, and drops a choice that no longer fits', async () => {
@@ -79,7 +79,7 @@ describe('提醒我 in the task form', () => {
     await fireEvent.press(view.getByRole('radio', { name: '前一天 09:00' }));
     await fireEvent.press(view.getByLabelText('保存'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'before', minutesBefore: 1440 });
+    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'before', minutesBefore: 1440, alarm: null });
   });
 
   test('a task without a date leaves the stored reminder alone', async () => {
@@ -102,7 +102,7 @@ describe('提醒我 in the task form', () => {
     await fireEvent.press(view.getByRole('radio', { name: '不提醒' }));
     await fireEvent.press(view.getByLabelText('保存'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'off', minutesBefore: null });
+    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'off', minutesBefore: null, alarm: null });
     expect(onSubmit.mock.calls[0][1]).toEqual({ contentChanged: false });
   });
 
@@ -112,7 +112,7 @@ describe('提醒我 in the task form', () => {
     await fireEvent.press(view.getByLabelText('保存'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0][1]).toEqual({ contentChanged: true });
-    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'default', minutesBefore: null });
+    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'default', minutesBefore: null, alarm: null });
   });
 
   test('on a recurring task it says the choice covers every occurrence', async () => {
@@ -125,6 +125,50 @@ describe('提醒我 in the task form', () => {
   });
 });
 
+describe('闹铃 in the task form', () => {
+  test('a new task can ring, and sends that choice though its time follows the default', async () => {
+    const { onSubmit, view } = await renderTaskForm();
+    await fireEvent.changeText(view.getByLabelText('任务标题'), '吃药');
+    await fireEvent.changeText(view.getByLabelText('截止日期'), '2030-10-01');
+    await fireEvent.changeText(view.getByLabelText('截止时间'), '18:00');
+    await fireEvent.press(view.getByRole('button', { name: '闹铃，普通提醒（默认）' }));
+    expect(view.getAllByRole('radio').map(option => option.props.accessibilityLabel)).toEqual(['默认（普通提醒）', '闹铃提醒', '普通提醒']);
+    await fireEvent.press(view.getByRole('radio', { name: '闹铃提醒' }));
+    expect(view.getByRole('button', { name: '闹铃，闹铃提醒' })).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('创建'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'default', minutesBefore: null, alarm: true });
+  });
+
+  test('keeps its choice when the time changes, and goes away with the reminder', async () => {
+    const { onSubmit, view } = await renderTaskForm(savedTask({ myReminder: { mode: 'default', minutesBefore: null, alarm: true } }));
+    await fireEvent.press(view.getByRole('button', { name: '提醒我，准时提醒（默认）' }));
+    await fireEvent.press(view.getByRole('radio', { name: '提前 15 分钟' }));
+    expect(view.getByRole('button', { name: '闹铃，闹铃提醒' })).toBeTruthy();
+    await fireEvent.press(view.getByRole('button', { name: '提醒我，提前 15 分钟提醒' }));
+    await fireEvent.press(view.getByRole('radio', { name: '不提醒' }));
+    expect(view.queryByRole('button', { name: /^闹铃/ })).toBeNull();
+    await fireEvent.press(view.getByLabelText('保存'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'off', minutesBefore: null, alarm: null });
+  });
+
+  test('is not offered where the defaults give no reminder', async () => {
+    const { view } = await renderTaskForm(savedTask({ assigneeIds: ['mom'], createdBy: 'mom' }));
+    expect(view.queryByRole('button', { name: /^闹铃/ })).toBeNull();
+  });
+
+  test('an edit of the alarm alone says nothing shared changed', async () => {
+    const { onSubmit, view } = await renderTaskForm(savedTask());
+    await fireEvent.press(view.getByRole('button', { name: '闹铃，普通提醒（默认）' }));
+    await fireEvent.press(view.getByRole('radio', { name: '闹铃提醒' }));
+    await fireEvent.press(view.getByLabelText('保存'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].myReminder).toEqual({ mode: 'default', minutesBefore: null, alarm: true });
+    expect(onSubmit.mock.calls[0][1]).toEqual({ contentChanged: false });
+  });
+});
+
 describe('提醒我 in the event form', () => {
   test('counts back from the start, and an all-day event uses the date-only time', async () => {
     const onSubmit = jest.fn().mockResolvedValue(undefined);
@@ -132,7 +176,7 @@ describe('提醒我 in the event form', () => {
     const initial: EventResponseDto = {
       id: 'e', householdId: 'h', title: '打疫苗', description: null, startTime: start, endTime: new Date('2030-10-01T16:30:00').toISOString(),
       allDay: false, location: null, recurrenceRuleId: null, occurrenceDate: null, cancelledAt: null, recurrence: null,
-      createdBy: 'mom', createdAt: start, updatedAt: start, labels: [], myReminder: { mode: 'default', minutesBefore: null },
+      createdBy: 'mom', createdAt: start, updatedAt: start, labels: [], myReminder: { mode: 'default', minutesBefore: null, alarm: null },
     };
     const view = await render(
       <MuchakuchaThemeProvider>

@@ -23,7 +23,7 @@ import {
 import { RecurrenceField } from '../recurrence/recurrence-field';
 import { toDateIso } from './calendar-utils';
 import { ReminderField } from '../reminders/reminder-field';
-import { choiceFromValue, choiceValue, DEFAULT_REMINDER, fitChoice, type ReminderOptionValue } from '../reminders/reminder-rules';
+import { alarmValue, choiceFromValue, choiceValue, DEFAULT_REMINDER, fitChoice, sameChoice, type AlarmOptionValue, type ReminderOptionValue } from '../reminders/reminder-rules';
 
 type EventInput = Omit<CreateEventDto, 'startTime' | 'endTime' | 'allDay' | 'recurrence'> & {
   startDate: string;
@@ -120,8 +120,9 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
     return { ...EMPTY_INPUT, startDate: date, endDate: date };
   });
   const baseline = useMemo(() => initial ? eventInputFrom(initial) : null, [initial]);
-  // A draft of its own, so the shape of saved form drafts stays as it was.
+  // Drafts of their own, so the shape of saved form drafts stays as it was.
   const [reminder, setReminder] = useWorkspaceState<ReminderOptionValue>(draftKey === undefined ? undefined : `${draftKey}:reminder`, () => choiceValue(initial?.myReminder ?? DEFAULT_REMINDER));
+  const [alarm, setAlarm] = useWorkspaceState<AlarmOptionValue>(draftKey === undefined ? undefined : `${draftKey}:alarm`, () => alarmValue(initial?.myReminder ?? DEFAULT_REMINDER));
   // An existing series keeps its own anchor when just this occurrence moves.
   // New repeats still follow the event's first date.
   const recurrenceStart = initial?.recurrence?.startsOn ?? form.startDate;
@@ -207,8 +208,8 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
     // (the update endpoint treats absent/undefined as "no change").
     data.description = (form.description ?? '').trim();
     data.location = (form.location ?? '').trim();
-    const myReminder = fitChoice(choiceFromValue(reminder), form.allDay);
-    if (initial !== undefined || myReminder.mode !== 'default') data.myReminder = myReminder;
+    const myReminder = fitChoice(choiceFromValue(reminder, alarm), form.allDay);
+    if (initial !== undefined || !sameChoice(myReminder, DEFAULT_REMINDER)) data.myReminder = myReminder;
 
     try {
       await onSubmit(data, { contentChanged: baseline === null || JSON.stringify(form) !== JSON.stringify(baseline) });
@@ -220,7 +221,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
         setError('保存失败，请检查网络后重试。');
       }
     }
-  }, [baseline, form, initial, onSubmit, recurrenceStart, reminder]);
+  }, [alarm, baseline, form, initial, onSubmit, recurrenceStart, reminder]);
 
   return (
     <Stack gap={0}>
@@ -285,9 +286,9 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
           own
           dateOnly={form.allDay}
           recurring={form.recurrence !== null}
-          value={choiceFromValue(reminder)}
+          value={choiceFromValue(reminder, alarm)}
           disabled={isSubmitting}
-          onChange={(choice) => setReminder(choiceValue(choice))}
+          onChange={(choice) => { setReminder(choiceValue(choice)); setAlarm(alarmValue(choice)); }}
         />
       </FormSection>
 

@@ -13,6 +13,8 @@ export interface ReminderNotification {
   fireAt: Date;
   /** The in-app route opened when the notification is tapped. */
   url: string;
+  /** Ring like an alarm clock until dismissed, where the phone can. */
+  alarm: boolean;
 }
 
 export const REMINDER_ID_PREFIX = 'reminder:';

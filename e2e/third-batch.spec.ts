@@ -16,7 +16,7 @@ async function setup(page: Page, role = 'OWNER') {
     let body: unknown = {};
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'mock-only' };
     else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '小林', hasHousehold: true };
-    else if (path.endsWith('/users/me/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', households: [] };
+    else if (path.endsWith('/users/me/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, households: [] };
     else if (path === '/api/v1/households') body = [household];
     else if (path.endsWith('/' + householdId)) body = { ...household, members: [{ membershipId: 'member', userId: 'user', displayName: '小林', role, isCurrentUser: true }] };
     else if (path.endsWith('/notes')) body = { notes: [note], total: 1 };

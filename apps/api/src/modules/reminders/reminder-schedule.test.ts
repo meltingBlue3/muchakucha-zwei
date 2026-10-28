@@ -9,7 +9,7 @@ function candidate(overrides: Partial<ReminderCandidate>): ReminderCandidate {
   return {
     key: 'task:a', kind: 'task', householdId: 'h', householdName: '小林之家', itemId: 'a', occurrenceDate: null,
     title: '交水费', at: new Date('2026-10-24T10:00:00.000Z'), allDay: false, location: null, minutesBefore: undefined,
-    ...overrides,
+    alarm: null, ...overrides,
   };
 }
 
@@ -64,8 +64,19 @@ describe('planReminders', () => {
       candidate({}),
       candidate({ key: 'event:b', kind: 'event', itemId: 'b' }),
       candidate({ key: 'task:own', itemId: 'own', minutesBefore: 60 }),
-    ], { taskMinutesBefore: null, eventMinutesBefore: null, dateOnlyTime: '09:00' });
+    ], { taskMinutesBefore: null, eventMinutesBefore: null, dateOnlyTime: '09:00', alarm: false });
     expect(planned.map(item => item.key)).toEqual(['task:own']);
+  });
+
+  test('each reminder rings by its own choice, or by the default when it has none', () => {
+    const items = [
+      candidate({}),
+      candidate({ key: 'task:ring', itemId: 'ring', alarm: true }),
+      candidate({ key: 'task:quiet', itemId: 'quiet', alarm: false }),
+    ];
+    const ringing = (defaults: typeof DEFAULT_REMINDER_SETTINGS) => plan(items, defaults).map(item => [item.key, item.alarm]);
+    expect(ringing(DEFAULT_REMINDER_SETTINGS)).toEqual([['task:a', false], ['task:quiet', false], ['task:ring', true]]);
+    expect(ringing({ ...DEFAULT_REMINDER_SETTINGS, alarm: true })).toEqual([['task:a', true], ['task:quiet', false], ['task:ring', true]]);
   });
 
   test('nothing already past is sent late, and nothing beyond seven days is scheduled yet', () => {
