@@ -31,7 +31,8 @@ Read this index only when the owning module or entry point of a request is uncle
 | Current user and profile | `src/modules/users/` |
 | Households, invitations, roles, ownership | `src/modules/households/`; pure governance decisions in `household-policy.ts` |
 | Events, tasks, notes, labels | `src/modules/events/`, `tasks/`, `notes/`, `labels/` |
-| Assistant providers, encrypted credentials, tool registry, confirmation loop | `src/modules/assistant/`; architecture and extension points in `docs/ai-assistant-research.md` |
+| Assistant providers, encrypted credentials, tool registry, confirmation loop | `src/modules/assistant/`; boundaries and extension points in [api.md](api.md#assistant) |
+| Personal reminder settings and upcoming plan | `src/modules/reminders/`; contracts in [api.md](api.md#personal-reminders), device reconciliation in [client.md](client.md#local-reminders) |
 | Recurrence rules, materialization, scheduling | `src/modules/recurrence/` |
 | Prisma client lifecycle | `src/infrastructure/prisma/` |
 
@@ -44,8 +45,9 @@ Read this index only when the owning module or entry point of a request is uncle
 
 ## Reference documents
 
-- [README.md](../../README.md) — stack, local setup, commands, feature inventory, known gaps, deployment.
+- [README.md](../../README.md) — project overview, feature summary, stack, and documentation index.
+- [development.md](../development.md) — local setup, device debugging, assistant configuration, and development constraints.
+- [deployment.md](../deployment.md) — production server, deployment, TLS certificates, reverse proxy, backups, and mobile builds.
 - [design.md](../design.md) — the current design language and its acceptance checklist.
 - [security/asvs-v5.0.0-l1.md](../security/asvs-v5.0.0-l1.md) — OWASP ASVS L1 control-to-test mapping.
-- [roadmap.md](../roadmap.md) — product intent that is not built yet, the non-goals, and the acceptance targets. Read it when a request reaches one of those areas; it is not a description of current behavior.
-- [apple-inspired-design-research.md](../apple-inspired-design-research.md) — the primary sources behind `design.md`. Read it when a design rule needs its rationale, not for values, which live in `theme.ts`.
+- [roadmap.md](../roadmap.md) — outstanding product work, device/model validation, and non-goals. Read it when a request reaches one of those areas.

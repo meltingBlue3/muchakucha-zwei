@@ -6,7 +6,9 @@ Read this playbook for client routing, data loading, session handling, draft sta
 
 Expo Router maps `apps/client/app/` to the route tree. `(auth)` and `(protected)` are layout groups and do not appear in URLs; `[id]`, `[taskId]`, and siblings are path parameters. A route file owns orchestration — parameters, fetching, navigation, and page composition — and delegates domain rendering to `src/features/` and appearance to `src/ui/`.
 
-Confirmation flows are routes, not inline branches: `members/[membershipId]/remove.tsx`, `ownership/transfer.tsx`, and `invitations/[invitationId]/revoke.tsx` follow this shape. A new destructive confirmation joins them rather than growing a parent screen.
+Standalone member-governance confirmations use routes, as in `members/[membershipId]/remove.tsx`, `ownership/transfer.tsx`, and `invitations/[invitationId]/revoke.tsx`. Editor steps and confirmations stay inside the existing `RouteWindow`; use its step/confirmation mechanism rather than adding another modal or route for each step.
+
+Resource windows retain the background list, filters, selected date, and scroll position. Direct links reconstruct a base page and close to the resource list when there is no history. Shared window handling owns browser/system back, busy-state close suppression, and focus restoration; when a trigger disappears, restore a stable list entry point.
 
 ## Loading data
 
@@ -39,6 +41,26 @@ Updates omit unchanged fields, so clearing an optional value requires sending it
 ## Platform adapters
 
 `src/platform/<area>/` holds one base file declaring the shared type and `.native.ts` / `.web.ts` / `.android.ts` implementations that Metro selects by extension. Platform branching belongs there, not in features or routes. `Platform.OS` checks inside a shared component are for rendering differences a type cannot express, such as the Web dialog naming in `src/ui/app-dialog.tsx`.
+
+## Voice input
+
+[use-assistant-voice-input.ts](../../apps/client/src/features/assistant/use-assistant-voice-input.ts) owns the attempt lifecycle; [platform/voice](../../apps/client/src/platform/voice/) owns recording and file access.
+
+- A cancelled attempt's late permission, recording, or transcription result cannot modify the draft. Only append a successful transcript after checking the combined message length; never auto-send or silently truncate it.
+- Leaving the page or losing access discards recording; backgrounding or a call during recording submits the captured portion. Ignore background events while merely opening the microphone: Android permission UI itself can produce them.
+- Release microphone tracks, temporary files, and Blob URLs on success, cancellation, and departure. Audio is transient, not draft data. Native permissions and recording configuration belong to the platform layer.
+- Web needs HTTPS or localhost for the microphone. Native recording formats, interruptions, and actual transcription acceptance require device evidence; pending checks live in the [roadmap](../roadmap.md#待验收).
+
+## Local reminders
+
+[reminder-sync.ts](../../apps/client/src/features/reminders/reminder-sync.ts) reconciles the server plan with device registrations. Startup, foreground return, household changes, and relevant successful writes request a sync.
+
+- Reconciliation is idempotent and serialized, with one follow-up run for changes received during a run. Offline failure preserves existing registrations. Only reminder-owned identifiers may be cancelled; content and delivery changes must replace obsolete registrations.
+- Sign-out and revoked/replayed sessions clear scheduled notifications, alarms, snoozes, and active ringing; ordinary expiry preserves them. Stable server keys identify recurring occurrences before and after materialization.
+- Notification taps and cold-start responses open content once. A future occurrence without an instance opens the household's Today page.
+- Keep runtime SDK imports inside [local-notifications.ts](../../apps/client/src/platform/reminders/local-notifications.ts). It avoids package-root remote-push modules unavailable in some runtimes; verify its SDK subpaths on upgrades. Shared native/Web types belong in a separate module to avoid Metro resolving a platform import back to itself.
+- [reminder-alarm](../../apps/client/modules/reminder-alarm/) implements Android ringing and snooze. Snoozes stay outside regular reconciliation but participate in cancel-all; expired registrations are removed without catch-up ringing. Missing alarm support falls back to ordinary notifications. Native module changes require a new binary.
+- Platform limits and the local-only scheduling tradeoff live in the [development guide](../development.md#提醒与闹铃); pending hardware verification lives in the [roadmap](../roadmap.md#待验收).
 
 ## Focused checks
 

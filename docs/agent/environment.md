@@ -1,6 +1,6 @@
 # Local Environment
 
-Read this playbook before starting a server, a database, or mail capture, before choosing a port, and before any command that writes to a database. [README.md](../../README.md) holds the full first-time setup; this file covers what a running session has to get right.
+Read this playbook before starting a server, a database, or mail capture, before choosing a port, and before any command that writes to a database. [development.md](../development.md) holds the full first-time setup; this file covers what a running session has to get right.
 
 ## Test services
 

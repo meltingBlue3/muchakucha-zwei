@@ -28,7 +28,7 @@ Open the file, route, endpoint, or error the request names, plus its direct depe
 | Choosing which checks to run, writing or repairing a test, reporting evidence | [docs/agent/testing.md](docs/agent/testing.md) |
 | Starting a server, database, or mail capture; port selection; anything that writes to a database | [docs/agent/environment.md](docs/agent/environment.md) |
 | Ownership or entry point of a module is unclear | [docs/agent/context.md](docs/agent/context.md) |
-| Deploying, the production server, TLS certificate, or reverse proxy | [README.md](README.md) — 生产部署 |
+| Deploying, the production server, TLS certificate, or reverse proxy | [docs/deployment.md](docs/deployment.md) |
 
 A request spanning several rows reads only those rows. Links inside a playbook follow the same rule: take one when its own trigger matches.
 
@@ -36,7 +36,7 @@ A request spanning several rows reads only those rows. Links inside a playbook f
 
 - Match the surrounding code: existing patterns, strict TypeScript, no new dependency without a stated reason.
 - Preserve unrelated working-tree changes. Review only the files this task touched.
-- Commands and versions live in `package.json` and [README.md](README.md). Read them there instead of trusting a remembered command.
+- Commands and versions live in `package.json` and [docs/development.md](docs/development.md). Read them there instead of trusting a remembered command.
 - Report the result, the checks actually run, and anything left unverified. State a skipped step rather than implying it.
 
 ## Standing safety

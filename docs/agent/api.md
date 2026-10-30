@@ -40,6 +40,28 @@ Every household-scoped handler resolves the caller's membership first. A caller 
 - Prisma models stay inside the API. Controllers return DTOs; `src/generated/prisma/` is generated output.
 - Refresh credentials are stored as hashes only (`RefreshToken.tokenHash`). Invitations are account-bound inbox records: every list/response checks the authenticated recipient; an invitation ID alone grants no access.
 
+## Assistant
+
+The assistant keeps protocol conversion, bounded execution, and business actions separate. This follows the [ReAct loop](https://arxiv.org/abs/2210.03629); model choice does not change authorization or CRUD semantics.
+
+- [assistant-provider.ts](../../apps/api/src/modules/assistant/assistant-provider.ts) owns provider protocols. Preserve opaque reasoning fields, signatures, and tool-call IDs required for subsequent requests; these belong to replay state, not visible answer text. Verify a complete tool round trip for each protocol.
+- [assistant.service.ts](../../apps/api/src/modules/assistant/assistant.service.ts) owns execution and confirmation; [assistant-context.ts](../../apps/api/src/modules/assistant/assistant-context.ts) builds bounded model context from fuller stored history. Read budget values from code. The run budget is checked at call boundaries, so an in-flight request may exceed it; keep per-request timeouts as well.
+- [assistant-tools.service.ts](../../apps/api/src/modules/assistant/assistant-tools.service.ts) injects authenticated user and household context, validates parameters, and reuses domain services. Tools expose business actions, never arbitrary SQL, scripts, URLs, or caller-selected actor IDs.
+- Writes become concrete proposals bound to user, household, parameters, and versions. Confirmation is consumed once, writes run serially, and partial success is reported per action. An edit conflict requires a fresh read and proposal, not replay against a silently updated version.
+- Provider sharing grants invocation only. Changing the destination or protocol invalidates continuation of old conversations; revoking sharing, membership, or configuration blocks subsequent use and pending confirmation.
+- Treat family content, provider responses, and upstream errors as untrusted data. Credentials stay encrypted on the server; logs retain bounded diagnostics and identifiers, not prompts, raw upstream bodies, or audio. The outbound transport owns HTTPS, DNS/address validation, and redirect restrictions; see [OWASP SSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html).
+- Transcription reuses provider ownership, encryption, sharing, transport, and usage accounting. Chat and transcription purposes are isolated. Audio passes through API memory without storage; response limits and accepted formats live in the transcription implementation and DTOs.
+
+## Personal reminders
+
+[reminders.service.ts](../../apps/api/src/modules/reminders/reminders.service.ts) and [reminder-schedule.ts](../../apps/api/src/modules/reminders/reminder-schedule.ts) compute the plan; devices schedule that result instead of duplicating recipient and timing rules.
+
+- Settings and overrides belong to the caller. Returning to default deletes an override. Reminder changes neither require nor change the content edit version; assistant tools omit personal `myReminder` data.
+- An override on recurring content belongs to its rule and applies to every occurrence. Splitting a rule copies each user's override to the new rule.
+- The plan must include unmaterialized upcoming occurrences. Derive them after `materializedThrough`, but exclude dates with any existing instance row, including cancelled or completed rows. Stable rule/date keys survive materialization so the same occurrence cannot be scheduled twice.
+- Date-only reminders use the person's configured local reference time in the request time zone, not a default lead time subtracted from UTC midnight. Closed household switches, disabled defaults, and explicit overrides all participate in the server calculation.
+- Alarm choice is independent of timing. An off reminder has no alarm override; the plan resolves defaults before returning `alarm` to the device. User-facing limitations live in the [development guide](../development.md#提醒与闹铃).
+
 ## Regenerating the contract
 
 Update the DTOs and templates in `apps/api/src/openapi/generate-openapi.ts`, then:
