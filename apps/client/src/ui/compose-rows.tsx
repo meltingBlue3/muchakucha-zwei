@@ -29,10 +29,10 @@ export function FormSection({ children }: { children: ReactNode }) {
 export function FormRow({ icon, align = 'center', children }: { icon?: ReactNode; align?: 'center' | 'start'; children: ReactNode }) {
   const dense = useDesktopDensity();
   return (
-    <View style={{ flexDirection: 'row', alignItems: align === 'start' ? 'flex-start' : 'center', gap: theme.spacing[2], minHeight: dense ? theme.layout.desktopField : theme.controlSizes.touchTarget }}>
-      <View importantForAccessibility="no-hide-descendants" aria-hidden style={{ width: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget, minHeight: dense ? theme.layout.desktopField : theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ flexDirection: 'row', alignItems: align === 'start' ? 'flex-start' : 'center', gap: theme.spacing[2], minHeight: dense ? theme.layout.desktopField + theme.spacing[1] : theme.controlSizes.touchTarget }}>
+      {dense && icon === undefined ? null : <View importantForAccessibility="no-hide-descendants" aria-hidden style={{ width: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget, minHeight: dense ? theme.layout.desktopField : theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center' }}>
         {icon}
-      </View>
+      </View>}
       {children}
     </View>
   );
@@ -52,7 +52,12 @@ export function RowMessage({ id, children }: { id?: string; children: ReactNode 
 
 /** Row icons share one size, stroke and muted color. */
 export function rowIcon(Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>) {
-  return <Icon size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />;
+  return <RowIcon Icon={Icon} />;
+}
+
+function RowIcon({ Icon }: { Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }> }) {
+  const dense = useDesktopDensity();
+  return <Icon size={dense ? theme.controlSizes.icon - 4 : theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />;
 }
 
 /** Borderless single-line input style for row content. */
@@ -74,6 +79,28 @@ export const titleInputStyle = {
   fontWeight: theme.typography.heading.fontWeight,
   paddingVertical: theme.spacing[4],
 };
+
+/** Desktop forms set their inputs in 14px rows and a 17px title, like the rest of the pane. */
+export const desktopRowInputStyle = {
+  ...rowInputStyle,
+  paddingVertical: theme.spacing[2],
+  fontSize: theme.typography.bodySm.fontSize,
+  lineHeight: theme.typography.bodySm.lineHeight,
+  minHeight: theme.layout.desktopField,
+};
+export const desktopTitleInputStyle = {
+  ...rowInputStyle,
+  fontSize: theme.typography.section.fontSize,
+  lineHeight: theme.typography.section.lineHeight,
+  fontWeight: theme.typography.section.fontWeight,
+  paddingVertical: theme.spacing[2],
+  minHeight: theme.layout.desktopField,
+};
+/** The row and title input styles for the current density. */
+export function useComposeInputStyles() {
+  const dense = useDesktopDensity();
+  return dense ? { row: desktopRowInputStyle, title: desktopTitleInputStyle } : { row: rowInputStyle, title: titleInputStyle };
+}
 
 /** A row showing the current choice; pressing it opens the choices. */
 export function SummaryRow({ name, summary, icon, open, disabled = false, onPress, trigger, muted = false }: {
@@ -100,8 +127,8 @@ export function SummaryRow({ name, summary, icon, open, disabled = false, onPres
         onPress={onPress}
         style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], minHeight: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], marginLeft: -theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
       >
-        <Text color={muted ? 'inkMuted' : 'ink'} style={{ flex: 1 }}>{summary}</Text>
-        <ChevronDown size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
+        <Text {...(dense ? { variant: 'bodySm' as const } : {})} color={muted ? 'inkMuted' : 'ink'} style={{ flex: 1 }}>{summary}</Text>
+        <ChevronDown size={dense ? theme.controlSizes.icon - 6 : theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
       </Pressable>
     </FormRow>
   );

@@ -12,6 +12,7 @@ import Check from 'lucide-react-native/icons/check';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import HousePlus from 'lucide-react-native/icons/house-plus';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
+import ChevronsUpDown from 'lucide-react-native/icons/chevrons-up-down';
 import Crown from 'lucide-react-native/icons/crown';
 import Shield from 'lucide-react-native/icons/shield';
 import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
@@ -40,6 +41,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
   Button,
+  Chip,
   IconButton,
   Heading,
   Inline,
@@ -83,6 +85,8 @@ interface AppShellProps {
    * column of lists or text comfortable; `wide` leaves room for two columns.
    */
   width?: 'reading' | 'wide';
+  /** Off for a desktop page whose columns carry their own headers, such as the assistant. */
+  pageHeader?: boolean;
 }
 
 export const AppShell = ({
@@ -103,6 +107,7 @@ export const AppShell = ({
   width: contentWidth = 'wide',
   aside,
   detailOpen = false,
+  pageHeader: showPageHeader = true,
 }: AppShellProps) => {
   const router = useRouter();
   const blurTarget = useRef<View>(null);
@@ -142,10 +147,11 @@ export const AppShell = ({
     >
       {wideNavigation ? footer : null}
       <View testID={desktop ? 'desktop-workspace' : undefined} style={{ flex: 1, minWidth: 0, ...(desktop ? { backgroundColor: theme.colors.surface, margin: theme.layout.workspaceInset, marginLeft: wideNavigation ? 0 : theme.layout.workspaceInset, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, borderRadius: theme.layout.workspaceRadius, overflow: 'hidden' } : {}) }}>
-      {desktop ? <View testID="desktop-page-header" style={{ height: theme.layout.pageHeaderHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], paddingHorizontal: theme.spacing[6], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
+      {desktop && showPageHeader ? <View testID="desktop-page-header" style={{ height: theme.layout.pageHeaderHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], paddingHorizontal: theme.spacing[6], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
         {showBack && !wideNavigation ? <IconButton label="返回" appearance="plain" icon={<ArrowLeft size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={handleBack} /> : null}
         <Heading variant="section" level={1} numberOfLines={1}>{pageHeader?.title ?? accessibilityLabel ?? title ?? ''}</Heading>
         {pageHeader?.subtitle ? <View style={{ flexShrink: 1 }}>{typeof pageHeader.subtitle === 'string' ? <Text variant="meta" numberOfLines={1}>{pageHeader.subtitle}</Text> : pageHeader.subtitle}</View> : null}
+        {pageHeader?.controls ? <View style={{ marginLeft: theme.spacing[2] }}>{pageHeader.controls}</View> : null}
         <View style={{ flex: 1 }} />
         {pageHeader?.action}
         {floatingAction}
@@ -207,7 +213,7 @@ export const AppShell = ({
         {layout === 'workspace' ? children : <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
-            paddingHorizontal: desktop ? theme.spacing[6] : wideNavigation ? theme.spacing[10] : inset,
+            paddingHorizontal: desktop ? theme.layout.desktopColumnInset : wideNavigation ? theme.spacing[10] : inset,
             paddingTop: desktop ? theme.spacing[4] : wideNavigation ? theme.spacing[8] : hasNav ? theme.spacing[1] : theme.spacing[6],
             paddingBottom: floatingAction && !desktopActions ? theme.spacing[16] + theme.spacing[10] : theme.spacing[10],
             maxWidth: desktop ? undefined : Platform.OS === 'web' ? (contentWidth === 'reading' ? theme.layout.contentMaxWidth : theme.layout.householdMaxWidth) + (wideNavigation ? theme.spacing[10] * 2 : 0) : undefined,
@@ -244,10 +250,17 @@ export const AppShell = ({
 
 // ---- InboxButton ----
 
-/** The personal inbox, where invitations to other households arrive. */
-export const InboxButton = () => {
+/**
+ * The personal inbox, where invitations to other households arrive. `count`
+ * is the number waiting, drawn as a small ink badge on the tray.
+ */
+export const InboxButton = ({ count = 0 }: { count?: number }) => {
   const router = useRouter();
-  return <IconButton appearance="plain" label="收件箱" icon={<Inbox color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} />;
+  const desktop = useDesktop();
+  return <View>
+    <IconButton appearance="plain" label={count ? `收件箱，${count} 项待处理` : '收件箱'} icon={<Inbox color={theme.colors.inkMuted} size={desktop ? theme.controlSizes.icon - 2 : theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} />
+    {count ? <View pointerEvents="none" style={{ position: 'absolute', top: theme.spacing[1] / 2, right: 0, minWidth: theme.spacing[4] - 1, height: theme.spacing[4] - 1, paddingHorizontal: theme.spacing[1] - 1, borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.ink, alignItems: 'center', justifyContent: 'center' }}><Text variant="caption" color="surface" style={{ fontSize: theme.typography.tag.fontSize - 1.5, lineHeight: theme.spacing[4] - 1, fontFamily: theme.fontFamilies.numericStrong }}>{count > 99 ? '99+' : count}</Text></View> : null}
+  </View>;
 };
 
 // ---- HouseholdHeader ----
@@ -281,20 +294,21 @@ export const HouseholdHeader = ({ householdName, onOpenSwitcher, placement = 'ba
       gap: theme.spacing[1],
       marginLeft: placement === 'bar' ? -theme.spacing[2] : 0,
       maxWidth: '100%',
-      minHeight: theme.controlSizes.touchTarget,
+      minHeight: desktop ? theme.layout.desktopControl + theme.spacing[2] : theme.controlSizes.touchTarget,
       paddingHorizontal: theme.spacing[2],
+      ...(desktop ? { gap: theme.spacing[2] + 2, borderRadius: theme.borderRadii.sm } : {}),
     })}
   >
-    {desktop ? <View style={{ width: theme.layout.desktopControl, height: theme.layout.desktopControl, backgroundColor: theme.colors.ink, borderRadius: theme.borderRadii.sm, alignItems: 'center', justifyContent: 'center' }}><Text variant="label" color="surface">{householdName.slice(0, 1)}</Text></View> : null}
+    {desktop ? <View style={{ width: theme.controlSizes.avatar, height: theme.controlSizes.avatar, backgroundColor: theme.colors.ink, borderRadius: theme.borderRadii.sm, alignItems: 'center', justifyContent: 'center' }}><Text variant="label" color="surface" style={{ fontSize: theme.typography.meta.fontSize }}>{householdName.slice(0, 1)}</Text></View> : null}
     {!rail ? <Text
       numberOfLines={1}
-      variant={placement === 'sidebar' ? 'section' : 'label'}
+      variant={placement === 'sidebar' ? desktop ? 'label' : 'section' : 'label'}
       color={placement === 'sidebar' ? 'ink' : 'inkMuted'}
-      style={{ flexShrink: 1 }}
+      style={[{ flexShrink: 1 }, desktop ? { fontSize: theme.typography.button.fontSize } : null]}
     >
       {householdName}
     </Text> : null}
-    {!rail ? <ChevronDown color={theme.colors.inkMuted} size={theme.controlSizes.icon - theme.spacing[1]} strokeWidth={theme.controlSizes.iconStroke} /> : null}
+    {!rail ? desktop ? <ChevronsUpDown color={theme.colors.inkFaint} size={theme.controlSizes.icon - 6} strokeWidth={theme.controlSizes.iconStroke} /> : <ChevronDown color={theme.colors.inkMuted} size={theme.controlSizes.icon - theme.spacing[1]} strokeWidth={theme.controlSizes.iconStroke} /> : null}
   </Pressable>
 ); };
 
@@ -670,7 +684,7 @@ export const MemberRow = ({
   }
   if (canTransferTo && onTransfer) actions.push({ label: '转移所有权', icon: Crown, accessibilityLabel: `转移所有权给 ${member.displayName}`, onPress: onTransfer });
   if (canRemoveMember && onRemove) actions.push({ label: '移除', icon: UserMinus, destructive: true, accessibilityLabel: `移除 ${member.displayName}`, onPress: onRemove });
-  if (desktop) return <View accessibilityLabel={`${member.displayName}，${roleLabel}${member.isCurrentUser ? '，本人' : ''}`} style={{ minHeight: theme.layout.desktopRowHeight + theme.spacing[2], flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}><View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}><MemberAvatar id={member.userId} name={member.displayName} /><Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1 }}>{member.displayName}{member.isCurrentUser ? '（我）' : ''}</Text></View><Text variant="meta" numberOfLines={1} style={{ flex: 1 }}>{member.username}</Text><Text variant="meta" style={{ width: theme.layout.fieldLabelColumn }}>{roleLabel}</Text>{/* The menu keeps its slot when it is empty, so every row's columns line up with the header. */}<View style={{ width: theme.layout.desktopControl, alignItems: 'center' }}><CardActionsMenu subject={`成员：${member.displayName}`} actions={actions} /></View></View>;
+  if (desktop) return <View accessibilityLabel={`${member.displayName}，${roleLabel}${member.isCurrentUser ? '，本人' : ''}`} style={{ minHeight: theme.layout.desktopRowHeight + theme.spacing[2], flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}><View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}><MemberAvatar id={member.userId} name={member.displayName} /><Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1 }}>{member.displayName}</Text>{member.isCurrentUser ? <Chip>我</Chip> : null}</View><Text variant="meta" numberOfLines={1} style={{ width: theme.layout.memberUsernameColumn, fontFamily: theme.fontFamilies.numeric }}>{member.username}</Text><View style={{ width: theme.layout.memberRoleColumn, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] }}>{member.role === 'OWNER' ? <Crown size={theme.controlSizes.icon - 6} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /> : member.role === 'ADMIN' ? <Shield size={theme.controlSizes.icon - 6} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /> : <View style={{ width: theme.controlSizes.icon - 6 }} />}<Text variant="meta" color="ink">{roleLabel}</Text></View>{/* The menu keeps its slot when it is empty, so every row's columns line up with the header. */}<View style={{ width: theme.layout.desktopControl, alignItems: 'center' }}><CardActionsMenu subject={`成员：${member.displayName}`} actions={actions} /></View></View>;
 
   return (
     <View
@@ -771,6 +785,18 @@ export const InvitationRow = ({
 
   const expiresDate = new Date(invitation.expiresAt);
   const expiryText = formatDateTime(expiresDate);
+  const desktop = useDesktop();
+  if (desktop) return (
+    <View accessibilityLabel={`邀请：${recipient}，${statusLabel}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.layout.desktopRowHeight + theme.spacing[4], paddingHorizontal: theme.spacing[1] }}>
+      <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}>
+        <View accessibilityLabel={`${recipient}的邀请`} accessibilityRole="image" style={{ width: theme.controlSizes.avatar + 4, height: theme.controlSizes.avatar + 4, borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}><Mail color={theme.colors.inkMuted} size={theme.controlSizes.icon - 5} strokeWidth={theme.controlSizes.iconStroke} /></View>
+        <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1 }}>{recipient}</Text>
+      </View>
+      <Text variant="meta" numberOfLines={1} style={{ width: theme.layout.memberUsernameColumn, fontFamily: theme.fontFamilies.numeric }}>{`${expiryText} 失效`}</Text>
+      <View accessibilityLabel={`状态：${statusLabel}`} style={{ width: theme.layout.memberRoleColumn, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] }}><Clock color={theme.colors.inkMuted} size={theme.controlSizes.icon - 6} strokeWidth={theme.controlSizes.iconStroke} /><Text variant="meta" color="ink">{statusLabel}</Text></View>
+      <View style={{ width: theme.layout.desktopControl, alignItems: 'center' }}>{resendBusy ? <Spinner label="重新发送中" /> : <CardActionsMenu subject={`邀请：${recipient}`} actions={actions} />}</View>
+    </View>
+  );
 
   return (
     <View

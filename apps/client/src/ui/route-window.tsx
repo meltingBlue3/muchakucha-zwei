@@ -71,6 +71,8 @@ export interface RouteWindowProps {
   children: ReactNode;
   footer?: ReactNode;
   headerActions?: ReactNode;
+  /** On the desktop pane, a quiet line shown in the header instead of the title, such as when a note was updated. */
+  headerNote?: string;
   step?: RouteWindowStep | null;
   onClose?: () => void;
   onBackStep?: (() => void) | undefined;
@@ -81,7 +83,7 @@ export interface RouteWindowProps {
   size?: 'standard' | 'editor';
 }
 
-export function RouteWindow({ title, busy = false, children, footer, headerActions, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor', draftPrefix }: RouteWindowProps) {
+export function RouteWindow({ title, busy = false, children, footer, headerActions, headerNote, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor', draftPrefix }: RouteWindowProps) {
   const focused = useIsFocused();
   const docked = (size === 'editor' || draftPrefix !== undefined) && DOCKED_RESOURCES.has(resource);
   const pane = useDesktop() && docked;
@@ -146,7 +148,7 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
       <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={pane && hasBackground ? 'none' : focused ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
-      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes'} headerActions={confirmation || step ? null : headerActions} {...(footer === undefined || confirmation || step ? {} : { footer })}>
+      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes'} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })}>
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>

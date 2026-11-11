@@ -278,11 +278,12 @@ export default function TaskListScreen() {
       width="reading"
       floatingAction={<FloatingCreateButton label="创建任务" onPress={handleCreateTask} />}
     >
-      <Stack gap={5} style={desktop ? { maxWidth: theme.layout.listPaneMaxWidth } : undefined}>
+      <Stack gap={desktop ? 3 : 5} style={desktop ? { maxWidth: theme.layout.listPaneMaxWidth } : undefined}>
         <PageIntro
           title="任务"
           {...(filterSummary ? { subtitle: filterSummary } : desktop && !loading ? { subtitle: `${tasks.filter(task => task.status !== 'completed' && task.status !== 'cancelled').length} 项未完成` } : {})}
-          action={<>{desktop ? <>{statusControl}<SearchField label="搜索任务" placeholder="搜索任务" value={query} onChangeText={setQuery} /></> : null}<FilterButton ref={filterTrigger} label="筛选任务" count={activeFilterCount} onPress={() => setFiltersOpen(true)} /></>}
+          {...(desktop ? { controls: statusControl } : {})}
+          action={<>{desktop ? <><SearchField label="搜索任务" placeholder="搜索任务" value={query} onChangeText={setQuery} /></> : null}<FilterButton ref={filterTrigger} label="筛选任务" count={activeFilterCount} onPress={() => setFiltersOpen(true)} /></>}
         />
         {!desktop ? statusControl : null}
         {filtersOpen ? <AppDialog title="筛选任务" trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
@@ -325,8 +326,8 @@ export default function TaskListScreen() {
 
         {groups.map(group => (
           <View key={group.key}>
-            <GroupLabel tone={group.tone}>{group.label}</GroupLabel>
-            <ListGroup>
+            <GroupLabel flush tone={group.tone}>{group.label}</GroupLabel>
+            <ListGroup flush>
               {group.tasks.map((task) => (
                 <TaskCard
                   table

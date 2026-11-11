@@ -7,7 +7,7 @@ import { sessionApiClient } from '../auth/session-runtime';
 import { AppDialog } from '../../ui/app-dialog';
 import { theme } from '../../ui/theme';
 import { useDesktop } from '../../ui/use-desktop';
-import { Banner, Button, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
+import { Banner, Button, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { AssistantBoundary, assistantPath, type AssistantHouseholdProps } from './assistant-boundary';
 import { assistantToken, chatProviders, transcriptionProvider, useAssistantOperation, useAssistantQuery } from './assistant-runtime';
 import { AssistantConversationPanel } from './conversation-panel';
@@ -124,6 +124,13 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
   </Pressable> : null;
   return <AssistantWorkspace householdId={householdId} householdName={householdName} title={conversation?.title ?? '家庭助手'} conversationId={conversationId} conversations={history}
     busy={operation.busy} onRefresh={() => { if (!operation.busy) void query.reload(); }}
+    inspector={inspector && preview ? <View testID="assistant-inspector" style={{ width: theme.layout.assistantInspectorWidth, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator, backgroundColor: theme.colors.surface }}>
+        {desktop ? <View testID="desktop-column-header" style={{ height: theme.layout.pageHeaderHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingHorizontal: theme.spacing[5], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
+          <Heading variant="label" level={2}>待确认</Heading>
+          <View style={{ minWidth: theme.spacing[4] + 2, height: theme.spacing[4] + 2, paddingHorizontal: theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.ink, alignItems: 'center', justifyContent: 'center' }}><Text variant="caption" color="surface" style={{ fontFamily: theme.fontFamilies.numericStrong, lineHeight: theme.spacing[4] + 2 }}>{pending.length}</Text></View>
+        </View> : null}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing[4] }}>{preview}</ScrollView>
+      </View> : null}
     {...(conversation && conversation.state !== 'running' && writable ? { onDelete: () => router.push(`${assistantPath(householdId)}/conversations/${encodeURIComponent(conversationId)}/delete`) } : {})}>
     <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}>
       {conversation ? <AssistantConversationPanel conversation={conversation} busy={operation.busy} disabled={!writable || !provider || query.loading} onSend={send} feedback={feedback}
@@ -132,7 +139,6 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
         {...(draft ? { draft } : {})} pendingPreview={inspector ? null : previewLink}
         voiceInput={{ householdId, providerId: transcriptionProvider(query.data?.providers ?? [])?.id ?? null }}
         modelControl={<AssistantModelPicker householdId={householdId} providers={chatProviders(query.data?.providers ?? [])} selectedId={conversation.providerId} busy={operation.busy || !writable || pending.length > 0 || conversation.state === 'running'} newConversation onSelect={id => { void start(id); }} />} /> : <ScrollView contentContainerStyle={{ padding: theme.spacing[5] }}>{feedback}</ScrollView>}
-      {inspector && preview ? <ScrollView testID="assistant-inspector" style={{ width: theme.layout.assistantInspectorWidth, flexGrow: 0, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator, backgroundColor: theme.colors.surface }} contentContainerStyle={{ padding: theme.spacing[5] }}>{preview}</ScrollView> : null}
     </View>
     {!inspector && previewOpen && preview ? <AppDialog title="操作预览" size="sheet" trigger={trigger} busy={operation.busy} onClose={() => setPreviewOpen(false)}>{operation.error ? <Banner>{operation.error} 已尝试同步对话，请查看最新结果。</Banner> : null}{preview}</AppDialog> : null}
   </AssistantWorkspace>;

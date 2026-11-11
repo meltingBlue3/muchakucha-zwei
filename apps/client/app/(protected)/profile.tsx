@@ -55,8 +55,8 @@ export default function ProfileRoute() {
   return (
     <AccountScreen accessibilityLabel="个人中心">
       <Stack gap={6}>
-        <PageIntro title="个人中心" />
-        <SettingsSection title="个人资料" icon={<CircleUserRound size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
+        <PageIntro title={desktop ? '个人资料' : '个人中心'} />
+        {desktop ? <ProfileForm apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} /> : <SettingsSection title="个人资料" icon={<CircleUserRound size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
           {desktop ? <ProfileForm apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} /> : <SettingsRows>
             <ProfileFact label="昵称" value={user?.displayName ?? '—'} action={
               <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel="编辑昵称" disabled={!user} onPress={() => setEditing(true)} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
@@ -65,7 +65,7 @@ export default function ProfileRoute() {
             } />
             <ProfileFact label="用户名" value={user?.username ?? '—'} note="用于登录，暂不支持修改。" />
           </SettingsRows>}
-        </SettingsSection>
+        </SettingsSection>}
         {!desktop ? <ListGroup>
           {LINKS.map(({ key, label, description, icon: Icon, path }) => (
             <ListRow

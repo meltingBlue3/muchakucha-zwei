@@ -9,7 +9,8 @@ import { useDesktop } from '../../../../../../src/ui/use-desktop';
 import { theme } from '../../../../../../src/ui/theme';
 import { formatDateTime } from '../../../../../../src/ui/date-values';
 import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
-import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
+import { DetailEditButton } from '../../../../../../src/ui/detail-fields';
 
 export default function NoteDetailRoute() {
   const desktop = useDesktop();
@@ -62,10 +63,10 @@ export default function NoteDetailRoute() {
   const body = note.body ?? '';
 
   return (
-    <NoteWindow title="笔记详情" headerActions={<Button label="编辑" accessibilityLabel="编辑笔记" tone="secondary" size="compact" onPress={handleEdit} />}>
+    <NoteWindow title="笔记详情" headerNote={`更新于 ${formatDateTime(new Date(note.updatedAt))}`} headerActions={<DetailEditButton accessibilityLabel="编辑笔记" worded onPress={handleEdit} />}>
       <Stack gap={4}>
         <Heading level={2} style={desktop ? theme.typography.readingTitle : undefined}>{note.title}</Heading>
-        <Text variant="caption" color="inkMuted">最后更新于 {formatDateTime(new Date(note.updatedAt))}</Text>
+        {!desktop ? <Text variant="caption" color="inkMuted">最后更新于 {formatDateTime(new Date(note.updatedAt))}</Text> : null}
         <MarkdownBody source={body} />
       </Stack>
     </NoteWindow>

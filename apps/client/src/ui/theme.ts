@@ -89,6 +89,10 @@ export const theme = createTheme({
   },
   typography: {
     readingTitle: { fontSize: 28, fontWeight: '700' as const, lineHeight: 36 },
+    /** The item's own title at the top of the wide detail pane. */
+    paneTitle: { fontSize: 20, fontWeight: '600' as const, lineHeight: 28 },
+    /** A word tag such as 高, 紧急 or 今天 beside a title or date. */
+    tag: { fontSize: 11.5, fontWeight: '400' as const, lineHeight: 18 },
     readingBody: { fontSize: 15, fontWeight: '400' as const, lineHeight: 28 },
     caption: { fontSize: 12, fontWeight: '500' as const, lineHeight: 16 },
     meta: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
@@ -235,7 +239,19 @@ export const theme = createTheme({
     desktopControl: 32,
     desktopField: 36,
     desktopNavRow: 34,
+    /** Horizontal padding of a desktop workspace column; flush lists bleed through it. */
+    desktopColumnInset: 24,
+    desktopSearchWidth: 220,
+    /** The member table's 用户名 and 角色 columns. */
+    memberUsernameColumn: 160,
+    memberRoleColumn: 120,
+    /** The recurrence table's 类型, 名称 and 下一次 columns; 规则 takes the rest. */
+    recurrenceKindColumn: 64,
+    recurrenceTitleColumn: 200,
+    recurrenceNextColumn: 96,
     accountNavWidth: 220,
+    /** The content beside the account navigation. */
+    accountContentWidth: 640,
     assistantHistoryWidth: 260,
     calendarAgendaWidth: 340,
     todayTodoWidth: 380,

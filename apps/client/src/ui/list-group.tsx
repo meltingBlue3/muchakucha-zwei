@@ -1,4 +1,4 @@
-import { Children, Fragment, isValidElement, useState, type ReactNode } from 'react';
+import { Children, Fragment, createContext, isValidElement, useContext, useState, type ReactNode } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { insetFocusRing } from '../platform/focus-ring/focus-ring';
 import { Text } from './primitives';
@@ -11,21 +11,31 @@ import { RowInteraction } from './row-interaction';
  * grouped this way instead of giving every item its own card, so a screen
  * shows twice as much and still reads as calm.
  */
-export function ListGroup({ children }: { children: ReactNode }) {
+/** Set inside a flush group: its rows run from edge to edge of the workspace column. */
+const FlushRows = createContext(false);
+
+/**
+ * On a wide screen a `flush` group bleeds through the column's padding, so its
+ * rows and hairlines run edge to edge like a table, with a hairline under the last row.
+ */
+export function ListGroup({ children, flush = false }: { children: ReactNode; flush?: boolean }) {
   const desktop = useDesktop();
+  const bleed = flush && desktop;
   const rows = Children.toArray(children).filter(isValidElement);
   if (rows.length === 0) return null;
   // The now marker is itself a divider, so it takes the place of a hairline.
   const isMarker = (index: number) => rows[index]?.type === NowMarker;
+  const hairline = <View style={{ height: theme.borderWidths.default, backgroundColor: theme.colors.separator, marginLeft: bleed ? 0 : theme.spacing[4] }} />;
   return (
-    <View style={{ backgroundColor: theme.colors.surface, borderRadius: desktop ? 0 : theme.borderRadii.lg, overflow: 'hidden' }}>
+    <FlushRows.Provider value={bleed}><View style={{ backgroundColor: theme.colors.surface, borderRadius: desktop ? 0 : theme.borderRadii.lg, overflow: 'hidden', ...(bleed ? { marginHorizontal: -theme.layout.desktopColumnInset } : {}) }}>
       {rows.map((row, index) => (
         <Fragment key={row.key ?? index}>
-          {index > 0 && !isMarker(index) && !isMarker(index - 1) ? <View style={{ height: theme.borderWidths.default, backgroundColor: theme.colors.separator, marginLeft: theme.spacing[4] }} /> : null}
+          {index > 0 && !isMarker(index) && !isMarker(index - 1) ? hairline : null}
           {row}
         </Fragment>
       ))}
-    </View>
+      {bleed ? hairline : null}
+    </View></FlushRows.Provider>
   );
 }
 
@@ -48,10 +58,13 @@ export function NowMarker({ time }: { time: string }) {
  * The small heading above a group, such as 「今天」 or 「待安排（2）」. It is a
  * level-2 heading so the groups can be skimmed with a screen reader.
  */
-export function GroupLabel({ children, tone = 'muted', trailing }: { children: string; tone?: 'muted' | 'accent'; trailing?: ReactNode }) {
+export function GroupLabel({ children, tone = 'muted', trailing, flush = false }: { children: string; tone?: 'muted' | 'accent'; trailing?: ReactNode; flush?: boolean }) {
+  const desktop = useDesktop();
+  // Above a flush group the label lines up with the rows' text, 20 from the column edge.
+  const bleed = flush && desktop;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing[2], paddingHorizontal: theme.spacing[1], marginBottom: theme.spacing[2], minHeight: theme.spacing[6] }}>
-      <Text accessibilityRole="header" aria-level={2} variant="label" color={tone === 'accent' ? 'accent' : 'inkMuted'} style={{ flexShrink: 1 }}>{children}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing[2], paddingHorizontal: bleed ? 0 : theme.spacing[1], marginBottom: bleed ? theme.spacing[1] + 2 : theme.spacing[2], marginTop: bleed ? theme.spacing[1] : 0, ...(bleed ? { marginHorizontal: theme.spacing[5] - theme.layout.desktopColumnInset } : {}), minHeight: theme.spacing[6] }}>
+      <Text accessibilityRole="header" aria-level={2} variant="label" color={tone === 'accent' ? 'accent' : 'inkMuted'} style={[{ flexShrink: 1 }, desktop ? { fontSize: theme.typography.tag.fontSize + 1 } : null]}>{children}</Text>
       {trailing}
     </View>
   );
@@ -77,6 +90,7 @@ export function ListRow({ accessibilityLabel, onPress, leading, trailing, footer
   const [hovered, setHovered] = useState(false);
   const [rowFocused, setRowFocused] = useState(false);
   const dense = useDesktopDensity();
+  const flush = useContext(FlushRows);
   // Controls sit on the title line: a one-line row is centered, and a longer
   // row grows downward without pulling the check mark or menu with it.
   const rowHeight = dense ? theme.layout.desktopRowHeight : theme.controlSizes.touchTarget + theme.spacing[2];
@@ -86,8 +100,8 @@ export function ListRow({ accessibilityLabel, onPress, leading, trailing, footer
     // The open row lets the paper show through and carries an ink bar: a
     // darker fill would push red due dates and faint metadata under 4.5:1.
     <RowInteraction.Provider value={hovered || rowFocused}><View onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} style={{ backgroundColor: pressed || hovered ? dense ? theme.colors.surfaceSubtle : theme.colors.surfaceMuted : selected ? theme.colors.canvas : theme.colors.surface }}>
-      {selected ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: theme.spacing[2], bottom: theme.spacing[2], width: theme.spacing[1] - 1, borderTopRightRadius: theme.borderRadii.full, borderBottomRightRadius: theme.borderRadii.full, backgroundColor: theme.colors.ink }} /> : null}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', minHeight: rowHeight, paddingLeft: leading ? theme.spacing[1] : theme.spacing[2], paddingRight: theme.spacing[2] }}>
+      {selected ? <View pointerEvents="none" style={flush ? { position: 'absolute', left: 0, top: 0, bottom: 0, width: theme.borderWidths.focus, backgroundColor: theme.colors.ink } : { position: 'absolute', left: 0, top: theme.spacing[2], bottom: theme.spacing[2], width: theme.spacing[1] - 1, borderTopRightRadius: theme.borderRadii.full, borderBottomRightRadius: theme.borderRadii.full, backgroundColor: theme.colors.ink }} /> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', minHeight: rowHeight, paddingLeft: flush ? theme.spacing[3] : leading ? theme.spacing[1] : theme.spacing[2], paddingRight: flush ? theme.spacing[3] : theme.spacing[2] }}>
         {leading ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', alignSelf: 'stretch', paddingTop: controlInset }}>{leading}</View> : null}
         <Pressable
           {...insetFocusRing}

@@ -1,3 +1,4 @@
+import Plus from 'lucide-react-native/icons/plus';
 import { useDesktop } from '../../../../../src/ui/use-desktop';
 import { CardActionsMenu } from '../../../../../src/ui/card-actions-menu';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -117,13 +118,13 @@ export default function LabelsIndexRoute() {
 
   return <><HouseholdScreen detailOpen={action !== null && (action.kind !== 'delete' || deletingFromPane)} active="labels" subpage accessibilityLabel="标签管理" width="reading" refreshing={refreshing} onRefresh={() => void refresh()}>
     <Stack gap={5}>
-      <PageIntro title="标签管理" subtitle={`${desktop && !loading && !error ? `${labels.length} 个 · ` : ''}${canManage ? '给日程和任务分类，全家共用。' : '标签由所有者和管理员维护，你可以给日程和任务使用它们。'}`} action={canManage ? <Button label={desktop ? '创建标签' : '创建'} accessibilityLabel="创建标签" onPress={() => open({ kind: 'create' })} /> : undefined} />
+      <PageIntro title="标签管理" subtitle={`${desktop && !loading && !error ? `${labels.length} 个 · ` : ''}${canManage ? '给日程和任务分类，全家共用。' : '标签由所有者和管理员维护，你可以给日程和任务使用它们。'}`} action={canManage ? <Button label={desktop ? '创建标签' : '创建'} accessibilityLabel="创建标签" {...(desktop ? { icon: (color: string) => <Plus size={theme.controlSizes.icon - 4} color={color} strokeWidth={theme.focus.width} /> } : {})} onPress={() => open({ kind: 'create' })} /> : undefined} />
       {loading ? <LoadingState label="正在加载标签" /> : null}
       {error ? <LoadError message={error} onRetry={() => void fetchLabels()} /> : null}
       {!loading && !error && !labels.length ? <EmptyState message={canManage ? '还没有标签，点击“创建”为日程和任务分类。' : '还没有标签，所有者或管理员创建后即可使用。'} /> : null}
-      <ListGroup>
+      <ListGroup flush>
         {labels.map(label => {
-          const dot = <View style={{ width: theme.spacing[3], height: theme.spacing[3], borderRadius: theme.borderRadii.full, backgroundColor: label.color }} />;
+          const dot = <View style={{ width: desktop ? theme.spacing[2] + 2 : theme.spacing[3], height: desktop ? theme.spacing[2] + 2 : theme.spacing[3], borderRadius: theme.borderRadii.full, backgroundColor: label.color }} />;
           const menu = canManage ? <CardActionsMenu subject={`标签 ${label.name}`} actions={[
             { kind: 'edit', accessibilityLabel: `编辑标签 ${label.name}`, onPress: () => open({ kind: 'edit', label }) },
             { kind: 'delete', accessibilityLabel: `删除标签 ${label.name}`, onPress: () => open({ kind: 'delete', label }) },
@@ -134,7 +135,7 @@ export default function LabelsIndexRoute() {
             return <ListRow key={label.id} accessibilityLabel={`标签：${label.name}`} selected={shown} onPress={() => open({ kind: 'edit', label })}
               leading={<View style={{ width: theme.spacing[6], height: theme.layout.desktopControl, alignItems: 'center', justifyContent: 'center' }}>{dot}</View>}
               trailing={<>{creator ? <Text variant="meta" numberOfLines={1} style={{ width: theme.spacing[10] * 3 }}>{`${creator} 创建`}</Text> : null}{menu}</>}>
-              <Text color="ink" numberOfLines={1}>{label.name}</Text>
+              <Text variant="bodySm" color="ink" numberOfLines={1}>{label.name}</Text>
             </ListRow>;
           }
           return <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.controlSizes.touchTarget + theme.spacing[2], paddingLeft: theme.spacing[4], paddingRight: theme.spacing[2] }}>

@@ -107,22 +107,22 @@ export function HouseholdNavigation({ householdId, active, belowActive = false, 
         {...(role === 'tab' ? { accessibilityState: { selected }, 'aria-selected': selected } : selected ? { 'aria-current': 'page' as const } : {})}
         onPress={() => role === 'tab' ? go(key) : active === key ? undefined : router.push(householdPath(householdId, key))}
         {...(rail ? { title: label } : {})}
-        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: rail ? 'center' : 'flex-start', gap: theme.spacing[3], minHeight: dense ? theme.layout.desktopNavRow : theme.spacing[10], paddingHorizontal: rail ? theme.spacing[2] : theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: selected ? theme.colors.surfaceSelected : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
+        style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: rail ? 'center' : 'flex-start', gap: desktop ? theme.spacing[2] + 2 : theme.spacing[3], minHeight: dense ? theme.layout.desktopNavRow : theme.spacing[10], paddingHorizontal: rail ? theme.spacing[2] : desktop ? theme.spacing[2] + 2 : theme.spacing[3], borderRadius: desktop ? theme.borderRadii.sm : theme.borderRadii.md, backgroundColor: selected ? theme.colors.surfaceSelected : pressed || hovered ? theme.colors.surfaceMuted : theme.colors.transparent })}
       >
-        <ItemIcon size={theme.controlSizes.icon} color={selected ? theme.colors.ink : theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
+        <ItemIcon size={desktop ? theme.controlSizes.icon - 3 : theme.controlSizes.icon} color={selected ? theme.colors.ink : theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
         {!rail ? <Text variant="bodySm" color={selected ? 'ink' : 'inkMuted'} style={{ fontWeight: selected ? '600' : '400' }}>{label}</Text> : null}
       </Pressable>
     );
   };
 
   return (
-    <View testID="global-sidebar" style={{ width: rail ? theme.layout.railWidth : theme.layout.navigationWidth, backgroundColor: theme.colors.canvas, paddingHorizontal: rail ? theme.spacing[2] : theme.spacing[3], paddingTop: theme.spacing[4], paddingBottom: theme.spacing[3], gap: theme.spacing[5] }}>
+    <View testID="global-sidebar" style={{ width: rail ? theme.layout.railWidth : theme.layout.navigationWidth, backgroundColor: theme.colors.canvas, paddingHorizontal: rail ? theme.spacing[2] : theme.spacing[3], paddingTop: theme.spacing[3], paddingBottom: theme.spacing[2] + 2, gap: theme.spacing[4] }}>
       {header}
       <View accessibilityRole="tablist" accessibilityLabel="家庭主导航" style={{ gap: theme.spacing[1] / 2 }}>
         {destinations.map(({ key, label, icon }) => item(key, label, icon, 'tab'))}
       </View>
       <View style={{ gap: theme.spacing[1] / 2 }}>
-        {!rail ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: theme.spacing[3], marginBottom: theme.spacing[1] }}>家庭</Text> : null}
+        {!rail ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: desktop ? theme.spacing[2] + 2 : theme.spacing[3], marginTop: desktop ? theme.spacing[1] + 2 : 0, marginBottom: theme.spacing[1] + 2, fontWeight: '400' }}>家庭</Text> : null}
         {familyPages.map(({ key, label, icon }) => item(key, label, icon, 'link'))}
       </View>
       {!desktop && children ? <View style={{ flex: 1, minHeight: 0 }}>{children}</View> : <View style={{ flex: 1 }} />}

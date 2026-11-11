@@ -5,14 +5,32 @@ import { theme } from './theme';
 import { useDesktop } from './use-desktop';
 
 /** One white panel of a settings page: an icon and title, then its rows. */
-export function SettingsSection({ title, icon, detail, action, children }: {
+export function SettingsSection({ title, icon, detail, count, action, children, plain = false }: {
   title: string;
   icon: ReactNode;
   detail?: string;
+  /** Desktop: a number printed after the title, as in 「成员 4」. */
+  count?: number;
   action?: ReactNode;
   children: ReactNode;
+  /** Desktop: no panel, as a table section in the page's main column. */
+  plain?: boolean;
 }) {
   const desktop = useDesktop();
+  if (desktop) {
+    return (
+      <Stack gap={plain ? 2 : 3} style={plain ? undefined : { backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.md, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, paddingHorizontal: theme.spacing[5], paddingVertical: theme.spacing[4] }}>
+        <Inline gap={2}>
+          <Heading variant="label" style={plain ? { fontSize: theme.typography.button.fontSize } : undefined}>{title}</Heading>
+          {count !== undefined ? <Text variant="meta" style={{ fontFamily: theme.fontFamilies.numeric }}>{count}</Text> : null}
+          <View style={{ flex: 1 }} />
+          {action}
+        </Inline>
+        {detail && count === undefined ? <Text variant="meta" style={{ marginTop: -theme.spacing[2] }}>{detail}</Text> : null}
+        {children}
+      </Stack>
+    );
+  }
   return (
     <Stack gap={4} style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, padding: theme.spacing[5], ...(desktop ? { borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator } : {}) }}>
       <Inline gap={3}>

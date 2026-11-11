@@ -1,5 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useInboxCount } from '../inbox/use-inbox-count';
+import { useCurrentUser } from '../auth/use-current-user';
+import { PageHeaderContext, type PageHeader } from '../../ui/page-intro';
+import { Heading } from '../../ui/primitives';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, View, useWindowDimensions } from 'react-native';
 import { useDesktop } from '../../ui/use-desktop';
 import { AccountNavigation } from '../profile/account-navigation';
@@ -54,6 +58,9 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
   const householdId = id ?? currentHouseholdId;
   const householdName = households.find(h => h.id === householdId)?.name ?? '';
 
+  // The sidebar's inbox badge: how many invitations wait.
+  const inboxCount = useInboxCount(!narrow);
+
   // A link or a refresh can open another household than the remembered one.
   // Each page adopts its household once, when the list is first ready; it
   // stays out of the way while the menu switches household and then
@@ -103,13 +110,14 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
         {...(detailOpen === undefined ? {} : { detailOpen })}
         {...(subpage ? (narrow ? { showBack: true, showProfile: true, title: '' } : {}) : headerRow ? { showProfile: true, headerContent: <HouseholdHeader householdName={householdName} onOpenSwitcher={openMenu} /> } : {})}
         {...(layout ? { layout } : {})}
+        {...(!headerRow ? { pageHeader: false } : {})}
         footer={!narrow || (tabBar && !subpage) ? (
           <HouseholdNavigation
             householdId={householdId}
             active={active}
             belowActive={subpage}
             header={<HouseholdHeader trigger={switcherTrigger} householdName={householdName} onOpenSwitcher={openMenu} placement="sidebar" />}
-            footer={<View style={{ flexDirection: rail ? 'column' : 'row', alignItems: 'center', gap: theme.spacing[1], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[3] }}><AccountMenu variant="row" /><InboxButton /></View>}
+            footer={<View style={{ flexDirection: rail ? 'column' : 'row', alignItems: 'center', gap: theme.spacing[1], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[3] }}><AccountMenu variant="row" /><InboxButton count={inboxCount} /></View>}
           >
             {sidebar}
           </HouseholdNavigation>
@@ -155,7 +163,7 @@ export function AccountScreen({ accessibilityLabel, refreshing, onRefresh, showI
   const desktop = useDesktop();
   const { currentHouseholdId } = useHouseholdContext();
   const refresh = { ...(refreshing === undefined ? {} : { refreshing }), ...(onRefresh ? { onRefresh } : {}) };
-  const content = desktop ? <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}><AccountNavigation /><ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing[6], width: '100%', maxWidth: theme.layout.editorDialogMaxWidth + theme.spacing[6] * 2 }}>{children}</ScrollView></View> : children;
+  const content = desktop ? <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}><AccountNavigation /><ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: theme.spacing[10], paddingVertical: theme.spacing[8], width: '100%', maxWidth: theme.layout.accountContentWidth + theme.spacing[10] * 2 }}><AccountContent>{children}</AccountContent></ScrollView></View> : children;
   if (wide && currentHouseholdId !== null) {
     return <HouseholdScreen active="account" subpage accessibilityLabel={accessibilityLabel} width="reading" {...(desktop ? { layout: 'workspace' as const } : {})} {...refresh}>{content}</HouseholdScreen>;
   }
@@ -165,4 +173,30 @@ export function AccountScreen({ accessibilityLabel, refreshing, onRefresh, showI
       {content}
     </AppShell>
   );
+}
+
+/**
+ * Desktop: every account page keeps 个人中心 and the person in the workspace
+ * header, and the page's own title (提醒, 收件箱 …) heads its content beside
+ * the account navigation.
+ */
+function AccountContent({ children }: { children: ReactNode }) {
+  const setShellHeader = useContext(PageHeaderContext);
+  const user = useCurrentUser();
+  const [section, setSection] = useState<PageHeader | null>(null);
+  const who = user ? `${user.displayName} · ${user.username}` : undefined;
+  useLayoutEffect(() => {
+    if (!setShellHeader) return undefined;
+    setShellHeader({ title: '个人中心', ...(who ? { subtitle: who } : {}) });
+    return () => setShellHeader(null);
+  }, [setShellHeader, who]);
+  return <PageHeaderContext.Provider value={setSection}>
+    {section ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], marginBottom: theme.spacing[5] }}>
+      <Heading level={2} style={theme.typography.paneTitle}>{section.title}</Heading>
+      {section.subtitle ? typeof section.subtitle === 'string' ? <Text variant="meta">{section.subtitle}</Text> : section.subtitle : null}
+      <View style={{ flex: 1 }} />
+      {section.action}
+    </View> : null}
+    {children}
+  </PageHeaderContext.Provider>;
 }

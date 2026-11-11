@@ -2,6 +2,7 @@ import { useContentChanges } from '../content/content-changes';
 import { useResourceNavigation } from '../../ui/use-resource-navigation';
 import { useDesktop } from '../../ui/use-desktop';
 import { DesktopMonth } from './desktop-month';
+import { DesktopDayPane } from './desktop-day-pane';
 import { usePathname } from 'expo-router';
 import { Text, Inline, IconButton } from '../../ui/primitives';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
@@ -63,7 +64,8 @@ export default function CalendarScreen() {
   const requestGeneration = useRef(0);
   const { currentHouseholdId } = useHouseholdContext();
 
-  const { date: today } = useMinuteClock();
+  const clock = useMinuteClock();
+  const today = clock.date;
   const todayIso = toDateIso(today);
   const [year, setYear] = useWorkspaceState(`view:${id}:events:year`, today.getFullYear());
   const [month, setMonth] = useWorkspaceState(`view:${id}:events:month`, today.getMonth());
@@ -254,7 +256,16 @@ export default function CalendarScreen() {
               onSelectDate={handleSelectDate}
             />}
           </View>
-          <View testID="calendar-agenda-pane" style={{ flex: desktop ? undefined : wide ? 1 : undefined, minWidth: 0, ...(desktop ? { width: activeTheme.layout.calendarAgendaWidth, padding: activeTheme.spacing[4], borderLeftWidth: activeTheme.borderWidths.default, borderLeftColor: activeTheme.colors.separator, ...(paneOpen ? { display: 'none' } : {}) } : {}) }}>
+          {desktop ? <View testID="calendar-agenda-pane" style={{ width: activeTheme.layout.calendarAgendaWidth, minHeight: 0, borderLeftWidth: activeTheme.borderWidths.default, borderLeftColor: activeTheme.colors.separator, ...(paneOpen ? { display: 'none' } : {}) }}>
+            <DesktopDayPane dateIso={selectedDateIso ?? todayIso} todayIso={todayIso} events={selectedDateEvents} openEventId={openEventId ?? null} nowMinutes={clock.minutes} onOpen={handleEventPress} onCreate={handleCreateEvent} onEdit={editEvent} onDelete={deleteEvent}>
+              {loading ? <LoadingState label="正在加载日程" /> : null}
+              {error ? <LoadError message={error} onRetry={() => void fetchEvents()} retryAccessibilityLabel="重试加载日程" /> : null}
+              {!loading && !error && selectedDateEvents.length === 0 ? <EmptyState
+                message={recurringFilter === 'recurring' ? RECURRING_EMPTY_EVENTS : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}
+                {...(filterSummary ? { action: <Button label="调整筛选" tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
+              /> : null}
+            </DesktopDayPane>
+          </View> :           <View testID="calendar-agenda-pane" style={{ flex: wide ? 1 : undefined, minWidth: 0 }}>
             <GroupLabel>{`${dateLabel}${selectedIsToday ? ' · 今天' : ''}`}</GroupLabel>
             <Stack gap={3}>
               {loading ? <LoadingState label="正在加载日程" /> : null}
@@ -267,7 +278,7 @@ export default function CalendarScreen() {
                 {selectedDateEvents.map(event => <EventCard key={event.id} event={event} withinDay timeColumn selected={event.id === openEventId} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />)}
               </ListGroup>
             </Stack>
-          </View>
+          </View>}
         </View>
       </Stack>
     </HouseholdScreen>

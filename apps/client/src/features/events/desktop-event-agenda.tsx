@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import type { EventResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { useResourceNavigation } from '../../ui/use-resource-navigation';
-import { GroupLabel, ListGroup } from '../../ui/list-group';
-import { Text } from '../../ui/primitives';
+import { Chip, Text } from '../../ui/primitives';
+import { DayAgendaList } from './desktop-day-pane';
 import { theme } from '../../ui/theme';
-import { formatDate, toTimeValue } from '../../ui/date-values';
+import { formatDate, formatWeekday } from '../../ui/date-values';
 import { eventLastDate } from './desktop-month';
 import { toDateIso } from './calendar-utils';
 
@@ -29,5 +29,10 @@ export function DesktopEventAgenda({ event }: { event: EventResponseDto }) {
     })();
     return () => { active = false; };
   }, [date, event.householdId]);
-  return <View style={{ marginBottom: theme.spacing[6], paddingBottom: theme.spacing[4], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}><GroupLabel>{formatDate(new Date(`${date}T12:00:00`), { weekday: true })}</GroupLabel><ListGroup>{items.map(item => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`当日日程：${item.title}`} {...(item.id === event.id ? { 'aria-current': true } : {})} onPress={() => { if (item.id !== event.id) open(`/households/${encodeURIComponent(event.householdId)}/events/${encodeURIComponent(item.id)}`); }} style={({ pressed }) => ({ minHeight: theme.layout.desktopRowHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingHorizontal: theme.spacing[2], backgroundColor: item.id === event.id ? theme.colors.canvas : pressed ? theme.colors.surfaceSubtle : theme.colors.surface })}><Text variant="time" style={{ width: theme.layout.timeColumn }}>{item.allDay ? '全天' : toTimeValue(new Date(item.startTime))}</Text><Text variant="bodySm" color="ink" numberOfLines={1} style={{ flex: 1 }}>{item.title}</Text></Pressable>)}</ListGroup></View>;
+  const isToday = date === toDateIso(new Date());
+  const now = new Date();
+  return <View style={{ marginHorizontal: -theme.spacing[3], marginBottom: theme.spacing[5], paddingBottom: theme.spacing[4], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator, gap: theme.spacing[3] }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingHorizontal: theme.spacing[2] }}><Text variant="label">{`${formatDate(new Date(`${date}T12:00:00`))} ${formatWeekday(new Date(`${date}T12:00:00`))}`}</Text>{isToday ? <Chip tone="accent">今天</Chip> : null}<Text variant="meta">{`${items.length} 个日程`}</Text></View>
+    <DayAgendaList namePrefix="当日日程" dateIso={date} events={items} openEventId={event.id} nowMinutes={isToday ? now.getHours() * 60 + now.getMinutes() : null} onOpen={item => { if (item.id !== event.id) open(`/households/${encodeURIComponent(event.householdId)}/events/${encodeURIComponent(item.id)}`); }} />
+  </View>;
 }

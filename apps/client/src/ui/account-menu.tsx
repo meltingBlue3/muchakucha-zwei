@@ -68,11 +68,11 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
         aria-haspopup="menu"
         onPress={openMenu}
         style={({ pressed }) => variant === 'row'
-          ? { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed || open ? theme.colors.surfaceMuted : theme.colors.transparent }
+          ? { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: desktop ? theme.spacing[2] + 2 : theme.spacing[3], minHeight: desktop ? theme.spacing[10] + theme.spacing[1] : theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], borderRadius: desktop ? theme.borderRadii.sm : theme.borderRadii.md, backgroundColor: pressed || open ? theme.colors.surfaceMuted : theme.colors.transparent }
           : { alignItems: 'center', justifyContent: 'center', minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.full, opacity: pressed ? 0.7 : 1 }}
       >
         {avatar}
-        {variant === 'row' && !rail ? <View style={{ flex: 1, minWidth: 0 }}><Text variant="bodySm" color="ink" numberOfLines={1}>{user?.displayName ?? '个人中心'}</Text>{user?.username ? <Text variant="meta" numberOfLines={1}>{user.username}</Text> : null}</View> : null}
+        {variant === 'row' && !rail ? <View style={{ flex: 1, minWidth: 0 }}><Text variant={desktop ? 'label' : 'bodySm'} color="ink" numberOfLines={1} style={desktop ? { fontSize: theme.typography.meta.fontSize, lineHeight: theme.typography.meta.lineHeight } : undefined}>{user?.displayName ?? '个人中心'}</Text>{user?.username ? <Text variant={desktop ? 'caption' : 'meta'} color={desktop ? 'inkFaint' : 'inkMuted'} numberOfLines={1} style={desktop ? { fontFamily: theme.fontFamilies.numeric, fontWeight: '400' } : undefined}>{user.username}</Text> : null}</View> : null}
       </Pressable>
       {mode === 'menu' ? (
         <Modal transparent visible animationType="none" onShow={focusInitial} onRequestClose={close} statusBarTranslucent navigationBarTranslucent>

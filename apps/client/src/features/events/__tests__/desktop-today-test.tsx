@@ -11,7 +11,7 @@ const pickUp: TaskResponseDto = { id: 'parcel', householdId: 'home', title: '取
 
 const renderToday = (events: EventResponseDto[], upcomingEvents: EventResponseDto[], props: Partial<ComponentProps<typeof DesktopToday>> = {}) => render(
   <MuchakuchaThemeProvider>
-    <DesktopToday detailOpen={false} date="2026-11-10" nowMinutes={10 * 60 + 42} events={events} todayTasks={[]} overdue={[]} unscheduled={[]} upcoming={[]} upcomingEvents={upcomingEvents} renderTask={() => null} taskCompletion={() => ({ onToggleComplete: () => undefined, statusChanging: false, statusError: null })} onOpenEvent={() => undefined} onOpenTask={() => undefined} onSelectDate={() => undefined} {...props} />
+    <DesktopToday detailOpen={false} date="2026-11-10" nowMinutes={10 * 60 + 42} events={events} todayTasks={[]} overdue={[]} unscheduled={[]} upcoming={[]} upcomingEvents={upcomingEvents} renderTask={() => null} taskCompletion={() => ({ onToggleComplete: () => undefined, statusChanging: false, statusError: null })} onOpenEvent={() => undefined} onOpenTask={() => undefined} onSelectDate={() => undefined} onOpenCalendar={() => undefined} onOpenTasks={() => undefined} onCreateTask={() => undefined} {...props} />
   </MuchakuchaThemeProvider>,
 );
 

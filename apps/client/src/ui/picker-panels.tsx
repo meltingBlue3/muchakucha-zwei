@@ -37,16 +37,18 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
   const today = toDateValue(new Date());
+  // A desktop month fills its weeks with the neighbouring months' days, as a wall calendar does.
+  const outside = compact || dense;
   const weeks = useMemo(() => {
     const leading = daysSinceMonday(month);
     const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
     const cells: Array<Date | null> = [
-      ...Array.from({ length: leading }, () => null),
+      ...Array.from({ length: leading }, (_, index) => outside ? new Date(month.getFullYear(), month.getMonth(), index - leading + 1) : null),
       ...Array.from({ length: days }, (_, index) => new Date(month.getFullYear(), month.getMonth(), index + 1)),
     ];
-    while (cells.length % 7 !== 0) cells.push(null);
+    while (cells.length % 7 !== 0) cells.push(outside ? new Date(month.getFullYear(), month.getMonth(), cells.length - leading + 1) : null);
     return Array.from({ length: cells.length / 7 }, (_, row) => cells.slice(row * 7, row * 7 + 7));
-  }, [month]);
+  }, [month, outside]);
   const shift = (delta: number) => setMonth(current => new Date(current.getFullYear(), current.getMonth() + delta, 1));
   const monthLabel = `${month.getFullYear()}年${month.getMonth() + 1}月`;
   const navButton = (label: string, delta: number, icon: React.ReactNode) => (
@@ -71,6 +73,7 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
             const dayValue = toDateValue(day);
             const isSelected = dayValue === value;
             const isToday = dayValue === today;
+            const otherMonth = day.getMonth() !== month.getMonth();
             return (
               <View key={column} style={{ flex: 1, alignItems: 'center' }}>
                 <Pressable
@@ -88,7 +91,7 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
                     backgroundColor: isSelected ? (isToday ? theme.colors.accent : theme.colors.primary) : pressed ? theme.colors.surfaceMuted : theme.colors.transparent,
                   })}
                 >
-                  <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accent' : 'ink'}>{day.getDate()}</Text>{markedDates.includes(dayValue) ? <View style={{ position: 'absolute', bottom: 0, width: theme.spacing[1], height: theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: isSelected ? theme.colors.surface : theme.colors.inkMuted }} /> : null}
+                  <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accent' : otherMonth ? 'inkFaint' : 'ink'} style={dense || compact ? { fontSize: theme.typography.meta.fontSize + 0.5 } : undefined}>{day.getDate()}</Text>{markedDates.includes(dayValue) ? <View style={{ position: 'absolute', bottom: 0, width: theme.spacing[1], height: theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: isSelected ? theme.colors.surface : theme.colors.inkMuted }} /> : null}
                 </Pressable>
               </View>
             );

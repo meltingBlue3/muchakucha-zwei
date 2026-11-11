@@ -52,13 +52,25 @@ for (const width of [1024, 1280, 1440, 1920]) {
     const sidebarWidth = width < 1280 ? 64 : 248;
     for (const destination of ['today', 'events', 'tasks', 'notes', `assistant/conversations/${conversationId}`, 'settings', 'labels', 'recurrence-rules', '/profile', '/reminders', '/inbox']) {
       await page.goto(destination.startsWith('/') ? destination : `${base}/${destination}`);
-      const header = page.getByTestId('desktop-page-header');
-      await expect(header.last()).toBeVisible();
-      await expect(page.getByRole('progressbar')).toHaveCount(0);
-      const box = (await header.boundingBox())!;
-      expect(box.height).toBe(56);
-      expect(box.x).toBe(sidebarWidth + 1);
-      expect(box.x + box.width).toBe(width - 9);
+      if (destination.startsWith('assistant/')) {
+        // The assistant's columns carry their own 56px headers in place of the shared one.
+        const columns = page.getByTestId('desktop-column-header');
+        await expect(columns.first()).toBeVisible();
+        await expect(page.getByTestId('desktop-page-header')).toHaveCount(0);
+        await expect(page.getByRole('progressbar')).toHaveCount(0);
+        const boxes = await Promise.all((await columns.all()).map(column => column.boundingBox()));
+        expect(boxes.length).toBeGreaterThanOrEqual(2);
+        for (const column of boxes) expect(column!.height).toBe(56);
+        expect(boxes[0]!.x).toBe(sidebarWidth + 1);
+      } else {
+        const header = page.getByTestId('desktop-page-header');
+        await expect(header.last()).toBeVisible();
+        await expect(page.getByRole('progressbar')).toHaveCount(0);
+        const box = (await header.boundingBox())!;
+        expect(box.height).toBe(56);
+        expect(box.x).toBe(sidebarWidth + 1);
+        expect(box.x + box.width).toBe(width - 9);
+      }
       const sidebar = (await page.getByTestId('global-sidebar').boundingBox())!;
       expect(sidebar.width).toBe(sidebarWidth);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -68,7 +80,8 @@ for (const width of [1024, 1280, 1440, 1920]) {
         expect(grid.y + grid.height).toBe(891);
         const span = page.getByTestId('calendar-span');
         await expect(span).toHaveCount(1);
-        expect((await span.boundingBox())!.width).toBeCloseTo(grid.width * 3 / 7, 0);
+        // Three day cells wide, inset 4px from the cell edges on each side.
+        expect((await span.boundingBox())!.width).toBeCloseTo(grid.width * 3 / 7 - 8, 0);
       }
       if (destination === `assistant/conversations/${conversationId}`) {
         await expect(page.getByTestId('assistant-history')).toBeVisible();

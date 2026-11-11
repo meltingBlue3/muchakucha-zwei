@@ -4,7 +4,7 @@ import Check from 'lucide-react-native/icons/check';
 import type { EventResponseDto, TaskResponseDto } from '@muchakucha/api-client';
 import { insetFocusRing } from '../../platform/focus-ring/focus-ring';
 import { CalendarGrid } from '../../ui/picker-panels';
-import { Heading, Stack, Text } from '../../ui/primitives';
+import { Button, Heading, Stack, Text } from '../../ui/primitives';
 import { GroupLabel, ListGroup, NowMarker } from '../../ui/list-group';
 import { labelTint, theme } from '../../ui/theme';
 import { useDesktopDensity } from '../../ui/use-desktop';
@@ -29,7 +29,7 @@ const MARKER_HEIGHT = TASK_SPAN * HOUR / 60 - theme.spacing[1] / 2;
 /** Share of the timeline width events keep when a task marker sits beside them. */
 const BESIDE_TASK = 55;
 /** An hour label this close to the now line would collide with its time. */
-const NOW_LABEL_CLEARANCE = 20;
+const NOW_LABEL_CLEARANCE = 12;
 const circleSize = theme.spacing[3];
 
 export function timelineLanes(events: EventResponseDto[]) {
@@ -126,8 +126,12 @@ function TimelineTask({ task, top, placement, completion, onOpen }: { task: Task
   );
 }
 
-function PaneTitle({ children }: { children: string }) {
-  return <View style={{ height: theme.layout.paneHeaderHeight, paddingHorizontal: theme.spacing[4], justifyContent: 'center' }}><Heading variant="section">{children}</Heading></View>;
+/** A column's own header: its name, and on the right a way out to the full page. */
+function PaneTitle({ children, link }: { children: string; link?: { label: string; onPress(): void } }) {
+  return <View style={{ height: theme.layout.paneHeaderHeight, paddingLeft: theme.layout.desktopColumnInset, paddingRight: theme.spacing[4], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+    <Heading variant="label" level={2} style={{ fontSize: theme.typography.section.fontSize - 1 }}>{children}</Heading>
+    {link ? <Pressable accessibilityRole="link" accessibilityLabel={link.label} onPress={link.onPress} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ minHeight: theme.layout.desktopControl - theme.spacing[1], justifyContent: 'center', paddingHorizontal: theme.spacing[2], borderRadius: theme.borderRadii.sm, backgroundColor: pressed || hovered ? theme.colors.surfaceMuted : theme.colors.transparent })}><Text variant="meta">{link.label}</Text></Pressable> : null}
+  </View>;
 }
 
 function TimelineEvent({ event, top, height, left, right, onPress }: { event: EventResponseDto; top: number; height: number; left: string; right: string; onPress(): void }) {
@@ -192,8 +196,9 @@ function UpcomingDays({ date, events, tasks, onOpenEvent, onOpenTask }: { date: 
   );
 }
 
-export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, unscheduled, upcoming, upcomingEvents, renderTask, taskCompletion, onOpenEvent, onOpenTask, onSelectDate, detailOpen }: {
+export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, unscheduled, upcoming, upcomingEvents, renderTask, taskCompletion, onOpenEvent, onOpenTask, onSelectDate, detailOpen, onOpenCalendar, onOpenTasks, onCreateTask }: {
   detailOpen: boolean;
+  onOpenCalendar(): void; onOpenTasks(): void; onCreateTask(): void;
   upcomingEvents: EventResponseDto[];
   date: string; nowMinutes: number; events: EventResponseDto[]; todayTasks: TaskResponseDto[]; overdue: TaskResponseDto[]; unscheduled: TaskResponseDto[]; upcoming: TaskResponseDto[];
   renderTask(task: TaskResponseDto): ReactNode;
@@ -217,16 +222,17 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
   const next = <Stack gap={5}>
     <CalendarGrid compact markedDates={markedDates} value={date} onSelect={onSelectDate} />
     <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4] }}>
-      <GroupLabel>未来 7 天</GroupLabel>
+      <Text accessibilityRole="header" aria-level={2} variant="label" style={{ marginBottom: theme.spacing[2] }}>未来 7 天</Text>
       <UpcomingDays date={date} events={upcomingEvents} tasks={upcoming} onOpenEvent={onOpenEvent} onOpenTask={onOpenTask} />
     </View>
   </Stack>;
   const groups = [{ title: '逾期', tasks: overdue, tone: 'accent' as const }, { title: '今天', tasks: dateOnly, tone: 'muted' as const }, { title: '待安排', tasks: unscheduled, tone: 'muted' as const }].filter(group => group.tasks.length > 0);
   const column = { flexGrow: 0, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator } as const;
-  const columnContent = { paddingHorizontal: theme.spacing[4], paddingBottom: theme.spacing[4], gap: theme.spacing[5] } as const;
+  const columnContent = { paddingHorizontal: theme.spacing[5], paddingBottom: theme.spacing[4], gap: theme.spacing[5] } as const;
+  const todoContent = { paddingHorizontal: theme.layout.desktopColumnInset, paddingBottom: theme.spacing[4], gap: theme.spacing[3] } as const;
   return <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}>
     <View style={{ flex: 1, minWidth: 0 }}>
-      <PaneTitle>时间安排</PaneTitle>
+      <PaneTitle link={{ label: '在日历中查看', onPress: onOpenCalendar }}>时间安排</PaneTitle>
       {allDay.length ? <View style={{ flexDirection: 'row', paddingHorizontal: theme.spacing[3], marginBottom: theme.spacing[1] }}>
         <Text variant="time" style={{ width: theme.layout.timeColumn, paddingTop: theme.spacing[2] }}>全天</Text>
         <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>{allDay.map(event => {
@@ -260,9 +266,10 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
       </ScrollView>
     </View>
     <View style={{ ...column, width: compact ? theme.layout.todayTodoWidth - theme.spacing[10] : theme.layout.todayTodoWidth }}>
-      <PaneTitle>待办</PaneTitle>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={columnContent}>
-        {groups.length ? groups.map(group => <View key={group.title}><GroupLabel tone={group.tone}>{`${group.title}（${group.tasks.length}）`}</GroupLabel><ListGroup>{group.tasks.map(renderTask)}</ListGroup></View>) : <Text variant="bodySm">今天没有待办。</Text>}
+      <PaneTitle link={{ label: '全部任务', onPress: onOpenTasks }}>待办</PaneTitle>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={todoContent}>
+        {groups.length ? groups.map(group => <View key={group.title}><GroupLabel flush tone={group.tone}>{`${group.title}（${group.tasks.length}）`}</GroupLabel><ListGroup flush>{group.tasks.map(renderTask)}</ListGroup></View>) : <Text variant="bodySm">今天没有待办。</Text>}
+        <Button label={groups.length ? '再添一项待办' : '添加待办'} tone="secondary" size="compact" style={{ alignSelf: 'flex-start', marginTop: theme.spacing[1] }} onPress={onCreateTask} />
         {compact ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], gap: theme.spacing[4] }}><Heading variant="section">接下来</Heading>{next}</View> : null}
       </ScrollView>
     </View>

@@ -3,7 +3,9 @@ import { useResourceNavigation } from '../../ui/use-resource-navigation';
 import { useDesktop } from '../../ui/use-desktop';
 import { MarkdownBody } from './markdown-body';
 import { theme } from '../../ui/theme';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { DetailEditButton } from '../../ui/detail-fields';
+import { formatDateTime } from '../../ui/date-values';
 import { useOpenWindowItem } from '../../ui/route-window';
 import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../content/use-content-delete';
@@ -21,7 +23,7 @@ import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useHouseholdContext } from '../households/household-context';
 import { NoteCard } from '../notes/note-card';
 import { searchNotesByTitle } from '../notes/note-search';
-import { Button, EmptyState, Heading, LoadError, LoadingState, Stack } from '../../ui/primitives';
+import { Button, EmptyState, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 
 export default function NotesListRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -109,7 +111,13 @@ export default function NotesListRoute() {
       onRefresh={handleRefresh}
       width="reading"
       floatingAction={<FloatingCreateButton label="创建笔记" onPress={handleCreateNote} />}
-      aside={desktop && !openNoteId && notes[0] ? <ScrollView contentContainerStyle={{ padding: theme.spacing[8], width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[8] * 2, alignSelf: 'center', gap: theme.spacing[5] }}><Heading level={2} style={theme.typography.readingTitle}>{notes[0].title}</Heading><Button label="编辑" accessibilityLabel="编辑最近的笔记" tone="secondary" style={{ alignSelf: 'flex-start' }} onPress={() => openResource(`/households/${encodeURIComponent(householdId!)}/notes/${encodeURIComponent(notes[0]!.id)}/edit`)} /><MarkdownBody source={notes[0].body ?? ''} /></ScrollView> : null}
+      aside={desktop && !openNoteId && notes[0] ? <View style={{ flex: 1, minHeight: 0 }}>
+        <View style={{ height: theme.layout.paneHeaderHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingLeft: theme.spacing[6], paddingRight: theme.spacing[3], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
+          <Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, fontFamily: theme.fontFamilies.numeric }}>{`更新于 ${formatDateTime(new Date(notes[0].updatedAt))}`}</Text>
+          <DetailEditButton accessibilityLabel="编辑最近的笔记" worded onPress={() => openResource(`/households/${encodeURIComponent(householdId!)}/notes/${encodeURIComponent(notes[0]!.id)}/edit`)} />
+        </View>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: theme.spacing[5], paddingHorizontal: theme.spacing[6], width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[6] * 2, alignSelf: 'center', gap: theme.spacing[4] }}><Heading level={2} style={theme.typography.readingTitle}>{notes[0].title}</Heading><MarkdownBody source={notes[0].body ?? ''} /></ScrollView>
+      </View> : null}
     >
       <Stack gap={5}>
         <PageIntro title="笔记" {...(notes.length > 0 ? { subtitle: `${notes.length} 篇，最近更新的在前` } : {})} action={desktop ? <SearchField label="搜索笔记" placeholder="按标题搜索" value={query} onChangeText={setQuery} /> : null} />
@@ -130,7 +138,7 @@ export default function NotesListRoute() {
           <EmptyState message={`没有标题匹配「${query.trim()}」的笔记。`} action={<Button label="清除搜索" tone="secondary" onPress={() => setQuery('')} />} />
         )}
 
-        {groups.filter(group => group.items.length).map(group => <Stack key={group.title} gap={2}>{group.title ? <GroupLabel>{group.title}</GroupLabel> : null}<ListGroup>
+        {groups.filter(group => group.items.length).map(group => <Stack key={group.title} gap={desktop ? 0 : 2}>{group.title ? <GroupLabel flush>{group.title}</GroupLabel> : null}<ListGroup flush>
           {group.items.map((note) => (
             <NoteCard key={note.id} note={note} selected={note.id === openNoteId || (desktop && !openNoteId && note.id === notes[0]?.id)} onPress={handleNotePress} onEdit={editNote(note)} onDelete={deleteNote(note)} />
           ))}

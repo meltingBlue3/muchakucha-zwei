@@ -11,7 +11,7 @@ import { useTheme } from '@shopify/restyle';
 import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text, FormActions } from '../../ui/primitives';
-import { FormRow, FormSection, RowMessage, rowIcon, rowInputStyle, titleInputStyle } from '../../ui/compose-rows';
+import { FormRow, FormSection, RowMessage, rowIcon, useComposeInputStyles } from '../../ui/compose-rows';
 import { DateField } from '../../ui/date-field';
 import { LabelPicker } from '../labels/label-picker';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
@@ -107,6 +107,7 @@ function eventInputFrom(initial: EventResponseDto): EventInput {
 
 export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: EventFormProps) {
   const activeTheme = useTheme<Theme>();
+  const inputs = useComposeInputStyles();
   // CR-03: the /series endpoint has no way to detach an occurrence into a
   // standalone item — selecting 不重复 here omits `recurrence` from the
   // payload, which the server reads as "unchanged" and just continues the
@@ -235,7 +236,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
           onChangeText={(v) => updateField('title', v)}
           placeholder="添加标题"
           placeholderTextColor={activeTheme.colors.inkMuted}
-          style={titleInputStyle}
+          style={inputs.title}
           maxLength={200}
           accessibilityLabel="日程标题"
           aria-invalid={titleError !== null}
@@ -300,7 +301,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
             onChangeText={(v) => updateField('location', v)}
             placeholder="添加地点"
             placeholderTextColor={activeTheme.colors.inkMuted}
-            style={rowInputStyle}
+            style={inputs.row}
             maxLength={255}
             accessibilityLabel="地点"
           />
@@ -315,7 +316,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
             onChangeText={(v) => updateField('description', v)}
             placeholder="添加说明"
             placeholderTextColor={activeTheme.colors.inkMuted}
-            style={[rowInputStyle, { minHeight: activeTheme.spacing[16] + activeTheme.spacing[4], textAlignVertical: 'top' }]}
+            style={[inputs.row, { minHeight: activeTheme.spacing[16] + activeTheme.spacing[4], textAlignVertical: 'top' }]}
             multiline
             numberOfLines={4}
             accessibilityLabel="日程描述"

@@ -105,8 +105,8 @@ export default function RecurrenceRulesIndexRoute() {
 
   return (
     <HouseholdScreen active="recurrence-rules" subpage accessibilityLabel="重复安排" width="reading" refreshing={refreshing} onRefresh={handleRefresh}>
-      <Stack gap={5}>
-        <PageIntro title="重复安排" subtitle="会自动重复的日程和任务，按下次发生的时间排列。" action={desktop ? <FilterOptions label="重复安排类型" hideLabel value={kind} options={[{ value: 'all', label: '全部', name: '全部重复安排' }, { value: 'event', label: '日程', name: '重复日程' }, { value: 'task', label: '任务', name: '重复任务' }]} onChange={setKind} /> : null} />
+      <Stack gap={desktop ? 0 : 5}>
+        <PageIntro title="重复安排" subtitle={desktop && !loading ? `${rules.length} 项 · 按下次发生时间排列` : '会自动重复的日程和任务，按下次发生的时间排列。'} controls={desktop ? <FilterOptions label="重复安排类型" hideLabel value={kind} options={[{ value: 'all', label: '全部', name: '全部重复安排' }, { value: 'event', label: '日程', name: '重复日程' }, { value: 'task', label: '任务', name: '重复任务' }]} onChange={setKind} /> : undefined} />
 
         {loading && <LoadingState label="正在加载重复安排" />}
 
@@ -119,8 +119,8 @@ export default function RecurrenceRulesIndexRoute() {
         {/* Rendered in the order the server returned: unresolved rules first
             by next occurrence, ended rules after by title. Re-ordering here
             would put a second, drifting copy of that contract on the client. */}
-        <ListGroup>
-          {desktop ? <View style={{ flexDirection: 'row', paddingHorizontal: theme.spacing[4], paddingVertical: theme.spacing[3], gap: theme.spacing[4] }}><Text variant="caption" style={{ width: theme.spacing[16] }}>类型</Text><Text variant="caption" style={{ flex: 1 }}>名称</Text><Text variant="caption" style={{ flex: 1 }}>规则</Text><Text variant="caption" style={{ width: theme.spacing[10] * 3 }}>下一次</Text></View> : null}
+        <ListGroup flush>
+          {desktop ? <View style={{ flexDirection: 'row', alignItems: 'center', height: theme.layout.desktopControl + theme.spacing[1], paddingHorizontal: theme.spacing[6], gap: theme.spacing[4] }}><Text variant="caption" color="inkFaint" style={{ width: theme.layout.recurrenceKindColumn, fontWeight: '400' }}>类型</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.recurrenceTitleColumn, fontWeight: '400' }}>名称</Text><Text variant="caption" color="inkFaint" style={{ flex: 1, fontWeight: '400' }}>规则</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.recurrenceNextColumn, textAlign: 'right', fontWeight: '400' }}>下一次</Text></View> : null}
           {rules.filter(rule => !desktop || kind === 'all' || rule.kind === kind).map((rule) => (
             <RecurrenceRuleRow
               key={rule.id}

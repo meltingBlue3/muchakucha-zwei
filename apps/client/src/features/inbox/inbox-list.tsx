@@ -1,3 +1,5 @@
+import Mail from 'lucide-react-native/icons/mail';
+import { useDesktop } from '../../ui/use-desktop';
 import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { insetFocusRing } from '../../platform/focus-ring/focus-ring';
@@ -34,6 +36,7 @@ export interface InboxListProps {
 }
 
 export function InboxList({ messages, loading, busy, error, notice, reload }: InboxListProps) {
+  const desktop = useDesktop();
   const [selectedId, setSelectedId] = useState<string>();
   const trigger = useRef<View>(null);
   const container = useRef<View>(null);
@@ -45,7 +48,8 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
     void action.run();
   };
   // In a row: compact pills, the primary answer filled and the other outlined.
-  const actions = (message: InboxMessage) => message.actions.map(action => (
+  // A desktop row reads like the window: the secondary answer first, the primary last.
+  const actions = (message: InboxMessage) => (desktop ? [...message.actions].sort((a, b) => Number(Boolean(a.primary)) - Number(Boolean(b.primary))) : message.actions).map(action => (
     <Button key={action.id} label={action.label} accessibilityLabel={action.accessibilityLabel} tone={action.primary ? 'primary' : 'secondary'} size="compact" disabled={busy || loading} onPress={() => run(action)} />
   ));
   // In the message window: the app's standard buttons, secondary first.
@@ -58,13 +62,14 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
       {error ? <LoadError message={error} disabled={busy || loading} onRetry={() => { void reload(); }} /> : null}
       {loading && messages.length === 0 ? <LoadingState label="正在加载消息" /> : null}
       {!loading && !error && messages.length === 0 ? <EmptyState title="暂无消息" message="新的通知会显示在这里。" /> : null}
-      {messages.length > 0 ? <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, overflow: 'hidden' }}>
-        {messages.map((message, index) => <View key={message.id} testID={`inbox-row-${message.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], borderBottomWidth: index < messages.length - 1 ? theme.borderWidths.default : 0, borderBottomColor: theme.colors.separator, paddingHorizontal: theme.spacing[2] }}>
+      {messages.length > 0 ? <View style={{ backgroundColor: theme.colors.surface, borderRadius: desktop ? theme.borderRadii.md : theme.borderRadii.lg, overflow: 'hidden', ...(desktop ? { borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator } : {}) }}>
+        {messages.map((message, index) => <View key={message.id} testID={`inbox-row-${message.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], borderBottomWidth: index < messages.length - 1 ? theme.borderWidths.default : 0, borderBottomColor: theme.colors.separator, paddingHorizontal: theme.spacing[2], ...(desktop ? { paddingLeft: theme.spacing[4], paddingRight: theme.spacing[3] } : {}) }}>
+          {desktop ? <View style={{ width: theme.controlSizes.avatar + 8, height: theme.controlSizes.avatar + 8, borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}><Mail size={theme.controlSizes.icon - 4} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /></View> : null}
           <Pressable {...insetFocusRing} ref={node => { if (node) rowTriggers.current.set(message.id, node); else rowTriggers.current.delete(message.id); }} accessibilityRole="button" accessibilityLabel={`查看消息：${message.summary}`} accessibilityHint="打开消息详情"
             disabled={busy} onPress={() => { trigger.current = rowTriggers.current.get(message.id) ?? null; setSelectedId(message.id); }}
             style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[4], backgroundColor: pressed ? theme.colors.surfaceSubtle : theme.colors.transparent })}>
             <Text variant="bodySm" color="ink" numberOfLines={2}>{message.summary}</Text>
-            <Text variant="caption" style={{ marginTop: theme.spacing[1] }}>{formatDate(new Date(message.createdAt))}</Text>
+            <Text variant="caption" style={{ marginTop: theme.spacing[1] }}>{formatDate(new Date(message.createdAt))}{desktop ? ' 收到' : ''}</Text>
           </Pressable>
           <View style={{ flexDirection: 'row', flexShrink: 0, gap: theme.spacing[2], paddingRight: theme.spacing[1] }}>{actions(message)}</View>
         </View>)}

@@ -14,7 +14,7 @@ import { useTheme } from '@shopify/restyle';
 import type { CreateTaskDto, TaskResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text, FormActions } from '../../ui/primitives';
-import { ChoiceField, FormRow, FormSection, ROW_CONTENT_INSET, RowMessage, rowIcon, rowInputStyle, titleInputStyle } from '../../ui/compose-rows';
+import { ChoiceField, FormRow, FormSection, ROW_CONTENT_INSET, RowMessage, rowIcon, useComposeInputStyles } from '../../ui/compose-rows';
 import { DateField } from '../../ui/date-field';
 import { toDateValue, toTimeValue } from '../../ui/date-values';
 import { LabelPicker } from '../labels/label-picker';
@@ -116,6 +116,7 @@ function dueFields(iso: string | null | undefined): Pick<TaskInput, 'dueDate' | 
 
 export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: TaskFormProps) {
   const activeTheme = useTheme<Theme>();
+  const inputs = useComposeInputStyles();
   // A brand-new task's due date starts empty (`EMPTY_TASK.dueDate`), and the
   // server ignores the top-level `dueDate` entirely once `recurrence` is
   // present (each occurrence's own due date is derived from the rule's
@@ -250,7 +251,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
           onChangeText={(v) => updateField('title', v)}
           placeholder="添加标题"
           placeholderTextColor={activeTheme.colors.inkMuted}
-          style={titleInputStyle}
+          style={inputs.title}
           maxLength={200}
           accessibilityLabel="任务标题"
           aria-invalid={titleError !== null}
@@ -380,7 +381,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
             onChangeText={(v) => updateField('description', v)}
             placeholder="添加说明"
             placeholderTextColor={activeTheme.colors.inkMuted}
-            style={[rowInputStyle, { minHeight: activeTheme.spacing[16] + activeTheme.spacing[4], textAlignVertical: 'top' }]}
+            style={[inputs.row, { minHeight: activeTheme.spacing[16] + activeTheme.spacing[4], textAlignVertical: 'top' }]}
             multiline
             numberOfLines={4}
             accessibilityLabel="任务描述"

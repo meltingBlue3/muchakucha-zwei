@@ -131,7 +131,7 @@ export function DateField({
         accessibilityState={{ disabled, expanded: open }}
         style={({ pressed }) => [fieldStyle, { borderRadius: plain ? activeTheme.borderRadii.sm : activeTheme.borderRadii.md, backgroundColor: pressed ? activeTheme.colors.surfaceMuted : plain ? activeTheme.colors.transparent : activeTheme.colors.surface }]}
       >
-        <Text color={isEmpty ? 'inkMuted' : 'ink'}>{displayValue}</Text>
+        <Text {...(dense ? { variant: 'bodySm' as const } : {})} color={isEmpty ? 'inkMuted' : 'ink'}>{displayValue}</Text>
       </Pressable>
       {desktop && open ? <AnchoredPopover title={PICKER_TITLES[mode]} onClose={close} trigger={trigger}>{panel}</AnchoredPopover> : !inWindow && open ? <AppDialog title={PICKER_TITLES[mode]} busy={false} onClose={close} trigger={trigger}>{panel}</AppDialog> : null}
     </View>

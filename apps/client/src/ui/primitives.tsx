@@ -129,6 +129,16 @@ export const Heading = forwardRef<React.ElementRef<typeof RestyleText>, HeadingP
 
 Heading.displayName = 'Heading';
 
+/**
+ * A one-word tag beside a title or a date, such as 高, 紧急 or 今天: muted for
+ * a plain fact, vermilion on its soft wash when it asks for attention.
+ */
+export const Chip = ({ children, tone = 'muted' }: { children: string; tone?: 'muted' | 'accent' }) => (
+  <View style={{ borderRadius: theme.borderRadii.sm / 2, paddingHorizontal: theme.spacing[1] + 1, backgroundColor: tone === 'accent' ? theme.colors.accentSoft : theme.colors.surfaceMuted, flexShrink: 0 }}>
+    <Text variant="caption" color={tone === 'accent' ? 'accentStrong' : 'inkMuted'} style={theme.typography.tag}>{children}</Text>
+  </View>
+);
+
 export const Spinner = ({ label = '正在处理', inverse = false }: { label?: string; inverse?: boolean }) => {
   const activeTheme = useTheme<Theme>();
   return (
@@ -157,6 +167,10 @@ type ButtonProps = Omit<PressableProps, 'children'> & {
    * row or in a phone sheet; it keeps the full touch target through hit slop.
    */
   size?: 'regular' | 'compact';
+  /** A leading icon, such as the plus of a create button; it takes the label's color. */
+  icon?: (color: string) => React.ReactNode;
+  /** A trailing icon, such as the chevron of a button that opens a menu. */
+  trailingIcon?: (color: string) => React.ReactNode;
 };
 
 export const getButtonFill = (state: { disabled: boolean; pressed: boolean }, tone: Exclude<ButtonTone, 'secondary'> = 'primary'): string =>
@@ -176,7 +190,7 @@ const webFocusRing = (focused: boolean) =>
     ? { outlineColor: theme.colors.focusRing, outlineOffset: theme.focus.offset, outlineStyle: 'solid' as const, outlineWidth: theme.focus.width }
     : {};
 
-export const Button = ({ disabled, label, loading = false, tone = 'primary', expanded, size = 'regular', style, ...props }: ButtonProps) => {
+export const Button = ({ disabled, label, loading = false, tone = 'primary', expanded, size = 'regular', icon, trailingIcon, style, ...props }: ButtonProps) => {
   const activeTheme = useTheme<Theme>();
   const dense = useDesktopDensity();
   const auth = useContext(AuthControlSizes);
@@ -217,14 +231,18 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', exp
           justifyContent: 'center',
           minHeight: auth ? activeTheme.layout.authControl : dense ? activeTheme.layout.desktopControl : compact ? activeTheme.controlSizes.compact : activeTheme.controlSizes.primary,
           minWidth: dense ? activeTheme.layout.desktopControl : activeTheme.controlSizes.touchTarget,
-          paddingHorizontal: compact ? activeTheme.spacing[4] : activeTheme.spacing[5],
+          paddingHorizontal: dense ? activeTheme.spacing[3] + 2 : compact ? activeTheme.spacing[4] : activeTheme.spacing[5],
+          ...(dense && icon ? { paddingLeft: activeTheme.spacing[3], gap: activeTheme.spacing[1] + 2 } : {}),
           ...webFocusRing(focused),
         },
         typeof style === 'function' ? style(state) : style,
       ]}
     >
       {loading ? <Spinner inverse={tone !== 'secondary'} label={`${label}，正在处理`} /> : null}
-      <Text variant={compact ? 'label' : 'button'} color={unavailable ? 'inkMuted' : tone === 'secondary' ? 'ink' : 'surface'}>{label}</Text>
+      {icon && !loading ? icon(unavailable ? activeTheme.colors.inkMuted : tone === 'secondary' ? activeTheme.colors.ink : activeTheme.colors.surface) : null}
+      {/* Desktop controls are 32px pills, so their labels drop to 13. */}
+      <Text variant={compact || dense ? 'label' : 'button'} color={unavailable ? 'inkMuted' : tone === 'secondary' ? 'ink' : 'surface'} style={dense ? { fontSize: activeTheme.textVariants.meta.fontSize } : undefined}>{label}</Text>
+      {trailingIcon ? trailingIcon(activeTheme.colors.inkMuted) : null}
     </Pressable>
   );
 };

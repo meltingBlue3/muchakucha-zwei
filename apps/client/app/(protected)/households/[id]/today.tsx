@@ -358,7 +358,7 @@ export default function TodayRoute() {
         {error !== null ? <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载今日数据" /> : null}
 
         {ready && viewState !== 'resolving' ? (
-          desktop ? <DesktopToday detailOpen={detailOpen} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} /> : wide && secondary
+          desktop ? <DesktopToday detailOpen={detailOpen} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenTasks={() => router.push(`/households/${encodeURIComponent(householdId!)}/tasks`)} onCreateTask={create('tasks')} /> : wide && secondary
             ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing[8] }}>
                 <View style={{ flex: 3, minWidth: 0 }}>{primary}</View>
                 <View style={{ flex: 2, minWidth: 0 }}>{secondary}</View>

@@ -5,7 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import X from 'lucide-react-native/icons/x';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
-import { Button, Heading, Inline } from './primitives';
+import { Button, Heading, Inline, Text } from './primitives';
+
+/** Kept for screen readers and focus, out of sight. */
+const visuallyHidden = { position: 'absolute' as const, width: 1, height: 1, overflow: 'hidden' as const, opacity: 0 };
 import { SheetActionSlot, type SheetAction } from './sheet-action';
 import { theme } from './theme';
 import { desktopDetailWidth, useDesktop } from './use-desktop';
@@ -17,7 +20,7 @@ function webDialogName(title: string): object {
   return Platform.OS === 'web' ? { 'aria-label': title } : {};
 }
 
-export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, headerActions, reading = false, anchored = false }: {
+export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, headerActions, headerNote, reading = false, anchored = false }: {
   title: string;
   busy: boolean;
   onClose(): void;
@@ -32,6 +35,8 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   docked?: boolean;
   footer?: ReactNode;
   headerActions?: ReactNode;
+  /** Desktop pane only: shown in the header in place of the title, which stays as the pane's (visually hidden) heading. */
+  headerNote?: string;
   reading?: boolean;
   anchored?: boolean;
 }) {
@@ -62,14 +67,16 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   if (pane) {
     const sidebar = width < theme.layout.railBreakpoint ? theme.layout.railWidth : theme.layout.navigationWidth;
     return <View role="region" accessibilityLabel={title} pointerEvents="box-none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}><View ref={panel} testID="app-dialog-panel" style={{ position: 'absolute', pointerEvents: 'auto', right: theme.layout.workspaceInset + theme.borderWidths.default, top: theme.layout.workspaceInset + theme.layout.pageHeaderHeight + theme.borderWidths.default, bottom: theme.layout.workspaceInset + theme.borderWidths.default, ...(reading ? { left: sidebar + theme.layout.notesListWidth + theme.borderWidths.default } : { width: desktopDetailWidth(width) }), backgroundColor: theme.colors.surface, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator, borderBottomRightRadius: theme.layout.workspaceRadius, overflow: 'hidden' }}>
-      <Inline style={{ height: theme.layout.paneHeaderHeight, paddingHorizontal: theme.spacing[4], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
-        <Heading ref={initial} tabIndex={-1} variant="label" level={2} style={{ flex: 1 }}>{title}</Heading>
+      <Inline gap={1} style={{ height: theme.layout.paneHeaderHeight, paddingLeft: theme.spacing[6], paddingRight: theme.spacing[2] + 2, borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
+        {/* A form names itself in the header; a detail keeps the header quiet, since its title follows in large type. */}
+        <Heading ref={initial} tabIndex={-1} variant={sheetAction ? 'label' : 'meta'} color={sheetAction ? 'ink' : 'inkFaint'} level={2} numberOfLines={1} style={headerNote ? visuallyHidden : { flex: 1 }}>{title}</Heading>
+        {headerNote ? <Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, fontFamily: theme.fontFamilies.numeric }}>{headerNote}</Text> : null}
         {headerActions}
         {reading && sheetAction ? <><Button label="取消" tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={{ width: theme.layout.desktopControl, height: theme.layout.desktopControl, alignItems: 'center', justifyContent: 'center' }}><X size={theme.controlSizes.icon} color={theme.colors.inkMuted} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ width: theme.layout.desktopControl, height: theme.layout.desktopControl, borderRadius: theme.borderRadii.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed || hovered ? theme.colors.surfaceMuted : theme.colors.transparent })}><X size={theme.controlSizes.icon - 4} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /></Pressable>
       </Inline>
       {reading && footer ? <View style={{ padding: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>{footer}</View> : null}
-      <SheetActionSlot.Provider value={setSheetAction}><ScrollView tabIndex={0} style={{ flex: 1, minHeight: 0 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: theme.spacing[6], ...(reading ? { width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[6] * 2, alignSelf: 'center' } : {}) }}>{children}</ScrollView></SheetActionSlot.Provider>
+      <SheetActionSlot.Provider value={setSheetAction}><ScrollView tabIndex={0} style={{ flex: 1, minHeight: 0 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingVertical: theme.spacing[5], paddingHorizontal: theme.spacing[6], ...(reading ? { width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[6] * 2, alignSelf: 'center' } : {}) }}>{children}</ScrollView></SheetActionSlot.Provider>
       {!reading && (footer || sheetAction) ? <View style={{ padding: theme.spacing[4], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>{footer}{sheetAction ? <Inline style={{ justifyContent: 'flex-end' }}><Button label="取消" tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></Inline> : null}</View> : null}
     </View></View>;
   }

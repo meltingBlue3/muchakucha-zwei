@@ -1,3 +1,4 @@
+import UserPlus from 'lucide-react-native/icons/user-plus';
 import { useDesktop } from '../../ui/use-desktop';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import type { GetHouseholdResponseDto, InvitationListItemDto } from '@muchakucha/api-client';
@@ -449,13 +450,21 @@ export function HouseholdSettings({
   ) : null;
 
   // One invite action in both layouts: the overview panel on wide screens, beside the 成员 title otherwise.
-  const inviteButton = <Button ref={inviteTrigger} label="邀请家人" tone={inviteInOverview ? 'primary' : 'secondary'} size={inviteInOverview ? 'regular' : 'compact'} onPress={() => setActiveForm('invite')} />;
+  const inviteButton = <Button ref={inviteTrigger} label="邀请家人" tone={inviteInOverview ? 'primary' : 'secondary'} size={inviteInOverview ? 'regular' : 'compact'} {...(desktop ? { icon: (color: string) => <UserPlus size={theme.controlSizes.icon - 4} color={color} strokeWidth={theme.focus.width} /> } : {})} onPress={() => setActiveForm('invite')} />;
+  // The desktop overview card: one fact per 40px row, the name with its 编辑 pill.
+  const overviewRow = (label: string, value: ReactNode, trailing?: ReactNode) => <Inline key={label} gap={3} style={{ minHeight: theme.layout.desktopRowHeight, borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>
+    <Text variant="meta" color="inkFaint" style={{ width: theme.layout.fieldLabelColumn }}>{label}</Text>
+    <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flex: 1, fontWeight: label === '家庭名称' ? '600' : '400' }}>{value}</Text>
+    {trailing}
+  </Inline>;
   const leaveEntry = !actorIsOwner || canTransferBeforeLeaving ? (
     <Pressable ref={leaveTrigger} accessibilityRole="button" accessibilityLabel="离开家庭" onPress={() => {
       if (actorIsOwner) { setSuccessorId(null); setLeaveOpen(true); }
       else { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/leave?householdName=${encodeURIComponent(authoritativeName)}`); }
-    }} style={({ pressed }) => ({ minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', gap: theme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.destructiveSoft : 'transparent' })}>
-      <LogOut size={theme.controlSizes.icon} color={theme.colors.destructive} strokeWidth={theme.controlSizes.iconStroke} />
+    }} style={({ pressed }) => desktop
+      ? { minHeight: theme.layout.desktopControl, flexDirection: 'row', gap: theme.spacing[1] + 2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing[3] + 2, borderRadius: theme.borderRadii.full, borderWidth: theme.borderWidths.default, borderColor: theme.colors.destructive, backgroundColor: pressed ? theme.colors.destructiveSoft : 'transparent' }
+      : { minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', gap: theme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.destructiveSoft : 'transparent' }}>
+      <LogOut size={desktop ? theme.controlSizes.icon - 5 : theme.controlSizes.icon} color={theme.colors.destructive} strokeWidth={theme.controlSizes.iconStroke} />
       <Text variant="label" color="destructive">离开家庭</Text>
     </Pressable>
   ) : null;
@@ -469,7 +478,12 @@ export function HouseholdSettings({
         {/* Rename form — only shown on the settings route */}
         {showRename ? (
           <SettingsSection title="基本信息" icon={<House size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
-            {wide ? (
+            {desktop ? <View style={{ marginTop: theme.spacing[1] }}>
+              {overviewRow('家庭名称', authoritativeName, actorIsOwner ? <Button ref={editTrigger} label="编辑" accessibilityLabel="编辑家庭名称" tone="secondary" size="compact" style={{ minHeight: theme.spacing[6] + 2, paddingHorizontal: theme.spacing[3] }} onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} /> : null)}
+              {overviewRow('你的角色', actorIsOwner ? '所有者' : actorRole === 'ADMIN' ? '管理员' : '成员')}
+              {overviewRow('成员', `${data.members.length} 位`)}
+              {showInvite && canManage ? overviewRow('待接受', invitationListLoading ? '—' : `${pendingInvitationCount} 个邀请`) : null}
+            </View> : wide ? (
               <Stack gap={4}>
                 <Stack gap={1}>
                   <Text variant="label">家庭名称</Text>
@@ -501,12 +515,15 @@ export function HouseholdSettings({
             )}
           </SettingsSection>
         ) : null}
-        {wide ? leaveEntry : null}
+        {desktop && leaveEntry ? <SettingsSection title="离开家庭" icon={null}>
+          <Text variant="meta">{actorIsOwner ? '你是所有者，离开前需要把所有权转移给另一位家人。离开后不再能看到这个家庭的内容。' : '离开后不再能看到这个家庭的日程、任务和笔记，需要重新被邀请才能回来。'}</Text>
+          <View style={{ alignSelf: 'flex-start' }}>{leaveEntry}</View>
+        </SettingsSection> : wide ? leaveEntry : null}
         </Stack>
         <Stack gap={4} style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', minWidth: 0 }}>
-        <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}
+        <SettingsSection plain title="成员" count={data.members.length} detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}
           action={showInvite && canManage && !inviteInOverview ? inviteButton : undefined}>
-        {desktop ? <Inline gap={3} style={{ borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator, paddingBottom: theme.spacing[3] }}><Text variant="caption" style={{ flex: 1 }}>姓名</Text><Text variant="caption" style={{ flex: 1 }}>用户名</Text><Text variant="caption" style={{ width: theme.layout.fieldLabelColumn }}>角色</Text><View style={{ width: theme.layout.desktopControl }} /></Inline> : null}
+        {desktop ? <Inline gap={3} style={{ borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator, paddingBottom: theme.spacing[2], paddingHorizontal: theme.spacing[1] }}><Text variant="caption" color="inkFaint" style={{ flex: 1, fontWeight: '400' }}>姓名</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.memberUsernameColumn, fontWeight: '400' }}>用户名</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.memberRoleColumn, fontWeight: '400' }}>角色</Text><View style={{ width: theme.layout.desktopControl }} /></Inline> : null}
         <SettingsRows>
           {data.members.map((member) => {
             const targetIsOwner = member.membershipId === data.ownerMembershipId;
@@ -538,7 +555,7 @@ export function HouseholdSettings({
 
         {/* Invitation list — visible to owner/admin when showInvite is enabled */}
         {showInvite && canManage ? (
-          <SettingsSection title="邀请" icon={<Mail size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
+          <SettingsSection plain title="邀请" {...(invitationListLoading ? {} : { count: invitationList.length })} icon={<Mail size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
 
             {invitationListError !== undefined ? (
               <LoadError message={`邀请列表没有加载成功。${invitationListError}`} onRetry={() => setInvitationAttempt(value => value + 1)} retryAccessibilityLabel="重试加载邀请" />

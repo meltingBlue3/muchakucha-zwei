@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { TaskResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
-import { Text } from '../../ui/primitives';
+import { Chip, Text } from '../../ui/primitives';
 import { CheckCircle } from '../../ui/check-circle';
 import { ListRow, RowSlot } from '../../ui/list-group';
 import { AvatarStack } from '../../ui/member-avatar';
@@ -120,7 +120,7 @@ export function TaskCard({
         </View>
       ) : null}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}><Text variant={dense ? 'bodySm' : 'body'} numberOfLines={dense ? 1 : 2} color={closed ? 'inkFaint' : 'ink'} style={{ flexShrink: 1, textDecorationLine: closed ? 'line-through' : 'none' }}>{task.title}</Text>{dense && task.priority === 'urgent' ? <Text variant="caption" color="accent">紧急</Text> : dense && task.priority === 'high' ? <Text variant="caption">高</Text> : null}{dense && task.recurrenceRuleId ? <RecurrenceBadge /> : null}</View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}><Text variant={dense ? 'bodySm' : 'body'} numberOfLines={dense ? 1 : 2} color={closed ? 'inkFaint' : 'ink'} style={{ flexShrink: 1, textDecorationLine: closed ? 'line-through' : 'none' }}>{task.title}</Text>{dense && !closed && task.priority === 'urgent' ? <Chip tone="accent">紧急</Chip> : dense && !closed && task.priority === 'high' ? <Chip>高</Chip> : null}{dense && task.recurrenceRuleId ? <RecurrenceBadge /> : null}</View>
       {hasDetails && !dense ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[2], rowGap: activeTheme.spacing[1], marginTop: activeTheme.spacing[1] / 2 }}>
           {showDue ? <Text variant="time" color={overdue ? 'accent' : 'inkMuted'}>{dueLabel}</Text> : null}

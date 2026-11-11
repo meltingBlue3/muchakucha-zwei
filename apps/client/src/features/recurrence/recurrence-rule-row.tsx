@@ -8,7 +8,10 @@ import { RecurrenceKindBadge, recurrenceKindLabel } from './recurrence-kind-badg
 import { recurrenceInputFromResponse } from './recurrence-options';
 import { formatRecurrenceSummary } from './recurrence-summary';
 import { useDesktop } from '../../ui/use-desktop';
-import { formatDate, parseDateValue } from '../../ui/date-values';
+import { formatDate, parseDateValue, toDateValue } from '../../ui/date-values';
+import { insetFocusRing } from '../../platform/focus-ring/focus-ring';
+import CalendarDays from 'lucide-react-native/icons/calendar-days';
+import CircleCheck from 'lucide-react-native/icons/circle-check';
 
 const NEVER_ENDS_SUFFIX = '，永不结束';
 const ENDED_LINE = '这个重复已经结束';
@@ -129,7 +132,20 @@ export function RecurrenceRuleRow({ rule, deviceTimeZone, onPress, selected = fa
   const activeTheme = useTheme<Theme>();
   const desktop = useDesktop();
   const formatted = formatRuleRow(rule, deviceTimeZone);
-  if (desktop) return <Pressable accessibilityRole="button" accessibilityLabel={formatted.accessibilityLabel} {...(selected ? { 'aria-current': true } : {})} onPress={onPress} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[4], minHeight: activeTheme.layout.desktopRowHeight, paddingHorizontal: activeTheme.spacing[4], backgroundColor: selected ? activeTheme.colors.canvas : pressed ? activeTheme.colors.surfaceSubtle : activeTheme.colors.surface })}><Text variant="meta" style={{ width: activeTheme.spacing[16] }}>{formatted.kindLabel ?? '—'}</Text><Text variant="bodySm" color="ink" numberOfLines={1} style={{ flex: 1 }}>{formatted.title}</Text><Text variant="meta" numberOfLines={1} style={{ flex: 1 }}>{formatted.summary}</Text><Text variant="time" numberOfLines={1} style={{ width: activeTheme.spacing[10] * 3 }}>{formatted.ended ? '已结束' : rule.nextOccurrenceDate ? formatDate(parseDateValue(rule.nextOccurrenceDate), { weekday: true }) : ''}</Text></Pressable>;
+  if (desktop) {
+    const next = rule.nextOccurrenceDate;
+    const isToday = next !== null && next !== undefined && next === toDateValue(new Date());
+    const time = rule.startTimeLocal ? rule.startTimeLocal.slice(0, 5) : '';
+    const nextText = formatted.ended ? '已结束' : next ? isToday ? `今天${time ? ` ${time}` : ''}` : formatDate(parseDateValue(next)) : '';
+    const KindIcon = rule.kind === 'event' ? CalendarDays : CircleCheck;
+    return <Pressable {...insetFocusRing} accessibilityRole="button" accessibilityLabel={formatted.accessibilityLabel} {...(selected ? { 'aria-current': true } : {})} onPress={onPress} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[4], minHeight: activeTheme.layout.desktopRowHeight + activeTheme.spacing[2], paddingHorizontal: activeTheme.spacing[6], opacity: formatted.ended ? 0.6 : 1, backgroundColor: selected ? activeTheme.colors.canvas : pressed || hovered ? activeTheme.colors.surfaceSubtle : activeTheme.colors.surface })}>
+      {selected ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: activeTheme.borderWidths.focus, backgroundColor: activeTheme.colors.ink }} /> : null}
+      <View style={{ width: activeTheme.layout.recurrenceKindColumn, flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] + 2 }}>{rule.kind ? <KindIcon size={activeTheme.controlSizes.icon - 5} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} /> : null}<Text variant="meta">{formatted.kindLabel ?? '—'}</Text></View>
+      <Text variant="bodySm" color="ink" numberOfLines={1} style={{ width: activeTheme.layout.recurrenceTitleColumn }}>{formatted.title}</Text>
+      <Text variant="meta" numberOfLines={1} style={{ flex: 1 }}>{formatted.summary}</Text>
+      <Text variant="time" numberOfLines={1} color={isToday && !formatted.ended ? 'accent' : 'inkMuted'} style={{ width: activeTheme.layout.recurrenceNextColumn, textAlign: 'right' }}>{nextText}</Text>
+    </Pressable>;
+  }
 
   return (
     <Pressable

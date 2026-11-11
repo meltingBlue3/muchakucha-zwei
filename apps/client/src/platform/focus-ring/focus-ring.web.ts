@@ -17,6 +17,9 @@ export function installFocusRing(): void {
   style.textContent = [
     `:focus-visible:not(input):not(textarea) { outline: ${ring}; outline-offset: ${theme.focus.offset}px; }`,
     `[data-focus-ring="inset"]:focus-visible { outline-offset: -${theme.focus.width}px; }`,
+    // A heading takes focus only when a pane or page opens, to start reading there.
+    // It is not a control, so a ring around it would only read as an error.
+    `[role="heading"][tabindex="-1"]:focus-visible, h1[tabindex="-1"]:focus-visible, h2[tabindex="-1"]:focus-visible { outline: none; }`,
   ].join('\n');
   document.head.append(style);
 }

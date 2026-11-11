@@ -11,10 +11,11 @@ import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { formatDateRange } from '../../../../../../src/features/events/calendar-utils';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
-import { DetailField, DetailPanel } from '../../../../../../src/ui/detail-fields';
+import { DetailField, DetailPanel, DetailEditButton } from '../../../../../../src/ui/detail-fields';
+import { useDesktop } from '../../../../../../src/ui/use-desktop';
 import { ReminderDetailField } from '../../../../../../src/features/reminders/reminder-detail';
 import { DEFAULT_REMINDER } from '../../../../../../src/features/reminders/reminder-rules';
-import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
+import { Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
 
 function currentTimeZone(fallback: string): string {
@@ -29,6 +30,7 @@ export default function EventDetailRoute() {
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
+  const desktop = useDesktop();
   const [event, setEvent] = useState<EventResponseDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export default function EventDetailRoute() {
 
   const when = formatDateRange(event.startTime, event.endTime, event.allDay, { weekday: true });
   return (
-    <EventWindow event={event} title="日程详情" headerActions={<Button label="编辑" accessibilityLabel="编辑日程" tone="secondary" size="compact" onPress={handleEdit} />}>
+    <EventWindow event={event} title="日程详情" headerActions={<DetailEditButton accessibilityLabel="编辑日程" onPress={handleEdit} />}>
       <Stack gap={5}>
         <Stack gap={2}>
           <Heading level={2}>{event.title}</Heading>
@@ -100,7 +102,7 @@ export default function EventDetailRoute() {
             cancelled ? '这次重复已取消。' : '当前查看这一次日程，编辑时可选择影响范围。',
           ]} /> : null}
         </DetailPanel>
-        {event.description ? <Stack gap={2}><Text variant="label" color="inkMuted">描述</Text><Text>{event.description}</Text></Stack> : null}
+        {event.description ? <Stack gap={desktop ? 1 : 2} style={desktop ? { borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[4] } : undefined}><Text variant={desktop ? 'meta' : 'label'} color={desktop ? 'inkFaint' : 'inkMuted'}>描述</Text><Text {...(desktop ? { variant: 'bodySm' as const, color: 'ink' as const } : {})}>{event.description}</Text></Stack> : null}
         {(event.labels ?? []).length ? <Stack gap={2}>
           <Text variant="label" color="inkMuted">标签</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>{event.labels.map(label => <LabelChip key={label.id} label={label} />)}</View>

@@ -20,7 +20,7 @@ export default function InboxRoute() {
   const inbox = useInbox({ api: sessionApiClient, getAccessToken, onAccepted });
   return <AccountScreen accessibilityLabel="收件箱" showInbox={false} refreshing={inbox.loading} onRefresh={() => { void inbox.reload(); }}>
     <Stack>
-      <PageIntro title="收件箱" />
+      <PageIntro title="收件箱" {...(!inbox.loading && inbox.messages.length ? { subtitle: `${inbox.messages.length} 项待处理` } : {})} />
       <InboxList {...inbox} />
     </Stack>
   </AccountScreen>;

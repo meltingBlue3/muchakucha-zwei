@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { Heading, Text } from './primitives';
 import { theme } from './theme';
 
-export type PageHeader = { title: string; subtitle?: ReactNode; action?: ReactNode };
+export type PageHeader = { title: string; subtitle?: ReactNode; controls?: ReactNode; action?: ReactNode };
 export const PageHeaderContext = createContext<Dispatch<SetStateAction<PageHeader | null>> | null>(null);
 
 /**
@@ -12,18 +12,20 @@ export const PageHeaderContext = createContext<Dispatch<SetStateAction<PageHeade
  * filter on the right. `subtitle` is one quiet line beneath, such as a summary
  * of the day or the filters in effect.
  */
-export function PageIntro({ title, subtitle, action }: {
+export function PageIntro({ title, subtitle, controls, action }: {
   title: string;
   subtitle?: ReactNode;
+  /** Desktop only: a view switch such as 待办 / 已完成, set right after the title rather than with the actions. */
+  controls?: ReactNode;
   action?: ReactNode;
 }) {
   const setHeader = useContext(PageHeaderContext);
   const desktop = useDesktop();
   useLayoutEffect(() => {
     if (!desktop || !setHeader) return;
-    setHeader({ title, subtitle, action });
+    setHeader({ title, subtitle, controls, action });
     return () => setHeader(null);
-  }, [desktop, setHeader, title, subtitle, action]);
+  }, [desktop, setHeader, title, subtitle, controls, action]);
   if (desktop && setHeader) return null;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: theme.spacing[4] }}>
