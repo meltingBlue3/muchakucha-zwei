@@ -12,7 +12,7 @@ let mockHouseholdId = 'household-1';
 const mockLists = {
   tasks: jest.fn(), notes: jest.fn(), events: jest.fn(), rules: jest.fn(), labels: jest.fn(),
 };
-jest.mock('expo-router', () => ({
+jest.mock('expo-router', () => ({ usePathname: () => '/',
   useLocalSearchParams: () => ({ id: mockHouseholdId }),
   useGlobalSearchParams: () => ({}),
   useRouter: () => ({ push: jest.fn() }),

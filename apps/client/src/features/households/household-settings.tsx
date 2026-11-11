@@ -1,3 +1,4 @@
+import { useDesktop } from '../../ui/use-desktop';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import type { GetHouseholdResponseDto, InvitationListItemDto } from '@muchakucha/api-client';
 import { ApiClientError } from '@muchakucha/api-client';
@@ -78,6 +79,7 @@ export function HouseholdSettings({
   const intro = (name: string) => <PageIntro title="家庭设置" subtitle={name} />;
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const desktop = useDesktop();
   const [activeForm, setActiveForm] = useState<'rename' | 'invite' | null>(null);
   const editTrigger = useRef<View>(null);
   const inviteTrigger = useRef<View>(null);
@@ -460,10 +462,10 @@ export function HouseholdSettings({
 
   return frame(`${authoritativeName}的成员`, (<>
       <Stack gap={6}>
-        {intro(authoritativeName)}
+        {desktop ? <PageIntro title="家庭设置" subtitle={authoritativeName} action={showInvite && canManage ? inviteButton : null} /> : intro(authoritativeName)}
 
-        <View style={{ flexDirection: wide ? 'row' : 'column', gap: wide ? theme.spacing[6] : theme.spacing[4], alignItems: wide ? 'flex-start' : 'stretch' }}>
-        <Stack gap={4} style={{ width: wide ? theme.layout.settingsNavWidth : '100%' }}>
+        <View style={{ flexDirection: desktop ? 'row-reverse' : wide ? 'row' : 'column', gap: wide ? theme.spacing[6] : theme.spacing[4], alignItems: wide ? 'flex-start' : 'stretch' }}>
+        <Stack gap={4} style={{ width: desktop ? theme.layout.assistantInspectorWidth : wide ? theme.layout.settingsNavWidth : '100%' }}>
         {/* Rename form — only shown on the settings route */}
         {showRename ? (
           <SettingsSection title="基本信息" icon={<House size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
@@ -488,7 +490,7 @@ export function HouseholdSettings({
                     </Inline>
                   ) : null}
                 </Stack>
-                {showInvite && canManage ? inviteButton : null}
+                {showInvite && canManage && !desktop ? inviteButton : null}
               </Stack>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], minHeight: theme.controlSizes.touchTarget }}>
@@ -504,6 +506,7 @@ export function HouseholdSettings({
         <Stack gap={4} style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', minWidth: 0 }}>
         <SettingsSection title="成员" detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}
           action={showInvite && canManage && !inviteInOverview ? inviteButton : undefined}>
+        {desktop ? <Inline gap={3} style={{ borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator, paddingBottom: theme.spacing[3] }}><Text variant="caption" style={{ flex: 1 }}>姓名</Text><Text variant="caption" style={{ flex: 1 }}>用户名</Text><Text variant="caption" style={{ width: theme.layout.fieldLabelColumn }}>角色</Text><View style={{ width: theme.layout.desktopControl }} /></Inline> : null}
         <SettingsRows>
           {data.members.map((member) => {
             const targetIsOwner = member.membershipId === data.ownerMembershipId;

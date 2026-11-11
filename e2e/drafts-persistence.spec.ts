@@ -143,16 +143,17 @@ test('note drafts survive browser restart, stay household scoped, and clear on s
   await fresh.getByRole('button', { name: '创建笔记', exact: true }).click();
   await expect(fresh.getByLabel('笔记标题')).toHaveValue('重启后继续');
   await expect(fresh.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
-  const dialog = fresh.getByRole('dialog', { name: '创建笔记', exact: true });
-  await expect(fresh.getByRole('dialog')).toHaveCount(1);
+  // The editor is the wide reading pane, a named region, or a phone's dialog; either way only one window is open.
+  const editor = () => fresh.getByRole((fresh.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '创建笔记', exact: true });
+  await expect(fresh.getByRole('dialog')).toHaveCount((fresh.viewportSize()?.width ?? 0) >= 1024 ? 0 : 1);
   for (const width of [320, 390, 1440]) {
     await fresh.setViewportSize({ width, height: 900 });
-    await expect(dialog.getByRole('button', { name: '创建', exact: true })).toBeVisible();
+    await expect(editor().getByRole('button', { name: '创建', exact: true })).toBeVisible();
     expect((await new AxeBuilder({ page: fresh }).analyze()).violations).toEqual([]);
     expect(await fresh.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await fresh.screenshot({ path: testInfo.outputPath(`draft-${width}.png`) });
   }
-  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  await editor().getByRole('button', { name: '取消', exact: true }).click();
   await expect(fresh).toHaveURL(new RegExp(`/households/${first.id}/notes$`));
   await fresh.getByRole('button', { name: '创建笔记', exact: true }).click();
   await expect(fresh.getByLabel('笔记标题')).toHaveValue('重启后继续');

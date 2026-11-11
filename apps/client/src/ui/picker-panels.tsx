@@ -1,3 +1,4 @@
+import { useDesktopDensity } from './use-desktop';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
@@ -24,7 +25,9 @@ export function PickerActions({ onCancel, onConfirm, confirmLabel = '确定', co
 }
 
 /** A Monday-first month grid. `value` is "YYYY-MM-DD". */
-export function CalendarGrid({ value, onSelect }: { value: string; onSelect(value: string): void }) {
+export function CalendarGrid({ value, onSelect, compact = false, markedDates = [] }: { value: string; onSelect(value: string): void; compact?: boolean; markedDates?: string[] }) {
+  const dense = useDesktopDensity();
+  const target = compact || dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget;
   const selected = parseDateValue(value);
   const [month, setMonth] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
   useEffect(() => {
@@ -47,7 +50,7 @@ export function CalendarGrid({ value, onSelect }: { value: string; onSelect(valu
   const shift = (delta: number) => setMonth(current => new Date(current.getFullYear(), current.getMonth() + delta, 1));
   const monthLabel = `${month.getFullYear()}年${month.getMonth() + 1}月`;
   const navButton = (label: string, delta: number, icon: React.ReactNode) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => shift(delta)} style={({ pressed }) => ({ width: theme.controlSizes.touchTarget, height: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => shift(delta)} style={({ pressed }) => ({ width: target, height: target, borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
       {icon}
     </Pressable>
   );
@@ -64,7 +67,7 @@ export function CalendarGrid({ value, onSelect }: { value: string; onSelect(valu
       {weeks.map((week, row) => (
         <View key={row} style={{ flexDirection: 'row' }}>
           {week.map((day, column) => {
-            if (!day) return <View key={column} style={{ flex: 1, height: theme.controlSizes.touchTarget }} />;
+            if (!day) return <View key={column} style={{ flex: 1, height: target }} />;
             const dayValue = toDateValue(day);
             const isSelected = dayValue === value;
             const isToday = dayValue === today;
@@ -77,15 +80,15 @@ export function CalendarGrid({ value, onSelect }: { value: string; onSelect(valu
                   aria-pressed={isSelected}
                   onPress={() => onSelect(dayValue)}
                   style={({ pressed }) => ({
-                    width: theme.controlSizes.touchTarget - theme.spacing[1],
-                    height: theme.controlSizes.touchTarget - theme.spacing[1],
+                    width: target - theme.spacing[1],
+                    height: target - theme.spacing[1],
                     borderRadius: theme.borderRadii.full,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: isSelected ? (isToday ? theme.colors.accent : theme.colors.primary) : pressed ? theme.colors.surfaceMuted : theme.colors.transparent,
                   })}
                 >
-                  <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accent' : 'ink'}>{day.getDate()}</Text>
+                  <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accent' : 'ink'}>{day.getDate()}</Text>{markedDates.includes(dayValue) ? <View style={{ position: 'absolute', bottom: 0, width: theme.spacing[1], height: theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: isSelected ? theme.colors.surface : theme.colors.inkMuted }} /> : null}
                 </Pressable>
               </View>
             );
@@ -149,7 +152,8 @@ export function TimePickerPanel({ value, onConfirm, onCancel }: { value: string;
   const [text, setText] = useState(value);
   const typed = normalizeTimeInput(text);
   const list = useRef<ScrollView>(null);
-  const rowHeight = theme.controlSizes.touchTarget;
+  const dense = useDesktopDensity();
+  const rowHeight = dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget;
   const nearest = useMemo(() => {
     const [h = 0, m = 0] = (normalizeTimeInput(value) ?? '09:00').split(':').map(Number);
     return Math.min(95, h * 4 + Math.floor(m / 15));

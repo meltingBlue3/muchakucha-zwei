@@ -45,16 +45,19 @@ async function prepareFixture(): Promise<Fixture> {
   });
   expect(household.status).toBe(201);
   const { id: householdId } = await household.json() as { id: string };
-  const startsOn = new Date().toISOString().slice(0, 10);
+  // The series starts today where the browser runs, at 17:00 there; a UTC date would be yesterday before 08:00 in Shanghai.
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17);
+  const startsOn = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
   const title = `无障碍重复事件-${Date.now()}`;
   const event = await fetch(`${API_ORIGIN}/api/v1/households/${householdId}/events`, {
     method: 'POST',
     headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       title,
-      startTime: `${startsOn}T09:00:00.000Z`,
-      endTime: `${startsOn}T10:00:00.000Z`,
-      recurrence: { freq: 'weekly', interval: 1, byWeekday: [new Date(`${startsOn}T12:00:00Z`).getUTCDay()], startsOn, count: 4, timezone: 'UTC' },
+      startTime: start.toISOString(),
+      endTime: new Date(start.getTime() + 60 * 60 * 1000).toISOString(),
+      recurrence: { freq: 'weekly', interval: 1, byWeekday: [start.getDay()], startsOn, count: 4, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     }),
   });
   expect(event.status).toBe(201);
@@ -66,6 +69,9 @@ async function loginFixture(page: Page, username: string) {
   await loginUsernameFixture(page, username, password);
 }
 
+/** Event windows and their steps are named regions in the wide side pane and dialogs on a phone. */
+const windowRole = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1024 ? 'region' as const : 'dialog' as const;
+
 async function openCalendar(page: Page) {
   await page.getByRole('tab', { name: '日历', exact: true }).click();
   await expect(page.getByRole('main', { name: '家庭日历' })).toBeVisible();
@@ -74,29 +80,29 @@ async function openCalendar(page: Page) {
 async function openNewEvent(page: Page) {
   await openCalendar(page);
   await page.getByLabel('创建日程').click();
-  await expect(page.getByRole('dialog', { name: '创建日程' })).toBeVisible();
+  await expect(page.getByRole(windowRole(page), { name: '创建日程' })).toBeVisible();
 }
 
 async function openCustomWeekly(page: Page) {
   await page.getByRole('button', { name: /^日程重复设置/ }).click();
-  await page.getByRole('dialog', { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
-  const custom = page.getByRole('dialog', { name: '自定义重复' });
+  await page.getByRole(windowRole(page), { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
+  const custom = page.getByRole(windowRole(page), { name: '自定义重复' });
   await custom.getByRole('radio', { name: '周', exact: true }).click();
   return custom;
 }
 
 async function openEventDetail(page: Page, fixture: Fixture) {
   await openCalendar(page);
-  const day = Number(new Date().toISOString().slice(8, 10));
+  const day = new Date().getDate();
   await page.getByLabel(new RegExp(`^\\d{4}年\\d{1,2}月${day}日(?:，今天)?，\\d+个日程$`)).click();
   await page.getByLabel(`日程：${fixture.title}，重复`).click();
-  await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
+  await expect(page.getByRole(windowRole(page), { name: '日程详情' })).toBeVisible();
 }
 
 async function openEventEdit(page: Page, fixture: Fixture) {
   await openEventDetail(page, fixture);
   await page.getByLabel('编辑日程').click();
-  await expect(page.getByRole('dialog', { name: '编辑日程' })).toBeVisible();
+  await expect(page.getByRole(windowRole(page), { name: '编辑日程' })).toBeVisible();
 }
 
 async function expectNoSeriousAxeViolations(page: Page) {
@@ -117,7 +123,7 @@ test.describe('event recurrence accessibility', () => {
     await page.getByLabel('创建日程').click();
     await expectNoSeriousAxeViolations(page);
     await page.getByLabel('取消').click();
-    const day = Number(new Date().toISOString().slice(8, 10));
+    const day = new Date().getDate();
     await page.getByLabel(new RegExp(`^\\d{4}年\\d{1,2}月${day}日(?:，今天)?，\\d+个日程$`)).click();
     await page.getByLabel(`日程：${fixture.title}，重复`).click();
     await expectNoSeriousAxeViolations(page);
@@ -135,7 +141,7 @@ test.describe('event recurrence accessibility', () => {
     await expect(repeat).toHaveAccessibleName('日程重复设置，不重复');
     await repeat.focus();
     await page.keyboard.press('Enter');
-    const options = page.getByRole('dialog', { name: '重复' });
+    const options = page.getByRole(windowRole(page), { name: '重复' });
     await expect(options.getByRole('radiogroup', { name: '重复频率' })).toBeVisible();
     await expect(options.getByRole('radio', { name: '不重复' })).toBeChecked();
     await options.getByRole('radio', { name: '不重复' }).focus();
@@ -165,6 +171,8 @@ test.describe('event recurrence accessibility', () => {
   });
 
   test('card deletion scope stays in one window and Escape returns to the card', async ({ page }) => {
+    // The 「⋯」 card menu belongs to the phone's event list; the wide calendar opens events in its side pane.
+    await page.setViewportSize({ width: 390, height: 844 });
     await loginFixture(page, fixture.username);
     await page.goto(`/households/${fixture.householdId}/events`);
     const more = page.getByRole('button', { name: `更多操作：日程：${fixture.title}`, exact: true }).first();

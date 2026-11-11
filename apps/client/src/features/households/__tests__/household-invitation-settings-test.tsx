@@ -5,7 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { HouseholdSettings, type HouseholdSettingsApi, type HouseholdSettingsProps } from '../household-settings';
 
-jest.mock('expo-router', () => ({
+jest.mock('expo-router', () => ({ usePathname: () => '/',
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
   useFocusEffect: (effect: () => void | (() => void)) => {
     const React = jest.requireActual<typeof import('react')>('react');

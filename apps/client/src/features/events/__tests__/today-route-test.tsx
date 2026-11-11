@@ -10,7 +10,7 @@ import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 const mockListEvents = jest.fn();
 const mockListTasks = jest.fn();
 
-jest.mock('expo-router', () => ({
+jest.mock('expo-router', () => ({ usePathname: () => '/',
   useLocalSearchParams: () => ({ id: 'household-1' }),
   useGlobalSearchParams: () => ({}),
   useRouter: () => ({ push: jest.fn() }),

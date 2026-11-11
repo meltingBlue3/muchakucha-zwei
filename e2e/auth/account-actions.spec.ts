@@ -49,18 +49,25 @@ test.describe('Authenticated account actions', () => {
     expect(renamed.status()).toBe(200);
 
     const username = await registerAndLogin(page);
-    // 个人中心 shows the nickname as a fact; 编辑 opens the 个人资料 window.
-    await page.getByRole('button', { name: '编辑昵称' }).click();
-    const dialog = page.getByRole('dialog', { name: '个人资料' });
-    const nickname = dialog.getByRole('textbox', { name: '昵称' });
+    // On a phone 个人中心 shows the nickname as a fact and 编辑 opens the 个人资料 window;
+    // a wide screen edits it in place on the page.
+    const wide = (page.viewportSize()?.width ?? 0) >= 1024;
+    if (!wide) await page.getByRole('button', { name: '编辑昵称' }).click();
+    const form = wide ? page.getByRole('main', { name: '个人中心' }) : page.getByRole('dialog', { name: '个人资料' });
+    const nickname = form.getByRole('textbox', { name: '昵称' });
     await expect(nickname).toHaveValue(username);
     await nickname.fill(duplicateName);
-    await dialog.getByRole('button', { name: '保存', exact: true }).click();
-    await expect(dialog.getByRole('status')).toHaveText('昵称已更新。');
+    await form.getByRole('button', { name: '保存', exact: true }).click();
+    await expect(form.getByRole('status')).toHaveText('昵称已更新。');
     await page.reload();
     await expect(page).toHaveURL(/\/profile/);
-    await expect(page.getByText(duplicateName, { exact: true })).toBeVisible();
-    await expect(page.getByText(username, { exact: true })).toBeVisible();
+    if (wide) {
+      await expect(form.getByRole('textbox', { name: '昵称' })).toHaveValue(duplicateName);
+      await expect(form.getByText(username, { exact: true })).toBeVisible();
+    } else {
+      await expect(page.getByText(duplicateName, { exact: true })).toBeVisible();
+      await expect(page.getByText(username, { exact: true })).toBeVisible();
+    }
   });
 
   test('logs out only the current browser while a second device stays authenticated', async ({ browser, page }) => {

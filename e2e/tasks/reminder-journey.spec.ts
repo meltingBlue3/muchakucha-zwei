@@ -1,7 +1,10 @@
 import { fixtureEditPayload } from '../../scripts/test-edit-version';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { loginUsernameFixture } from '../support/auth';
+
+/** A task opens in the wide side pane, a named region, and in a dialog on a phone; its edit form follows it. */
+const windowRole = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1024 ? 'region' as const : 'dialog' as const;
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -51,10 +54,10 @@ test('a reminder set in the task form is stored as the person\'s own and schedul
   const taskId = created.body.id as string;
 
   await loginUsernameFixture(page, owner.username, password, `/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}`);
-  const detail = page.getByRole('dialog', { name: '任务详情', exact: true });
+  const detail = page.getByRole(windowRole(page), { name: '任务详情', exact: true });
   await expect(detail.getByText('18:00（准时）', { exact: true })).toBeVisible();
   await detail.getByRole('button', { name: '编辑任务', exact: true }).click();
-  const edit = page.getByRole('dialog', { name: '编辑任务', exact: true });
+  const edit = page.getByRole(windowRole(page), { name: '编辑任务', exact: true });
   await edit.getByRole('button', { name: '提醒我，准时提醒（默认）', exact: true }).click();
   await page.getByRole('radio', { name: '提前 1 小时', exact: true }).click();
   await edit.getByRole('button', { name: '保存', exact: true }).click();

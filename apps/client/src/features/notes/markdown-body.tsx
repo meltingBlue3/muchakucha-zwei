@@ -5,9 +5,11 @@ import type Token from 'markdown-it/lib/token.mjs';
 import { Stack, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
 import { parseMarkdown, safeLink, type MarkdownNode } from './markdown';
+import { useDesktop } from '../../ui/use-desktop';
 
 export function MarkdownBody({ source, tableLabel = '笔记表格，可横向滚动', headingOffset = 0 }: { source: string; tableLabel?: string; headingOffset?: number }) {
   const theme = useTheme<Theme>();
+  const desktop = useDesktop();
   const nodes = useMemo(() => parseMarkdown(source), [source]);
   const [linkError, setLinkError] = useState(false);
   const inline = (tokens: Token[]): ReactNode[] => {
@@ -36,7 +38,7 @@ export function MarkdownBody({ source, tableLabel = '笔记表格，可横向滚
     return walk();
   };
   const render = (items: MarkdownNode[]): ReactNode[] => items.map(({ token, children }, index) => {
-    if (token.type === 'inline') return <Text key={index} selectable>{inline(token.children ?? [])}</Text>;
+    if (token.type === 'inline') return <Text key={index} selectable style={desktop ? theme.typography.readingBody : undefined}>{inline(token.children ?? [])}</Text>;
     if (token.type === 'heading_open') {
       const level = Number(token.tag.slice(1));
       const typography = level === 1 ? theme.typography.heading : level === 2 ? theme.typography.section : level === 3 ? theme.typography.body : level === 4 ? theme.typography.label : theme.typography.bodySm;

@@ -88,6 +88,8 @@ export const theme = createTheme({
     numericStrong: numericStrongFontFamily,
   },
   typography: {
+    readingTitle: { fontSize: 28, fontWeight: '700' as const, lineHeight: 36 },
+    readingBody: { fontSize: 15, fontWeight: '400' as const, lineHeight: 28 },
     caption: { fontSize: 12, fontWeight: '500' as const, lineHeight: 16 },
     meta: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
     bodySm: { fontSize: 14, fontWeight: '400' as const, lineHeight: 20 },
@@ -215,6 +217,34 @@ export const theme = createTheme({
     raised: '0 2px 6px rgba(29,27,24,0.12), 0 10px 28px rgba(29,27,24,0.16)',
   },
   layout: {
+    popoverLayer: 1000,
+    workspaceInset: 8,
+    workspaceRadius: 12,
+    pageHeaderHeight: 56,
+    paneHeaderHeight: 48,
+    railBreakpoint: 1280,
+    railWidth: 64,
+    detailPaneWidth: 400,
+    detailPaneWidthCompact: 360,
+    detailPaneWidthMax: 520,
+    detailGrowthBreakpoint: 1600,
+    listPaneMaxWidth: 880,
+    notesListWidth: 340,
+    readingWidth: 680,
+    desktopRowHeight: 40,
+    desktopControl: 32,
+    desktopField: 36,
+    desktopNavRow: 34,
+    accountNavWidth: 220,
+    assistantHistoryWidth: 260,
+    calendarAgendaWidth: 340,
+    todayTodoWidth: 380,
+    todayUpcomingWidth: 320,
+    timelineHourHeight: 48,
+    authPanelWidth: 560,
+    authFormWidth: 360,
+    authControl: 40,
+    desktopSwitcherWidth: 300,
     authWideBreakpoint: 960,
     authLayoutMaxWidth: 1040,
     authCardMaxWidth: 420,
@@ -251,6 +281,13 @@ export const theme = createTheme({
     reducedTransitionMs: 80,
   },
 });
+
+/** Blend user label colours onto the white workspace; never introduce another palette. */
+export function labelTint(color: string): string {
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return theme.colors.surfaceSubtle;
+  const channels = [1, 3, 5].map(index => Math.round(parseInt(color.slice(index, index + 2), 16) * 0.1 + 255 * 0.9));
+  return `rgb(${channels.join(', ')})`;
+}
 
 export type Theme = typeof theme;
 export type Space = keyof Theme['spacing'];

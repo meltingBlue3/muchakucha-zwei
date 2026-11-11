@@ -16,6 +16,8 @@ import { theme } from '../../ui/theme';
 import { formatDateTime } from '../../ui/date-values';
 import { assistantPath } from './assistant-boundary';
 import { MenuRow } from './menu-row';
+import { PageIntro } from '../../ui/page-intro';
+import { useDesktop } from '../../ui/use-desktop';
 
 export function AssistantWorkspace({ householdId, householdName, title, conversationId, conversations, busy, children, onRefresh, onDelete }: {
   householdId: string; householdName: string; title: string; conversationId?: string;
@@ -24,6 +26,7 @@ export function AssistantWorkspace({ householdId, householdName, title, conversa
 }) {
   const router = useRouter();
   const wide = useWindowDimensions().width >= theme.layout.navigationBreakpoint;
+  const desktop = useDesktop();
   const [dialog, setDialog] = useState<'history' | 'options' | null>(null);
   const historyTrigger = useRef<View>(null);
   const optionsTrigger = useRef<View>(null);
@@ -41,16 +44,20 @@ export function AssistantWorkspace({ householdId, householdName, title, conversa
   </Stack>;
   // A conversation on a phone is a focused view: back to the assistant, no tab bar.
   return <HouseholdScreen active="assistant" layout="workspace" headerRow={false} tabBar={!conversationId} accessibilityLabel={conversationId ? '助手对话' : '家庭助手'}
-    sidebar={<ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: theme.spacing[5], gap: theme.spacing[3] }}>
-      <Button label="新对话" tone="secondary" disabled={busy} onPress={startNew} />{history}
-    </ScrollView>}>
-    <Inline style={{ paddingLeft: !wide && conversationId ? theme.spacing[1] : theme.spacing[5], paddingRight: theme.spacing[2], paddingVertical: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
+    sidebar={!desktop ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: theme.spacing[5], gap: theme.spacing[3] }}><Button label="新对话" tone="secondary" disabled={busy} onPress={startNew} />{history}</ScrollView> : null}>
+    {desktop ? <PageIntro title={title} subtitle="对话仅自己可见" action={<IconButton ref={optionsTrigger} label="助手选项" appearance="plain" disabled={busy} icon={<Ellipsis size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={() => setDialog('options')} />} /> : null}
+    <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}>
+    {desktop ? <View testID="assistant-history" style={{ width: theme.layout.assistantHistoryWidth, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator, padding: theme.spacing[3], gap: theme.spacing[3] }}><Inline><Heading variant="section" style={{ flex: 1 }}>助手</Heading><IconButton label="新对话" appearance="plain" disabled={busy} icon={<SquarePen size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={startNew} /></Inline><ScrollView style={{ flex: 1 }}>{history}</ScrollView><Button label="模型配置" tone="secondary" onPress={() => router.push(`${root}/providers`)} /></View> : null}
+    <View style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+    {!desktop ? <Inline style={{ paddingLeft: !wide && conversationId ? theme.spacing[1] : theme.spacing[5], paddingRight: theme.spacing[2], paddingVertical: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
       {!wide && conversationId ? <IconButton label="返回" appearance="plain" icon={<ArrowLeft size={theme.controlSizes.icon} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.replace(root)} /> : null}
       <Stack gap={1} style={{ flex: 1, minWidth: 0 }}><Heading variant="section" level={1} numberOfLines={1}>{title}</Heading><Text variant="caption" numberOfLines={1}>{householdName} · 对话仅自己可见</Text></Stack>
       {!wide ? <IconButton ref={historyTrigger} label="我的对话" appearance="plain" disabled={busy} icon={<PanelLeft size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={() => setDialog('history')} /> : <IconButton label="新对话" appearance="plain" disabled={busy} icon={<SquarePen size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={() => router.push(root)} />}
       <IconButton ref={optionsTrigger} label="助手选项" appearance="plain" disabled={busy} icon={<Ellipsis size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={() => setDialog('options')} />
-    </Inline>
+    </Inline> : null}
     {children}
+    </View>
+    </View>
     {/* On a phone the sheet's own action sits beside its title, and options read as a menu rather than a stack of buttons. */}
     {dialog ? <AppDialog title={dialog === 'history' ? '我的对话' : '助手选项'} size="sheet" trigger={dialog === 'history' ? historyTrigger : optionsTrigger} busy={busy} onClose={() => setDialog(null)}
       headerActions={dialog === 'history' ? <Button label="新对话" tone="secondary" size="compact" disabled={busy} onPress={startNew} /> : null}>

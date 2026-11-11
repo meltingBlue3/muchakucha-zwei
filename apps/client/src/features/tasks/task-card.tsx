@@ -12,8 +12,11 @@ import { RecurrenceBadge } from '../recurrence/recurrence-badge';
 import { toDateValue, toTimeValue } from '../../ui/date-values';
 import { statusLabel, formatDueDate, isOverdue } from './task-utils';
 import { completionActionLabel } from './task-completion';
+import { useDesktopDensity } from '../../ui/use-desktop';
+import { useWindowDimensions } from 'react-native';
 
 interface TaskCardProps {
+  table?: boolean;
   onEdit?: (() => void) | undefined;
   onDelete?: (() => void) | undefined;
   task: TaskResponseDto;
@@ -56,8 +59,11 @@ export function TaskCard({
   time,
   showDue: showDueSetting = true,
   selected = false,
+  table = false,
 }: TaskCardProps) {
   const activeTheme = useTheme<Theme>();
+  const dense = useDesktopDensity();
+  const compactLabels = useWindowDimensions().width < activeTheme.layout.railBreakpoint;
   const cancelled = task.status === 'cancelled';
   const completed = task.status === 'completed';
   const closed = completed || cancelled;
@@ -87,7 +93,11 @@ export function TaskCard({
         ) : null}
       </>}
       trailing={<>
-        <AvatarStack members={assignees} />
+        {dense && table ? <>
+          <View style={{ width: compactLabels ? activeTheme.spacing[6] : activeTheme.spacing[10] * 3, flexDirection: 'row', gap: activeTheme.spacing[1], overflow: 'hidden' }}>{labels.map(label => <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], flexShrink: 1 }}><View style={{ width: activeTheme.spacing[1] * 2, height: activeTheme.spacing[1] * 2, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} />{!compactLabels ? <Text variant="meta" numberOfLines={1}>{label.name}</Text> : null}</View>)}</View>
+          <Text variant="time" numberOfLines={1} color={overdue ? 'accent' : 'inkMuted'} style={{ width: activeTheme.spacing[10] * 2 + activeTheme.spacing[6], textAlign: 'right' }}>{closed ? cancelled ? '已取消' : '已完成' : dueLabel || (task.dueDate ? '今天' : '')}</Text>
+        </> : null}
+        <View style={dense ? { width: activeTheme.spacing[12], alignItems: 'center' } : undefined}><AvatarStack members={assignees} /></View>
         <CardActionsMenu subject={`任务：${task.title}`} disabled={statusChanging} actions={[
           ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: `编辑任务：${task.title}`, onPress: onEdit }] : []),
           ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除任务：${task.title}`, onPress: onDelete }] : []),
@@ -110,8 +120,8 @@ export function TaskCard({
         </View>
       ) : null}
     >
-      <Text variant="body" numberOfLines={2} color={closed ? 'inkFaint' : 'ink'} style={{ textDecorationLine: closed ? 'line-through' : 'none' }}>{task.title}</Text>
-      {hasDetails ? (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}><Text variant={dense ? 'bodySm' : 'body'} numberOfLines={dense ? 1 : 2} color={closed ? 'inkFaint' : 'ink'} style={{ flexShrink: 1, textDecorationLine: closed ? 'line-through' : 'none' }}>{task.title}</Text>{dense && task.priority === 'urgent' ? <Text variant="caption" color="accent">紧急</Text> : dense && task.priority === 'high' ? <Text variant="caption">高</Text> : null}{dense && task.recurrenceRuleId ? <RecurrenceBadge /> : null}</View>
+      {hasDetails && !dense ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[2], rowGap: activeTheme.spacing[1], marginTop: activeTheme.spacing[1] / 2 }}>
           {showDue ? <Text variant="time" color={overdue ? 'accent' : 'inkMuted'}>{dueLabel}</Text> : null}
           {overdue ? <Text variant="meta" color="accent">逾期</Text> : null}
@@ -120,6 +130,14 @@ export function TaskCard({
           {!closed && task.priority === 'high' ? <Text variant="meta" color="ink">高优先级</Text> : null}
           {task.recurrenceRuleId != null ? <RecurrenceBadge /> : null}
           <LabelTags labels={labels} />
+        </View>
+      ) : null}
+      {dense && !table && (showDue || labels.length > 0 || task.status !== 'pending') ? (
+        // Outside the table the due date and labels have no columns, so they sit under the title.
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[3], rowGap: activeTheme.spacing[1], marginTop: activeTheme.spacing[1] / 2 }}>
+          {showDue ? <Text variant="time" color={overdue ? 'accent' : 'inkMuted'}>{dueLabel}</Text> : null}
+          {task.status !== 'pending' ? <Text variant="meta" color={completed ? 'success' : task.status === 'in_progress' ? 'ink' : 'inkMuted'}>{cancelled ? '已取消' : statusLabel(task.status)}</Text> : null}
+          {labels.map(label => <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] }}><View style={{ width: activeTheme.spacing[1] * 2, height: activeTheme.spacing[1] * 2, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} /><Text variant="meta" numberOfLines={1}>{label.name}</Text></View>)}
         </View>
       ) : null}
     </ListRow>

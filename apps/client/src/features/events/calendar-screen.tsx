@@ -1,3 +1,11 @@
+import { useContentChanges } from '../content/content-changes';
+import { useResourceNavigation } from '../../ui/use-resource-navigation';
+import { useDesktop } from '../../ui/use-desktop';
+import { DesktopMonth } from './desktop-month';
+import { usePathname } from 'expo-router';
+import { Text, Inline, IconButton } from '../../ui/primitives';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { useOpenWindowItem } from '../../ui/route-window';
 import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../content/use-content-delete';
@@ -40,6 +48,9 @@ const byStart = (a: EventResponseDto, b: EventResponseDto) => Number(b.allDay) -
 export default function CalendarScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const desktop = useDesktop();
+  const paneOpen = /\/events\/[^/]+(?:\/edit)?$/.test(usePathname());
+  const openResource = useResourceNavigation();
   const openEventId = useOpenWindowItem('eventId');
   const deleteEvent = useContentDelete('events');
   const editEvent = useContentEdit('events');
@@ -90,6 +101,8 @@ export default function CalendarScreen() {
       if (request === requestGeneration.current) setLoading(false);
     }
   }, [householdId, year, month]);
+
+  useContentChanges(householdId, fetchEvents);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -172,17 +185,17 @@ export default function CalendarScreen() {
   const handleEventPress = useCallback(
     (event: EventResponseDto) => {
       rememberRouteTrigger();
-      void router.push(
+      openResource(
         `/households/${encodeURIComponent(householdId!)}/events/${encodeURIComponent(event.id)}`,
       );
     },
-    [router, householdId],
+    [router, householdId, openResource],
   );
 
   const handleCreateEvent = useCallback(() => {
     rememberRouteTrigger();
-    void router.push(`/households/${encodeURIComponent(householdId!)}/events/new`);
-  }, [router, householdId]);
+    openResource(`/households/${encodeURIComponent(householdId!)}/events/new`);
+  }, [router, householdId, openResource]);
 
   const [weekView, setWeekView] = useWorkspaceState(`view:${id}:events:weekView`, true);
   // Phones start on one week; a wide screen always has room for the month.
@@ -198,16 +211,22 @@ export default function CalendarScreen() {
     <HouseholdScreen
       active="events"
       accessibilityLabel="家庭日历"
+      layout={desktop ? 'workspace' : 'document'}
       refreshing={refreshing}
       onRefresh={handleRefresh}
       floatingAction={<FloatingCreateButton label="创建日程" onPress={handleCreateEvent} />}
     >
-      <Stack gap={5}>
+      <Stack gap={desktop ? 0 : 5} style={desktop ? { flex: 1, minHeight: 0 } : undefined}>
         <PageIntro
           title="日历"
-          {...(filterSummary ? { subtitle: filterSummary } : {})}
+          // On a wide screen the month being shown reads right after the page title, with its arrows and 今天; filters stay with the actions.
+          {...(desktop ? { subtitle: <Inline gap={3}>
+            <Inline gap={1}><IconButton label="上一个月" appearance="plain" icon={<ChevronLeft size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />} onPress={() => changeMonth(-1)} /><Text variant="section" color="ink">{year}年{month + 1}月</Text><IconButton label="下一个月" appearance="plain" icon={<ChevronRight size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />} onPress={() => changeMonth(1)} /></Inline>
+            <Button label="今天" accessibilityLabel="回到今天" tone="secondary" size="compact" onPress={() => handleSelectDate(toDateIso(new Date()))} />
+            {filterSummary ? <Text variant="meta" numberOfLines={1}>{filterSummary}</Text> : null}
+          </Inline> } : filterSummary ? { subtitle: filterSummary } : {})}
           action={<>
-            {!selectedIsToday ? <Button label="今天" accessibilityLabel="回到今天" tone="secondary" size="compact" onPress={() => handleSelectDate(toDateIso(new Date()))} /> : null}
+            {!desktop && !selectedIsToday ? <Button label="今天" accessibilityLabel="回到今天" tone="secondary" size="compact" onPress={() => handleSelectDate(toDateIso(new Date()))} /> : null}
             <FilterButton ref={filterTrigger} label="筛选日程" count={activeFilterCount} onPress={() => setFiltersOpen(true)} />
           </>}
         />
@@ -217,9 +236,9 @@ export default function CalendarScreen() {
             {availableLabels.length ? <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(label => ({ value: label.id, label: label.name, name: `筛选标签：${label.name}` }))]} value={labelFilter} onChange={setLabelFilter} /> : null}
           </Stack>
         </AppDialog> : null}
-        <View style={{ flexDirection: wide ? 'row' : 'column', gap: activeTheme.spacing[6], alignItems: wide ? 'flex-start' : 'stretch' }}>
+        <View style={{ flexDirection: wide ? 'row' : 'column', gap: desktop ? 0 : activeTheme.spacing[6], alignItems: desktop ? 'stretch' : wide ? 'flex-start' : 'stretch', ...(desktop ? { flex: 1, minHeight: 0 } : {}) }}>
           <View testID="calendar-month-pane" style={{ flex: wide ? 2 : undefined, minWidth: 0 }}>
-            <CalendarMonth
+            {desktop ? <DesktopMonth year={year} month={month} todayIso={todayIso} selectedDateIso={selectedDateIso} events={filteredEvents} onSelectDate={handleSelectDate} onOpenEvent={handleEventPress} /> : <CalendarMonth
               todayIso={todayIso}
               year={year}
               month={month}
@@ -233,9 +252,9 @@ export default function CalendarScreen() {
               onNextWeek={() => moveSelection(7)}
               {...(wide ? {} : { onToggleMode: () => setWeekView(value => !value) })}
               onSelectDate={handleSelectDate}
-            />
+            />}
           </View>
-          <View testID="calendar-agenda-pane" style={{ flex: wide ? 1 : undefined, minWidth: 0 }}>
+          <View testID="calendar-agenda-pane" style={{ flex: desktop ? undefined : wide ? 1 : undefined, minWidth: 0, ...(desktop ? { width: activeTheme.layout.calendarAgendaWidth, padding: activeTheme.spacing[4], borderLeftWidth: activeTheme.borderWidths.default, borderLeftColor: activeTheme.colors.separator, ...(paneOpen ? { display: 'none' } : {}) } : {}) }}>
             <GroupLabel>{`${dateLabel}${selectedIsToday ? ' · 今天' : ''}`}</GroupLabel>
             <Stack gap={3}>
               {loading ? <LoadingState label="正在加载日程" /> : null}

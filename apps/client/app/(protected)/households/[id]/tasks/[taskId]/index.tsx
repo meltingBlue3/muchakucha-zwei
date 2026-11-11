@@ -1,3 +1,4 @@
+import { notifyContentChanged, useContentChanges } from '../../../../../../src/features/content/content-changes';
 import { TaskWindow } from '../../../../../../src/features/tasks/task-window';
 import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
 import { isEditConflict } from '../../../../../../src/ui/edit-conflict';
@@ -20,6 +21,7 @@ import { formatRecurrenceSummary } from '../../../../../../src/features/recurren
 import { formatDueDate, isOverdue, priorityLabel, statusLabel } from '../../../../../../src/features/tasks/task-utils';
 import { DetailField, DetailPanel } from '../../../../../../src/ui/detail-fields';
 import { Banner, Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
+import { useDesktop } from '../../../../../../src/ui/use-desktop';
 import type { Theme } from '../../../../../../src/ui/theme';
 
 function currentTimeZone(fallback: string): string {
@@ -34,6 +36,7 @@ export default function TaskDetailRoute() {
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId: string }>();
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
+  const desktop = useDesktop();
   const userId = useCurrentUser()?.id ?? '';
   const [task, setTask] = useState<TaskResponseDto | null>(null);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
@@ -71,6 +74,8 @@ export default function TaskDetailRoute() {
     }, [fetchTask]),
   );
 
+  useContentChanges(id, fetchTask);
+
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -92,6 +97,7 @@ export default function TaskDetailRoute() {
         expectedUpdatedAt: task.updatedAt,
         ...(task.recurrence ? { expectedRuleUpdatedAt: task.recurrence.updatedAt } : {}),
       });
+      notifyContentChanged(id, fetchTask);
       await fetchTask();
     } catch (caught: unknown) {
       setStatusError(
@@ -131,11 +137,13 @@ export default function TaskDetailRoute() {
       ? null
       : formatRecurrenceSummary(recurrence, currentTimeZone(recurrence.timezone));
 
-  // 编辑 sits in the title bar like 保存 in the edit window; the footer keeps the one status action.
-  const footer = !cancelled || statusError ? (
+  const completion = !cancelled ? <Button label={task.status === 'completed' ? '标记为未完成' : '标记为完成'} {...(desktop ? { size: 'compact' as const } : {})} loading={statusBusy} onPress={() => void writeStatus(task.status === 'completed' ? 'pending' : 'completed')} /> : null;
+  // 编辑 sits in the title bar like 保存 in the edit window. On a phone the footer keeps the one status action;
+  // in the wide detail pane it sits under the title, beside the status it changes.
+  const footer = !desktop && (!cancelled || statusError) ? (
     <Stack gap={2}>
       {statusError ? <Banner>{statusError}</Banner> : null}
-      {!cancelled ? <Button label={task.status === 'completed' ? '标记为未完成' : '标记为完成'} loading={statusBusy} onPress={() => void writeStatus(task.status === 'completed' ? 'pending' : 'completed')} /> : null}
+      {completion}
     </Stack>
   ) : null;
   return (
@@ -143,7 +151,8 @@ export default function TaskDetailRoute() {
       <Stack gap={5}>
         <Stack gap={2}>
           <Heading level={2}>{task.title}</Heading>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[2] }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[desktop ? 3 : 2] }}>
+            {desktop ? completion : null}
             <Text variant="label" color={task.status === 'completed' ? 'success' : task.status === 'in_progress' ? 'ink' : 'inkMuted'}>{cancelled ? '已取消' : statusLabel(task.status)}</Text>
             {overdue ? <Text variant="label" color="destructive">已逾期</Text> : null}
             {/* 进行中 is a deliberate stage, offered beside the status it changes rather than behind a "more" toggle. */}
@@ -153,6 +162,7 @@ export default function TaskDetailRoute() {
               </Pressable>
             ) : null}
           </View>
+          {desktop && statusError ? <Banner>{statusError}</Banner> : null}
         </Stack>
         <DetailPanel>
           <DetailField label="截止日期" value={task.dueDate ? formatDueDate(task.dueDate) : '未设置'} urgent={overdue} />

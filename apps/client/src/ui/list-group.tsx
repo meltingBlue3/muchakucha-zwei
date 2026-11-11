@@ -3,6 +3,8 @@ import { Platform, Pressable, View } from 'react-native';
 import { insetFocusRing } from '../platform/focus-ring/focus-ring';
 import { Text } from './primitives';
 import { theme } from './theme';
+import { useDesktopDensity, useDesktop } from './use-desktop';
+import { RowInteraction } from './row-interaction';
 
 /**
  * A run of related rows on one white panel, divided by hairlines. Lists are
@@ -10,12 +12,13 @@ import { theme } from './theme';
  * shows twice as much and still reads as calm.
  */
 export function ListGroup({ children }: { children: ReactNode }) {
+  const desktop = useDesktop();
   const rows = Children.toArray(children).filter(isValidElement);
   if (rows.length === 0) return null;
   // The now marker is itself a divider, so it takes the place of a hairline.
   const isMarker = (index: number) => rows[index]?.type === NowMarker;
   return (
-    <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, overflow: 'hidden' }}>
+    <View style={{ backgroundColor: theme.colors.surface, borderRadius: desktop ? 0 : theme.borderRadii.lg, overflow: 'hidden' }}>
       {rows.map((row, index) => (
         <Fragment key={row.key ?? index}>
           {index > 0 && !isMarker(index) && !isMarker(index - 1) ? <View style={{ height: theme.borderWidths.default, backgroundColor: theme.colors.separator, marginLeft: theme.spacing[4] }} /> : null}
@@ -71,14 +74,18 @@ export function ListRow({ accessibilityLabel, onPress, leading, trailing, footer
   selected?: boolean;
 }) {
   const [pressed, setPressed] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [rowFocused, setRowFocused] = useState(false);
+  const dense = useDesktopDensity();
   // Controls sit on the title line: a one-line row is centered, and a longer
   // row grows downward without pulling the check mark or menu with it.
-  const rowHeight = theme.controlSizes.touchTarget + theme.spacing[2];
-  const controlInset = (rowHeight - theme.controlSizes.touchTarget) / 2;
+  const rowHeight = dense ? theme.layout.desktopRowHeight : theme.controlSizes.touchTarget + theme.spacing[2];
+  const controlHeight = dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget;
+  const controlInset = (rowHeight - controlHeight) / 2;
   return (
     // The open row lets the paper show through and carries an ink bar: a
     // darker fill would push red due dates and faint metadata under 4.5:1.
-    <View style={{ backgroundColor: pressed ? theme.colors.surfaceMuted : selected ? theme.colors.canvas : theme.colors.surface }}>
+    <RowInteraction.Provider value={hovered || rowFocused}><View onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} style={{ backgroundColor: pressed || hovered ? dense ? theme.colors.surfaceSubtle : theme.colors.surfaceMuted : selected ? theme.colors.canvas : theme.colors.surface }}>
       {selected ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: theme.spacing[2], bottom: theme.spacing[2], width: theme.spacing[1] - 1, borderTopRightRadius: theme.borderRadii.full, borderBottomRightRadius: theme.borderRadii.full, backgroundColor: theme.colors.ink }} /> : null}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', minHeight: rowHeight, paddingLeft: leading ? theme.spacing[1] : theme.spacing[2], paddingRight: theme.spacing[2] }}>
         {leading ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', alignSelf: 'stretch', paddingTop: controlInset }}>{leading}</View> : null}
@@ -89,16 +96,18 @@ export function ListRow({ accessibilityLabel, onPress, leading, trailing, footer
           // A button cannot be aria-selected, so the web marks the open item as current.
           {...(selected ? Platform.OS === 'web' ? { 'aria-current': true } : { accessibilityState: { selected } } : {})}
           onPress={onPress}
+          onFocus={() => setRowFocused(true)}
+          onBlur={() => setRowFocused(false)}
           onPressIn={() => setPressed(true)}
           onPressOut={() => setPressed(false)}
-          style={{ flex: 1, minWidth: 0, minHeight: rowHeight, paddingTop: (rowHeight - theme.typography.body.lineHeight) / 2, paddingBottom: theme.spacing[3], paddingHorizontal: theme.spacing[2] }}
+          style={{ flex: 1, minWidth: 0, minHeight: rowHeight, paddingTop: (rowHeight - theme.typography.body.lineHeight) / 2, paddingBottom: dense ? theme.spacing[2] : theme.spacing[3], paddingHorizontal: theme.spacing[2] }}
         >
           {children}
         </Pressable>
-        {trailing ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], height: theme.controlSizes.touchTarget, marginTop: controlInset }}>{trailing}</View> : null}
+        {trailing ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], height: controlHeight, marginTop: controlInset }}>{trailing}</View> : null}
       </View>
       {footer}
-    </View>
+    </View></RowInteraction.Provider>
   );
 }
 

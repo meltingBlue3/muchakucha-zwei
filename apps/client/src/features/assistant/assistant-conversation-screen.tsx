@@ -6,6 +6,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { sessionApiClient } from '../auth/session-runtime';
 import { AppDialog } from '../../ui/app-dialog';
 import { theme } from '../../ui/theme';
+import { useDesktop } from '../../ui/use-desktop';
 import { Banner, Button, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { AssistantBoundary, assistantPath, type AssistantHouseholdProps } from './assistant-boundary';
 import { assistantToken, chatProviders, transcriptionProvider, useAssistantOperation, useAssistantQuery } from './assistant-runtime';
@@ -20,7 +21,8 @@ const PROGRESS_POLL_MS = 2_000;
 
 function Conversation({ householdId, householdName, writable, conversationId }: AssistantHouseholdProps & { conversationId: string }) {
   const router = useRouter();
-  const inspector = useWindowDimensions().width >= theme.layout.assistantInspectorBreakpoint;
+  const desktop = useDesktop();
+  const inspector = useWindowDimensions().width >= theme.layout.assistantInspectorBreakpoint || desktop;
   const trigger = useRef<View>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [draft, setDraft] = useState<{ value: string; revision: number }>();

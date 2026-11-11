@@ -17,6 +17,7 @@ import { PageIntro } from '../../src/ui/page-intro';
 import { Stack, Text } from '../../src/ui/primitives';
 import { SettingsRows, SettingsSection } from '../../src/ui/settings-section';
 import { theme } from '../../src/ui/theme';
+import { useDesktop } from '../../src/ui/use-desktop';
 
 const LINKS = [
   { key: 'inbox', label: '收件箱', description: '查看和处理收到的家庭邀请', icon: Inbox, path: '/inbox' },
@@ -46,6 +47,7 @@ function ProfileFact({ label, value, note, action }: { label: string; value: str
  * at the foot.
  */
 export default function ProfileRoute() {
+  const desktop = useDesktop();
   const user = useCurrentUser();
   const editTrigger = useRef<View>(null);
   const [editing, setEditing] = useState(false);
@@ -55,16 +57,16 @@ export default function ProfileRoute() {
       <Stack gap={6}>
         <PageIntro title="个人中心" />
         <SettingsSection title="个人资料" icon={<CircleUserRound size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
-          <SettingsRows>
+          {desktop ? <ProfileForm apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} /> : <SettingsRows>
             <ProfileFact label="昵称" value={user?.displayName ?? '—'} action={
               <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel="编辑昵称" disabled={!user} onPress={() => setEditing(true)} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
                 <Text variant="label" color="link">编辑</Text>
               </Pressable>
             } />
             <ProfileFact label="用户名" value={user?.username ?? '—'} note="用于登录，暂不支持修改。" />
-          </SettingsRows>
+          </SettingsRows>}
         </SettingsSection>
-        <ListGroup>
+        {!desktop ? <ListGroup>
           {LINKS.map(({ key, label, description, icon: Icon, path }) => (
             <ListRow
               key={key}
@@ -77,11 +79,11 @@ export default function ProfileRoute() {
               <Text variant="meta">{description}</Text>
             </ListRow>
           ))}
-        </ListGroup>
-        <Stack gap={1}>
+        </ListGroup> : null}
+        {!desktop ? <Stack gap={1}>
           <LogoutAction apiClient={sessionApiClient} onLoggedOut={() => router.replace('/login')} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} />
           <Text variant="caption" style={{ textAlign: 'center' }}>只影响这台设备，家庭里的内容会保留。</Text>
-        </Stack>
+        </Stack> : null}
       </Stack>
       {editing ? (
         <AppDialog title="个人资料" busy={busy} onClose={() => setEditing(false)} trigger={editTrigger}>

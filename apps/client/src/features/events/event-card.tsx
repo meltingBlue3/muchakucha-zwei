@@ -8,6 +8,7 @@ import { EventBar, ListRow, RowSlot } from '../../ui/list-group';
 import { LabelTags } from '../labels/label-chip';
 import { RecurrenceBadge } from '../recurrence/recurrence-badge';
 import { formatDateRange, formatTime, formatTimeRange } from './calendar-utils';
+import { useDesktop } from '../../ui/use-desktop';
 
 interface EventCardProps {
   onEdit?: (() => void) | undefined;
@@ -25,6 +26,7 @@ interface EventCardProps {
 /** One event as a list row: start time, a bar in its label's color, then title and place. */
 export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false, timeColumn = false, selected = false }: EventCardProps) {
   const activeTheme = useTheme<Theme>();
+  const desktop = useDesktop();
   const labels = event.labels ?? [];
   const place = event.location !== null && event.location !== '' ? event.location : null;
   const when = withinDay ? formatTimeRange(event.startTime, event.endTime, event.allDay) : formatDateRange(event.startTime, event.endTime, event.allDay);
@@ -37,7 +39,7 @@ export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false,
       accessibilityLabel={`日程：${event.title}${event.recurrenceRuleId == null ? '' : '，重复'}`}
       onPress={() => onPress(event)}
       selected={selected}
-      leading={<>
+      leading={desktop ? <View style={{ alignSelf: 'stretch', width: activeTheme.spacing[1], backgroundColor: labels[0]?.color ?? activeTheme.colors.inkFaint, marginVertical: activeTheme.spacing[2] }} /> : <>
         {timeColumn ? <RowSlot width={activeTheme.layout.timeColumn}><Text variant="time" style={{ paddingLeft: activeTheme.spacing[3] }}>{startTime}</Text></RowSlot> : null}
         {/* As wide as a task's completion mark, so event and task titles line up in a mixed list. */}
         <View style={{ width: activeTheme.controlSizes.touchTarget, alignSelf: 'stretch', flexDirection: 'row', justifyContent: 'center' }}>
@@ -49,9 +51,9 @@ export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false,
         ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除日程：${event.title}`, onPress: onDelete }] : []),
       ]} />}
     >
-      <Text variant="body" numberOfLines={2}>{event.title}</Text>
+      <Text variant={desktop ? 'bodySm' : 'body'} color="ink" numberOfLines={desktop ? 1 : 2}>{event.title}</Text>
       {showWhen || place !== null || event.recurrenceRuleId != null || labels.length > 0 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[2], rowGap: activeTheme.spacing[1], marginTop: activeTheme.spacing[1] / 2 }}>
-        {showWhen ? <Text variant="time">{when}</Text> : null}
+        {showWhen || desktop ? <Text variant="time">{desktop && event.allDay ? '全天' : when}</Text> : null}
         {place !== null ? <Text variant="meta" numberOfLines={1} style={{ flexShrink: 1 }}>{place}</Text> : null}
         {event.recurrenceRuleId != null ? <RecurrenceBadge /> : null}
         <LabelTags labels={labels} />

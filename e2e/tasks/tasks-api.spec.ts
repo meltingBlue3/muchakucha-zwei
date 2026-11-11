@@ -1,7 +1,10 @@
 import { fixtureEditPayload } from '../../scripts/test-edit-version';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 import { loginUsernameFixture } from '../support/auth';
+
+/** A task opens in the wide side pane, a named region, and in a dialog on a phone; its edit form follows it. */
+const windowRole = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1024 ? 'region' as const : 'dialog' as const;
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://127.0.0.1:3000';
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://127.0.0.1:8081';
@@ -275,7 +278,7 @@ test.describe('Tasks API', () => {
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await expect(page.getByRole('button', { name: '编辑任务', exact: true })).toBeVisible();
     // The list behind the window shows the new title too; check the detail window itself.
-    await expect(page.getByRole('dialog', { name: '任务详情' }).getByText('B共同修改', { exact: true })).toBeVisible();
+    await expect(page.getByRole(windowRole(page), { name: '任务详情' }).getByText('B共同修改', { exact: true })).toBeVisible();
     const saved = await apiCall(memberA.accessToken, 'GET', `/api/v1/households/${householdId}/tasks/${taskId}`);
     expect(saved.body.title).toBe('B共同修改');
     expect(saved.body.createdBy).toBe(memberA.userId);

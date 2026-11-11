@@ -2,11 +2,13 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { Stack, Text } from './primitives';
 import { theme } from './theme';
+import { useDesktop } from './use-desktop';
 
 /** The grouped key facts of an item in its detail window. */
 export function DetailPanel({ children }: { children: ReactNode }) {
+  const desktop = useDesktop();
   return (
-    <Stack gap={3} style={{ backgroundColor: theme.colors.surfaceSubtle, padding: theme.spacing[4], borderRadius: theme.borderRadii.lg }}>
+    <Stack gap={desktop ? 5 : 3} style={desktop ? { paddingVertical: theme.spacing[4] } : { backgroundColor: theme.colors.surfaceSubtle, padding: theme.spacing[4], borderRadius: theme.borderRadii.lg }}>
       {children}
     </Stack>
   );

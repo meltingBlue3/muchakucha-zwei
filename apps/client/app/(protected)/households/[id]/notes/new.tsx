@@ -1,3 +1,4 @@
+import { notifyContentChanged } from '../../../../../src/features/content/content-changes';
 import { useWorkspaceStore } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams } from 'expo-router';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
@@ -33,6 +34,7 @@ export default function CreateNoteRoute() {
         }
         await sessionApiClient.createNote(token, id!, data);
         workspace.clear(draftPrefix);
+        notifyContentChanged(id);
         exitAllowed.current = true;
         close();
       } catch {
@@ -45,7 +47,7 @@ export default function CreateNoteRoute() {
   );
 
   return (
-    <NoteWindow title="创建笔记" busy={isSubmitting} exitAllowed={exitAllowed}>
+    <NoteWindow draftPrefix={draftPrefix} title="创建笔记" busy={isSubmitting} exitAllowed={exitAllowed}>
       <Stack gap={4}>
         <HouseholdContextNote householdName={householdName} />
         {error !== null ? <Banner>{error}</Banner> : null}

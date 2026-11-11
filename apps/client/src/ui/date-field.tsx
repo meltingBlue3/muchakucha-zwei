@@ -8,6 +8,8 @@ import { formatDateLabel, parseDateValue, parseTimeValue, toDateValue, toTimeVal
 import { AppDialog } from './app-dialog';
 import { DatePickerPanel, PickerActions, TimePickerPanel } from './picker-panels';
 import { useWindowStep, type RouteWindowStep } from './window-step';
+import { useDesktop, useDesktopDensity } from './use-desktop';
+import { AnchoredPopover } from './anchored-popover';
 
 export { formatDateLabel } from './date-values';
 
@@ -56,6 +58,8 @@ export function DateField({
   align = 'start',
 }: DateFieldProps) {
   const activeTheme = useTheme<Theme>();
+  const desktop = useDesktop();
+  const dense = useDesktopDensity();
   const [open, setOpen] = useState(false);
   const trigger = useRef<View>(null);
   const plain = appearance === 'plain';
@@ -69,12 +73,12 @@ export function DateField({
   const apply = useCallback((next: string) => { setOpen(false); onChange(next); }, [onChange]);
   const pickerValue = value === '' && pickerDefault !== undefined ? pickerDefault : value;
   const panel = open ? <PickerPanel mode={mode} value={pickerValue} onConfirm={apply} onCancel={close} /> : null;
-  const step = useMemo<RouteWindowStep | null>(() => open && Platform.OS !== 'android' ? {
+  const step = useMemo<RouteWindowStep | null>(() => open && Platform.OS !== 'android' && !desktop ? {
     title: PICKER_TITLES[mode],
     content: panel,
     onClose: close,
     onReturn: () => (trigger.current as unknown as { focus?(): void } | null)?.focus?.(),
-  } : null, [open, mode, panel, close]);
+  } : null, [open, mode, panel, close, desktop]);
   const inWindow = useWindowStep(step);
 
   const press = () => {
@@ -99,7 +103,7 @@ export function DateField({
   };
 
   const fieldStyle = plain ? {
-    minHeight: activeTheme.controlSizes.touchTarget,
+    minHeight: dense ? activeTheme.layout.desktopControl : activeTheme.controlSizes.touchTarget,
     justifyContent: 'center' as const,
     alignItems: align === 'end' ? 'flex-end' as const : 'flex-start' as const,
   } : {
@@ -109,7 +113,7 @@ export function DateField({
     borderRadius: activeTheme.borderRadii.md,
     paddingHorizontal: activeTheme.spacing[4],
     paddingVertical: activeTheme.spacing[3],
-    minHeight: activeTheme.controlSizes.field,
+    minHeight: dense ? activeTheme.layout.desktopField : activeTheme.controlSizes.field,
     justifyContent: 'center' as const,
   };
 
@@ -129,7 +133,7 @@ export function DateField({
       >
         <Text color={isEmpty ? 'inkMuted' : 'ink'}>{displayValue}</Text>
       </Pressable>
-      {!inWindow && open ? <AppDialog title={PICKER_TITLES[mode]} busy={false} onClose={close} trigger={trigger}>{panel}</AppDialog> : null}
+      {desktop && open ? <AnchoredPopover title={PICKER_TITLES[mode]} onClose={close} trigger={trigger}>{panel}</AnchoredPopover> : !inWindow && open ? <AppDialog title={PICKER_TITLES[mode]} busy={false} onClose={close} trigger={trigger}>{panel}</AppDialog> : null}
     </View>
   );
 }

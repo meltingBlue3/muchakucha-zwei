@@ -12,6 +12,7 @@ import { Pressable, View, useWindowDimensions } from 'react-native';
 
 import { Text } from './primitives';
 import { theme } from './theme';
+import { useDesktop, useDesktopDensity } from './use-desktop';
 
 type Icon = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 
@@ -61,6 +62,9 @@ export function HouseholdNavigation({ householdId, active, belowActive = false, 
   const router = useRouter();
   const { width } = useWindowDimensions();
   const wide = width >= theme.layout.navigationBreakpoint;
+  const desktop = useDesktop();
+  const dense = useDesktopDensity();
+  const rail = desktop && width < theme.layout.railBreakpoint;
   const go = (key: string) => {
     if (active !== key || belowActive) router.replace(householdPath(householdId, key));
   };
@@ -102,25 +106,26 @@ export function HouseholdNavigation({ householdId, active, belowActive = false, 
         accessibilityLabel={label}
         {...(role === 'tab' ? { accessibilityState: { selected }, 'aria-selected': selected } : selected ? { 'aria-current': 'page' as const } : {})}
         onPress={() => role === 'tab' ? go(key) : active === key ? undefined : router.push(householdPath(householdId, key))}
-        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.spacing[10], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: selected ? theme.colors.surfaceSelected : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
+        {...(rail ? { title: label } : {})}
+        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: rail ? 'center' : 'flex-start', gap: theme.spacing[3], minHeight: dense ? theme.layout.desktopNavRow : theme.spacing[10], paddingHorizontal: rail ? theme.spacing[2] : theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: selected ? theme.colors.surfaceSelected : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
       >
         <ItemIcon size={theme.controlSizes.icon} color={selected ? theme.colors.ink : theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
-        <Text variant="bodySm" color={selected ? 'ink' : 'inkMuted'} style={{ fontWeight: selected ? '600' : '400' }}>{label}</Text>
+        {!rail ? <Text variant="bodySm" color={selected ? 'ink' : 'inkMuted'} style={{ fontWeight: selected ? '600' : '400' }}>{label}</Text> : null}
       </Pressable>
     );
   };
 
   return (
-    <View style={{ width: theme.layout.navigationWidth, backgroundColor: theme.colors.canvas, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator, paddingHorizontal: theme.spacing[3], paddingTop: theme.spacing[4], paddingBottom: theme.spacing[3], gap: theme.spacing[5] }}>
+    <View testID="global-sidebar" style={{ width: rail ? theme.layout.railWidth : theme.layout.navigationWidth, backgroundColor: theme.colors.canvas, paddingHorizontal: rail ? theme.spacing[2] : theme.spacing[3], paddingTop: theme.spacing[4], paddingBottom: theme.spacing[3], gap: theme.spacing[5] }}>
       {header}
       <View accessibilityRole="tablist" accessibilityLabel="家庭主导航" style={{ gap: theme.spacing[1] / 2 }}>
         {destinations.map(({ key, label, icon }) => item(key, label, icon, 'tab'))}
       </View>
       <View style={{ gap: theme.spacing[1] / 2 }}>
-        <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: theme.spacing[3], marginBottom: theme.spacing[1] }}>家庭</Text>
+        {!rail ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: theme.spacing[3], marginBottom: theme.spacing[1] }}>家庭</Text> : null}
         {familyPages.map(({ key, label, icon }) => item(key, label, icon, 'link'))}
       </View>
-      {children ? <View style={{ flex: 1, minHeight: 0 }}>{children}</View> : <View style={{ flex: 1 }} />}
+      {!desktop && children ? <View style={{ flex: 1, minHeight: 0 }}>{children}</View> : <View style={{ flex: 1 }} />}
       {footer}
     </View>
   );

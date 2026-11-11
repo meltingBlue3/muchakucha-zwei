@@ -1,3 +1,4 @@
+import { notifyContentChanged } from '../../../../../src/features/content/content-changes';
 import { useRef } from 'react';
 import { EventWindow, useEventWindowClose } from '../../../../../src/features/events/event-window';
 import { toDateIso } from '../../../../../src/features/events/calendar-utils';
@@ -36,12 +37,17 @@ export default function CreateEventRoute() {
       if (token === null) throw new Error('Session expired');
       return sessionApiClient.tagEvent(token, id!, resourceId, { labelIds });
     },
-    onComplete: () => { workspace.clear(draftPrefix); exitAllowed.current = true; close(); },
+    onComplete: () => {
+      workspace.clear(draftPrefix);
+      notifyContentChanged(id);
+      exitAllowed.current = true;
+      close();
+    },
   });
   const handleSubmit = (data: CreateEventDto) => submit(data, selectedLabelIds);
 
   return (
-    <EventWindow title="创建日程" busy={isSubmitting} exitAllowed={exitAllowed}>
+    <EventWindow draftPrefix={draftPrefix} title="创建日程" busy={isSubmitting} exitAllowed={exitAllowed}>
 
         <Stack gap={4}>
           <HouseholdContextNote householdName={householdName} />

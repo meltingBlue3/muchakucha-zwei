@@ -45,7 +45,7 @@ for (const width of [320, 390, 1440]) {
     await page.goto(`${base}/notes`);
     await page.getByLabel('搜索笔记', { exact: true }).fill('暑假');
     await page.getByRole('button', { name: /^笔记：/ }).click();
-    const detail = page.getByRole('dialog', { name: '笔记详情', exact: true });
+    const detail = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记详情', exact: true });
     await expect(detail.getByRole('button', { name: '编辑笔记' })).toBeInViewport();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`note-detail-${width}.png`) });
@@ -66,7 +66,7 @@ for (const width of [320, 390, 1440]) {
     await page.screenshot({ path: testInfo.outputPath(`family-${width}.png`) });
     await page.getByRole('button', { name: '管理标签', exact: true }).click();
     await page.getByRole('button', { name: '创建标签', exact: true }).click();
-    const create = page.getByRole('dialog', { name: '创建标签', exact: true });
+    const create = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '创建标签', exact: true });
     await create.getByLabel('标签名称', { exact: true }).fill('旅行');
     const colors = create.getByRole('radio');
     for (const color of await colors.all()) {
@@ -80,10 +80,16 @@ for (const width of [320, 390, 1440]) {
     await expect(page.getByLabel('标签：旅行', { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.goto(`${base}/today`);
+    if (width >= 1024) {
+      await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(10);
+      await expect(page.getByRole('heading', { name: '逾期（5）', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '待安排（5）', exact: true })).toBeVisible();
+    } else {
     await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(6);
     await page.getByRole('button', { name: '查看全部逾期任务（5）' }).click();
     await page.getByRole('button', { name: '查看全部待安排（5）' }).click();
     await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(10);
+    }
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`today-${width}.png`) });
   });
@@ -96,9 +102,10 @@ test('direct note edits restore drafts and closing returns to detail without sta
   await page.reload();
   await expect(page.getByLabel('笔记标题', { exact: true })).toHaveValue('保存到设备的草稿');
   await expect(page.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('dialog')).toHaveCount(1);
+  // One window and nothing stacked: a phone's single dialog, or the wide reading pane with no dialog at all.
+  await expect(page.getByRole('dialog')).toHaveCount((page.viewportSize()?.width ?? 0) >= 1024 ? 0 : 1);
   await page.getByRole('button', { name: '关闭编辑笔记', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '笔记详情', exact: true })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记详情', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(`${base}/notes`);
 });
@@ -143,7 +150,8 @@ test('a completed preview task keeps its undo action even if the server reorders
     await route.fulfill({ json: task });
   });
   await page.goto(`${base}/today`);
-  await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount(3);
+  // A phone previews three undated tasks; the wide Today's 待办 column lists all five.
+  await expect(page.getByRole('button', { name: /^任务：/ })).toHaveCount((page.viewportSize()?.width ?? 0) >= 1024 ? 5 : 3);
   await page.getByRole('button', { name: '完成任务', exact: true }).first().click();
   await expect(page.getByRole('button', { name: '撤销完成：预览任务 0' })).toBeVisible();
   await page.getByRole('button', { name: '撤销完成：预览任务 0' }).click();

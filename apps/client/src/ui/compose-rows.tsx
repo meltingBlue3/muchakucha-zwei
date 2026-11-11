@@ -4,6 +4,8 @@ import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Check from 'lucide-react-native/icons/check';
 
 import { PickerActions } from './picker-panels';
+import { AnchoredPopover } from './anchored-popover';
+import { useDesktop, useDesktopDensity } from './use-desktop';
 import { FormMessage, Stack, Text } from './primitives';
 import { theme } from './theme';
 import { useWindowStep, type RouteWindowStep } from './window-step';
@@ -25,9 +27,10 @@ export function FormSection({ children }: { children: ReactNode }) {
 
 /** Icon column plus content; rows without an icon keep the same text edge. */
 export function FormRow({ icon, align = 'center', children }: { icon?: ReactNode; align?: 'center' | 'start'; children: ReactNode }) {
+  const dense = useDesktopDensity();
   return (
-    <View style={{ flexDirection: 'row', alignItems: align === 'start' ? 'flex-start' : 'center', gap: theme.spacing[2], minHeight: theme.controlSizes.touchTarget }}>
-      <View importantForAccessibility="no-hide-descendants" aria-hidden style={{ width: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ flexDirection: 'row', alignItems: align === 'start' ? 'flex-start' : 'center', gap: theme.spacing[2], minHeight: dense ? theme.layout.desktopField : theme.controlSizes.touchTarget }}>
+      <View importantForAccessibility="no-hide-descendants" aria-hidden style={{ width: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget, minHeight: dense ? theme.layout.desktopField : theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center' }}>
         {icon}
       </View>
       {children}
@@ -84,6 +87,7 @@ export function SummaryRow({ name, summary, icon, open, disabled = false, onPres
   /** Placeholder-style summary for an empty optional value. */
   muted?: boolean;
 }) {
+  const dense = useDesktopDensity();
   return (
     <FormRow icon={icon}>
       <Pressable
@@ -94,7 +98,7 @@ export function SummaryRow({ name, summary, icon, open, disabled = false, onPres
         aria-haspopup="dialog"
         disabled={disabled}
         onPress={onPress}
-        style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], minHeight: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], marginLeft: -theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
+        style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], minHeight: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], marginLeft: -theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
       >
         <Text color={muted ? 'inkMuted' : 'ink'} style={{ flex: 1 }}>{summary}</Text>
         <ChevronDown size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
@@ -143,6 +147,7 @@ export function OptionRow({ label, detail, checked, disabled = false, multiple =
   leading?: ReactNode;
   onPress(): void;
 }) {
+  const dense = useDesktopDensity();
   return (
     <Pressable
       accessibilityRole={multiple ? 'checkbox' : 'radio'}
@@ -152,7 +157,7 @@ export function OptionRow({ label, detail, checked, disabled = false, multiple =
       disabled={disabled}
       onPress={onPress}
       {...(Platform.OS === 'web' ? { onKeyDown: moveFocus } : {})}
-      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], minHeight: theme.controlSizes.touchTarget + theme.spacing[1], paddingHorizontal: theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], minHeight: dense ? theme.layout.desktopRowHeight : theme.controlSizes.touchTarget + theme.spacing[1], paddingHorizontal: theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
     >
       <OptionMark checked={checked} disabled={disabled} multiple={multiple} />
       {leading}
@@ -194,6 +199,7 @@ export function ChoiceField<T extends string>({ name, title, icon, summary, opti
   /** Extra content under the list, such as a hint. */
   children?: ReactNode;
 }) {
+  const desktop = useDesktop();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<T[]>([]);
   const trigger = useRef<View>(null);
@@ -236,7 +242,7 @@ export function ChoiceField<T extends string>({ name, title, icon, summary, opti
       </Stack>
     ),
   } : null, [open, title, close, multiple, name, options, emptyValue, draft, value, children, toggle, onChange]);
-  const inWindow = useWindowStep(step);
+  const inWindow = useWindowStep(desktop ? null : step);
 
   return (
     <Stack gap={0}>
@@ -253,7 +259,7 @@ export function ChoiceField<T extends string>({ name, title, icon, summary, opti
           setOpen(!open);
         }}
       />
-      {!inWindow && step ? <View style={{ paddingLeft: ROW_CONTENT_INSET, paddingBottom: theme.spacing[3] }}>{step.content}</View> : null}
+      {desktop && step ? <AnchoredPopover scrollable title={title} trigger={trigger} onClose={close}>{step.content}</AnchoredPopover> : !inWindow && step ? <View style={{ paddingLeft: ROW_CONTENT_INSET, paddingBottom: theme.spacing[3] }}>{step.content}</View> : null}
     </Stack>
   );
 }

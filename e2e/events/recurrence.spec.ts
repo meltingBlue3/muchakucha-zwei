@@ -3,6 +3,9 @@ import { Client } from 'pg';
 
 import { loginUsernameFixture } from '../support/auth';
 
+/** Event windows and their steps are named regions in the wide side pane and dialogs on a phone. */
+const windowRole = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1024 ? 'region' as const : 'dialog' as const;
+
 /** The calendar grid names a day as "2030年6月20日". */
 const dayLabel = (iso: string): string => {
   const [year, month, day] = iso.slice(0, 10).split('-').map(Number);
@@ -161,7 +164,7 @@ test.describe('recurring event and task journeys', () => {
     }
     await page.getByRole('button', { name: `${dayLabel(futureDate)}，1个日程`, exact: true }).click();
     await page.getByRole('button', { name: new RegExp(`^日程：${title}`) }).click();
-    await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
+    await expect(page.getByRole(windowRole(page), { name: '日程详情' })).toBeVisible();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     const persisted = await listEvents(account.accessToken, householdId, futureDate, futureDate);
     expect(persisted.some((event) => event.occurrenceDate === futureDate && event.title === title)).toBe(true);
@@ -180,7 +183,7 @@ test.describe('recurring event and task journeys', () => {
     await page.getByRole('tab', { name: '日历', exact: true }).click();
     await expect(page.getByLabel('创建日程')).toBeVisible();
     await page.getByLabel('创建日程').click();
-    await expect(page.getByRole('dialog', { name: '创建日程' })).toBeVisible();
+    await expect(page.getByRole(windowRole(page), { name: '创建日程' })).toBeVisible();
     await page.getByLabel('日程标题').fill(title);
     await pickDate(page, '开始日期', startDate);
     await pickDate(page, '结束日期', startDate);
@@ -190,11 +193,11 @@ test.describe('recurring event and task journeys', () => {
     const repeat = page.getByRole('button', { name: /^日程重复设置/ });
     await expect(repeat).toHaveAccessibleName('日程重复设置，不重复');
     await repeat.click();
-    await page.getByRole('dialog', { name: '重复' }).getByRole('radio', { name: '每天' }).click();
+    await page.getByRole(windowRole(page), { name: '重复' }).getByRole('radio', { name: '每天' }).click();
     await expect(repeat).toHaveAccessibleName('日程重复设置，每天重复');
     await repeat.click();
-    await page.getByRole('dialog', { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
-    const custom = page.getByRole('dialog', { name: '自定义重复' });
+    await page.getByRole(windowRole(page), { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
+    const custom = page.getByRole(windowRole(page), { name: '自定义重复' });
     await custom.getByRole('radio', { name: '周', exact: true }).click();
     const defaultWeekday = await page.evaluate((value) => new Date(`${value}T12:00:00`).getDay(), startDate);
     const selectedWeekdays = [defaultWeekday, (defaultWeekday + 1) % 7, (defaultWeekday + 2) % 7];
@@ -227,7 +230,7 @@ test.describe('recurring event and task journeys', () => {
     await page.getByLabel(new RegExp(`^${dayLabel(String(detailOccurrence.occurrenceDate))}(?:，今天)?，\\d+个日程$`)).click();
     await page.getByLabel(`日程：${title}，重复`).click();
     // The wide sidebar also links to 重复安排, so read the field inside the window.
-    const detail = page.getByRole('dialog', { name: '日程详情' });
+    const detail = page.getByRole(windowRole(page), { name: '日程详情' });
     await expect(detail.getByRole('heading', { name: title, exact: true })).toBeVisible();
     await expect(detail.getByText('重复安排', { exact: true })).toBeVisible();
     await expect(detail.getByText(/每周.*重复，共 4 次/)).toBeVisible();
@@ -272,13 +275,13 @@ test.describe('recurring event and task journeys', () => {
     await page.getByLabel(new RegExp(`^${dayLabel(String(selected.occurrenceDate))}(?:，今天)?，\\d+个日程$`)).click();
     await page.getByLabel(`日程：${eventTitle}，重复`).click();
     await page.getByLabel('编辑日程').click();
-    const edit = page.getByRole('dialog', { name: '编辑日程' });
+    const edit = page.getByRole(windowRole(page), { name: '编辑日程' });
     await expect(edit).toBeVisible();
     // Weekdays live on the custom repeat page, reached through the repeat row.
     const openCustomRepeat = async () => {
       await page.getByRole('button', { name: /^日程重复设置/ }).click();
-      await page.getByRole('dialog', { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
-      return page.getByRole('dialog', { name: '自定义重复' });
+      await page.getByRole(windowRole(page), { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
+      return page.getByRole(windowRole(page), { name: '自定义重复' });
     };
     let custom = await openCustomRepeat();
     await custom.getByLabel(weekdayLabel(removedWeekday)).click();
@@ -289,7 +292,7 @@ test.describe('recurring event and task journeys', () => {
     await custom.getByRole('button', { name: '完成', exact: true }).click();
     await page.getByLabel('保存', { exact: true }).click();
 
-    const dialog = page.getByRole('dialog', { name: '更改重复规则？' });
+    const dialog = page.getByRole(windowRole(page), { name: '更改重复规则？' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel('仅此一次')).toBeDisabled();
     const beforeChoice = (await listEvents(account.accessToken, householdId, rangeStart, rangeEnd))
@@ -324,7 +327,10 @@ test.describe('recurring event and task journeys', () => {
     // future, which keeps them out of both the overdue and today groups and
     // leaves exactly one occurrence due today. The rule is anchored to the
     // browser's timezone so the materializer's "today" and the Today view's
-    // "today" are the same calendar day.
+    // "today" are the same calendar day. It lives in a household of its own:
+    // the split event series above can also fall on today, and Today would
+    // count that occurrence in the same timeline group.
+    const taskHouseholdId = await createHousehold(account.accessToken, '取消单次之家');
     const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const localIsoDate = (offsetDays: number): string => {
       const date = new Date();
@@ -338,7 +344,7 @@ test.describe('recurring event and task journeys', () => {
     };
     const today = localIsoDate(0);
     const taskTitle = `取消单次-${Date.now()}`;
-    const taskCreate = await apiCall<any>(account.accessToken, 'POST', `/api/v1/households/${householdId}/tasks`, {
+    const taskCreate = await apiCall<any>(account.accessToken, 'POST', `/api/v1/households/${taskHouseholdId}/tasks`, {
       title: taskTitle,
       recurrence: {
         freq: 'weekly',
@@ -350,7 +356,7 @@ test.describe('recurring event and task journeys', () => {
       },
     });
     expect(taskCreate.status).toBe(201);
-    const taskOccurrences = (await listTasks(account.accessToken, householdId))
+    const taskOccurrences = (await listTasks(account.accessToken, taskHouseholdId))
       .filter((task) => task.title === taskTitle)
       .sort((left, right) => left.occurrenceDate.localeCompare(right.occurrenceDate));
     expect(taskOccurrences).toHaveLength(4);
@@ -359,7 +365,9 @@ test.describe('recurring event and task journeys', () => {
     const taskToCancel = taskOccurrences.find((task) => task.occurrenceDate === today)!;
     expect(taskToCancel).toBeDefined();
 
-    await page.goto(`/households/${householdId}`);
+    // 全天 / 时间线 groups and the card menu are the phone's Today; the wide Today has columns instead.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/households/${taskHouseholdId}`);
     await page.getByRole('tab', { name: '今日', exact: true }).click();
     await expect(page.getByRole('main', { name: '今日视图' })).toBeVisible();
     // Exactly one occurrence is due today, and it is listed for today before the
@@ -380,19 +388,19 @@ test.describe('recurring event and task journeys', () => {
     await deleteDialog.getByRole('button', { name: '确认删除任务', exact: true }).click();
     await expect(deleteDialog).toHaveCount(0);
 
-    const afterCancel = (await listTasks(account.accessToken, householdId))
+    const afterCancel = (await listTasks(account.accessToken, taskHouseholdId))
       .filter((task) => task.title === taskTitle);
     expect(afterCancel.find((task) => task.id === taskToCancel.id)?.status).toBe('cancelled');
     expect(afterCancel.filter((task) => task.id !== taskToCancel.id).every((task) => task.status === 'pending')).toBe(true);
 
-    await page.goto(`/households/${householdId}`);
+    await page.goto(`/households/${taskHouseholdId}`);
     await page.getByRole('tab', { name: '任务', exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/households/${householdId}/tasks$`));
+    await expect(page).toHaveURL(new RegExp(`/households/${taskHouseholdId}/tasks$`));
     // The list opens on 待办; a cancelled occurrence is listed under 全部.
     await page.getByRole('radio', { name: '筛选：全部', exact: true }).click();
     await expect(page.getByText('已取消', { exact: true })).toBeVisible();
 
-    await page.goto(`/households/${householdId}`);
+    await page.goto(`/households/${taskHouseholdId}`);
     await page.getByRole('tab', { name: '今日', exact: true }).click();
     await expect(page.getByRole('main', { name: '今日视图' })).toBeVisible();
     // The cancelled occurrence is gone from today — the group held only that

@@ -16,11 +16,16 @@ export function useOverlayFocus({ mode, panel, initial, trigger, onClose }: Over
 
   useEffect(() => {
     if (mode === 'closed') return;
-    const frame = requestAnimationFrame(focusInitial);
+    const keyboard = document.activeElement?.matches(':focus-visible') ?? false;
+    // A pane opened by pointer leaves focus on the list row, unless nothing holds focus any more
+    // (the control that opened it was replaced): then the pane takes it, so keys keep reaching it.
+    const lost = !document.activeElement || document.activeElement === document.body;
+    const frame = mode !== 'pane' || keyboard || lost ? requestAnimationFrame(focusInitial) : 0;
     const token = {};
     openOverlays.push(token);
     const onKeyDown = (event: KeyboardEvent) => {
       if (openOverlays[openOverlays.length - 1] !== token) return;
+      if (mode === 'pane' && !(panel.current as unknown as HTMLElement | null)?.contains(document.activeElement)) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -38,7 +43,7 @@ export function useOverlayFocus({ mode, panel, initial, trigger, onClose }: Over
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
           : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
         items[next]?.focus();
-      } else if (event.key === 'Tab') {
+      } else if (event.key === 'Tab' && mode !== 'pane') {
         if (!first) { event.preventDefault(); focusInitial(); }
         else if (event.shiftKey && (document.activeElement === first || !element?.contains(document.activeElement))) {
           event.preventDefault(); last?.focus();

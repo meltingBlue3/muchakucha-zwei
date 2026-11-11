@@ -116,7 +116,8 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   // --- Read ---
   await card.click();
   await expect(page).toHaveURL(new RegExp(`${notesPath}/${noteId}$`));
-  const detail = page.getByRole('dialog', { name: '笔记详情' });
+  // The note opens in the wide reading pane, a named region, or in a phone's dialog.
+  const detail = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记详情' });
   await expect(detail.getByRole('heading', { name: '暑假计划' })).toBeVisible();
   await expect(detail.getByText('看外婆')).toBeVisible();
 
@@ -203,8 +204,10 @@ test('a member edits another member’s shared note without gaining deletion rig
   await page.getByLabel('笔记标题').fill('周末采购清单');
   await page.getByLabel('笔记内容').fill('牛奶、面包');
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '周末采购清单', exact: true })).toBeVisible();
-  await expect(page.getByText('牛奶、面包', { exact: true })).toBeVisible();
+  // Read the saved note in its window: on a wide screen the refreshed list beside it shows the same words.
+  const detail = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记详情' });
+  await expect(detail.getByRole('heading', { name: '周末采购清单', exact: true })).toBeVisible();
+  await expect(detail.getByText('牛奶、面包', { exact: true })).toBeVisible();
   const deleted = await apiCall(member.accessToken, 'DELETE', `/households/${householdId}/notes/${noteId}`);
   expect(deleted.status).toBe(403);
   const saved = await apiCall(creator.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`);

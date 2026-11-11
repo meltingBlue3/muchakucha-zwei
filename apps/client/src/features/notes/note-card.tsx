@@ -6,6 +6,7 @@ import { ListRow } from '../../ui/list-group';
 import type { NoteResponseDto } from '@muchakucha/api-client';
 import { Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
+import { useDesktop } from '../../ui/use-desktop';
 
 interface NoteCardProps {
   onEdit?: (() => void) | undefined;
@@ -19,6 +20,7 @@ interface NoteCardProps {
 /** One note as a list row: title, then when it changed and how it begins. */
 export function NoteCard({ note, onPress, onEdit, onDelete, selected = false }: NoteCardProps) {
   const excerpt = markdownExcerpt(note.body ?? '');
+  const desktop = useDesktop();
 
   return (
     <ListRow
@@ -30,10 +32,10 @@ export function NoteCard({ note, onPress, onEdit, onDelete, selected = false }: 
         ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除笔记：${note.title}`, onPress: onDelete }] : []),
       ]} />}
     >
-      <Text variant="body" numberOfLines={1}>{note.title}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}><Text variant={desktop ? 'bodySm' : 'body'} color="ink" numberOfLines={1} style={{ flex: 1 }}>{note.title}</Text>{desktop ? <Text variant="time">{formatDate(new Date(note.updatedAt))}</Text> : null}</View>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: theme.spacing[2], marginTop: theme.spacing[1] / 2 }}>
-        <Text variant="time" color="inkFaint">{formatDate(new Date(note.updatedAt))}</Text>
-        {excerpt !== '' ? <Text variant="meta" numberOfLines={1} style={{ flex: 1 }}>{excerpt}</Text> : null}
+        {!desktop ? <Text variant="time" color="inkFaint">{formatDate(new Date(note.updatedAt))}</Text> : null}
+        {excerpt !== '' ? <Text variant="meta" numberOfLines={desktop ? 2 : 1} style={{ flex: 1 }}>{excerpt}</Text> : null}
       </View>
     </ListRow>
   );

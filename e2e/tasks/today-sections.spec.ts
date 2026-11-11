@@ -64,6 +64,14 @@ function todayAtNoonIso(): string {
   return date.toISOString();
 }
 
+/** The calendar date `offset` days from today where the browser runs; `toISOString` would give the UTC date, a day early before 08:00 in Shanghai. */
+function localDate(offset = 0): string {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 test('undated tasks appear under 待安排 instead of inflating today', async ({ page }) => {
   const owner = await prepareAccount('owner');
   const household = await apiCall(owner.accessToken, 'POST', '/households', { name: '待安排之家' });
@@ -81,6 +89,8 @@ test('undated tasks appear under 待安排 instead of inflating today', async ({
     expect(undated.status).toBe(201);
   }
 
+  // These sections and the 后续安排 toggle are the phone's Today; the wide Today has its own columns, covered in desktop-redesign.spec.ts.
+  await page.setViewportSize({ width: 390, height: 844 });
   await loginUsernameFixture(page, owner.username, password, `/households/${encodeURIComponent(householdId)}/today`);
 
   // Only work actually due today runs in the timeline; a noon due time places it there.
@@ -96,8 +106,8 @@ test('undated tasks appear under 待安排 instead of inflating today', async ({
   await expect(page.getByRole('button', { name: /^查看后续安排/ })).toHaveCount(0);
 });
 
-for (const recurring of [false, true]) {
-test(`completing a task is one tap and stays undoable on the card${recurring ? ' (recurring)' : ''}`, async ({ page }) => {
+for (const recurring of [false, true]) for (const width of [390, 1280]) {
+test(`completing a task is one tap and stays undoable${recurring ? ' (recurring)' : ''} at ${width}px`, async ({ page }) => {
   const owner = await prepareAccount('complete');
   const household = await apiCall(owner.accessToken, 'POST', '/households', { name: '完成之家' });
   expect(household.status).toBe(201);
@@ -106,7 +116,7 @@ test(`completing a task is one tap and stays undoable on the card${recurring ? '
   const created = await apiCall(owner.accessToken, 'POST', `/households/${householdId}/tasks`, {
     title: '洗碗',
     ...(!recurring ? { dueDate: todayAtNoonIso() } : {}),
-    ...(recurring ? { recurrence: { freq: 'daily', startsOn: todayAtNoonIso().slice(0, 10), timezone: 'Asia/Shanghai', count: 1 } } : {}),
+    ...(recurring ? { recurrence: { freq: 'daily', startsOn: localDate(), timezone: localTimezone, count: 1 } } : {}),
   });
   expect(created.status).toBe(201);
   const taskId = created.body.id as string;
@@ -119,8 +129,12 @@ test(`completing a task is one tap and stays undoable on the card${recurring ? '
   });
   expect(started.status).toBe(200);
 
+  // The check is on the phone's Today card, and on a wide screen on the timeline marker of a timed task or
+  // the 待办 row of an all-day one. The marker has no room for a status, so there the check itself stands in for 进行中.
+  await page.setViewportSize({ width, height: width < 1024 ? 844 : 720 });
+  const inProgress = width >= 1024 && !recurring ? page.getByRole('button', { name: '完成任务' }) : page.getByText('进行中');
   await loginUsernameFixture(page, owner.username, password, `/households/${encodeURIComponent(householdId)}/today`);
-  await expect(page.getByText('进行中')).toBeVisible();
+  await expect(inProgress).toBeVisible();
 
   // One tap finishes it — the old rotation needed two from here.
   await page.getByRole('button', { name: '完成任务' }).click();
@@ -131,7 +145,7 @@ test(`completing a task is one tap and stays undoable on the card${recurring ? '
 
   // Undo from the top notice restores 进行中, not 待办.
   await page.getByRole('button', { name: '撤销完成：洗碗' }).click();
-  await expect(page.getByText('进行中')).toBeVisible();
+  await expect(inProgress).toBeVisible();
 
   const afterUndo = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/tasks/${taskId}`);
   expect(afterUndo.body.status).toBe('in_progress');
@@ -148,7 +162,7 @@ test(`the detail page carries 进行中 as its own action${recurring ? ' (recurr
   const created = await apiCall(owner.accessToken, 'POST', `/households/${householdId}/tasks`, {
     title: '换灯泡',
     ...(!recurring ? { dueDate: todayAtNoonIso() } : {}),
-    ...(recurring ? { recurrence: { freq: 'daily', startsOn: todayAtNoonIso().slice(0, 10), timezone: 'Asia/Shanghai', count: 1 } } : {}),
+    ...(recurring ? { recurrence: { freq: 'daily', startsOn: localDate(), timezone: localTimezone, count: 1 } } : {}),
   });
   expect(created.status).toBe(201);
   const taskId = created.body.id as string;
@@ -173,17 +187,14 @@ test('upcoming reminders show the nearest open occurrence per series', async ({ 
   const owner = await prepareAccount('nearest');
   const household = await apiCall(owner.accessToken, 'POST', '/households', { name: '重复提醒之家' });
   const householdId = household.body.id as string;
-  const today = new Date();
-  const day = (offset: number) => {
-    const date = new Date(today);
-    date.setDate(date.getDate() + offset);
-    return date.toISOString().slice(0, 10);
-  };
-  // Several upcoming occurrences, all within the normal generation window.
+  // Several upcoming occurrences, all within the normal generation window. The series starts tomorrow
+  // where the browser runs, so none of them is due today.
   const created = await apiCall(owner.accessToken, 'POST', `/households/${householdId}/tasks`, {
-    title: '重复收拾', recurrence: { freq: 'weekly', startsOn: day(1), timezone: 'UTC', byWeekday: [0, 1, 2, 3, 4, 5, 6] },
+    title: '重复收拾', recurrence: { freq: 'weekly', startsOn: localDate(1), timezone: localTimezone, byWeekday: [0, 1, 2, 3, 4, 5, 6] },
   });
   expect(created.status).toBe(201);
+  // These sections and the 后续安排 toggle are the phone's Today; the wide Today has its own columns, covered in desktop-redesign.spec.ts.
+  await page.setViewportSize({ width: 390, height: 844 });
   await loginUsernameFixture(page, owner.username, password, `/households/${householdId}/today`);
   await page.getByRole('button', { name: /^查看后续安排/ }).click();
   await expect(page.getByRole('heading', { name: '临近截止日期（1）', exact: true })).toBeVisible();

@@ -39,9 +39,9 @@ for (const width of [320, 390, 1440]) {
     await page.goto(`${base}/tasks`);
     const item = page.getByRole('button', { name: /^任务：/ });
     await item.click();
-    const detail = page.getByRole('dialog', { name: '任务详情', exact: true });
+    const detail = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情', exact: true });
     await expect(detail).toBeVisible();
-    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(page.getByRole('dialog')).toHaveCount((page.viewportSize()?.width ?? 0) >= 1024 ? 0 : 1);
     await expect(detail.getByRole('button', { name: '标记为完成', exact: true })).toBeInViewport();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     const panel = await detail.getByTestId('app-dialog-panel').boundingBox();
@@ -49,15 +49,16 @@ for (const width of [320, 390, 1440]) {
     expect(panel!.x + panel!.width).toBeLessThanOrEqual(width);
     await page.screenshot({ path: testInfo.outputPath(`task-detail-${width}.png`) });
     await detail.getByRole('button', { name: '编辑任务', exact: true }).click();
-    const edit = page.getByRole('dialog', { name: '编辑任务', exact: true });
+    const edit = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '编辑任务', exact: true });
     await expect(edit).toBeVisible();
-    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(page.getByRole('dialog')).toHaveCount((page.viewportSize()?.width ?? 0) >= 1024 ? 0 : 1);
     await edit.getByRole('textbox', { name: '任务标题', exact: true }).fill('已修改的聚餐安排');
     await expect(edit.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
     await edit.getByRole('button', { name: '保存', exact: true }).click();
     await expect(detail).toBeVisible();
     await expect(detail.getByText('已修改的聚餐安排', { exact: true })).toBeVisible();
     expect(state.getTask().title).toBe('已修改的聚餐安排');
+    if (width >= 1024) await expect(page.getByRole('button', { name: '任务：已修改的聚餐安排', exact: true })).toBeVisible();
     await detail.getByRole('button', { name: '关闭任务详情' }).click();
     await expect(page).toHaveURL(`${base}/tasks`);
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -68,9 +69,9 @@ for (const width of [320, 390, 1440]) {
 test('direct task window links survive reload and close to a safe destination', async ({ page }) => {
   await setup(page);
   await page.goto(`${base}/tasks/${taskId}`);
-  await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情' })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情' })).toBeVisible();
   await page.getByRole('button', { name: '关闭任务详情' }).click();
   await expect(page).toHaveURL(`${base}/tasks`);
   await page.goto(`${base}/tasks/new`);
@@ -83,13 +84,15 @@ test('direct task window links survive reload and close to a safe destination', 
 
 test('closing a task opened from today restores the original entry', async ({ page }) => {
   await setup(page);
+  // 后续安排 is the phone's collapsible Today section; the wide Today lists the coming days in their own column.
+  await page.setViewportSize({ width: 390, height: 844 });
   // Keep the fixture's due date ahead of today, so the task stays under 后续安排.
   await page.clock.setFixedTime(new Date('2026-09-29T02:00:00Z'));
   await page.goto(`${base}/today`);
   await page.getByRole('button', { name: /查看后续安排/ }).click();
   const item = page.getByRole('button', { name: /^任务：/ });
   await item.click();
-  await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(`${base}/today`);
   await expect(item).toBeVisible();
@@ -122,7 +125,7 @@ test('a failed save retains the draft and busy windows resist closing', async ({
     await route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE' } } });
   });
   await page.goto(`${base}/tasks/${taskId}/edit`);
-  const edit = page.getByRole('dialog', { name: '编辑任务', exact: true });
+  const edit = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '编辑任务', exact: true });
   await edit.getByRole('textbox', { name: '任务标题', exact: true }).fill('保留我的修改');
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('task-edit-390.png') });
@@ -135,7 +138,7 @@ test('a failed save retains the draft and busy windows resist closing', async ({
   await expect(edit.getByText('保存失败，请重试。', { exact: true })).toBeVisible();
   await expect(edit.getByRole('textbox', { name: '任务标题', exact: true })).toHaveValue('保留我的修改');
   await edit.getByRole('button', { name: '关闭编辑任务' }).click();
-  await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情' })).toBeVisible();
 });
 
 test('card menu opens deletion and Escape restores the card action', async ({ page }) => {
@@ -145,24 +148,29 @@ test('card menu opens deletion and Escape restores the card action', async ({ pa
   await more.click();
   await page.getByRole('menuitem', { name: /^删除任务：/ }).click();
   await expect(page.getByRole('dialog', { name: '删除任务', exact: true })).toBeVisible();
+  // Deleting from a list menu is one centered confirmation at every width, with nothing stacked under it.
   await expect(page.getByRole('dialog')).toHaveCount(1);
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(`${base}/tasks`);
   await expect(more).toBeFocused();
 });
 
-test('wide screens dock task windows beside the list and keep their steps in place', async ({ page }) => {
+test('desktop task panes keep the list interactive and retain anchored pickers', async ({ page }) => {
   await setup(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/tasks`);
   const row = page.getByRole('button', { name: /^任务：/ });
   await row.click();
-  const detail = page.getByRole('dialog', { name: '任务详情', exact: true });
+  const detail = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情', exact: true });
   await expect(detail).toBeVisible();
   const docked = (await detail.getByTestId('app-dialog-panel').boundingBox())!;
   // Against the right edge at full height, leaving the list readable on the left.
   expect(docked.x + docked.width).toBeGreaterThan(1440 - 24);
-  expect(docked.height).toBeGreaterThan(900 - 48);
+  expect(docked.y).toBe(65);
+  expect(docked.width).toBe(400);
+  expect(docked.height).toBe(826);
+  await expect(row).toBeVisible();
+  await row.click();
   expect(docked.x).toBeGreaterThan(1440 / 2);
   await expect(page.getByTestId('app-dialog-blur')).toHaveCount(0);
   // The window hides the list from the accessibility tree, so find the marked row by its attribute.
@@ -172,13 +180,14 @@ test('wide screens dock task windows beside the list and keep their steps in pla
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   // Editing and its pickers stay in the same docked panel.
   await detail.getByRole('button', { name: '编辑任务', exact: true }).click();
-  const edit = page.getByRole('dialog', { name: '编辑任务', exact: true });
+  const edit = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '编辑任务', exact: true });
   await expect(edit).toBeVisible();
   expect(await edit.getByTestId('app-dialog-panel').boundingBox()).toEqual(docked);
   await edit.getByRole('button', { name: /^截止日期，/ }).click();
   const picker = page.getByRole('dialog', { name: '选择日期', exact: true });
   await expect(picker).toBeVisible();
-  expect(await picker.getByTestId('app-dialog-panel').boundingBox()).toEqual(docked);
+  expect((await picker.boundingBox())!.width).toBeLessThan(docked.width);
+  await expect(edit).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(edit).toBeVisible();
   await page.keyboard.press('Escape');
@@ -200,7 +209,7 @@ test('editing from the card menu returns to the list, while editing from detail 
   const more = page.getByRole('button', { name: /^更多操作：任务：/ });
   await more.click();
   await page.getByRole('menuitem', { name: /^编辑任务：/ }).click();
-  const edit = page.getByRole('dialog', { name: '编辑任务', exact: true });
+  const edit = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '编辑任务', exact: true });
   await expect(edit).toBeVisible();
   await edit.getByRole('button', { name: '关闭编辑任务' }).click();
   await expect(page).toHaveURL(`${base}/tasks`);
@@ -209,8 +218,8 @@ test('editing from the card menu returns to the list, while editing from detail 
 
   await page.getByRole('button', { name: /^任务：/ }).click();
   await page.getByRole('button', { name: '编辑任务', exact: true }).click();
-  await page.getByRole('dialog', { name: '编辑任务', exact: true }).getByRole('button', { name: '关闭编辑任务' }).click();
-  await expect(page.getByRole('dialog', { name: '任务详情', exact: true })).toBeVisible();
+  await page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '编辑任务', exact: true }).getByRole('button', { name: '关闭编辑任务' }).click();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情', exact: true })).toBeVisible();
 });
 
 test('browser history moves one window level at a time', async ({ page }) => {
@@ -219,13 +228,13 @@ test('browser history moves one window level at a time', async ({ page }) => {
   await page.getByRole('button', { name: /^任务：/ }).click();
   await page.getByRole('button', { name: '编辑任务', exact: true }).click();
   await page.goBack();
-  await expect(page.getByRole('dialog', { name: '任务详情', exact: true })).toBeVisible();
-  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount((page.viewportSize()?.width ?? 0) >= 1024 ? 0 : 1);
   await page.goBack();
   await expect(page).toHaveURL(`${base}/tasks`);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.goForward();
-  await expect(page.getByRole('dialog', { name: '任务详情', exact: true })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情', exact: true })).toBeVisible();
 });
 
 test('closing a task preserves a long list scroll position', async ({ page }) => {
@@ -254,7 +263,7 @@ for (const width of [320, 390, 1440]) {
     const state = await setup(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${base}/tasks/new`);
-    const dialog = page.getByRole('dialog', { name: '创建任务' });
+    const dialog = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '创建任务' });
     for (const name of ['截止日期，添加截止日期', '任务重复设置，不重复', '负责人，未分配', '任务状态，待办', '任务优先级，中优先级']) {
       await expect(dialog.getByRole('button', { name, exact: true })).toBeVisible();
     }
@@ -300,8 +309,8 @@ test('the due row and the repeat interval each stay on one line on a 360px phone
   expect(chosen.height).toBeLessThanOrEqual(lineHeight);
   const recurrence = page.getByRole('button', { name: /^任务重复设置，/ });
   await recurrence.click();
-  await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
-  const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
+  await page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
+  const custom = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '自定义重复', exact: true });
   const rows = await Promise.all([
     custom.getByLabel('重复间隔', { exact: true }),
     ...['天', '周', '个月', '年'].map((unit) => custom.getByRole('radio', { name: unit, exact: true })),
@@ -316,8 +325,8 @@ test('a custom task recurrence validates before applying and survives reload', a
   const recurrence = page.getByRole('button', { name: /^任务重复设置，/ });
   await recurrence.focus();
   await page.keyboard.press('Enter');
-  await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
-  const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
+  await page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
+  const custom = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '自定义重复', exact: true });
   await custom.getByRole('radio', { name: '天', exact: true }).click();
   await custom.getByRole('radio', { name: '重复次数', exact: true }).click();
   await custom.getByLabel('重复次数值', { exact: true }).fill('0');
@@ -333,7 +342,7 @@ test('a custom task recurrence validates before applying and survives reload', a
   expect(state.getWrites()).toBe(0);
   await page.reload();
   await expect(recurrence).toHaveAccessibleName('任务重复设置，每天重复，共 4 次');
-  await page.getByRole('dialog', { name: '创建任务' }).getByRole('button', { name: '创建', exact: true }).click();
+  await page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '创建任务' }).getByRole('button', { name: '创建', exact: true }).click();
   await expect(page).toHaveURL(`${base}/tasks`);
   expect(state.getTask()).toMatchObject({ recurrence: { freq: 'daily', count: 4 } });
 });
@@ -350,7 +359,7 @@ test('editing changes status and priority through their lists and clears the des
   await page.getByRole('dialog', { name: '状态', exact: true }).getByRole('radio', { name: '进行中', exact: true }).click();
   await expect(status).toHaveAccessibleName('任务状态，进行中');
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '任务详情' })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情' })).toBeVisible();
   expect(state.getTask()).toMatchObject({ status: 'in_progress', priority: 'medium', description: '' });
 });
 
@@ -372,7 +381,7 @@ for (const width of [390, 1440]) {
     });
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${base}/recurrence-rules/${ruleId}`);
-    const window = page.getByRole('dialog', { name: '重复安排', exact: true });
+    const window = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复安排', exact: true });
     const repeat = window.getByRole('button', { name: /^重复规则，/ });
     await expect(repeat).toHaveAccessibleName('重复规则，每周一重复');
     await expect(window.getByText('更改会从明天开始生效，今天和之前的安排都保留。', { exact: true })).toBeVisible();
@@ -381,18 +390,18 @@ for (const width of [390, 1440]) {
     await page.screenshot({ path: testInfo.outputPath(`rule-window-${width}.png`) });
 
     await repeat.click();
-    const options = page.getByRole('dialog', { name: '重复', exact: true });
+    const options = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复', exact: true });
     await expect(options.getByRole('radio', { name: '不重复' })).toBeDisabled();
     await expect(options.getByText('要停止这个重复，请使用下方的「结束此重复」。', { exact: true })).toBeVisible();
     await options.getByRole('radio', { name: '自定义…' }).click();
-    const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
+    const custom = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '自定义重复', exact: true });
     await expect(custom.getByRole('checkbox', { name: '星期一' })).toBeChecked();
     await custom.getByLabel('重复间隔', { exact: true }).fill('2');
     await custom.getByRole('button', { name: '完成', exact: true }).click();
     await expect(repeat).toHaveAccessibleName('重复规则，每 2 周的周一重复');
 
     await window.getByRole('button', { name: '保存', exact: true }).click();
-    const confirm = page.getByRole('dialog', { name: '确认保存重复安排', exact: true });
+    const confirm = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '确认保存重复安排', exact: true });
     await expect(confirm.getByText('这会影响明天起的每一次。', { exact: true })).toBeVisible();
     await confirm.getByRole('button', { name: '确认保存', exact: true }).click();
     await expect(page).toHaveURL(`${base}/recurrence-rules`);

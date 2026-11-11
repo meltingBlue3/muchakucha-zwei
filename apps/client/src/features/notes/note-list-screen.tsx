@@ -1,10 +1,16 @@
+import { useContentChanges } from '../content/content-changes';
+import { useResourceNavigation } from '../../ui/use-resource-navigation';
+import { useDesktop } from '../../ui/use-desktop';
+import { MarkdownBody } from './markdown-body';
+import { theme } from '../../ui/theme';
+import { ScrollView } from 'react-native';
 import { useOpenWindowItem } from '../../ui/route-window';
 import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { PageIntro } from '../../ui/page-intro';
-import { ListGroup } from '../../ui/list-group';
+import { GroupLabel, ListGroup } from '../../ui/list-group';
 import { SearchField } from '../../ui/search-field';
 import { HouseholdScreen } from '../households/household-screen';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,11 +21,13 @@ import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useHouseholdContext } from '../households/household-context';
 import { NoteCard } from '../notes/note-card';
 import { searchNotesByTitle } from '../notes/note-search';
-import { Button, EmptyState, LoadError, LoadingState, Stack } from '../../ui/primitives';
+import { Button, EmptyState, Heading, LoadError, LoadingState, Stack } from '../../ui/primitives';
 
 export default function NotesListRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const desktop = useDesktop();
+  const openResource = useResourceNavigation();
   const openNoteId = useOpenWindowItem('noteId');
   const deleteNote = useContentDelete('notes');
   const editNote = useContentEdit('notes');
@@ -35,6 +43,7 @@ export default function NotesListRoute() {
 
   const householdId = id ?? currentHouseholdId;
   const visibleNotes = searchNotesByTitle(notes, query);
+  const groups = desktop ? [{ title: '最近 7 天', items: visibleNotes.filter(note => Date.now() - new Date(note.updatedAt).getTime() <= 7 * 86400000) }, { title: '更早', items: visibleNotes.filter(note => Date.now() - new Date(note.updatedAt).getTime() > 7 * 86400000) }] : [{ title: '', items: visibleNotes }];
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === null || householdId === '') return;
@@ -69,6 +78,8 @@ export default function NotesListRoute() {
     }, [fetchData]),
   );
 
+  useContentChanges(householdId, fetchData);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchData();
@@ -78,17 +89,17 @@ export default function NotesListRoute() {
   const handleNotePress = useCallback(
     (note: NoteResponseDto) => {
       rememberRouteTrigger();
-      void router.push(
+      openResource(
         `/households/${encodeURIComponent(householdId!)}/notes/${encodeURIComponent(note.id)}`,
       );
     },
-    [router, householdId],
+    [router, householdId, openResource],
   );
 
   const handleCreateNote = useCallback(() => {
     rememberRouteTrigger();
-    void router.push(`/households/${encodeURIComponent(householdId!)}/notes/new`);
-  }, [router, householdId]);
+    openResource(`/households/${encodeURIComponent(householdId!)}/notes/new`);
+  }, [router, householdId, openResource]);
 
   return (
     <HouseholdScreen
@@ -98,11 +109,12 @@ export default function NotesListRoute() {
       onRefresh={handleRefresh}
       width="reading"
       floatingAction={<FloatingCreateButton label="创建笔记" onPress={handleCreateNote} />}
+      aside={desktop && !openNoteId && notes[0] ? <ScrollView contentContainerStyle={{ padding: theme.spacing[8], width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[8] * 2, alignSelf: 'center', gap: theme.spacing[5] }}><Heading level={2} style={theme.typography.readingTitle}>{notes[0].title}</Heading><Button label="编辑" accessibilityLabel="编辑最近的笔记" tone="secondary" style={{ alignSelf: 'flex-start' }} onPress={() => openResource(`/households/${encodeURIComponent(householdId!)}/notes/${encodeURIComponent(notes[0]!.id)}/edit`)} /><MarkdownBody source={notes[0].body ?? ''} /></ScrollView> : null}
     >
       <Stack gap={5}>
-        <PageIntro title="笔记" {...(notes.length > 0 ? { subtitle: `${notes.length} 篇，最近更新的在前` } : {})} />
+        <PageIntro title="笔记" {...(notes.length > 0 ? { subtitle: `${notes.length} 篇，最近更新的在前` } : {})} action={desktop ? <SearchField label="搜索笔记" placeholder="按标题搜索" value={query} onChangeText={setQuery} /> : null} />
 
-        {(notes.length > 0 || query !== '') && (
+        {!desktop && (notes.length > 0 || query !== '') && (
           <SearchField label="搜索笔记" placeholder="按标题搜索" value={query} onChangeText={setQuery} />
         )}
 
@@ -118,11 +130,11 @@ export default function NotesListRoute() {
           <EmptyState message={`没有标题匹配「${query.trim()}」的笔记。`} action={<Button label="清除搜索" tone="secondary" onPress={() => setQuery('')} />} />
         )}
 
-        <ListGroup>
-          {visibleNotes.map((note) => (
-            <NoteCard key={note.id} note={note} selected={note.id === openNoteId} onPress={handleNotePress} onEdit={editNote(note)} onDelete={deleteNote(note)} />
+        {groups.filter(group => group.items.length).map(group => <Stack key={group.title} gap={2}>{group.title ? <GroupLabel>{group.title}</GroupLabel> : null}<ListGroup>
+          {group.items.map((note) => (
+            <NoteCard key={note.id} note={note} selected={note.id === openNoteId || (desktop && !openNoteId && note.id === notes[0]?.id)} onPress={handleNotePress} onEdit={editNote(note)} onDelete={deleteNote(note)} />
           ))}
-        </ListGroup>
+        </ListGroup></Stack>)}
       </Stack>
     </HouseholdScreen>
   );

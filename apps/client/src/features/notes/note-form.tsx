@@ -9,6 +9,7 @@ import type { CreateNoteDto, NoteResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { FormMessage, Stack, FormActions } from '../../ui/primitives';
 import { FormSection, titleInputStyle } from '../../ui/compose-rows';
+import { useDesktop } from '../../ui/use-desktop';
 
 export interface NoteInput {
   title: string;
@@ -31,6 +32,7 @@ interface NoteFormProps {
 
 export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, isSubmitting }: NoteFormProps) {
   const activeTheme = useTheme<Theme>();
+  const desktop = useDesktop();
   const [form, setForm] = useWorkspaceState<NoteInput>(draftKey, () => {
     if (initial) {
       return {
@@ -80,7 +82,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
           onChangeText={(v) => updateField('title', v)}
           placeholder="添加标题"
           placeholderTextColor={activeTheme.colors.inkMuted}
-          style={[titleInputStyle, { paddingHorizontal: activeTheme.spacing[2] }]}
+          style={[titleInputStyle, { paddingHorizontal: activeTheme.spacing[2] }, desktop ? activeTheme.typography.readingTitle : undefined]}
           maxLength={200}
           accessibilityLabel="笔记标题"
           aria-invalid={titleError !== null}

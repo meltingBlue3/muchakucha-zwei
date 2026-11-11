@@ -1,3 +1,8 @@
+import { useContentChanges } from '../content/content-changes';
+import { useResourceNavigation } from '../../ui/use-resource-navigation';
+import { useDesktop } from '../../ui/use-desktop';
+import { SearchField } from '../../ui/search-field';
+import { theme } from '../../ui/theme';
 import { useOpenWindowItem } from '../../ui/route-window';
 import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../content/use-content-delete';
@@ -87,6 +92,9 @@ export function groupTasksByDue(tasks: TaskResponseDto[], status: FilterKey, tod
 export default function TaskListScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const desktop = useDesktop();
+  const [query, setQuery] = useState('');
+  const openResource = useResourceNavigation();
   const openTaskId = useOpenWindowItem('taskId');
   const deleteTask = useContentDelete('tasks');
   const editTask = useContentEdit('tasks');
@@ -135,7 +143,7 @@ export default function TaskListScreen() {
   const availableLabels = useMemo(() => mergeLabels(householdLabels, seenLabels), [householdLabels, seenLabels]);
 
   const filteredTasks = useMemo(() => {
-    let result = tasks;
+    let result = tasks.filter(task => task.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
     if (filter !== 'all') {
       result = result.filter((t) => t.status === filter);
     }
@@ -150,7 +158,7 @@ export default function TaskListScreen() {
     }
     result = applyRecurringFilter(result, recurringFilter);
     return result;
-  }, [tasks, filter, priorityFilter, assigneeFilter, labelFilter, recurringFilter]);
+  }, [tasks, query, filter, priorityFilter, assigneeFilter, labelFilter, recurringFilter]);
 
   // Status shows on the page itself, so the 筛选 count covers only what it hides.
   const activeFilterCount = [
@@ -206,6 +214,8 @@ export default function TaskListScreen() {
     }
   }, [householdId]);
 
+  useContentChanges(householdId, fetchData);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchData();
@@ -225,11 +235,11 @@ export default function TaskListScreen() {
   const handleTaskPress = useCallback(
     (task: TaskResponseDto) => {
       rememberRouteTrigger();
-      void router.push(
+      openResource(
         `/households/${encodeURIComponent(householdId!)}/tasks/${encodeURIComponent(task.id)}`,
       );
     },
-    [router, householdId],
+    [router, householdId, openResource],
   );
 
   const completion = useTaskCompletion(householdId, fetchData);
@@ -239,8 +249,8 @@ export default function TaskListScreen() {
 
   const handleCreateTask = useCallback(() => {
     rememberRouteTrigger();
-    void router.push(`/households/${encodeURIComponent(householdId!)}/tasks/new`);
-  }, [router, householdId]);
+    openResource(`/households/${encodeURIComponent(householdId!)}/tasks/new`);
+  }, [router, householdId, openResource]);
 
   const generationWindow = classifyGenerationWindow({
     materializedThrough,
@@ -256,6 +266,7 @@ export default function TaskListScreen() {
     labelFilter !== 'all' ? availableLabels.find(l => l.id === labelFilter)?.name ?? '已选标签' : '',
     recurringFilter !== 'all' ? '仅重复' : '',
   ].filter(Boolean).join(' · ') : undefined;
+  const statusControl = <FilterOptions hideLabel label="任务状态" options={FILTERS.map(f => ({ value: f.key, label: f.label, name: `筛选：${f.label}` }))} value={filter} onChange={value => setFilter(value as FilterKey)} />;
 
   return (
     <HouseholdScreen
@@ -267,13 +278,13 @@ export default function TaskListScreen() {
       width="reading"
       floatingAction={<FloatingCreateButton label="创建任务" onPress={handleCreateTask} />}
     >
-      <Stack gap={5}>
+      <Stack gap={5} style={desktop ? { maxWidth: theme.layout.listPaneMaxWidth } : undefined}>
         <PageIntro
           title="任务"
-          {...(filterSummary ? { subtitle: filterSummary } : {})}
-          action={<FilterButton ref={filterTrigger} label="筛选任务" count={activeFilterCount} onPress={() => setFiltersOpen(true)} />}
+          {...(filterSummary ? { subtitle: filterSummary } : desktop && !loading ? { subtitle: `${tasks.filter(task => task.status !== 'completed' && task.status !== 'cancelled').length} 项未完成` } : {})}
+          action={<>{desktop ? <>{statusControl}<SearchField label="搜索任务" placeholder="搜索任务" value={query} onChangeText={setQuery} /></> : null}<FilterButton ref={filterTrigger} label="筛选任务" count={activeFilterCount} onPress={() => setFiltersOpen(true)} /></>}
         />
-        <FilterOptions hideLabel label="任务状态" options={FILTERS.map(f => ({ value: f.key, label: f.label, name: `筛选：${f.label}` }))} value={filter} onChange={value => setFilter(value as FilterKey)} />
+        {!desktop ? statusControl : null}
         {filtersOpen ? <AppDialog title="筛选任务" trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
           <Stack gap={5}>
             <FilterOptions label="优先级" options={PRIORITY_FILTERS.map(p => ({ value: p.key, label: p.label, name: `优先级筛选：${p.label}` }))} value={priorityFilter} onChange={value => setPriorityFilter(value as PriorityFilterKey)} />
@@ -318,6 +329,7 @@ export default function TaskListScreen() {
             <ListGroup>
               {group.tasks.map((task) => (
                 <TaskCard
+                  table
                   key={task.id}
                   task={task}
                   assignees={(task.assigneeIds ?? []).map((uid) => ({ id: uid, name: memberNameMap.get(uid) ?? '未知成员' }))}

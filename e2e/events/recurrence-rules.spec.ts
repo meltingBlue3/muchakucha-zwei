@@ -33,6 +33,19 @@ const END_CONFIRM_ACTION = '确认结束';
 const ENDED_ROW_LINE = '这个重复已经结束';
 const ENDED_DETAIL_NOTE = '这个重复已经结束了。';
 
+/** On a wide screen the rule opens in the side pane, a named region, and its steps follow it there. */
+const wide = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1024;
+const windowRole = (page: Page) => wide(page) ? 'region' as const : 'dialog' as const;
+
+/** The wide list is a table: the next date sits in its own column as 「11月11日周三」, and an ended rule reads 「已结束」 there. */
+function nextColumn(page: Page, iso: string): string {
+  if (!wide(page)) return `下一次 ${iso}`;
+  const date = new Date(`${iso}T12:00:00`);
+  const year = date.getFullYear() === new Date().getFullYear() ? '' : `${date.getFullYear()}年`;
+  return `${year}${date.getMonth() + 1}月${date.getDate()}日周${DAY_NAMES[date.getDay()]}`;
+}
+const endedRowLine = (page: Page) => wide(page) ? '已结束' : ENDED_ROW_LINE;
+
 type ApiResult<T = any> = { status: number; body: T };
 type TestAccount = { username: string; accessToken: string; userId: string };
 type RuleListItem = {
@@ -227,7 +240,7 @@ function ruleListScreen(page: Page) {
 }
 
 function ruleDetailScreen(page: Page) {
-  return page.getByRole('dialog', { name: /^(重复安排|确认保存重复安排|结束重复安排)$/ });
+  return page.getByRole(windowRole(page), { name: /^(重复安排|确认保存重复安排|结束重复安排)$/ });
 }
 
 async function openRuleList(page: Page, householdId: string): Promise<void> {
@@ -348,12 +361,12 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(taskRow).toBeVisible();
     await expect(taskRow.getByText('任务', { exact: true })).toBeVisible();
     await expect(taskRow.getByText(taskSummary, { exact: true })).toBeVisible();
-    await expect(taskRow.getByText(`下一次 ${today}`, { exact: true })).toBeVisible();
+    await expect(taskRow.getByText(nextColumn(page, today), { exact: true })).toBeVisible();
 
     const eventRow = list.getByLabel(`日程重复安排：${eventTitle}，${eventSummary}`);
     await expect(eventRow).toBeVisible();
     await expect(eventRow.getByText('日程', { exact: true })).toBeVisible();
-    await expect(eventRow.getByText(`下一次 ${tomorrow}`, { exact: true })).toBeVisible();
+    await expect(eventRow.getByText(nextColumn(page, tomorrow), { exact: true })).toBeVisible();
 
     // --- Ending the event rule: two-step confirm, zero writes before it ---
     await eventRow.click();
@@ -380,7 +393,7 @@ test.describe('recurrence rule addendum journeys', () => {
     // D-14: "结束" is not "删除" — the rule stays in the list and says so in
     // words, so opacity is never the only signal.
     await expect(list.getByText(eventTitle, { exact: true })).toBeVisible();
-    await expect(list.getByText(ENDED_ROW_LINE, { exact: true })).toBeVisible();
+    await expect(list.getByText(endedRowLine(page), { exact: true })).toBeVisible();
 
     // --- Ending the daily rule: today's occurrence must survive ---
     await taskRow.click();
@@ -392,7 +405,7 @@ test.describe('recurrence rule addendum journeys', () => {
 
     // Both rules are now visibly ended. The API still includes today's date
     // in the daily rule's walk, and its existing task must remain available.
-    await expect(list.getByText(ENDED_ROW_LINE, { exact: true })).toHaveCount(2);
+    await expect(list.getByText(endedRowLine(page), { exact: true })).toHaveCount(2);
     expect((await listRules(account.accessToken, householdId))
       .find((rule) => rule.id === taskRuleId)?.nextOccurrenceDate).toBe(today);
 
@@ -424,7 +437,7 @@ test.describe('recurrence rule addendum journeys', () => {
     await openRuleList(page, householdId);
     const list = ruleListScreen(page);
     const detail = ruleDetailScreen(page);
-    await expect(list.getByText(ENDED_ROW_LINE, { exact: true })).toBeVisible();
+    await expect(list.getByText(endedRowLine(page), { exact: true })).toBeVisible();
     await expectNoSeriousAxeViolations(page);
 
     // The confirmation replaces the editor in the same window. Focus starts
@@ -438,11 +451,16 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(endTrigger).toBeFocused();
     await endTrigger.click();
     await expect(detail.getByText(END_CONFIRM_PROMPT, { exact: true })).toBeVisible();
-    await expect(detail.getByRole('button', { name: '关闭结束重复安排' })).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(detail.getByLabel(END_CONFIRM_ACTION)).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(detail.getByLabel('取消', { exact: true })).toBeFocused();
+    if (wide(page)) {
+      // The side pane has no focus trap: the confirmation that replaces its content takes focus on its title.
+      await expect(detail.getByRole('heading', { name: '结束重复安排', exact: true })).toBeFocused();
+    } else {
+      await expect(detail.getByRole('button', { name: '关闭结束重复安排' })).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(detail.getByLabel(END_CONFIRM_ACTION)).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(detail.getByLabel('取消', { exact: true })).toBeFocused();
+    }
     await detail.getByLabel('取消').click();
     await expect(detail.getByText(END_CONFIRM_PROMPT, { exact: true })).toHaveCount(0);
 
@@ -465,7 +483,7 @@ test('a direct rule window preserves draft choices and saves only after confirma
   const repeat = page.getByRole('button', { name: /^重复规则，/ });
   await expect(repeat).toHaveAccessibleName('重复规则，每天重复');
   await repeat.click();
-  const options = page.getByRole('dialog', { name: '重复', exact: true });
+  const options = page.getByRole(windowRole(page), { name: '重复', exact: true });
   // Ending a series is its own action, so 不重复 is not offered here.
   await expect(options.getByRole('radio', { name: '不重复' })).toBeDisabled();
   await options.getByRole('radio', { name: '每周' }).click();
@@ -479,7 +497,11 @@ test('a direct rule window preserves draft choices and saves only after confirma
     await page.screenshot({ path: testInfo.outputPath(`rule-window-${width}.png`) });
   }
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(1);
+  // The confirmation replaces the editor in the same window: one dialog on a phone, the pane itself on a wide screen.
+  if (wide(page)) {
+    await expect(page.getByRole('region', { name: '确认保存重复安排', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  } else await expect(page.getByRole('dialog')).toHaveCount(1);
   const unchanged = await apiCall(account.accessToken, 'GET', `/api/v1/households/${householdId}/recurrence-rules/${ruleId}`);
   expect(unchanged.status).toBe(200);
   expect(unchanged.body.freq).toBe('daily');

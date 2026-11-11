@@ -210,6 +210,7 @@ export default function RemindersRoute() {
 
       {choosing !== null && settings !== null ? (
         <AppDialog
+          anchored
           title={choosing === 'task' ? '分给我的任务' : choosing === 'event' ? '日程' : '只有日期时'}
           busy={saving}
           onClose={() => setChoosing(null)}

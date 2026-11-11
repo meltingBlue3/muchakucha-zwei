@@ -68,6 +68,8 @@ test('no-household onboarding offers both routes and profile access', async ({ p
 });
 
 test('profile only enables saving changed input and announces success', async ({ page }) => {
+  // The phone shows the nickname as a fact with 编辑; a wide screen edits it in place (desktop-redesign.spec.ts).
+  await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, true);
   await page.goto('/profile');
   await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
@@ -154,6 +156,19 @@ for (const width of [320, 390, 1440]) {
     await expect(trigger).toBeFocused();
     await trigger.click();
     await page.getByRole('menuitem', { name: '个人资料' }).click();
+    if (width >= 1024) {
+      await expect(page).toHaveURL(/profile$/);
+      await expect(page.getByRole('navigation', { name: '个人中心导航' })).toBeVisible();
+      const nickname = page.getByLabel('昵称', { exact: true });
+      await expect(nickname).toHaveValue('小林');
+      await nickname.fill('新的昵称');
+      await page.getByRole('button', { name: '保存', exact: true }).click();
+      await expect(page.getByText('昵称已更新。')).toBeVisible();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await checkLayout(page);
+      await page.screenshot({ path: `test-results/account-profile-${width}.png` });
+      return;
+    }
     const dialog = page.getByRole('dialog', { name: '个人资料', exact: true });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toBeFocused();

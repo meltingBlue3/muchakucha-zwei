@@ -15,6 +15,7 @@ import { useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { MemberAvatar } from './member-avatar';
 import { Text } from './primitives';
 import { theme } from './theme';
+import { useDesktop } from './use-desktop';
 
 type AccountPanel = 'closed' | 'menu' | 'profile' | 'logout';
 
@@ -28,6 +29,8 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
   const user = useCurrentUser();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
+  const desktop = useDesktop();
+  const rail = desktop && variant === 'row' && width < theme.layout.railBreakpoint;
   const trigger = useRef<View>(null);
   const panel = useRef<View>(null);
   const initial = useRef<View>(null);
@@ -69,7 +72,7 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
           : { alignItems: 'center', justifyContent: 'center', minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.full, opacity: pressed ? 0.7 : 1 }}
       >
         {avatar}
-        {variant === 'row' ? <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flex: 1 }}>{user?.displayName ?? '个人中心'}</Text> : null}
+        {variant === 'row' && !rail ? <View style={{ flex: 1, minWidth: 0 }}><Text variant="bodySm" color="ink" numberOfLines={1}>{user?.displayName ?? '个人中心'}</Text>{user?.username ? <Text variant="meta" numberOfLines={1}>{user.username}</Text> : null}</View> : null}
       </Pressable>
       {mode === 'menu' ? (
         <Modal transparent visible animationType="none" onShow={focusInitial} onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
@@ -105,6 +108,7 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
                   accessibilityRole="menuitem"
                   accessibilityLabel={label}
                   onPress={() => {
+                    if (desktop && key === 'profile') { setMode('closed'); router.push('/profile'); return; }
                     if (key !== 'reminders') { setMode(key); return; }
                     setMode('closed');
                     router.push('/reminders');

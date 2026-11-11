@@ -2,7 +2,7 @@ import type { RefObject } from 'react';
 import type { View } from 'react-native';
 
 export interface OverlayFocusOptions {
-  mode: 'closed' | 'menu' | 'dialog';
+  mode: 'closed' | 'menu' | 'dialog' | 'pane';
   panel: RefObject<View | null>;
   initial: RefObject<View | null>;
   trigger: RefObject<View | null>;

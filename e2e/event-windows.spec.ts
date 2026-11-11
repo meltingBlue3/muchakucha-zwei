@@ -49,25 +49,29 @@ for (const width of [320, 390, 1440]) {
     await expect(page.getByRole('button', { name: /^日程：/ })).toBeVisible();
     const month = await page.getByTestId('calendar-month-pane').boundingBox();
     const agenda = await page.getByTestId('calendar-agenda-pane').boundingBox();
-    if (width === 1440) expect(agenda!.x).toBeGreaterThan(month!.x + month!.width);
+    if (width === 1440) expect(agenda!.x).toBeGreaterThanOrEqual(month!.x + month!.width);
     else expect(agenda!.y).toBeGreaterThan(month!.y + month!.height);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`calendar-${width}.png`), fullPage: true });
     await page.getByRole('button', { name: /^日程：/ }).click();
-    const detail = page.getByRole('dialog', { name: '日程详情', exact: true });
+    const detail = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '日程详情', exact: true });
     await expect(detail).toBeVisible();
     await expect(detail.getByRole('button', { name: '编辑日程', exact: true })).toBeInViewport();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`event-detail-${width}.png`) });
     await detail.getByRole('button', { name: '编辑日程', exact: true }).click();
-    const edit = page.getByRole('dialog', { name: '编辑日程', exact: true });
-    await expect(page.getByRole('dialog')).toHaveCount(1);
+    const edit = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '编辑日程', exact: true });
+    await expect(page.getByRole('dialog')).toHaveCount((page.viewportSize()?.width ?? 0) >= 1024 ? 0 : 1);
     await edit.getByRole('textbox', { name: '日程标题', exact: true }).fill('已修改的日程');
     await expect(edit.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
     await edit.getByRole('button', { name: '保存', exact: true }).click();
     await expect(detail.getByRole('heading', { name: '已修改的日程', exact: true })).toBeVisible();
     expect(events.get(eventId)!.title).toBe('已修改的日程');
+    if (width >= 1024) {
+      await detail.getByRole('button', { name: '关闭日程详情' }).focus();
+      await expect(page.getByRole('button', { name: '查看月历日程：已修改的日程', exact: true })).toBeVisible();
+    }
     await page.keyboard.press('Escape');
     await expect(page).toHaveURL(`${base}/events`);
     await expect(page.getByRole('button', { name: /^2030年6月15日/ })).toHaveAttribute('aria-pressed', 'true');
@@ -75,7 +79,7 @@ for (const width of [320, 390, 1440]) {
     if (width < 1024) await page.getByRole('button', { name: '下一周', exact: true }).click();
     await page.getByRole('button', { name: /^2030年6月20日/ }).click();
     await page.getByRole('button', { name: '创建日程', exact: true }).click();
-    const create = page.getByRole('dialog', { name: '创建日程', exact: true });
+    const create = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '创建日程', exact: true });
     await expect(create.getByRole('button', { name: '开始日期，2030年6月20日周四', exact: true })).toBeVisible();
     await expect(create.getByRole('button', { name: '结束日期，2030年6月20日周四', exact: true })).toBeVisible();
     await create.getByLabel('日程标题', { exact: true }).fill('选中日期的新日程');
@@ -97,8 +101,10 @@ test('calendar filters have visible summaries and Today restores the current mon
   await expect(page.getByText('2030年7月', { exact: true })).toBeVisible();
   const today = page.getByRole('button', { name: '回到今天' });
   // Title-row actions stay within the title line: on a phone the scroll area clips anything above it.
+  // On a wide screen 今天 sits beside the title in the 56px header, centred on the same line.
   const [todayBox, titleBox] = await Promise.all([today.boundingBox(), page.getByRole('heading', { name: '日历', exact: true }).boundingBox()]);
-  expect(todayBox!.y).toBeGreaterThanOrEqual(titleBox!.y);
+  if ((page.viewportSize()?.width ?? 0) >= 1024) expect(Math.abs(todayBox!.y + todayBox!.height / 2 - titleBox!.y - titleBox!.height / 2)).toBeLessThan(2);
+  else expect(todayBox!.y).toBeGreaterThanOrEqual(titleBox!.y);
   await today.click();
   await expect(page.getByRole('button', { name: /^2030年6月15日/ })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '筛选日程', exact: true }).click();
@@ -123,7 +129,7 @@ test('direct event edit links restore drafts and confirmation stays in one windo
   await expect(page.getByLabel('日程标题', { exact: true })).toHaveValue('保留修改');
   await expect(page.getByRole('button', { name: '删除事件', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '关闭编辑日程' }).click();
-  await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '日程详情' })).toBeVisible();
   await page.getByRole('button', { name: '关闭日程详情' }).click();
   await expect(page).toHaveURL(`${base}/events`);
 });
@@ -133,10 +139,10 @@ test('an event opened from Today closes back to Today with focus restored', asyn
   await page.goto(`${base}/today`);
   const item = page.getByRole('button', { name: /^日程：/ });
   await item.click();
-  await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '日程详情' })).toBeVisible();
   await page.getByRole('button', { name: '编辑日程', exact: true }).click();
   await page.goBack();
-  await expect(page.getByRole('dialog', { name: '日程详情' })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '日程详情' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(`${base}/today`);
   await expect(item).toBeFocused();
@@ -169,6 +175,9 @@ test('a late response from the previous month cannot replace the selected month'
 
 test('card deletion confirms, removes the event, and returns to Today', async ({ page }) => {
   const events = await setup(page);
+  // Event cards with a 「⋯」 menu are the phone's Today; the wide Today draws events as timeline blocks.
+  await page.setViewportSize({ width: 390, height: 844 });
+
   await page.goto(`${base}/today`);
   const more = page.getByRole('button', { name: /^更多操作：日程：/ });
   await more.click();
@@ -210,7 +219,7 @@ test('Today floating creation menu offers three destinations', async ({ page }) 
   for (const name of ['创建日程', '创建任务', '创建笔记']) await expect(page.getByRole('menuitem', { name, exact: true })).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole('menuitem', { name: '创建日程', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '创建日程', exact: true })).toBeVisible();
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '创建日程', exact: true })).toBeVisible();
 });
 
 for (const width of [390, 1440]) {
@@ -218,7 +227,7 @@ for (const width of [390, 1440]) {
     const events = await setup(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${base}/events/new`);
-    const create = page.getByRole('dialog', { name: '创建日程', exact: true });
+    const create = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '创建日程', exact: true });
     await create.getByLabel('日程标题', { exact: true }).fill('游泳课');
 
     await create.getByRole('button', { name: /^开始日期，/ }).click();
@@ -251,7 +260,7 @@ for (const width of [390, 1440]) {
 
     const repeat = create.getByRole('button', { name: /^日程重复设置/ });
     await repeat.click();
-    const options = page.getByRole('dialog', { name: '重复', exact: true });
+    const options = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复', exact: true });
     await expect(options.getByRole('radio')).toHaveText(['不重复', '每天', '每周', '每月', '每年', '自定义…']);
     await expect(options.getByRole('radio', { name: '不重复' })).toBeChecked();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
@@ -261,7 +270,7 @@ for (const width of [390, 1440]) {
 
     await repeat.click();
     await options.getByRole('radio', { name: '自定义…' }).click();
-    const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
+    const custom = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '自定义重复', exact: true });
     await expect(custom.getByRole('radio', { name: '周', exact: true })).toBeChecked();
     await custom.getByLabel('重复间隔', { exact: true }).fill('2');
     await custom.getByRole('checkbox', { name: '星期四' }).click();
@@ -290,7 +299,7 @@ for (const width of [390, 1440]) {
     await endsOnPicker.getByRole('button', { name: '切换到键盘输入', exact: true }).click();
     await endsOnPicker.getByLabel('输入日期').fill('2030-08-31');
     await endsOnPicker.getByRole('button', { name: '确定', exact: true }).click();
-    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(page.getByRole('dialog')).toHaveCount(width >= 1024 ? 0 : 1);
     await expect(custom.getByRole('button', { name: '重复截止日期，2030年8月31日周六', exact: true })).toBeFocused();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

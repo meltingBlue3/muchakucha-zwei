@@ -11,21 +11,26 @@ import { WindowStepContext, type RouteWindowStep, type WindowStepHost } from './
 
 export type { RouteWindowStep };
 import { getRouteTrigger } from '../platform/overlays/route-trigger';
+import { useDesktop } from './use-desktop';
+import { useWorkspaceStore } from './workspace-state';
 
 export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'households' | 'settings') {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const router = useRouter();
+  const desktop = useDesktop();
   const state = navigation.getState();
+  const baseIndex = state?.routes.slice(0, state.index).reduce((found, route, index) => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id && !/\/(tasks|events|notes|recurrence-rules)\/(new|\[)/.test(route.name) ? index : found, -1) ?? -1;
   const hasBackground = state?.routes.slice(0, state.index).some(route =>
     resource === 'households' || (route.name.startsWith('households/[id]/') &&
     (route.params as { id?: string } | undefined)?.id === id),
   ) ?? false;
   const close = useCallback(() => {
-    if (hasBackground) router.back();
+    if (desktop && baseIndex >= 0 && state) navigation.dispatch({ type: 'POP', payload: { count: state.index - baseIndex } });
+    else if (hasBackground) router.back();
     else if (resource === 'households') router.replace('/household-handoff');
     else router.replace(`/households/${encodeURIComponent(id)}/${resource}`);
-  }, [hasBackground, router, id, resource]);
+  }, [hasBackground, router, id, resource, desktop, baseIndex, state, navigation]);
   return { close, hasBackground };
 }
 
@@ -36,7 +41,7 @@ const DOCKED_RESOURCES: ReadonlySet<RouteWindowProps['resource']> = new Set(['ta
  * The item whose window is open above this page, so its row can be marked
  * while the window is docked beside the list.
  */
-export function useOpenWindowItem(param: 'taskId' | 'eventId' | 'noteId'): string | undefined {
+export function useOpenWindowItem(param: 'taskId' | 'eventId' | 'noteId' | 'ruleId'): string | undefined {
   const value = useGlobalSearchParams<Record<typeof param, string>>()[param];
   return typeof value === 'string' ? value : undefined;
 }
@@ -56,9 +61,11 @@ export function useEditWindowExit(resource: 'tasks' | 'events' | 'notes', itemId
   }, [hasBackground, router, id, resource, itemId]);
 }
 
-/** A route owns the URL; the dialog owns presentation and focus. Previous
- * transparent routes stay mounted, but only the focused route opens a modal. */
+/** A route owns the URL; AppDialog owns presentation and focus. Previous
+ * transparent routes stay mounted; only the focused route presents a pane or modal. */
 export interface RouteWindowProps {
+  /** Only editors own draft guards; a read-only detail may have a saved draft. */
+  draftPrefix?: string;
   title: string;
   busy?: boolean;
   children: ReactNode;
@@ -74,8 +81,12 @@ export interface RouteWindowProps {
   size?: 'standard' | 'editor';
 }
 
-export function RouteWindow({ title, busy = false, children, footer, headerActions, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor' }: RouteWindowProps) {
+export function RouteWindow({ title, busy = false, children, footer, headerActions, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor', draftPrefix }: RouteWindowProps) {
   const focused = useIsFocused();
+  const docked = (size === 'editor' || draftPrefix !== undefined) && DOCKED_RESOURCES.has(resource);
+  const pane = useDesktop() && docked;
+  const workspace = useWorkspaceStore();
+  const confirmedSwitch = useRef(false);
   // Controls inside the content (pickers, option lists) open their own steps.
   const [ownedStep, setOwnedStep] = useState<{ owner: object; step: RouteWindowStep } | null>(null);
   const stepHost = useMemo<WindowStepHost>(() => ({
@@ -110,7 +121,16 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
   useEffect(() => {
     navigation.setOptions({ gestureEnabled: !busy });
     return navigation.addListener('beforeRemove', event => {
+      if (confirmedSwitch.current) { confirmedSwitch.current = false; return; }
       if (exitAllowed?.current) return;
+      const target = event.data.action.payload as { name?: string; params?: Record<string, unknown> } | undefined;
+      const targetId = target?.params?.taskId ?? target?.params?.eventId ?? target?.params?.noteId ?? target?.params?.ruleId ?? (target?.name?.endsWith('/new') ? 'new' : undefined);
+      const switchingItem = targetId !== undefined && targetId !== draftPrefix?.split(':')[3];
+      if (pane && draftPrefix && switchingItem && event.data.action.type === 'REPLACE' && workspace.hasDrafts(draftPrefix) && !busy && !step && !onBackStep) {
+        event.preventDefault();
+        setConfirmation({ title: '切换条目？', message: '当前修改还没有保存。草稿会保留，之后可以继续编辑。', confirmLabel: '保留草稿并切换', onConfirm: () => { confirmedSwitch.current = true; navigation.dispatch(event.data.action); } });
+        return;
+      }
       if (busy || confirmationRef.current || step || onBackStep) {
         event.preventDefault();
         if (!busy) {
@@ -120,13 +140,13 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
         }
       }
     });
-  }, [navigation, busy, confirmation, step, onBackStep, exitAllowed]);
+  }, [navigation, busy, confirmation, step, onBackStep, exitAllowed, pane, workspace, draftPrefix]);
   return (
     <DialogBackground.Provider value={hasBackground ? parentBackground : background}>
-      <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={focused ? 'auto' : 'none'}>
+      <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={pane && hasBackground ? 'none' : focused ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
-      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={size === 'editor' && DOCKED_RESOURCES.has(resource)} headerActions={confirmation || step ? null : headerActions} {...(footer === undefined || confirmation || step ? {} : { footer })}>
+      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes'} headerActions={confirmation || step ? null : headerActions} {...(footer === undefined || confirmation || step ? {} : { footer })}>
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>

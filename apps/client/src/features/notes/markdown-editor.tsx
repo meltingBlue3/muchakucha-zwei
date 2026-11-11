@@ -12,10 +12,12 @@ import { Button, IconButton, Stack, Text, TextField } from '../../ui/primitives'
 import type { Theme } from '../../ui/theme';
 import { NoteEditorChromeContext } from './note-editor-chrome';
 import { MarkdownBody } from './markdown-body';
+import { useDesktop } from '../../ui/use-desktop';
 import { headingLevel, insertLink, insertTable, safeLink, setHeading, toggleBold, type MarkdownEdit, type Selection } from './markdown';
 
 export function MarkdownEditor({ value, onChange, disabled }: { value: string; onChange(value: string): void; disabled: boolean }) {
   const theme = useTheme<Theme>();
+  const desktop = useDesktop();
   const input = useRef<TextInput>(null);
   const selection = useRef<Selection>({ start: 0, end: 0 });
   const [cursor, setCursor] = useState<Selection | undefined>();
@@ -35,6 +37,8 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
   }, []);
   const apply = useCallback((edit: MarkdownEdit) => { onChange(edit.value); setPanel(null); setError(''); restore(edit.selection); }, [onChange, restore]);
   const closePanel = useCallback(() => { setPanel(null); setError(''); restore(); }, [restore]);
+  // On a wide screen the toolbar reads as a row of plain tools, like the board's editor header.
+  const toolbarAppearance = desktop ? { appearance: 'plain' as const } : {};
   const chrome = useMemo(() => ({
     step: panel ? {
       title: panel === 'heading' ? '标题格式' : panel === 'link' ? '插入链接' : '插入表格',
@@ -63,11 +67,12 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
         {error ? <Text accessibilityRole="alert" color="destructive">{error}</Text> : null}
       </Stack>,
     } : null,
-    footer: preview ? null : <View accessibilityRole="toolbar" accessibilityLabel="笔记格式" style={{ flexDirection: 'row', justifyContent: 'space-around', gap: theme.spacing[1] }}>
-      <IconButton label="标题格式" disabled={disabled} icon={<Heading size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => { setError(''); setPanel('heading'); }} />
-      <IconButton label="粗体" disabled={disabled} icon={<Bold size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => apply(toggleBold(value, selection.current))} />
-      <IconButton label="链接" disabled={disabled} icon={<Link size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => { setLabel(value.slice(selection.current.start, selection.current.end)); setUrl(''); setError(''); setPanel('link'); }} />
-      <IconButton label="表格" disabled={disabled} icon={<Table size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => { setError(''); setPanel('table'); }} />
+    // A phone spreads the buttons across the keyboard bar for thumbs; a wide screen keeps them together at the start of the text column.
+    footer: preview ? null : <View accessibilityRole="toolbar" accessibilityLabel="笔记格式" style={desktop ? { flexDirection: 'row', gap: theme.spacing[1], width: '100%', maxWidth: theme.layout.readingWidth, alignSelf: 'center' } : { flexDirection: 'row', justifyContent: 'space-around', gap: theme.spacing[1] }}>
+      <IconButton {...toolbarAppearance} label="标题格式" disabled={disabled} icon={<Heading size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => { setError(''); setPanel('heading'); }} />
+      <IconButton {...toolbarAppearance} label="粗体" disabled={disabled} icon={<Bold size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => apply(toggleBold(value, selection.current))} />
+      <IconButton {...toolbarAppearance} label="链接" disabled={disabled} icon={<Link size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => { setLabel(value.slice(selection.current.start, selection.current.end)); setUrl(''); setError(''); setPanel('link'); }} />
+      <IconButton {...toolbarAppearance} label="表格" disabled={disabled} icon={<Table size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => { setError(''); setPanel('table'); }} />
     </View>,
     headerActions: <IconButton
       appearance="plain"
@@ -77,7 +82,7 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
       icon={preview ? <Pencil size={theme.controlSizes.icon} color={theme.colors.ink} /> : <BookOpen size={theme.controlSizes.icon} color={theme.colors.ink} />}
       onPress={() => { setPreview(!preview); if (preview) restore(); }}
     />,
-  }), [preview, panel, value, disabled, label, url, columns, rows, error, theme, apply, closePanel, restore]);
+  }), [preview, panel, value, disabled, label, url, columns, rows, error, theme, desktop, apply, closePanel, restore]);
   useEffect(() => { setChrome(chrome); }, [setChrome, chrome]);
   useEffect(() => () => setChrome(null), [setChrome]);
   return <Stack gap={2}>
@@ -88,7 +93,7 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
       onSelectionChange={event => { selection.current = event.nativeEvent.selection; setCursor(undefined); }}
       onBlur={() => { selection.current = readTextSelection(input.current) ?? selection.current; }}
       onChangeText={onChange}
-      style={{ minHeight: theme.controlSizes.field * 4, color: theme.colors.ink, paddingVertical: theme.spacing[3], paddingHorizontal: theme.spacing[2], fontFamily: theme.fontFamilies.regular, fontSize: theme.typography.body.fontSize, lineHeight: theme.typography.body.lineHeight, textAlignVertical: 'top' }}
+      style={{ minHeight: theme.controlSizes.field * (desktop ? 8 : 4), color: theme.colors.ink, paddingVertical: theme.spacing[3], paddingHorizontal: theme.spacing[2], fontFamily: theme.fontFamilies.regular, fontSize: desktop ? theme.typography.readingBody.fontSize : theme.typography.body.fontSize, lineHeight: desktop ? theme.typography.readingBody.lineHeight : theme.typography.body.lineHeight, textAlignVertical: 'top' }}
     />}
   </Stack>;
 }

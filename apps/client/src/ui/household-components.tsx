@@ -23,8 +23,10 @@ import CircleArrowUp from 'lucide-react-native/icons/circle-arrow-up';
 import CircleArrowDown from 'lucide-react-native/icons/circle-arrow-down';
 import UserMinus from 'lucide-react-native/icons/user-minus';
 
-import { useRouter } from 'expo-router';
-import React, { forwardRef, useCallback, useRef } from 'react';
+import { usePathname, useRouter } from 'expo-router';
+import React, { forwardRef, useCallback, useRef, useState, type RefObject } from 'react';
+import { AnchoredPopover } from './anchored-popover';
+import { desktopDetailWidth, useDesktop } from './use-desktop';
 import {
   Modal,
   Platform,
@@ -49,7 +51,7 @@ import {
 import { theme } from './theme';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
 import { MemberAvatar } from './member-avatar';
-import { PageCreateActionContext } from './page-intro';
+import { PageHeaderContext, type PageHeader } from './page-intro';
 import { ActionNotice, useActionNoticeDismissal, type ActionNoticeProps } from './action-notice';
 import { formatDateTime } from './date-values';
 import { CardActionsMenu, type CardAction } from './card-actions-menu';
@@ -57,6 +59,8 @@ import { CardActionsMenu, type CardAction } from './card-actions-menu';
 // ---- AppShell ----
 
 interface AppShellProps {
+  detailOpen?: boolean;
+  aside?: React.ReactNode;
   children: React.ReactNode;
   accessibilityLabel?: string;
   refreshing?: boolean;
@@ -97,12 +101,20 @@ export const AppShell = ({
   notice,
   layout = 'document',
   width: contentWidth = 'wide',
+  aside,
+  detailOpen = false,
 }: AppShellProps) => {
   const router = useRouter();
   const blurTarget = useRef<View>(null);
   const noticeDismissal = useActionNoticeDismissal(notice);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const desktop = useDesktop();
+  const pathname = usePathname();
+  const [pageHeader, setPageHeader] = useState<PageHeader | null>(null);
+  const resourceWindow = /\/(tasks|events|notes|recurrence-rules)\/[^/]+(?:\/edit)?$/.test(pathname);
+  const notes = accessibilityLabel === '家庭笔记';
+  const reserved = desktop && (resourceWindow || detailOpen) && !notes ? desktopDetailWidth(width) : 0;
   const desktopActions = Platform.OS === 'web' && width >= theme.layout.navigationBreakpoint;
   const wideNavigation = width >= theme.layout.navigationBreakpoint && footer !== undefined;
 
@@ -129,8 +141,17 @@ export const AppShell = ({
       style={{ backgroundColor: theme.colors.canvas, flex: 1, flexDirection: wideNavigation ? 'row' : 'column' }}
     >
       {wideNavigation ? footer : null}
-      <View style={{ flex: 1, minWidth: 0 }}>
-      {hasNav ? (
+      <View testID={desktop ? 'desktop-workspace' : undefined} style={{ flex: 1, minWidth: 0, ...(desktop ? { backgroundColor: theme.colors.surface, margin: theme.layout.workspaceInset, marginLeft: wideNavigation ? 0 : theme.layout.workspaceInset, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, borderRadius: theme.layout.workspaceRadius, overflow: 'hidden' } : {}) }}>
+      {desktop ? <View testID="desktop-page-header" style={{ height: theme.layout.pageHeaderHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], paddingHorizontal: theme.spacing[6], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
+        {showBack && !wideNavigation ? <IconButton label="返回" appearance="plain" icon={<ArrowLeft size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={handleBack} /> : null}
+        <Heading variant="section" level={1} numberOfLines={1}>{pageHeader?.title ?? accessibilityLabel ?? title ?? ''}</Heading>
+        {pageHeader?.subtitle ? <View style={{ flexShrink: 1 }}>{typeof pageHeader.subtitle === 'string' ? <Text variant="meta" numberOfLines={1}>{pageHeader.subtitle}</Text> : pageHeader.subtitle}</View> : null}
+        <View style={{ flex: 1 }} />
+        {pageHeader?.action}
+        {floatingAction}
+        {showProfile && !wideNavigation ? <>{showInbox ? <InboxButton /> : null}<AccountMenu /></> : null}
+      </View> : null}
+      {hasNav && !desktop ? (
         <View
           style={{
             alignItems: 'center',
@@ -181,15 +202,16 @@ export const AppShell = ({
         </View>
       ) : null}
       {/* Its parent starts below the status bar, which the keyboard view cannot see. */}
-      <KeyboardArea style={{ flex: 1 }} windowOffset={insets.top}>
+      <PageHeaderContext.Provider value={setPageHeader}>
+      <KeyboardArea style={{ flex: 1, minHeight: 0, ...(desktop ? { marginRight: reserved, ...(notes ? { width: theme.layout.notesListWidth, flex: undefined, flexGrow: 1, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator } : {}) } : {}) }} windowOffset={insets.top}>
         {layout === 'workspace' ? children : <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
-            paddingHorizontal: wideNavigation ? theme.spacing[10] : inset,
-            paddingTop: wideNavigation ? theme.spacing[8] : hasNav ? theme.spacing[1] : theme.spacing[6],
+            paddingHorizontal: desktop ? theme.spacing[6] : wideNavigation ? theme.spacing[10] : inset,
+            paddingTop: desktop ? theme.spacing[4] : wideNavigation ? theme.spacing[8] : hasNav ? theme.spacing[1] : theme.spacing[6],
             paddingBottom: floatingAction && !desktopActions ? theme.spacing[16] + theme.spacing[10] : theme.spacing[10],
-            maxWidth: Platform.OS === 'web' ? (contentWidth === 'reading' ? theme.layout.contentMaxWidth : theme.layout.householdMaxWidth) + (wideNavigation ? theme.spacing[10] * 2 : 0) : undefined,
-            alignSelf: Platform.OS === 'web' ? 'center' : undefined,
+            maxWidth: desktop ? undefined : Platform.OS === 'web' ? (contentWidth === 'reading' ? theme.layout.contentMaxWidth : theme.layout.householdMaxWidth) + (wideNavigation ? theme.spacing[10] * 2 : 0) : undefined,
+            alignSelf: desktop ? 'stretch' : Platform.OS === 'web' ? 'center' : undefined,
             width: '100%',
           }}
           keyboardDismissMode={scrollKeyboardDismissMode}
@@ -205,11 +227,13 @@ export const AppShell = ({
             ) : undefined
           }
         >
-          <PageCreateActionContext.Provider value={desktopActions ? floatingAction : null}>{children}</PageCreateActionContext.Provider>
+          {children}
         </ScrollView>}
         {floatingAction && !desktopActions ? <View pointerEvents="box-none" style={{ position: 'absolute', right: theme.layout.mobileInset, bottom: theme.spacing[4] }}>{floatingAction}</View> : null}
         {notice ? <View pointerEvents="box-none" style={{ position: 'absolute', top: theme.spacing[2], left: theme.layout.mobileInset, right: theme.layout.mobileInset, alignItems: 'center' }}><ActionNotice {...notice} onTouchCapture={noticeDismissal.noticeCapture} /></View> : null}
       </KeyboardArea>
+      </PageHeaderContext.Provider>
+      {desktop && aside ? <View style={{ position: 'absolute', top: theme.layout.pageHeaderHeight, bottom: 0, left: theme.layout.notesListWidth, right: 0, backgroundColor: theme.colors.surface }}>{aside}</View> : null}
       </View>
       {!wideNavigation ? footer : null}
     </SafeAreaView>
@@ -229,6 +253,7 @@ export const InboxButton = () => {
 // ---- HouseholdHeader ----
 
 interface HouseholdHeaderProps {
+  trigger?: RefObject<View | null>;
   householdName: string;
   onOpenSwitcher: () => void;
   /** `sidebar` is the larger form at the top of the wide-screen navigation. */
@@ -236,8 +261,13 @@ interface HouseholdHeaderProps {
 }
 
 /** The current household's name with a chevron; it opens the household menu. */
-export const HouseholdHeader = ({ householdName, onOpenSwitcher, placement = 'bar' }: HouseholdHeaderProps) => (
+export const HouseholdHeader = ({ householdName, onOpenSwitcher, placement = 'bar', trigger }: HouseholdHeaderProps) => {
+  const { width } = useWindowDimensions();
+  const desktop = useDesktop();
+  const rail = desktop && width < theme.layout.railBreakpoint;
+  return (
   <Pressable
+    ref={trigger}
     accessibilityLabel={`当前家庭：${householdName}，切换家庭`}
     accessibilityRole="button"
     onPress={onOpenSwitcher}
@@ -255,17 +285,18 @@ export const HouseholdHeader = ({ householdName, onOpenSwitcher, placement = 'ba
       paddingHorizontal: theme.spacing[2],
     })}
   >
-    <Text
+    {desktop ? <View style={{ width: theme.layout.desktopControl, height: theme.layout.desktopControl, backgroundColor: theme.colors.ink, borderRadius: theme.borderRadii.sm, alignItems: 'center', justifyContent: 'center' }}><Text variant="label" color="surface">{householdName.slice(0, 1)}</Text></View> : null}
+    {!rail ? <Text
       numberOfLines={1}
       variant={placement === 'sidebar' ? 'section' : 'label'}
       color={placement === 'sidebar' ? 'ink' : 'inkMuted'}
       style={{ flexShrink: 1 }}
     >
       {householdName}
-    </Text>
-    <ChevronDown color={theme.colors.inkMuted} size={theme.controlSizes.icon - theme.spacing[1]} strokeWidth={theme.controlSizes.iconStroke} />
+    </Text> : null}
+    {!rail ? <ChevronDown color={theme.colors.inkMuted} size={theme.controlSizes.icon - theme.spacing[1]} strokeWidth={theme.controlSizes.iconStroke} /> : null}
   </Pressable>
-);
+); };
 
 // ---- HouseholdContextNote ----
 
@@ -342,6 +373,7 @@ export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryA
 // ---- HouseholdSwitcher ----
 
 interface HouseholdSwitcherProps {
+  trigger?: RefObject<View | null>;
   households: ListMyHouseholdsItemDto[];
   currentHouseholdId: string | null;
   onSelect: (id: string) => void;
@@ -358,8 +390,9 @@ interface HouseholdSwitcherProps {
  * centered panel on Web.
  */
 export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
-  ({ households, currentHouseholdId, onSelect, onCreateNew, visible, onClose, links = [] }, ref) => {
+  ({ households, currentHouseholdId, onSelect, onCreateNew, visible, onClose, links = [], trigger }, ref) => {
     const headingRef = useRef<View>(null);
+    const desktop = useDesktop();
     // The panel is pinned flush to the physical bottom edge (see the height:'75%'
     // comment below), which on Android puts the last row right under the
     // gesture-nav bar unless we pad for it explicitly.
@@ -400,14 +433,14 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
           ...(Platform.OS === 'web'
             ? { maxHeight: theme.layout.switcherMaxHeight }
             : { height: '75%' as unknown as number }),
-          width: Platform.OS === 'web' ? theme.layout.switcherWidth : '100%',
-          ...(Platform.OS === 'web'
+          width: desktop ? '100%' : Platform.OS === 'web' ? theme.layout.switcherWidth : '100%',
+          ...(Platform.OS === 'web' && !desktop
             ? { boxShadow: theme.shadow.raised as string }
             : {}),
           overflow: 'hidden',
         }}
       >
-        <View
+        {!desktop ? <View
           style={{
             alignItems: 'center',
             flexDirection: 'row',
@@ -434,7 +467,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
           >
             <X color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
           </Pressable>
-        </View>
+        </View> : null}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: theme.spacing[3] + insets.bottom }}>
           {households.map((household) => {
             const current = household.id === currentHouseholdId;
@@ -487,6 +520,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
       </View>
     );
 
+    if (desktop && trigger) return <AnchoredPopover title="切换家庭" trigger={trigger} onClose={onClose}>{content}</AnchoredPopover>;
     if (Platform.OS === 'web') {
       return (
         <Modal
@@ -627,6 +661,7 @@ export const MemberRow = ({
   canTransferTo = false,
   onTransfer,
 }: MemberRowProps) => {
+  const desktop = useDesktop();
   const roleLabel = ROLE_LABELS[member.role] ?? member.role;
   const actions: CardAction[] = [];
   if (roleAction !== undefined && onRoleAction) {
@@ -635,6 +670,7 @@ export const MemberRow = ({
   }
   if (canTransferTo && onTransfer) actions.push({ label: '转移所有权', icon: Crown, accessibilityLabel: `转移所有权给 ${member.displayName}`, onPress: onTransfer });
   if (canRemoveMember && onRemove) actions.push({ label: '移除', icon: UserMinus, destructive: true, accessibilityLabel: `移除 ${member.displayName}`, onPress: onRemove });
+  if (desktop) return <View accessibilityLabel={`${member.displayName}，${roleLabel}${member.isCurrentUser ? '，本人' : ''}`} style={{ minHeight: theme.layout.desktopRowHeight + theme.spacing[2], flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}><View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}><MemberAvatar id={member.userId} name={member.displayName} /><Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1 }}>{member.displayName}{member.isCurrentUser ? '（我）' : ''}</Text></View><Text variant="meta" numberOfLines={1} style={{ flex: 1 }}>{member.username}</Text><Text variant="meta" style={{ width: theme.layout.fieldLabelColumn }}>{roleLabel}</Text>{/* The menu keeps its slot when it is empty, so every row's columns line up with the header. */}<View style={{ width: theme.layout.desktopControl, alignItems: 'center' }}><CardActionsMenu subject={`成员：${member.displayName}`} actions={actions} /></View></View>;
 
   return (
     <View

@@ -1,3 +1,7 @@
+import { useContentChanges } from '../../../../src/features/content/content-changes';
+import { useResourceNavigation } from '../../../../src/ui/use-resource-navigation';
+import { useDesktop } from '../../../../src/ui/use-desktop';
+import { DesktopToday } from '../../../../src/features/events/desktop-today';
 import { useOpenWindowItem } from '../../../../src/ui/route-window';
 import { FloatingCreateButton } from '../../../../src/ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../../../../src/features/content/use-content-delete';
@@ -6,7 +10,7 @@ import { useWorkspaceState } from '../../../../src/ui/workspace-state';
 import { PageIntro } from '../../../../src/ui/page-intro';
 import { formatDate, formatWeekday, toTimeValue } from '../../../../src/ui/date-values';
 import { GroupLabel, ListGroup, NowMarker } from '../../../../src/ui/list-group';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, usePathname } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import { useMinuteClock } from '../../../../src/ui/use-minute-clock';
@@ -89,6 +93,9 @@ export function partitionTodayTasks(tasks: TaskResponseDto[], retainCompletedId:
 export default function TodayRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const desktop = useDesktop();
+  const detailOpen = /\/(tasks|events)\/[^/]+(?:\/edit)?$/.test(usePathname());
+  const openResource = useResourceNavigation();
   const openTaskId = useOpenWindowItem('taskId');
   const openEventId = useOpenWindowItem('eventId');
   const deleteTask = useContentDelete('tasks');
@@ -98,6 +105,7 @@ export default function TodayRoute() {
   const { width } = useWindowDimensions();
   const { viewState, currentHouseholdId } = useHouseholdContext();
 
+  const [upcomingEvents, setUpcomingEvents] = useState<EventResponseDto[]>([]);
   const [events, setEvents] = useState<EventResponseDto[]>([]);
   const [tasks, setTasks] = useState<TaskResponseDto[]>([]);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
@@ -142,16 +150,22 @@ export default function TodayRoute() {
         return;
       }
 
-      const [eventsResult, tasksResult, householdResult] = await Promise.all([
+      const nextDay = new Date(`${currentDate}T12:00:00`);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const nextWeek = new Date(`${currentDate}T12:00:00`);
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      const [eventsResult, tasksResult, householdResult, upcomingResult] = await Promise.all([
         // Use the calendar query so events spanning into today are included.
         sessionApiClient.listEvents(token, householdId, currentDate, currentDate, undefined, undefined, true),
         sessionApiClient.listTasks(token, householdId),
         sessionApiClient.getHousehold(token, householdId),
+        desktop ? sessionApiClient.listEvents(token, householdId, toDateIso(nextDay), toDateIso(nextWeek), undefined, undefined, true) : Promise.resolve(null),
       ]);
 
       if (request !== requestGeneration.current) return;
       loadedDay.current = dayKey;
       setEvents(eventsResult.events);
+      setUpcomingEvents(upcomingResult?.events.filter(event => toDateIso(new Date(event.startTime)) > currentDate) ?? []);
       setMembers(householdResult.members);
       setTasks(tasksResult.tasks);
     } catch {
@@ -161,7 +175,7 @@ export default function TodayRoute() {
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
-  }, [householdId, currentDate, dayKey]);
+  }, [householdId, currentDate, dayKey, desktop]);
 
   const completion = useTaskCompletion(householdId ?? undefined, fetchData);
 
@@ -175,6 +189,8 @@ export default function TodayRoute() {
   const previewTasks = (items: TaskResponseDto[], expanded: boolean) => expanded
     ? items
     : items.filter((task, index) => index < 3 || task.id === completion.undoTaskId);
+
+  useContentChanges(householdId, fetchData);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -199,27 +215,27 @@ export default function TodayRoute() {
   const handleEventPress = useCallback(
     (event: EventResponseDto) => {
       rememberRouteTrigger();
-      void router.push(
+      openResource(
         `/households/${encodeURIComponent(householdId!)}/events/${encodeURIComponent(event.id)}`,
       );
     },
-    [router, householdId],
+    [router, householdId, openResource],
   );
 
   const handleTaskPress = useCallback(
     (task: TaskResponseDto) => {
       rememberRouteTrigger();
-      void router.push(
+      openResource(
         `/households/${encodeURIComponent(householdId!)}/tasks/${encodeURIComponent(task.id)}`,
       );
     },
-    [router, householdId],
+    [router, householdId, openResource],
   );
 
   const create = (kind: 'events' | 'tasks' | 'notes') => () => {
     if (kind === 'events') setCalendarDate(todayIso());
     rememberRouteTrigger();
-    router.push(`/households/${encodeURIComponent(householdId!)}/${kind}/new`);
+    openResource(`/households/${encodeURIComponent(householdId!)}/${kind}/new`);
   };
 
   const taskRow = (task: TaskResponseDto, options: { time?: string; showDue?: boolean } = {}) => (
@@ -246,7 +262,8 @@ export default function TodayRoute() {
 
   const summary = (
     <Text variant="bodySm">
-      {formatWeekday(now.date)}
+      {/* On a wide screen the sidebar names the page 今日, so the header carries the date in its summary. */}
+      {desktop ? `${formatDate(now.date)} ${formatWeekday(now.date)}` : formatWeekday(now.date)}
       {ready ? ` · ${todayEvents.length} 个日程 · ${todayTasks.length} 件待办` : ''}
       {ready && overdueTasks.length > 0 ? <Text variant="bodySm" color="accent">{` · ${overdueTasks.length} 件逾期`}</Text> : null}
     </Text>
@@ -324,6 +341,7 @@ export default function TodayRoute() {
     <HouseholdScreen
       active="today"
       accessibilityLabel="今日视图"
+      layout={desktop ? 'workspace' : 'document'}
       notice={completion.undoNotice}
       refreshing={refreshing}
       onRefresh={handleRefresh}
@@ -333,14 +351,14 @@ export default function TodayRoute() {
         { kind: 'notes', label: '创建笔记', onPress: create('notes') },
       ]} />}
     >
-      <Stack gap={6}>
-        <PageIntro title={formatDate(now.date)} subtitle={summary} />
+      <Stack gap={desktop ? 0 : 6} style={desktop ? { flex: 1, minHeight: 0 } : undefined}>
+        <PageIntro title={desktop ? '今日' : formatDate(now.date)} subtitle={summary} />
 
         {loading ? <LoadingState label="正在加载今日安排" /> : null}
         {error !== null ? <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载今日数据" /> : null}
 
         {ready && viewState !== 'resolving' ? (
-          wide && secondary
+          desktop ? <DesktopToday detailOpen={detailOpen} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} /> : wide && secondary
             ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing[8] }}>
                 <View style={{ flex: 3, minWidth: 0 }}>{primary}</View>
                 <View style={{ flex: 2, minWidth: 0 }}>{secondary}</View>

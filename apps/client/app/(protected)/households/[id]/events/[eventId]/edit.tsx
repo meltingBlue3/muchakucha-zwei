@@ -1,3 +1,4 @@
+import { notifyContentChanged } from '../../../../../../src/features/content/content-changes';
 import { hasRecurrenceFieldErrors } from '../../../../../../src/features/recurrence/recurrence-options';
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
 import { HouseholdContextNote } from '../../../../../../src/ui/household-components';
@@ -114,6 +115,7 @@ export default function EditEventRoute() {
       // Only the reminder changed: nothing shared to save, no occurrences to choose.
       if (!contentChanged && sameIds(selectedLabelIds, (event?.labels ?? []).map((label) => label.id))) {
         workspace.clear(draftPrefix);
+        notifyContentChanged(id);
         exitAllowed.current = true;
         exitEdit();
         setIsSubmitting(false);
@@ -137,6 +139,7 @@ export default function EditEventRoute() {
         }
         await sessionApiClient.updateEvent(token, id!, eventId!, { ...data, ...conflict.precondition, labelIds: selectedLabelIds });
         workspace.clear(draftPrefix);
+        notifyContentChanged(id);
         exitAllowed.current = true;
         exitEdit();
       } catch (err: unknown) {
@@ -173,6 +176,7 @@ export default function EditEventRoute() {
       }
       setPendingSeriesAction(null);
       workspace.clear(draftPrefix);
+      notifyContentChanged(id);
       if (scope === 'this_only') {
         exitAllowed.current = true;
         exitEdit();
@@ -203,7 +207,7 @@ export default function EditEventRoute() {
   };
 
   return (
-    <EventWindow size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : '编辑日程'} busy={isSubmitting || seriesSubmitting !== null} onClose={handleCancel} onBackStep={pendingSeriesAction ? handleCancel : undefined} exitAllowed={exitAllowed}>
+    <EventWindow draftPrefix={draftPrefix} size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : '编辑日程'} busy={isSubmitting || seriesSubmitting !== null} onClose={handleCancel} onBackStep={pendingSeriesAction ? handleCancel : undefined} exitAllowed={exitAllowed}>
       {pendingSeriesAction ? <SeriesScopeContent mode={pendingSeriesAction.mode} error={seriesError} submitting={seriesSubmitting} onClose={handleCancel} onSelect={scope => void handleSeriesSelect(scope)} />
         : loading ? <LoadingState label="正在加载日程" /> : event === null ? <Stack gap={3}>
           <LoadError message={error ?? '日程未找到或已被删除。'} onRetry={() => void fetchEvent()} />

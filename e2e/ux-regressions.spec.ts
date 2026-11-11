@@ -102,13 +102,21 @@ for (const width of [320, 390, 1440]) {
     await expect(page.getByRole('textbox')).toHaveCount(0);
     await page.getByRole('button', { name: '个人中心', exact: true }).click();
     await page.getByRole('menuitem', { name: '个人资料' }).click();
-    await expect(page.getByRole('dialog', { name: '个人资料' })).toBeVisible();
-    const appearance = await dialogAppearance(page);
-    await page.keyboard.press('Escape');
+    let appearance: Awaited<ReturnType<typeof dialogAppearance>> | undefined;
+    if (width >= 1024) {
+      await expect(page).toHaveURL(/profile$/);
+      await expect(page.getByRole('textbox', { name: '昵称', exact: true })).toBeVisible();
+      await page.getByRole('link', { name: '家庭设置', exact: true }).click();
+    } else {
+      await expect(page.getByRole('dialog', { name: '个人资料' })).toBeVisible();
+      appearance = await dialogAppearance(page);
+      await page.keyboard.press('Escape');
+    }
     await page.getByRole('button', { name: '个人中心', exact: true }).click();
     await page.getByRole('menuitem', { name: '退出登录' }).click();
     await expect(page.getByRole('dialog', { name: '退出登录' })).toBeVisible();
-    expect(await dialogAppearance(page)).toEqual(appearance);
+    if (appearance) expect(await dialogAppearance(page)).toEqual(appearance);
+    else appearance = await dialogAppearance(page);
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: '编辑家庭名称' }).click();
     await expect(page.getByRole('dialog', { name: '编辑家庭名称' })).toBeVisible();
@@ -239,7 +247,9 @@ for (const kind of ['tasks', 'events'] as const) {
     await page.getByLabel(kind === 'tasks' ? '创建任务' : '创建日程', { exact: true }).click();
     await page.getByLabel(kind === 'tasks' ? '任务标题' : '日程标题', { exact: true }).fill('只创建一次');
     await expect(page.getByText('保存到：家庭 A', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /当前家庭/ })).toHaveCount(0);
+    // The create window names its household and offers no switcher of its own; the wide sidebar keeps the global one outside it.
+    const createWindow = (page.viewportSize()?.width ?? 0) >= 1024 ? page.getByRole('region', { name: kind === 'tasks' ? '创建任务' : '创建日程', exact: true }) : page;
+    await expect(createWindow.getByRole('button', { name: /当前家庭/ })).toHaveCount(0);
     await page.getByLabel('选择标签 家务', { exact: true }).click();
     await page.getByLabel('创建', { exact: true }).filter({ visible: true }).last().click();
     await expect(page.getByText('内容已创建，但标签未保存。重试只会保存标签，不会重复创建。')).toBeVisible();
@@ -292,8 +302,9 @@ for (const width of [320, 390, 1440]) {
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
     await page.setViewportSize({ width, height: 900 });
-    // Today is titled with the date; 家庭 has no tab and is reached through the household menu.
-    const destinations: Array<[string, string | RegExp, string?]> = [['today', /^\d{1,2}月\d{1,2}日$/], ['events', '日历', '日历'], ['tasks', '任务', '任务'], ['notes', '笔记', '笔记'], ['more', '家庭']];
+    // On a phone Today is titled with the date; on a wide screen the header says 今日 and the date leads its summary.
+    // 家庭 has no tab and is reached through the household menu.
+    const destinations: Array<[string, string | RegExp, string?]> = [['today', width >= 1024 ? '今日' : /^\d{1,2}月\d{1,2}日$/], ['events', '日历', '日历'], ['tasks', '任务', '任务'], ['notes', '笔记', '笔记'], ['more', '家庭']];
     for (const [route, title, tab] of destinations) {
       if (tab) await page.getByRole('tab', { name: tab, exact: true }).click();
       else await page.goto(`/households/${a}/${route}`);
@@ -323,7 +334,7 @@ for (const width of [320, 390, 1440]) {
     const requests = await setup(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/households/${a}/notes/new`);
-    const dialog = page.getByRole('dialog', { name: '创建笔记', exact: true });
+    const dialog = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '创建笔记', exact: true });
     await dialog.getByLabel('笔记标题').fill('日语学习');
     const input = dialog.getByLabel('笔记内容');
     const previewButton = dialog.getByRole('button', { name: '预览', exact: true });
@@ -347,8 +358,8 @@ for (const width of [320, 390, 1440]) {
     await dialog.getByRole('button', { name: '粗体', exact: true }).click();
     await expect(input).toHaveValue('**日语学习**');
     await dialog.getByRole('button', { name: '标题格式' }).click();
-    const headings = page.getByRole('dialog', { name: '标题格式', exact: true });
-    await expect(page.getByRole('dialog')).toHaveCount(1);
+    const headings = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '标题格式', exact: true });
+    await expect(page.getByRole('dialog')).toHaveCount(width >= 1024 ? 0 : 1);
     await expect(headings.getByRole('button', { name: 'H6', exact: true })).toBeVisible();
     await headings.getByRole('button', { name: 'H2', exact: true }).click();
     await expect(input).toBeFocused();
@@ -356,18 +367,18 @@ for (const width of [320, 390, 1440]) {
     await input.press('End');
     await input.press('Enter');
     await dialog.getByRole('button', { name: '链接', exact: true }).click();
-    const linkWindow = page.getByRole('dialog', { name: '插入链接', exact: true });
+    const linkWindow = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '插入链接', exact: true });
     await expect(input).not.toBeVisible();
     await linkWindow.getByLabel('显示文字', { exact: true }).fill('学习资料');
     await linkWindow.getByLabel('网址', { exact: true }).fill('https://example.com');
-    expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
+    expect((await new AxeBuilder({ page }).include(width >= 1024 ? '[role="region"]' : '[role="dialog"]').analyze()).violations).toEqual([]);
     await page.screenshot({ path: `/tmp/muchakucha-markdown-link-window-${width}.png` });
     await linkWindow.getByRole('button', { name: '插入链接', exact: true }).click();
     await expect(input).toBeFocused();
     await expect(input).toHaveValue(/学习资料/);
     await dialog.getByRole('button', { name: '表格', exact: true }).click();
-    const tableWindow = page.getByRole('dialog', { name: '插入表格', exact: true });
-    await expect(page.getByRole('dialog')).toHaveCount(1);
+    const tableWindow = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '插入表格', exact: true });
+    await expect(page.getByRole('dialog')).toHaveCount(width >= 1024 ? 0 : 1);
     await tableWindow.getByRole('button', { name: '插入表格', exact: true }).click();
     const source = await input.inputValue();
     await dialog.getByRole('button', { name: '预览', exact: true }).click();
@@ -376,7 +387,7 @@ for (const width of [320, 390, 1440]) {
     await expect(dialog.getByRole('columnheader')).toHaveCount(2);
     const panel = dialog.getByTestId('app-dialog-panel');
     expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-    expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
+    expect((await new AxeBuilder({ page }).include(width >= 1024 ? '[role="region"]' : '[role="dialog"]').analyze()).violations).toEqual([]);
     await page.screenshot({ path: `/tmp/muchakucha-markdown-preview-${width}.png` });
     await dialog.getByRole('button', { name: '编辑', exact: true }).click();
     await expect(input).toHaveValue(source);
@@ -396,12 +407,12 @@ test('note format windows close back to editing without losing the selection or 
   const note = { id: taskId, householdId: a, title: '日语学习', body: '词语练习', createdBy: 'user', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' };
   await page.route(`**/api/v1/households/${a}/notes/${taskId}`, route => route.fulfill({ json: note }));
   await page.goto(`/households/${a}/notes/${taskId}/edit`);
-  const editor = page.getByRole('dialog', { name: '编辑笔记', exact: true });
+  const editor = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '编辑笔记', exact: true });
   const input = editor.getByLabel('笔记内容');
   await expect(input).toHaveValue('词语练习');
   await input.selectText();
   await editor.getByRole('button', { name: '链接', exact: true }).click();
-  const link = page.getByRole('dialog', { name: '插入链接', exact: true });
+  const link = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '插入链接', exact: true });
   await expect(link.getByLabel('显示文字')).toHaveValue('词语练习');
   await link.getByLabel('网址', { exact: true }).fill('https://example.com');
   await link.getByRole('button', { name: '关闭插入链接', exact: true }).click();
@@ -410,13 +421,14 @@ test('note format windows close back to editing without losing the selection or 
   await editor.getByRole('button', { name: '粗体', exact: true }).click();
   await expect(input).toHaveValue('**词语练习**');
   await editor.getByRole('button', { name: '表格', exact: true }).click();
-  const table = page.getByRole('dialog', { name: '插入表格', exact: true });
+  const table = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '插入表格', exact: true });
   await table.getByRole('button', { name: '关闭插入表格' }).click();
   await expect(input).toHaveValue('**词语练习**');
   await editor.getByRole('button', { name: '标题格式' }).click();
-  const headings = page.getByRole('dialog', { name: '标题格式', exact: true });
+  const headings = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '标题格式', exact: true });
   await expect(headings).toBeVisible();
-  expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
+  // The heading choices are a step of the editor: inside the side pane's region on a wide screen, a dialog on a phone.
+  expect((await new AxeBuilder({ page }).include((page.viewportSize()?.width ?? 0) >= 1024 ? '[role="region"]' : '[role="dialog"]').analyze()).violations).toEqual([]);
   await page.screenshot({ path: '/tmp/muchakucha-markdown-heading-window.png' });
   await page.keyboard.press('Escape');
   await expect(input).toBeFocused();
@@ -441,8 +453,8 @@ for (const width of [320, 390, 1440]) {
       await page.goto(`/households/${a}/${route}`);
       const create = page.getByRole('button', { name: createLabel, exact: true });
       await expect(create).toBeInViewport();
-      // Today's title is the date itself.
-      const heading = await page.getByRole('heading', route === 'today' ? { name: /^\d{1,2}月\d{1,2}日$/ } : { name: title, exact: true }).boundingBox();
+      // On a phone Today's title is the date itself; a wide screen titles it 今日.
+      const heading = await page.getByRole('heading', route === 'today' && width < 1024 ? { name: /^\d{1,2}月\d{1,2}日$/ } : { name: title, exact: true }).boundingBox();
       const button = await create.boundingBox();
       if (width === 1440) {
         expect(Math.abs(button!.y + button!.height / 2 - heading!.y - heading!.height / 2)).toBeLessThan(2);
@@ -460,7 +472,9 @@ for (const width of [320, 390, 1440]) {
         if (width === 1440) expect((await menu.boundingBox())!.y).toBeGreaterThan(button!.y + button!.height);
         await page.getByRole('menuitem', { name: '创建任务', exact: true }).click();
       } else await create.click();
-      await expect(page.getByRole('dialog', { name: route === 'today' ? '创建任务' : createLabel, exact: true })).toBeVisible();
+      const editor = page.getByRole(width >= 1024 ? 'region' : 'dialog', { name: route === 'today' ? '创建任务' : createLabel, exact: true });
+      await expect(editor).toBeVisible();
+      if (width >= 1024) await editor.getByRole('heading', { name: route === 'today' ? '创建任务' : createLabel, exact: true }).focus();
       await page.keyboard.press('Escape');
       await expect(create).toBeFocused();
       if (route !== 'tasks' && route !== 'events') continue;

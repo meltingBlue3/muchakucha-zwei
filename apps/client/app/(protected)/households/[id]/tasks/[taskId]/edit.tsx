@@ -1,3 +1,4 @@
+import { notifyContentChanged } from '../../../../../../src/features/content/content-changes';
 import { hasRecurrenceFieldErrors } from '../../../../../../src/features/recurrence/recurrence-options';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
 import { TaskWindow } from '../../../../../../src/features/tasks/task-window';
@@ -142,6 +143,7 @@ export default function EditTaskRoute() {
     // Only the reminder changed: nothing shared to save, no occurrences to choose.
     if (!contentChanged && sameIds(selectedLabelIds, (task?.labels ?? []).map((label) => label.id))) {
       workspace.clear(draftPrefix);
+      notifyContentChanged(id);
       exitAllowed.current = true;
       exitEdit();
       return;
@@ -165,6 +167,7 @@ export default function EditTaskRoute() {
       }
       await sessionApiClient.updateTask(token, householdId, taskId, { ...data, ...conflict.precondition, labelIds: selectedLabelIds });
       workspace.clear(draftPrefix);
+      notifyContentChanged(id);
       exitAllowed.current = true;
       exitEdit();
     } catch (error: unknown) {
@@ -222,6 +225,7 @@ export default function EditTaskRoute() {
       }
       setPendingSeriesAction(null);
       workspace.clear(draftPrefix);
+      notifyContentChanged(id);
       if (scope === 'this_only') {
         exitAllowed.current = true;
         exitEdit();
@@ -265,7 +269,7 @@ export default function EditTaskRoute() {
   }
 
   return (
-    <TaskWindow size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : "编辑任务"} busy={submitting || seriesSubmitting !== null} onClose={closeEdit} onBackStep={pendingSeriesAction ? closeEdit : undefined} exitAllowed={exitAllowed}>
+    <TaskWindow draftPrefix={draftPrefix} size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : "编辑任务"} busy={submitting || seriesSubmitting !== null} onClose={closeEdit} onBackStep={pendingSeriesAction ? closeEdit : undefined} exitAllowed={exitAllowed}>
       <Stack gap={4}>
         {pendingSeriesAction ? null : <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />}
 

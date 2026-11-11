@@ -23,9 +23,12 @@ import { BrandLogo } from './brand-logo';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
 import { SheetActionSlot } from './sheet-action';
 import { theme, type Space, type TextVariant, type Theme } from './theme';
+import { useDesktopDensity } from './use-desktop';
+import { useWindowDimensions } from 'react-native';
 
 const Box = createBox<Theme>();
 const RestyleText = createText<Theme>();
+const AuthControlSizes = React.createContext(false);
 
 export const MuchakuchaThemeProvider = ({ children }: PropsWithChildren) => (
   <ThemeProvider theme={theme}>{children}</ThemeProvider>
@@ -175,6 +178,8 @@ const webFocusRing = (focused: boolean) =>
 
 export const Button = ({ disabled, label, loading = false, tone = 'primary', expanded, size = 'regular', style, ...props }: ButtonProps) => {
   const activeTheme = useTheme<Theme>();
+  const dense = useDesktopDensity();
+  const auth = useContext(AuthControlSizes);
   const unavailable = disabled || loading;
   const [focused, setFocused] = useState(false);
   const { onBlur, onFocus, ...pressableProps } = props;
@@ -210,8 +215,8 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', exp
           flexDirection: 'row',
           gap: activeTheme.spacing[2],
           justifyContent: 'center',
-          minHeight: compact ? activeTheme.controlSizes.compact : activeTheme.controlSizes.primary,
-          minWidth: activeTheme.controlSizes.touchTarget,
+          minHeight: auth ? activeTheme.layout.authControl : dense ? activeTheme.layout.desktopControl : compact ? activeTheme.controlSizes.compact : activeTheme.controlSizes.primary,
+          minWidth: dense ? activeTheme.layout.desktopControl : activeTheme.controlSizes.touchTarget,
           paddingHorizontal: compact ? activeTheme.spacing[4] : activeTheme.spacing[5],
           ...webFocusRing(focused),
         },
@@ -234,10 +239,12 @@ export function FormActions({ onCancel, onSubmit, submitting, submitLabel, disab
 }) {
   const sheet = useContext(SheetActionSlot);
   const submit = useRef(onSubmit);
+  const cancel = useRef(onCancel);
   submit.current = onSubmit;
+  cancel.current = onCancel;
   useEffect(() => {
     if (!sheet) return;
-    sheet({ label: submitLabel, submitting, disabled, onPress: () => submit.current() });
+    sheet({ label: submitLabel, submitting, disabled, onPress: () => submit.current(), onCancel: () => cancel.current() });
     return () => sheet(null);
   }, [sheet, submitLabel, submitting, disabled]);
   // A compact editor sheet shows the submit in its header and cancels through its close button.
@@ -313,6 +320,7 @@ type IconButtonProps = Omit<PressableProps, 'children'> & {
 
 export const IconButton = ({ icon, label, style, visibleLabel = false, appearance = 'outlined', ...props }: IconButtonProps) => {
   const activeTheme = useTheme<Theme>();
+  const dense = useDesktopDensity();
   return (
     <Pressable
       {...props}
@@ -328,8 +336,8 @@ export const IconButton = ({ icon, label, style, visibleLabel = false, appearanc
           flexDirection: 'row',
           gap: activeTheme.spacing[2],
           justifyContent: 'center',
-          minHeight: activeTheme.controlSizes.touchTarget,
-          minWidth: activeTheme.controlSizes.touchTarget,
+          minHeight: dense ? activeTheme.layout.desktopControl : activeTheme.controlSizes.touchTarget,
+          minWidth: dense ? activeTheme.layout.desktopControl : activeTheme.controlSizes.touchTarget,
         },
         typeof style === 'function' ? style(state) : style,
       ]}
@@ -353,6 +361,8 @@ type FieldProps = TextInputProps & {
 export const TextField = forwardRef<NativeTextInput, FieldProps>(
   ({ disabled, error, hint, submitAttempt, trailing, label, nativeID, onBlur, onFocus, style, ...props }, ref) => {
     const activeTheme = useTheme<Theme>();
+    const dense = useDesktopDensity();
+    const auth = useContext(AuthControlSizes);
     const preferences = useAccessibilityPreferences();
     const generatedId = useId();
     const inputId = nativeID ?? `field-${generatedId}`;
@@ -411,7 +421,7 @@ export const TextField = forwardRef<NativeTextInput, FieldProps>(
               fontFamily: activeTheme.fontFamilies.regular,
               fontSize: activeTheme.typography.body.fontSize,
               lineHeight: activeTheme.typography.body.lineHeight,
-              minHeight: activeTheme.controlSizes.field,
+              minHeight: auth ? activeTheme.layout.authControl : dense ? activeTheme.layout.desktopField : activeTheme.controlSizes.field,
               paddingHorizontal: activeTheme.spacing[4],
               ...(trailing ? { paddingRight: activeTheme.spacing[16] } : {}),
               ...(Platform.OS === 'web' && preferences.forcedColors
@@ -597,6 +607,16 @@ const useAccessibilityPreferences = () => {
 export const AuthShell = ({ children }: PropsWithChildren) => {
   const preferences = useAccessibilityPreferences();
   const duration = getMotionDuration(preferences.reducedMotion);
+  const { width } = useWindowDimensions();
+  const split = Platform.OS === 'web' && width >= theme.layout.navigationBreakpoint;
+  if (split) return <SafeAreaView role="main" style={{ flex: 1, flexDirection: 'row', backgroundColor: theme.colors.canvas }}>
+    <View style={{ flex: 1, padding: theme.spacing[12], justifyContent: 'center', gap: theme.spacing[12] }}>
+      <BrandMark />
+      <Stack gap={4}><Heading variant="display">把日子，过在一起。</Heading><Text color="inkMuted">日程、待办和心里的小事，都有一个共同的去处。</Text></Stack>
+      <Stack gap={4} style={{ padding: theme.spacing[6], backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, maxWidth: theme.layout.authCardMaxWidth, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator }}><Heading variant="section">一家人的今日</Heading><Text variant="bodySm">09:00　一起开始新的一天</Text><Text variant="bodySm">○　记下要做的事</Text><Text variant="bodySm">○　留一张给家人的笔记</Text></Stack>
+    </View>
+    <ScrollView style={{ width: theme.layout.authPanelWidth, flexGrow: 0, backgroundColor: theme.colors.surface }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: theme.spacing[10] }}><View testID="auth-shell" style={{ width: '100%', maxWidth: theme.layout.authFormWidth, alignSelf: 'center' }}><AuthControlSizes.Provider value>{children}</AuthControlSizes.Provider></View></ScrollView>
+  </SafeAreaView>;
   return (
     <Screen>
       <View style={{ flex: 1, width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center', justifyContent: 'center', gap: theme.spacing[8] }}>

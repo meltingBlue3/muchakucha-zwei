@@ -7,6 +7,8 @@ import type { Theme } from '../../ui/theme';
 import { RecurrenceKindBadge, recurrenceKindLabel } from './recurrence-kind-badge';
 import { recurrenceInputFromResponse } from './recurrence-options';
 import { formatRecurrenceSummary } from './recurrence-summary';
+import { useDesktop } from '../../ui/use-desktop';
+import { formatDate, parseDateValue } from '../../ui/date-values';
 
 const NEVER_ENDS_SUFFIX = '，永不结束';
 const ENDED_LINE = '这个重复已经结束';
@@ -117,14 +119,17 @@ export function formatRuleRow(
 }
 
 interface RecurrenceRuleRowProps {
+  selected?: boolean;
   rule: RecurrenceRuleListItemDto;
   deviceTimeZone: string;
   onPress(): void;
 }
 
-export function RecurrenceRuleRow({ rule, deviceTimeZone, onPress }: RecurrenceRuleRowProps) {
+export function RecurrenceRuleRow({ rule, deviceTimeZone, onPress, selected = false }: RecurrenceRuleRowProps) {
   const activeTheme = useTheme<Theme>();
+  const desktop = useDesktop();
   const formatted = formatRuleRow(rule, deviceTimeZone);
+  if (desktop) return <Pressable accessibilityRole="button" accessibilityLabel={formatted.accessibilityLabel} {...(selected ? { 'aria-current': true } : {})} onPress={onPress} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[4], minHeight: activeTheme.layout.desktopRowHeight, paddingHorizontal: activeTheme.spacing[4], backgroundColor: selected ? activeTheme.colors.canvas : pressed ? activeTheme.colors.surfaceSubtle : activeTheme.colors.surface })}><Text variant="meta" style={{ width: activeTheme.spacing[16] }}>{formatted.kindLabel ?? '—'}</Text><Text variant="bodySm" color="ink" numberOfLines={1} style={{ flex: 1 }}>{formatted.title}</Text><Text variant="meta" numberOfLines={1} style={{ flex: 1 }}>{formatted.summary}</Text><Text variant="time" numberOfLines={1} style={{ width: activeTheme.spacing[10] * 3 }}>{formatted.ended ? '已结束' : rule.nextOccurrenceDate ? formatDate(parseDateValue(rule.nextOccurrenceDate), { weekday: true }) : ''}</Text></Pressable>;
 
   return (
     <Pressable

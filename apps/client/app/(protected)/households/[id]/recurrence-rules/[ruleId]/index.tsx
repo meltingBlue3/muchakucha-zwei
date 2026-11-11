@@ -1,4 +1,7 @@
 import { RouteWindow, useRouteWindowClose } from '../../../../../../src/ui/route-window';
+import { recurrencePreview } from '../../../../../../src/features/recurrence/recurrence-preview';
+import { useDesktop } from '../../../../../../src/ui/use-desktop';
+import { formatDate, parseDateValue } from '../../../../../../src/ui/date-values';
 import RecurrenceListScreen from '../../../../../../src/features/recurrence/recurrence-list-screen';
 import { DraftNotice } from '../../../../../../src/ui/draft-notice';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
@@ -58,6 +61,7 @@ function resolveDeviceTimeZone(): string {
 }
 
 export default function RecurrenceRuleDetailRoute() {
+  const desktop = useDesktop();
   const { id, ruleId } = useLocalSearchParams<{ id: string; ruleId: string }>();
   const router = useRouter();
   const exitAllowed = useRef(false);
@@ -231,7 +235,7 @@ export default function RecurrenceRuleDetailRoute() {
     else dismiss();
   };
   return (
-      <RouteWindow resource="recurrence-rules" size={saveConfirmOpen || endConfirmOpen ? 'standard' : 'editor'} title={saveConfirmOpen ? '确认保存重复安排' : endConfirmOpen ? '结束重复安排' : '重复安排'} busy={busy} onClose={close} onBackStep={saveConfirmOpen || endConfirmOpen ? close : undefined} exitAllowed={exitAllowed} fallback={<RecurrenceListScreen />}>
+      <RouteWindow draftPrefix={draftPrefix} resource="recurrence-rules" size={saveConfirmOpen || endConfirmOpen ? 'standard' : 'editor'} title={saveConfirmOpen ? '确认保存重复安排' : endConfirmOpen ? '结束重复安排' : '重复安排'} busy={busy} onClose={close} onBackStep={saveConfirmOpen || endConfirmOpen ? close : undefined} exitAllowed={exitAllowed} fallback={<RecurrenceListScreen />}>
         {saveConfirmOpen || endConfirmOpen ? <Stack gap={3}>
           <Text>{saveConfirmOpen ? SAVE_CONFIRM_PROMPT : END_CONFIRM_PROMPT}</Text>
           {writeError ? <Banner>{writeError}</Banner> : null}
@@ -265,6 +269,8 @@ export default function RecurrenceRuleDetailRoute() {
                   </View>
                 </Stack>
               </FormRow>
+
+              {desktop && !ended ? <Stack gap={2} style={{ paddingVertical: activeTheme.spacing[4] }}><Heading variant="section">接下来 5 次</Heading>{recurrencePreview(rule).map(date => <Text key={date} variant="time">{formatDate(parseDateValue(date), { weekday: true })}{rule.startTimeLocal ? ` ${rule.startTimeLocal}` : ''}</Text>)}<Text variant="caption">按当前规则预览 · {rule.timezone}</Text></Stack> : null}
 
               <FormSection>
                 {/* `startDate` is the split anchor (tomorrow), NOT the rule's

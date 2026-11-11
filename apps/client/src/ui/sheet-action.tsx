@@ -6,6 +6,7 @@ export interface SheetAction {
   submitting: boolean;
   disabled?: boolean;
   onPress(): void;
+  onCancel?(): void;
 }
 
 /**

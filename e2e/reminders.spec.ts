@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+/** A task opens in the wide side pane, a named region, and in a dialog on a phone; its edit form follows it. */
+const windowRole = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1024 ? 'region' as const : 'dialog' as const;
+
 const householdId = '11111111-1111-4111-8111-111111111111';
 const parentsId = '22222222-2222-4222-8222-222222222222';
 const taskId = '33333333-3333-4333-8333-333333333333';
@@ -103,10 +106,10 @@ for (const width of [320, 390, 1440]) {
 test('a task shows when its reminder comes, and changing only the reminder saves no edit', async ({ page }, testInfo) => {
   const writes = await setup(page);
   await page.goto(`${base}/tasks/${taskId}`);
-  const detail = page.getByRole('dialog', { name: '任务详情', exact: true });
+  const detail = page.getByRole(windowRole(page), { name: '任务详情', exact: true });
   await expect(detail.getByText('18:00（准时）', { exact: true })).toBeVisible();
   await detail.getByRole('button', { name: '编辑任务', exact: true }).click();
-  const edit = page.getByRole('dialog', { name: '编辑任务', exact: true });
+  const edit = page.getByRole(windowRole(page), { name: '编辑任务', exact: true });
   await edit.getByRole('button', { name: '提醒我，准时提醒（默认）', exact: true }).click();
   await expect(page.getByText('只改你自己的提醒，家人不受影响。')).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
@@ -123,9 +126,9 @@ test('a task shows when its reminder comes, and changing only the reminder saves
 test('a task can ring on its own, and the detail says so', async ({ page }) => {
   const writes = await setup(page);
   await page.goto(`${base}/tasks/${taskId}`);
-  const detail = page.getByRole('dialog', { name: '任务详情', exact: true });
+  const detail = page.getByRole(windowRole(page), { name: '任务详情', exact: true });
   await detail.getByRole('button', { name: '编辑任务', exact: true }).click();
-  const edit = page.getByRole('dialog', { name: '编辑任务', exact: true });
+  const edit = page.getByRole(windowRole(page), { name: '编辑任务', exact: true });
   await edit.getByRole('button', { name: '闹铃，普通提醒（默认）', exact: true }).click();
   await expect(page.getByText('只改你自己的提醒，家人不受影响。闹铃只在 Android 手机上响，这台设备上仍是普通提醒。')).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);

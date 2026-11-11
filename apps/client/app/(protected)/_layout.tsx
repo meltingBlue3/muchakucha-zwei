@@ -12,6 +12,7 @@ import { ReminderSync } from '../../src/features/reminders/reminder-sync';
 import { AppShell } from '../../src/ui/household-components';
 import { Spinner, Text, Stack as UIStack } from '../../src/ui/primitives';
 import { theme } from '../../src/ui/theme';
+import { RouteSurface } from '../../src/platform/layout/route-surface';
 
 /**
  * Renders children (the Stack navigator) at all times so the navigation
@@ -85,7 +86,7 @@ export default function ProtectedLayout() {
     React.createElement(
       ResolvingGate,
       null,
-      React.createElement(WorkspaceStateProvider, { store: draftWorkspace }, React.createElement(Stack, { screenOptions: { headerShown: false } },
+      React.createElement(WorkspaceStateProvider, { store: draftWorkspace }, React.createElement(Stack, { screenOptions: { headerShown: false }, screenLayout: ({ children }) => <RouteSurface>{children}</RouteSurface> },
         ...['households/[id]/assistant/providers/new', 'households/[id]/assistant/providers/[providerId]/edit', 'households/[id]/assistant/providers/[providerId]/delete', 'households/[id]/assistant/conversations/[conversationId]/delete', 'households/[id]/tasks/new', 'households/[id]/tasks/[taskId]/index', 'households/[id]/tasks/[taskId]/edit', 'households/[id]/tasks/[taskId]/delete', 'households/[id]/events/new', 'households/[id]/events/[eventId]/index', 'households/[id]/events/[eventId]/edit', 'households/[id]/events/[eventId]/delete', 'households/[id]/notes/new', 'households/[id]/notes/[noteId]/index', 'households/[id]/notes/[noteId]/edit', 'households/[id]/notes/[noteId]/delete', 'households/new', 'households/[id]/recurrence-rules/[ruleId]/index', 'households/[id]/members/[membershipId]/remove', 'households/[id]/members/[membershipId]/role', 'households/[id]/ownership/transfer', 'households/[id]/ownership/leave', 'households/[id]/leave', 'households/[id]/invitations/[invitationId]/revoke'].map(name =>
           React.createElement(Stack.Screen, { key: name, name, options: { presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } } }),
         ),

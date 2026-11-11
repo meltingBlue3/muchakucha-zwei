@@ -1,6 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { View, useWindowDimensions } from 'react-native';
+import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { useDesktop } from '../../ui/use-desktop';
+import { AccountNavigation } from '../profile/account-navigation';
 
 import { AccountMenu } from '../../ui/account-menu';
 import type { ActionNoticeProps } from '../../ui/action-notice';
@@ -15,7 +17,9 @@ import { useHouseholdContext } from './household-context';
  * tab bar or sidebar, and the access-changed and not-found states every page
  * shares. Switching household keeps you on the same destination.
  */
-export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing, onRefresh, floatingAction, width, sidebar, layout, headerRow = true, tabBar = true, subpage = false, children }: {
+export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing, onRefresh, floatingAction, width, sidebar, layout, headerRow = true, tabBar = true, subpage = false, children, aside, detailOpen }: {
+  detailOpen?: boolean;
+  aside?: ReactNode;
   active: HouseholdTab;
   accessibilityLabel: string;
   notice?: ActionNoticeProps | null;
@@ -40,9 +44,13 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
 }) {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const narrow = useWindowDimensions().width < theme.layout.navigationBreakpoint;
+  const screenWidth = useWindowDimensions().width;
+  const narrow = screenWidth < theme.layout.navigationBreakpoint;
+  const desktop = useDesktop();
+  const rail = desktop && screenWidth < theme.layout.railBreakpoint;
   const { viewState, households, currentHouseholdId, accessChangedHouseholdName, refreshHouseholds, switchHousehold, rememberHousehold } = useHouseholdContext();
   const [menuOpen, setMenuOpen] = useState(false);
+  const switcherTrigger = useRef<View>(null);
   const householdId = id ?? currentHouseholdId;
   const householdName = households.find(h => h.id === householdId)?.name ?? '';
 
@@ -91,6 +99,8 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
     <>
       <AppShell
         accessibilityLabel={accessibilityLabel}
+        aside={aside}
+        {...(detailOpen === undefined ? {} : { detailOpen })}
         {...(subpage ? (narrow ? { showBack: true, showProfile: true, title: '' } : {}) : headerRow ? { showProfile: true, headerContent: <HouseholdHeader householdName={householdName} onOpenSwitcher={openMenu} /> } : {})}
         {...(layout ? { layout } : {})}
         footer={!narrow || (tabBar && !subpage) ? (
@@ -98,8 +108,8 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
             householdId={householdId}
             active={active}
             belowActive={subpage}
-            header={<HouseholdHeader householdName={householdName} onOpenSwitcher={openMenu} placement="sidebar" />}
-            footer={<View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[3] }}><InboxButton /><AccountMenu variant="row" /></View>}
+            header={<HouseholdHeader trigger={switcherTrigger} householdName={householdName} onOpenSwitcher={openMenu} placement="sidebar" />}
+            footer={<View style={{ flexDirection: rail ? 'column' : 'row', alignItems: 'center', gap: theme.spacing[1], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[3] }}><AccountMenu variant="row" /><InboxButton /></View>}
           >
             {sidebar}
           </HouseholdNavigation>
@@ -113,6 +123,7 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
         {children}
       </AppShell>
       <HouseholdSwitcher
+        trigger={switcherTrigger}
         currentHouseholdId={householdId}
         households={households}
         onCreateNew={() => { setMenuOpen(false); router.push('/households/new'); }}
@@ -141,15 +152,17 @@ export function AccountScreen({ accessibilityLabel, refreshing, onRefresh, showI
 }) {
   const router = useRouter();
   const wide = useWindowDimensions().width >= theme.layout.navigationBreakpoint;
+  const desktop = useDesktop();
   const { currentHouseholdId } = useHouseholdContext();
   const refresh = { ...(refreshing === undefined ? {} : { refreshing }), ...(onRefresh ? { onRefresh } : {}) };
+  const content = desktop ? <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}><AccountNavigation /><ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing[6], width: '100%', maxWidth: theme.layout.editorDialogMaxWidth + theme.spacing[6] * 2 }}>{children}</ScrollView></View> : children;
   if (wide && currentHouseholdId !== null) {
-    return <HouseholdScreen active="account" subpage accessibilityLabel={accessibilityLabel} width="reading" {...refresh}>{children}</HouseholdScreen>;
+    return <HouseholdScreen active="account" subpage accessibilityLabel={accessibilityLabel} width="reading" {...(desktop ? { layout: 'workspace' as const } : {})} {...refresh}>{content}</HouseholdScreen>;
   }
   return (
-    <AppShell title="" accessibilityLabel={accessibilityLabel} showBack showProfile showInbox={showInbox} width="reading" {...refresh}
+    <AppShell title="" accessibilityLabel={accessibilityLabel} showBack showProfile showInbox={showInbox} width="reading" {...(desktop ? { layout: 'workspace' as const } : {})} {...refresh}
       onBack={() => router.canGoBack() ? router.back() : router.replace('/household-handoff')}>
-      {children}
+      {content}
     </AppShell>
   );
 }

@@ -134,7 +134,8 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   expect(task?.labels.map((label) => label.id)).toEqual([labelId]);
 
   await page.goto(`${householdPath}/tasks/${task!.id}`);
-  await expect(page.getByRole('dialog', { name: '任务详情' }).getByLabel('标签：学习')).toBeVisible();
+  // A wide screen opens the task in the side pane, a named region; a phone opens a dialog.
+  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '任务详情' }).getByLabel('标签：学习')).toBeVisible();
 
   // --- Deleting the label asks for confirmation and detaches it from the task ---
   await page.goto(`${householdPath}/labels`);

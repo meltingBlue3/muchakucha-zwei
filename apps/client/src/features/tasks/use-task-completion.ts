@@ -1,3 +1,4 @@
+import { notifyContentChanged } from '../content/content-changes';
 import { isEditConflict } from '../../ui/edit-conflict';
 import { useCallback, useState } from 'react';
 import { ApiClientError, type TaskResponseDto } from '@muchakucha/api-client';
@@ -56,6 +57,7 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
         expectedUpdatedAt: attempt.task.updatedAt,
         ...(attempt.task.recurrence ? { expectedRuleUpdatedAt: attempt.task.recurrence.updatedAt } : {}),
       });
+      notifyContentChanged(householdId, refresh);
       // Only a completion is undoable, and only until the next write.
       setUndoable(attempt.target === 'completed' ? { task: saved ?? attempt.task, previousStatus: attempt.previousStatus } : null);
       refresh();

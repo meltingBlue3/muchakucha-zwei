@@ -1,5 +1,10 @@
-import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useResourceNavigation } from '../../ui/use-resource-navigation';
+import { useOpenWindowItem } from '../../ui/route-window';
+import { useDesktop } from '../../ui/use-desktop';
+import { FilterOptions } from '../../ui/filter-options';
+import { theme } from '../../ui/theme';
+import { View } from 'react-native';
 import { PageIntro } from '../../ui/page-intro';
 import { useCallback, useRef, useState } from 'react';
 import type { RecurrenceRuleListItemDto } from '@muchakucha/api-client';
@@ -9,7 +14,7 @@ import { useHouseholdContext } from '../households/household-context';
 import { RecurrenceRuleRow } from '../recurrence/recurrence-rule-row';
 import { HouseholdScreen } from '../households/household-screen';
 import { ListGroup } from '../../ui/list-group';
-import { EmptyState, LoadError, LoadingState, Stack } from '../../ui/primitives';
+import { EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 
 const LOAD_ERROR = '无法加载重复安排，请检查网络连接后重试。';
 // Straight quotes match the published sibling copy in `recurring-filter.ts`.
@@ -25,7 +30,10 @@ function resolveDeviceTimeZone(): string {
 
 export default function RecurrenceRulesIndexRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  const openResource = useResourceNavigation();
+  const openRuleId = useOpenWindowItem('ruleId');
+  const desktop = useDesktop();
+  const [kind, setKind] = useState('all');
   const {
     currentHouseholdId,
   } = useHouseholdContext();
@@ -90,16 +98,15 @@ export default function RecurrenceRulesIndexRoute() {
 
   const handleOpenRule = useCallback((ruleId: string) => {
     if (householdId === undefined || householdId === '') return;
-    rememberRouteTrigger();
-    void router.push(
+    openResource(
       `/households/${encodeURIComponent(householdId)}/recurrence-rules/${encodeURIComponent(ruleId)}`,
     );
-  }, [householdId, router]);
+  }, [householdId, openResource]);
 
   return (
     <HouseholdScreen active="recurrence-rules" subpage accessibilityLabel="重复安排" width="reading" refreshing={refreshing} onRefresh={handleRefresh}>
       <Stack gap={5}>
-        <PageIntro title="重复安排" subtitle="会自动重复的日程和任务，按下次发生的时间排列。" />
+        <PageIntro title="重复安排" subtitle="会自动重复的日程和任务，按下次发生的时间排列。" action={desktop ? <FilterOptions label="重复安排类型" hideLabel value={kind} options={[{ value: 'all', label: '全部', name: '全部重复安排' }, { value: 'event', label: '日程', name: '重复日程' }, { value: 'task', label: '任务', name: '重复任务' }]} onChange={setKind} /> : null} />
 
         {loading && <LoadingState label="正在加载重复安排" />}
 
@@ -113,10 +120,12 @@ export default function RecurrenceRulesIndexRoute() {
             by next occurrence, ended rules after by title. Re-ordering here
             would put a second, drifting copy of that contract on the client. */}
         <ListGroup>
-          {rules.map((rule) => (
+          {desktop ? <View style={{ flexDirection: 'row', paddingHorizontal: theme.spacing[4], paddingVertical: theme.spacing[3], gap: theme.spacing[4] }}><Text variant="caption" style={{ width: theme.spacing[16] }}>类型</Text><Text variant="caption" style={{ flex: 1 }}>名称</Text><Text variant="caption" style={{ flex: 1 }}>规则</Text><Text variant="caption" style={{ width: theme.spacing[10] * 3 }}>下一次</Text></View> : null}
+          {rules.filter(rule => !desktop || kind === 'all' || rule.kind === kind).map((rule) => (
             <RecurrenceRuleRow
               key={rule.id}
               rule={rule}
+              selected={rule.id === openRuleId}
               deviceTimeZone={deviceTimeZone}
               onPress={() => handleOpenRule(rule.id)}
             />

@@ -5,11 +5,14 @@ import type { NoteResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { NoteWindow } from '../../../../../../src/features/notes/note-window';
+import { useDesktop } from '../../../../../../src/ui/use-desktop';
+import { theme } from '../../../../../../src/ui/theme';
 import { formatDateTime } from '../../../../../../src/ui/date-values';
 import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
 import { Button, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 
 export default function NoteDetailRoute() {
+  const desktop = useDesktop();
   const { id, noteId } = useLocalSearchParams<{ id: string; noteId: string }>();
   const router = useRouter();
   const [note, setNote] = useState<NoteResponseDto | null>(null);
@@ -61,7 +64,7 @@ export default function NoteDetailRoute() {
   return (
     <NoteWindow title="笔记详情" headerActions={<Button label="编辑" accessibilityLabel="编辑笔记" tone="secondary" size="compact" onPress={handleEdit} />}>
       <Stack gap={4}>
-        <Heading level={2}>{note.title}</Heading>
+        <Heading level={2} style={desktop ? theme.typography.readingTitle : undefined}>{note.title}</Heading>
         <Text variant="caption" color="inkMuted">最后更新于 {formatDateTime(new Date(note.updatedAt))}</Text>
         <MarkdownBody source={body} />
       </Stack>

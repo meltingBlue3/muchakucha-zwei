@@ -192,7 +192,7 @@ async function openHistory(page: Page) {
 
 async function openModelSettings(page: Page) {
   await page.getByRole('button', { name: '助手选项', exact: true }).click();
-  await page.getByRole('button', { name: '模型配置', exact: true }).click();
+  await page.getByRole('dialog', { name: '助手选项', exact: true }).getByRole('button', { name: '模型配置', exact: true }).click();
 }
 
 async function openProposal(page: Page) {
@@ -294,6 +294,8 @@ for (const width of [320, 390, 1440]) {
 }
 
 test('a transcription failure keeps the draft, and leaving the conversation releases the microphone', async ({ page }) => {
+  // Leaves through the phone conversation's 返回; the wide assistant keeps its conversation list beside it instead.
+  await page.setViewportSize({ width: 390, height: 844 });
   await mockMicrophone(page);
   const state = await mockAssistant(page, { voice: true });
   await openExistingConversation(page);

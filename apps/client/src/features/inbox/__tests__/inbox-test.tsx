@@ -4,7 +4,7 @@ import { ApiClientError } from '@muchakucha/api-client';
 import { useInbox } from '../use-inbox';
 import { InboxList } from '../inbox-list';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
-jest.mock('expo-router', () => ({ useFocusEffect: (effect: () => void | (() => void)) => {
+jest.mock('expo-router', () => ({ usePathname: () => '/', useFocusEffect: (effect: () => void | (() => void)) => {
   const React = jest.requireActual<typeof import('react')>('react'); React.useEffect(effect, [effect]);
 } }));
 function setup() {

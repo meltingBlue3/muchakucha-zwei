@@ -1,3 +1,4 @@
+import { notifyContentChanged } from '../../../../../src/features/content/content-changes';
 import { TaskWindow, useTaskWindowClose } from '../../../../../src/features/tasks/task-window';
 import { DraftNotice } from '../../../../../src/ui/draft-notice';
 import { useCreateWithLabels } from '../../../../../src/features/households/use-create-with-labels';
@@ -73,7 +74,12 @@ export default function CreateTaskRoute() {
       if (token === null) throw new Error('Session expired');
       return sessionApiClient.tagTask(token, id!, resourceId, { labelIds });
     },
-    onComplete: () => { workspace.clear(draftPrefix); exitAllowed.current = true; handleClose(); },
+    onComplete: () => {
+      workspace.clear(draftPrefix);
+      notifyContentChanged(id);
+      exitAllowed.current = true;
+      handleClose();
+    },
   });
   const handleSubmit = (data: CreateTaskDto) => submit(data, selectedLabelIds);
 
@@ -91,7 +97,7 @@ export default function CreateTaskRoute() {
   }
 
   return (
-    <TaskWindow title="创建任务" busy={submitting} exitAllowed={exitAllowed}>
+    <TaskWindow draftPrefix={draftPrefix} title="创建任务" busy={submitting} exitAllowed={exitAllowed}>
       <Stack gap={4}>
         <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
 

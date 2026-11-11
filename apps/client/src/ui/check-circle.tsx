@@ -2,6 +2,7 @@ import { Pressable, View } from 'react-native';
 import Check from 'lucide-react-native/icons/check';
 import Minus from 'lucide-react-native/icons/minus';
 import { theme } from './theme';
+import { useDesktopDensity } from './use-desktop';
 
 export type CheckState = 'open' | 'done' | 'void';
 
@@ -19,7 +20,8 @@ export function CheckCircle({ state, attention = false, accessibilityLabel, disa
   busy?: boolean;
   onPress(): void;
 }) {
-  const size = theme.controlSizes.checkbox;
+  const dense = useDesktopDensity();
+  const size = dense ? theme.spacing[4] : theme.controlSizes.checkbox;
   const done = state === 'done';
   const unavailable = disabled || state === 'void';
   return (
@@ -29,7 +31,7 @@ export function CheckCircle({ state, attention = false, accessibilityLabel, disa
       accessibilityState={{ disabled: unavailable, busy }}
       disabled={unavailable}
       onPress={onPress}
-      style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
+      style={({ pressed }) => ({ minWidth: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget, minHeight: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
     >
       <View
         style={{

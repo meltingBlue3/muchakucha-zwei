@@ -8,7 +8,7 @@ import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 const mockListLabels = jest.fn();
 const mockRole = { current: 'MEMBER' as 'OWNER' | 'ADMIN' | 'MEMBER' };
 
-jest.mock('expo-router', () => ({
+jest.mock('expo-router', () => ({ usePathname: () => '/',
   useLocalSearchParams: () => ({ id: 'household-1' }),
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
   useFocusEffect: (effect: () => void | (() => void)) => {

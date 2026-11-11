@@ -2,6 +2,7 @@ import { Children, isValidElement, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Heading, Inline, Stack, Text } from './primitives';
 import { theme } from './theme';
+import { useDesktop } from './use-desktop';
 
 /** One white panel of a settings page: an icon and title, then its rows. */
 export function SettingsSection({ title, icon, detail, action, children }: {
@@ -11,8 +12,9 @@ export function SettingsSection({ title, icon, detail, action, children }: {
   action?: ReactNode;
   children: ReactNode;
 }) {
+  const desktop = useDesktop();
   return (
-    <Stack gap={4} style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, padding: theme.spacing[5] }}>
+    <Stack gap={4} style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, padding: theme.spacing[5], ...(desktop ? { borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator } : {}) }}>
       <Inline gap={3}>
         {icon}
         <Stack gap={0} style={{ flex: 1 }}>

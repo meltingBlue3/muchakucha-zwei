@@ -1,3 +1,4 @@
+import { notifyContentChanged } from '../../../../../../src/features/content/content-changes';
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
 import { HouseholdContextNote } from '../../../../../../src/ui/household-components';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
@@ -69,6 +70,7 @@ export default function EditNoteRoute() {
         }
         await sessionApiClient.updateNote(token, id!, noteId!, { ...data, expectedUpdatedAt: conflict.precondition.expectedUpdatedAt });
         workspace.clear(draftPrefix);
+        notifyContentChanged(id);
         exitAllowed.current = true;
         exitEdit();
       } catch (caught: unknown) {
@@ -85,7 +87,7 @@ export default function EditNoteRoute() {
   };
 
   return (
-    <NoteWindow title="编辑笔记" busy={isSubmitting} onClose={close} exitAllowed={exitAllowed}>
+    <NoteWindow draftPrefix={draftPrefix} title="编辑笔记" busy={isSubmitting} onClose={close} exitAllowed={exitAllowed}>
       {loading ? <LoadingState label="正在加载笔记" /> : note === null ? <Stack gap={3}>
         <LoadError message={error ?? '笔记未找到或已被删除。'} onRetry={() => void fetchNote()} />
       </Stack> : <Stack gap={4}>
