@@ -6,7 +6,15 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "node": "24.18.0",
+      "pnpm": "10.34.5",
+      "env": {
+        "APP_VARIANT": "development"
+      },
+      "android": {
+        "withoutCredentials": true
+      }
     },
     "preview": {
       "distribution": "internal",
