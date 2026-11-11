@@ -2,13 +2,14 @@ import { MarkdownEditor } from './markdown-editor';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useContext, useId, useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { CreateNoteDto, NoteResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { FormMessage, Stack, FormActions } from '../../ui/primitives';
-import { FormSection, titleInputStyle } from '../../ui/compose-rows';
+import { FormSection, titleInputStyle, useComposeInputStyles } from '../../ui/compose-rows';
+import { ReadingPane } from '../../ui/app-dialog';
 import { useDesktop } from '../../ui/use-desktop';
 
 export interface NoteInput {
@@ -32,6 +33,9 @@ interface NoteFormProps {
 
 export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, isSubmitting }: NoteFormProps) {
   const activeTheme = useTheme<Theme>();
+  // Beside the notes list a note is written in reading type; in a side pane it matches the task and event forms.
+  const reading = useContext(ReadingPane);
+  const inputs = useComposeInputStyles();
   const desktop = useDesktop();
   const [form, setForm] = useWorkspaceState<NoteInput>(draftKey, () => {
     if (initial) {
@@ -82,7 +86,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
           onChangeText={(v) => updateField('title', v)}
           placeholder="添加标题"
           placeholderTextColor={activeTheme.colors.inkMuted}
-          style={[titleInputStyle, { paddingHorizontal: activeTheme.spacing[2] }, desktop ? activeTheme.typography.readingTitle : undefined]}
+          style={[desktop && !reading ? inputs.title : titleInputStyle, { paddingHorizontal: activeTheme.spacing[2] }, desktop && reading ? activeTheme.typography.readingTitle : undefined]}
           maxLength={200}
           accessibilityLabel="笔记标题"
           aria-invalid={titleError !== null}

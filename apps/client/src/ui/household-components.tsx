@@ -28,6 +28,7 @@ import { usePathname, useRouter } from 'expo-router';
 import React, { forwardRef, useCallback, useRef, useState, type RefObject } from 'react';
 import { AnchoredPopover } from './anchored-popover';
 import { desktopDetailWidth, useDesktop } from './use-desktop';
+import { layoutTransition } from './motion';
 import { useSidebarRail } from './sidebar-rail';
 import {
   Modal,
@@ -63,6 +64,8 @@ import { CardActionsMenu, type CardAction } from './card-actions-menu';
 
 interface AppShellProps {
   detailOpen?: boolean;
+  /** The width a pane beside the page takes, when it is not the usual detail width. */
+  paneWidth?: number | undefined;
   aside?: React.ReactNode;
   children: React.ReactNode;
   accessibilityLabel?: string;
@@ -108,6 +111,7 @@ export const AppShell = ({
   width: contentWidth = 'wide',
   aside,
   detailOpen = false,
+  paneWidth,
   pageHeader: showPageHeader = true,
 }: AppShellProps) => {
   const router = useRouter();
@@ -120,7 +124,7 @@ export const AppShell = ({
   const [pageHeader, setPageHeader] = useState<PageHeader | null>(null);
   const resourceWindow = /\/(tasks|events|notes|recurrence-rules)\/[^/]+(?:\/edit)?$/.test(pathname);
   const notes = accessibilityLabel === '家庭笔记';
-  const reserved = desktop && (resourceWindow || detailOpen) && !notes ? desktopDetailWidth(width) : 0;
+  const reserved = desktop && (resourceWindow || detailOpen) && !notes ? paneWidth ?? desktopDetailWidth(width) : 0;
   const desktopActions = Platform.OS === 'web' && width >= theme.layout.navigationBreakpoint;
   const wideNavigation = width >= theme.layout.navigationBreakpoint && footer !== undefined;
 
@@ -210,7 +214,7 @@ export const AppShell = ({
       ) : null}
       {/* Its parent starts below the status bar, which the keyboard view cannot see. */}
       <PageHeaderContext.Provider value={setPageHeader}>
-      <KeyboardArea style={{ flex: 1, minHeight: 0, ...(desktop ? { marginRight: reserved, ...(notes ? { width: theme.layout.notesListWidth, flex: undefined, flexGrow: 1, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator } : {}) } : {}) }} windowOffset={insets.top}>
+      <KeyboardArea style={{ flex: 1, minHeight: 0, ...(desktop ? { marginRight: reserved, ...layoutTransition('margin-right'), ...(notes ? { width: theme.layout.notesListWidth, flex: undefined, flexGrow: 1, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator } : {}) } : {}) }} windowOffset={insets.top}>
         {layout === 'workspace' ? children : <ScrollView
           contentContainerStyle={{
             flexGrow: 1,

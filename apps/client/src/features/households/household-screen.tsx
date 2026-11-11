@@ -24,8 +24,10 @@ import { useHouseholdContext } from './household-context';
  * tab bar or sidebar, and the access-changed and not-found states every page
  * shares. Switching household keeps you on the same destination.
  */
-export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing, onRefresh, floatingAction, width, sidebar, layout, headerRow = true, tabBar = true, subpage = false, children, aside, detailOpen }: {
+export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing, onRefresh, floatingAction, width, sidebar, layout, headerRow = true, tabBar = true, subpage = false, children, aside, detailOpen, paneWidth }: {
   detailOpen?: boolean;
+  /** The width of a pane beside the page when it is not the usual detail width, such as a note beside Today. */
+  paneWidth?: number | undefined;
   aside?: ReactNode;
   active: HouseholdTab;
   accessibilityLabel: string;
@@ -116,6 +118,7 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
         accessibilityLabel={accessibilityLabel}
         aside={aside}
         {...(detailOpen === undefined ? {} : { detailOpen })}
+        paneWidth={paneWidth}
         {...(subpage ? (narrow ? { showBack: true, showProfile: true, title: '' } : {}) : headerRow ? { showProfile: true, headerContent: <HouseholdHeader householdName={householdName} onOpenSwitcher={openMenu} /> } : {})}
         {...(layout ? { layout } : {})}
         {...(!headerRow ? { pageHeader: false } : {})}

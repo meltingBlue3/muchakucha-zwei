@@ -47,6 +47,8 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL: webOrigin,
+    // Panes and columns are measured at rest, without the desktop motion.
+    contextOptions: { reducedMotion: 'reduce' },
     trace: 'retain-on-failure',
   },
   webServer: [

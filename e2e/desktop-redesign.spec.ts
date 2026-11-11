@@ -281,6 +281,87 @@ test('the wide sign-in screen sets the product beside a floating form', async ({
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
 
+test('creating from Today keeps only the columns related to what is being made', async ({ page }, testInfo) => {
+  await setup(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/today`);
+  // An event keeps the dates of 接下来, a task keeps 待办, a note gets both columns' room.
+  const layouts = { 日程: { todo: false, next: true, pane: 400 }, 任务: { todo: true, next: false, pane: 400 }, 笔记: { todo: false, next: false, pane: 700 } };
+  const todo = page.getByRole('heading', { name: '待办', exact: true });
+  const next = page.getByRole('heading', { name: '接下来', exact: true });
+  for (const [kind, layout] of Object.entries(layouts)) {
+    await page.getByTestId('header-create').click();
+    // A small menu anchored under the button, with no blurred layer over the page.
+    const menu = page.getByRole('menu', { name: '创建内容', exact: true });
+    expect((await menu.boundingBox())!.width).toBe(184);
+    await expect(page.getByTestId('create-menu-blur')).toHaveCount(0);
+    await menu.getByRole('menuitem', { name: `创建${kind}`, exact: true }).click();
+    const region = page.getByRole('region', { name: `创建${kind}`, exact: true });
+    const panel = region.getByTestId('app-dialog-panel');
+    await expect(panel).toHaveCSS('opacity', '1');
+    const pane = (await panel.boundingBox())!;
+    expect(pane.width).toBe(layout.pane);
+    await expect(todo).toHaveCount(layout.todo ? 1 : 0);
+    await expect(next).toHaveCount(layout.next ? 1 : 0);
+    for (const kept of [layout.todo ? page.getByRole('link', { name: '全部任务', exact: true }) : null, layout.next ? next : null]) {
+      if (kept) expect((await kept.boundingBox())!.x + (await kept.boundingBox())!.width).toBeLessThan(pane.x);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`today-create-${kind}-1440.png`) });
+    // The way out is a round 32px button, not a bare glyph.
+    const close = region.getByRole('button', { name: `关闭创建${kind}`, exact: true });
+    expect((await close.boundingBox())!.width).toBe(32);
+    await expect(close).toHaveCSS('border-radius', '999px');
+    await close.click();
+    await expect(region).toHaveCount(0);
+    // The folded columns come back once the pane closes.
+    await expect(todo).toHaveCount(1);
+    await expect(next).toHaveCount(1);
+  }
+});
+
+test.describe('desktop motion', () => {
+  test.use({ contextOptions: { reducedMotion: 'no-preference' } });
+  /** Opacity and transform of the pane on every frame for a while after `act`. */
+  async function paneFrames(page: Page, act: () => Promise<void>) {
+    await page.evaluate(() => {
+      const frames: Array<[string, string]> = [];
+      (window as unknown as { paneFrames: typeof frames }).paneFrames = frames;
+      const start = performance.now();
+      const tick = () => {
+        const panel = document.querySelector('[data-testid="app-dialog-panel"]');
+        if (panel) { const style = getComputedStyle(panel); frames.push([style.opacity, style.transform]); }
+        if (performance.now() - start < 1200) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await act();
+    await page.waitForTimeout(1300);
+    return page.evaluate(() => (window as unknown as { paneFrames: Array<[string, string]> }).paneFrames);
+  }
+
+  test('a pane slides in once; switching items replaces it in place', async ({ page }) => {
+    await setup(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${base}/tasks`);
+    const opened = await paneFrames(page, () => page.getByRole('button', { name: '任务：交物业费 1', exact: true }).click());
+    expect(opened.some(([opacity]) => Number(opacity) < 1)).toBe(true);
+    expect(opened.some(([, transform]) => transform !== 'none' && transform !== 'matrix(1, 0, 0, 1, 0, 0)')).toBe(true);
+    expect(opened.at(-1)).toEqual(['1', 'matrix(1, 0, 0, 1, 0, 0)']);
+    const switched = await paneFrames(page, () => page.getByRole('button', { name: '任务：检查朵朵的数学作业 2', exact: true }).click());
+    expect(switched.every(([opacity]) => opacity === '1')).toBe(true);
+  });
+
+  test('with reduced motion a pane only fades in', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await setup(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${base}/tasks`);
+    const opened = await paneFrames(page, () => page.getByRole('button', { name: '任务：交物业费 1', exact: true }).click());
+    expect(opened.length).toBeGreaterThan(0);
+    expect(opened.every(([, transform]) => transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)')).toBe(true);
+  });
+});
+
 test('labels are edited in the side pane beside a list that stays usable', async ({ page }) => {
   await setup(page);
   await page.setViewportSize({ width: 1440, height: 900 });

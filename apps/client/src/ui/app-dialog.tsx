@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createContext, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { DialogBackdrop } from './dialog-backdrop';
 import { Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,10 +11,14 @@ import { Button, Heading, Inline, Text } from './primitives';
 const visuallyHidden = { position: 'absolute' as const, width: 1, height: 1, overflow: 'hidden' as const, opacity: 0 };
 import { SheetActionSlot, type SheetAction } from './sheet-action';
 import { theme } from './theme';
-import { desktopDetailWidth, useDesktop } from './use-desktop';
+import { desktopDetailWidth, todayNotePaneWidth, useDesktop } from './use-desktop';
+import { layoutTransition, usePaneEntrance } from './motion';
 import { AnchoredPopover } from './anchored-popover';
 import { holdsCommandKey, useCommandKeyLabel } from './command-key';
 import { useSidebarRail } from './sidebar-rail';
+
+/** True inside the wide reading pane beside the notes list, where a note is set in reading type. */
+export const ReadingPane = createContext(false);
 
 // React Native Web always renders Modal as a role="dialog" node, so on web that node carries
 // the dialog name and the panel stays a plain container to avoid nested dialogs.
@@ -22,7 +26,7 @@ function webDialogName(title: string): object {
   return Platform.OS === 'web' ? { 'aria-label': title } : {};
 }
 
-export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, headerActions, headerNote, reading = false, anchored = false }: {
+export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, headerActions, headerNote, reading = false, anchored = false, wide = false }: {
   title: string;
   busy: boolean;
   onClose(): void;
@@ -41,6 +45,8 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   headerNote?: string;
   reading?: boolean;
   anchored?: boolean;
+  /** Desktop pane only: as wide as Today's 待办 and 接下来 together, for a note written beside Today. */
+  wide?: boolean;
 }) {
   const panel = useRef<View>(null);
   const initial = useRef<View>(null);
@@ -67,6 +73,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
     if ((!pane && !popover) || (pane && changed)) focus();
   }, [title, focus, pane, popover]);
   const commandKey = useCommandKeyLabel();
+  const entrance = usePaneEntrance(pane);
   // In a desktop pane, Ctrl+Enter (⌘+Enter on a Mac) submits the form from anywhere inside it.
   // Listened for while capturing: React Native Web's text fields stop key events from bubbling.
   useEffect(() => {
@@ -84,17 +91,18 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   if (popover) return <AnchoredPopover scrollable title={title} trigger={trigger} onClose={close} busy={busy}>{children}{footer}</AnchoredPopover>;
   if (pane) {
     const sidebar = rail ? theme.layout.railWidth : theme.layout.navigationWidth;
-    return <View role="region" accessibilityLabel={title} pointerEvents="box-none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}><View ref={panel} testID="app-dialog-panel" style={{ position: 'absolute', pointerEvents: 'auto', right: theme.layout.workspaceInset + theme.borderWidths.default, top: theme.layout.workspaceInset + theme.layout.pageHeaderHeight + theme.borderWidths.default, bottom: theme.layout.workspaceInset + theme.borderWidths.default, ...(reading ? { left: sidebar + theme.layout.notesListWidth + theme.borderWidths.default } : { width: desktopDetailWidth(width) }), backgroundColor: theme.colors.surface, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator, borderBottomRightRadius: theme.layout.workspaceRadius, overflow: 'hidden' }}>
+    return <View role="region" accessibilityLabel={title} pointerEvents="box-none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}><View ref={panel} testID="app-dialog-panel" style={{ position: 'absolute', pointerEvents: 'auto', right: theme.layout.workspaceInset + theme.borderWidths.default, top: theme.layout.workspaceInset + theme.layout.pageHeaderHeight + theme.borderWidths.default, bottom: theme.layout.workspaceInset + theme.borderWidths.default, ...(reading ? { left: sidebar + theme.layout.notesListWidth + theme.borderWidths.default } : { width: wide ? todayNotePaneWidth(width, rail) : desktopDetailWidth(width) }), backgroundColor: theme.colors.surface, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator, borderBottomRightRadius: theme.layout.workspaceRadius, overflow: 'hidden', ...entrance }}>
       <Inline gap={1} style={{ height: theme.layout.paneHeaderHeight, paddingLeft: theme.spacing[6], paddingRight: theme.spacing[2] + 2, borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
         {/* A form names itself in the header; a detail keeps the header quiet, since its title follows in large type. */}
         <Heading ref={initial} tabIndex={-1} variant={sheetAction ? 'label' : 'meta'} color={sheetAction ? 'ink' : 'inkFaint'} level={2} numberOfLines={1} style={headerNote ? visuallyHidden : { flex: 1 }}>{title}</Heading>
         {headerNote ? <Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, fontFamily: theme.fontFamilies.numeric }}>{headerNote}</Text> : null}
         {headerActions}
         {reading && sheetAction ? <><Button label="取消" tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ width: theme.layout.desktopControl, height: theme.layout.desktopControl, borderRadius: theme.borderRadii.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed || hovered ? theme.colors.surfaceMuted : theme.colors.transparent })}><X size={theme.controlSizes.icon - 4} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /></Pressable>
+        {/* Round and filled, in ink, so it reads as the way out. */}
+        <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ width: theme.layout.desktopControl, height: theme.layout.desktopControl, marginLeft: theme.spacing[1], borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceSelected : hovered ? theme.colors.surfaceSelected : theme.colors.surfaceMuted, ...layoutTransition('background-color') })}><X size={theme.controlSizes.icon - 4} color={theme.colors.ink} strokeWidth={theme.focus.width} /></Pressable>
       </Inline>
       {reading && footer ? <View style={{ padding: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>{footer}</View> : null}
-      <SheetActionSlot.Provider value={setSheetAction}><ScrollView tabIndex={0} style={{ flex: 1, minHeight: 0 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingVertical: theme.spacing[5], paddingHorizontal: theme.spacing[6], ...(reading ? { width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[6] * 2, alignSelf: 'center' } : {}) }}>{children}</ScrollView></SheetActionSlot.Provider>
+      <ReadingPane.Provider value={reading}><SheetActionSlot.Provider value={setSheetAction}><ScrollView tabIndex={0} style={{ flex: 1, minHeight: 0 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingVertical: theme.spacing[5], paddingHorizontal: theme.spacing[6], ...(reading ? { width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[6] * 2, alignSelf: 'center' } : {}) }}>{children}</ScrollView></SheetActionSlot.Provider></ReadingPane.Provider>
       {!reading && (footer || sheetAction) ? <View style={{ padding: theme.spacing[4], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>{footer}{sheetAction ? <Inline style={{ justifyContent: 'flex-end' }}><Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, paddingLeft: theme.spacing[2], fontFamily: theme.fontFamilies.numeric }}>{`${commandKey} + Enter ${sheetAction.label}`}</Text><Button label="取消" tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></Inline> : null}</View> : null}
     </View></View>;
   }

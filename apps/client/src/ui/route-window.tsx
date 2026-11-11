@@ -21,17 +21,18 @@ export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 're
   const desktop = useDesktop();
   const state = navigation.getState();
   const baseIndex = state?.routes.slice(0, state.index).reduce((found, route, index) => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id && !/\/(tasks|events|notes|recurrence-rules)\/(new|\[)/.test(route.name) ? index : found, -1) ?? -1;
-  const hasBackground = state?.routes.slice(0, state.index).some(route =>
-    resource === 'households' || (route.name.startsWith('households/[id]/') &&
-    (route.params as { id?: string } | undefined)?.id === id),
-  ) ?? false;
+  const household = state?.routes.slice(0, state.index).filter(route => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id) ?? [];
+  const hasBackground = resource === 'households' ? (state?.index ?? 0) > 0 : household.length > 0;
+  /** The window opened over its own section's list, or drew that list itself for a direct link. */
+  const top = household[household.length - 1];
+  const overList = !top || top.name.startsWith(`households/[id]/${resource}/`);
   const close = useCallback(() => {
     if (desktop && baseIndex >= 0 && state) navigation.dispatch({ type: 'POP', payload: { count: state.index - baseIndex } });
     else if (hasBackground) router.back();
     else if (resource === 'households') router.replace('/household-handoff');
     else router.replace(`/households/${encodeURIComponent(id)}/${resource}`);
   }, [hasBackground, router, id, resource, desktop, baseIndex, state, navigation]);
-  return { close, hasBackground };
+  return { close, hasBackground, overList, background: top?.name };
 }
 
 /** Family content opens beside its list on a wide screen; account and setup windows stay centered. */
@@ -109,7 +110,9 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
   const confirmationRef = useRef(confirmation);
   confirmationRef.current = confirmation;
   const navigation = useNavigation();
-  const { close: dismiss, hasBackground } = useRouteWindowClose(resource);
+  const { close: dismiss, hasBackground, overList, background: backgroundRoute } = useRouteWindowClose(resource);
+  // Beside Today a note takes the room of 待办 and 接下来, which Today folds away for it.
+  const besideToday = resource === 'notes' && backgroundRoute === 'households/[id]/today';
   const trigger = useRef(getRouteTrigger());
   const background = useRef<View>(null);
   const parentBackground = useContext(DialogBackground);
@@ -148,7 +151,7 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
       <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={pane && hasBackground ? 'none' : focused ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
-      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes'} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })}>
+      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes' && overList} wide={besideToday} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })}>
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>

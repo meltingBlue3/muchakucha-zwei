@@ -8,6 +8,7 @@ import { Button, Heading, Stack, Text } from '../../ui/primitives';
 import { GroupLabel, ListGroup, NowMarker } from '../../ui/list-group';
 import { labelTint, theme } from '../../ui/theme';
 import { useDesktopDensity } from '../../ui/use-desktop';
+import { layoutTransition, usePresence } from '../../ui/motion';
 import { formatDate, formatWeekday, parseDateValue, toTimeValue } from '../../ui/date-values';
 import { completionActionLabel } from '../tasks/task-completion';
 import { isOverdue } from '../tasks/task-utils';
@@ -174,6 +175,21 @@ function AgendaRow({ label, time, mark, title, onPress }: { label: string; time:
 }
 
 /** The next seven days after `date`, one block per day that has something on it. */
+/**
+ * One of Today's side columns. It folds away to the right edge of the
+ * timeline instead of vanishing: its width and opacity ease out, and its
+ * content keeps its own width meanwhile so nothing reflows.
+ */
+function SideColumn({ visible, width, children }: { visible: boolean; width: number; children: ReactNode }) {
+  const { mounted, shown } = usePresence(visible);
+  if (!mounted) return null;
+  return (
+    <View aria-hidden={!shown} style={{ width: shown ? width : 0, opacity: shown ? 1 : 0, overflow: 'hidden', borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator, ...layoutTransition('width, opacity') }}>
+      <View style={{ flex: 1, minHeight: 0, width }}>{children}</View>
+    </View>
+  );
+}
+
 function UpcomingDays({ date, events, tasks, onOpenEvent, onOpenTask }: { date: string; events: EventResponseDto[]; tasks: TaskResponseDto[]; onOpenEvent(event: EventResponseDto): void; onOpenTask(task: TaskResponseDto): void }) {
   const days = Array.from({ length: 7 }, (_, index) => { const day = parseDateValue(date); day.setDate(day.getDate() + index + 1); return day; });
   const blocks = days.flatMap(day => {
@@ -196,8 +212,9 @@ function UpcomingDays({ date, events, tasks, onOpenEvent, onOpenTask }: { date: 
   );
 }
 
-export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, unscheduled, upcoming, upcomingEvents, renderTask, taskCompletion, onOpenEvent, onOpenTask, onSelectDate, detailOpen, onOpenCalendar, onOpenTasks, onCreateTask }: {
-  detailOpen: boolean;
+export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, unscheduled, upcoming, upcomingEvents, renderTask, taskCompletion, onOpenEvent, onOpenTask, onSelectDate, detail, onOpenCalendar, onOpenTasks, onCreateTask }: {
+  /** What the pane beside Today holds, if one is open. */
+  detail: 'tasks' | 'events' | 'notes' | null;
   onOpenCalendar(): void; onOpenTasks(): void; onCreateTask(): void;
   upcomingEvents: EventResponseDto[];
   date: string; nowMinutes: number; events: EventResponseDto[]; todayTasks: TaskResponseDto[]; overdue: TaskResponseDto[]; unscheduled: TaskResponseDto[]; upcoming: TaskResponseDto[];
@@ -209,6 +226,17 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
   const scroll = useRef<ScrollView>(null);
   const initialMinute = useRef(nowMinutes).current;
   const compact = useWindowDimensions().width < theme.layout.railBreakpoint;
+  const [rowWidth, setRowWidth] = useState(0);
+  // A task opened from 未来 7 天 keeps that list in view, so the clicked row stays visible.
+  const [openedFromUpcoming, setOpenedFromUpcoming] = useState(false);
+  useEffect(() => { if (!detail) setOpenedFromUpcoming(false); }, [detail]);
+  const upcomingTask = detail === 'tasks' && openedFromUpcoming && !compact;
+  // Only what relates to the open item stays: an event keeps the dates of 接下来, a task keeps 待办, a note keeps the timeline alone.
+  const showTodo = !detail || (detail === 'tasks' && !upcomingTask);
+  const showUpcoming = !compact && (!detail || detail === 'events' || upcomingTask);
+  const todoWidth = compact ? theme.layout.todayTodoWidth - theme.spacing[10] : theme.layout.todayTodoWidth;
+  // Beside a pane, 待办 and the timeline share what is left evenly.
+  const todoShare = detail && rowWidth ? Math.min(todoWidth, Math.floor(rowWidth / 2)) : todoWidth;
   useEffect(() => { const frame = requestAnimationFrame(() => scroll.current?.scrollTo({ y: Math.max(0, initialMinute - DAY_START - 90) * HOUR / 60, animated: false })); return () => cancelAnimationFrame(frame); }, [initialMinute]);
   const allDay = events.filter(event => event.allDay || toDateIso(new Date(event.startTime)) < date);
   const timed = events.filter(event => !allDay.includes(event)).sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -223,14 +251,13 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
     <CalendarGrid compact markedDates={markedDates} value={date} onSelect={onSelectDate} />
     <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4] }}>
       <Text accessibilityRole="header" aria-level={2} variant="label" style={{ marginBottom: theme.spacing[2] }}>未来 7 天</Text>
-      <UpcomingDays date={date} events={upcomingEvents} tasks={upcoming} onOpenEvent={onOpenEvent} onOpenTask={onOpenTask} />
+      <UpcomingDays date={date} events={upcomingEvents} tasks={upcoming} onOpenEvent={onOpenEvent} onOpenTask={task => { setOpenedFromUpcoming(true); onOpenTask(task); }} />
     </View>
   </Stack>;
   const groups = [{ title: '逾期', tasks: overdue, tone: 'accent' as const }, { title: '今天', tasks: dateOnly, tone: 'muted' as const }, { title: '待安排', tasks: unscheduled, tone: 'muted' as const }].filter(group => group.tasks.length > 0);
-  const column = { flexGrow: 0, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator } as const;
   const columnContent = { paddingHorizontal: theme.spacing[5], paddingBottom: theme.spacing[4], gap: theme.spacing[5] } as const;
   const todoContent = { paddingHorizontal: theme.layout.desktopColumnInset, paddingBottom: theme.spacing[4], gap: theme.spacing[3] } as const;
-  return <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}>
+  return <View onLayout={event => setRowWidth(event.nativeEvent.layout.width)} style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}>
     <View style={{ flex: 1, minWidth: 0 }}>
       <PaneTitle link={{ label: '在日历中查看', onPress: onOpenCalendar }}>时间安排</PaneTitle>
       {allDay.length ? <View style={{ flexDirection: 'row', paddingHorizontal: theme.spacing[3], marginBottom: theme.spacing[1] }}>
@@ -259,23 +286,23 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
             const due = Math.max(DAY_START, Math.min(DAY_END - TASK_SPAN, minutes(task.dueDate!)));
             // Beside an event the marker keeps to the lane the events leave free; otherwise it is as wide as its title.
             const placement = overlapsEvent(due) ? { right: 0, width: `${100 - BESIDE_TASK}%` as const } : { left: 0, maxWidth: '100%' as const };
-            return <TimelineTask key={task.id} task={task} top={at(due)} placement={placement} completion={taskCompletion(task)} onOpen={() => onOpenTask(task)} />;
+            return <TimelineTask key={task.id} task={task} top={at(due)} placement={placement} completion={taskCompletion(task)} onOpen={() => { setOpenedFromUpcoming(false); onOpenTask(task); }} />;
           })}
           {nowShown ? <View pointerEvents="none" style={{ position: 'absolute', left: -theme.layout.timeColumn, right: 0, top: at(nowMinutes) - theme.typography.time.lineHeight / 2 }}><NowMarker time={clock(nowMinutes)} /></View> : null}
         </View>
       </ScrollView>
     </View>
-    <View style={{ ...column, width: compact ? theme.layout.todayTodoWidth - theme.spacing[10] : theme.layout.todayTodoWidth }}>
+    <SideColumn visible={showTodo} width={todoShare}>
       <PaneTitle link={{ label: '全部任务', onPress: onOpenTasks }}>待办</PaneTitle>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={todoContent}>
         {groups.length ? groups.map(group => <View key={group.title}><GroupLabel flush tone={group.tone}>{`${group.title}（${group.tasks.length}）`}</GroupLabel><ListGroup flush>{group.tasks.map(renderTask)}</ListGroup></View>) : <Text variant="bodySm">今天没有待办。</Text>}
         <Button label={groups.length ? '再添一项待办' : '添加待办'} tone="secondary" size="compact" style={{ alignSelf: 'flex-start', marginTop: theme.spacing[1] }} onPress={onCreateTask} />
         {compact ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], gap: theme.spacing[4] }}><Heading variant="section">接下来</Heading>{next}</View> : null}
       </ScrollView>
-    </View>
-    {!compact && !detailOpen ? <View style={{ ...column, width: theme.layout.todayUpcomingWidth }}>
+    </SideColumn>
+    {!compact ? <SideColumn visible={showUpcoming} width={theme.layout.todayUpcomingWidth}>
       <PaneTitle>接下来</PaneTitle>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={columnContent}>{next}</ScrollView>
-    </View> : null}
+    </SideColumn> : null}
   </View>;
 }

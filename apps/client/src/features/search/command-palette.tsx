@@ -86,7 +86,6 @@ export function SearchEntry({ rail, trigger, onPress }: { rail: boolean; trigger
       accessibilityRole="button"
       accessibilityLabel="搜索"
       {...{ 'aria-keyshortcuts': 'Control+K Meta+K' }}
-      {...(rail ? { title: `搜索（${commandKey} K）` } : {})}
       onPress={onPress}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: rail ? 'center' : 'flex-start', gap: theme.spacing[2], height: theme.layout.desktopControl, paddingHorizontal: rail ? 0 : theme.spacing[2] + 2, borderRadius: theme.borderRadii.sm, backgroundColor: pressed || hovered ? theme.colors.surfaceSelected : theme.colors.surfaceMuted })}
     >

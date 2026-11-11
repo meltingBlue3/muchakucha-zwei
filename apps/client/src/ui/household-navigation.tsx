@@ -33,7 +33,6 @@ export function SidebarToggle() {
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ expanded: !rail }}
-      {...{ title: label }}
       onPress={toggle}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ width: theme.controlSizes.avatar, height: theme.controlSizes.avatar, borderRadius: theme.borderRadii.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed || hovered ? theme.colors.surfaceMuted : theme.colors.transparent })}
     >

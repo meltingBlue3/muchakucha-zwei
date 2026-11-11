@@ -9,7 +9,8 @@ export default defineConfig({
   workers: 1,
   // Metro development bundles make multi-page checks slower than production builds.
   timeout: 60_000,
-  use: { baseURL: previewUrl ?? 'http://localhost:8081', viewport: { width: 390, height: 844 }, trace: 'retain-on-failure' },
+  // Panes and columns are measured at rest; desktop-redesign.spec.ts checks the motion itself.
+  use: { baseURL: previewUrl ?? 'http://localhost:8081', viewport: { width: 390, height: 844 }, contextOptions: { reducedMotion: 'reduce' }, trace: 'retain-on-failure' },
   webServer: previewUrl ? undefined : {
     command: 'pnpm --filter client exec expo start --web --port 8081',
     url: 'http://localhost:8081',

@@ -248,6 +248,8 @@ export const theme = createTheme({
     /** Horizontal padding of a desktop workspace column; flush lists bleed through it. */
     desktopColumnInset: 24,
     desktopSearchWidth: 220,
+    /** The desktop 创建 menu under the page header's button. */
+    createMenuWidth: 184,
     /** The Ctrl K search panel. */
     commandPaletteWidth: 560,
     /** The member table's 用户名 and 角色 columns. */
@@ -264,6 +266,8 @@ export const theme = createTheme({
     calendarAgendaWidth: 340,
     todayTodoWidth: 380,
     todayUpcomingWidth: 320,
+    /** Today's timeline never narrows past this while a wide pane sits beside it. */
+    todayTimelineMinWidth: 320,
     timelineHourHeight: 48,
     authPanelWidth: 560,
     authFormWidth: 360,
@@ -306,6 +310,11 @@ export const theme = createTheme({
   motion: {
     transitionMs: 180,
     reducedTransitionMs: 80,
+    /** A desktop pane sliding in and the columns making room for it. */
+    paneMs: 200,
+    paneOffset: 16,
+    /** Quick to start, gentle to settle. */
+    easing: 'cubic-bezier(0.2, 0, 0, 1)',
   },
 });
 

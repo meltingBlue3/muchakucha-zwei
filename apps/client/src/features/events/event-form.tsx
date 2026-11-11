@@ -12,6 +12,7 @@ import type { CreateEventDto, EventResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Stack, Text, FormActions } from '../../ui/primitives';
 import { FormRow, FormSection, RowMessage, rowIcon, useComposeInputStyles } from '../../ui/compose-rows';
+import { useDesktopDensity } from '../../ui/use-desktop';
 import { DateField } from '../../ui/date-field';
 import { LabelPicker } from '../labels/label-picker';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
@@ -108,6 +109,7 @@ function eventInputFrom(initial: EventResponseDto): EventInput {
 export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: EventFormProps) {
   const activeTheme = useTheme<Theme>();
   const inputs = useComposeInputStyles();
+  const dense = useDesktopDensity();
   // CR-03: the /series endpoint has no way to detach an occurrence into a
   // standalone item — selecting 不重复 here omits `recurrence` from the
   // payload, which the server reads as "unchanged" and just continues the
@@ -247,7 +249,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
 
       <FormSection>
         <FormRow icon={rowIcon(Clock)}>
-          <Text style={{ flex: 1 }}>全天</Text>
+          <Text variant={dense ? 'bodySm' : 'body'} style={{ flex: 1 }}>全天</Text>
           <Switch
             disabled={isSubmitting}
             accessibilityLabel="全天日程"

@@ -1,6 +1,7 @@
 import { useContentChanges } from '../../../../src/features/content/content-changes';
 import { useResourceNavigation } from '../../../../src/ui/use-resource-navigation';
-import { useDesktop } from '../../../../src/ui/use-desktop';
+import { todayNotePaneWidth, useDesktop } from '../../../../src/ui/use-desktop';
+import { useSidebarRail } from '../../../../src/ui/sidebar-rail';
 import { DesktopToday } from '../../../../src/features/events/desktop-today';
 import { useOpenWindowItem } from '../../../../src/ui/route-window';
 import { FloatingCreateButton } from '../../../../src/ui/floating-create-button';
@@ -35,7 +36,9 @@ export default function TodayRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const desktop = useDesktop();
-  const detailOpen = /\/(tasks|events)\/[^/]+(?:\/edit)?$/.test(usePathname());
+  // What the pane beside Today holds decides which of Today's columns stay.
+  const detail = (/\/(tasks|events|notes)\/[^/]+(?:\/edit)?$/.exec(usePathname())?.[1] ?? null) as 'tasks' | 'events' | 'notes' | null;
+  const { rail } = useSidebarRail();
   const openResource = useResourceNavigation();
   const openTaskId = useOpenWindowItem('taskId');
   const openEventId = useOpenWindowItem('eventId');
@@ -283,6 +286,7 @@ export default function TodayRoute() {
       active="today"
       accessibilityLabel="今日视图"
       layout={desktop ? 'workspace' : 'document'}
+      paneWidth={desktop && detail === 'notes' ? todayNotePaneWidth(width, rail) : undefined}
       notice={completion.undoNotice}
       refreshing={refreshing}
       onRefresh={handleRefresh}
@@ -299,7 +303,7 @@ export default function TodayRoute() {
         {error !== null ? <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载今日数据" /> : null}
 
         {ready && viewState !== 'resolving' ? (
-          desktop ? <DesktopToday detailOpen={detailOpen} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenTasks={() => router.push(`/households/${encodeURIComponent(householdId!)}/tasks`)} onCreateTask={create('tasks')} /> : wide && secondary
+          desktop ? <DesktopToday detail={detail} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenTasks={() => router.push(`/households/${encodeURIComponent(householdId!)}/tasks`)} onCreateTask={create('tasks')} /> : wide && secondary
             ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing[8] }}>
                 <View style={{ flex: 3, minWidth: 0 }}>{primary}</View>
                 <View style={{ flex: 2, minWidth: 0 }}>{secondary}</View>
