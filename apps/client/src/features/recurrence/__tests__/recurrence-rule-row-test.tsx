@@ -26,6 +26,9 @@ const baseRule: RecurrenceRuleListItemDto = {
   timezone: TZ,
   startTimeLocal: null,
   durationMinutes: null,
+  lunar: null,
+  occasion: null,
+  birthYear: null,
   nextOccurrenceDate: '2026-08-18',
 };
 

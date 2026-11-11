@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Plus from 'lucide-react-native/icons/plus';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import X from 'lucide-react-native/icons/x';
+import Cake from 'lucide-react-native/icons/cake';
 import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
 import NotebookText from 'lucide-react-native/icons/notebook-text';
@@ -12,8 +13,8 @@ import { DialogBackdrop } from './dialog-backdrop';
 import { Button, Text } from './primitives';
 import { theme } from './theme';
 
-type CreateAction = { kind: 'events' | 'tasks' | 'notes'; label: string; onPress(): void };
-const icons = { events: CalendarDays, tasks: CircleCheck, notes: NotebookText };
+type CreateAction = { kind: 'events' | 'tasks' | 'notes' | 'birthdays'; label: string; onPress(): void };
+const icons = { events: CalendarDays, tasks: CircleCheck, notes: NotebookText, birthdays: Cake };
 type Props = { label: string; onPress(): void; actions?: never } | { label?: never; onPress?: never; actions: CreateAction[] };
 
 export function FloatingCreateButton(props: Props) {

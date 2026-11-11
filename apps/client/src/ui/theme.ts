@@ -111,6 +111,8 @@ export const theme = createTheme({
     display: { fontSize: 30, fontWeight: '700' as const, lineHeight: 38 },
     time: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
     numeral: { fontSize: 15, fontWeight: '400' as const, lineHeight: 20 },
+    /** The lunar day, solar term or festival under a date in a month grid. */
+    lunarDay: { fontSize: 10, fontWeight: '400' as const, lineHeight: 13 },
   },
   textVariants: {
     defaults: {

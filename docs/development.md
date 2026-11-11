@@ -108,6 +108,7 @@ EXPO_PUBLIC_API_ORIGIN=http://<开发机局域网 IP>:3100 pnpm --filter client 
 
 - 按 [testing.md](agent/testing.md#pick-the-smallest-sufficient-check) 选择检查，命令统一见其 [Commands](agent/testing.md#commands)。集成测试和 E2E 会清空数据库，只能使用回环地址、库名含独立 `test` 片段的可丢弃数据库；连接与迁移步骤见 [environment.md](agent/environment.md#test-services)。
 - API 契约通过 `pnpm openapi:generate` 生成，并用 `pnpm openapi:check` 检查；`packages/api-client` 仅存生成产物。
+- `packages/lunar` 是客户端与 API 共用的农历模块，以 TypeScript 源码发布：Metro 和 Vitest 直接编译，API 运行时由 Node 24 的类型剥离加载，所以 API 构建不需要先构建它。它只能是单个文件、只用可擦除的语法（`erasableSyntaxOnly`），不能有相对导入。年份表按 GB/T 33661 的规则由朔日和中气算出，覆盖农历 1900–2100 年；`index.test.ts` 逐日对照 Node 自带的 ICU，并列出 ICU 因朔日或中气贴近午夜而算错的年份。
 - 协作编辑提交原始 `expectedUpdatedAt`，重复实例另带 `expectedRuleUpdatedAt`。冲突时整次修改不写入，保留草稿及原始版本，查看最新内容后再整理保存；刷新或重试不能自动接受新版本。草稿实现见 [client.md](agent/client.md#drafts)。
 - 成员离开家庭保留共享内容，清理其任务负责人关系及后续重复分配；所有者需先交接所有权。角色与权限入口见 [context.md](agent/context.md#api)。
 - 日历按请求起止日期补齐重复实例，范围最多 366 天，不推进后台连续生成进度，也不补齐中间未查询的日期。

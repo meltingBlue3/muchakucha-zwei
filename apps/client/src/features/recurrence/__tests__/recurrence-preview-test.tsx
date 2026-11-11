@@ -1,7 +1,7 @@
 import type { RecurrenceRuleListItemDto } from '@muchakucha/api-client';
 import { recurrencePreview } from '../recurrence-preview';
 
-const rule: RecurrenceRuleListItemDto = { id: 'rule', title: '月末整理', kind: 'task', freq: 'monthly', interval: 1, startsOn: '2026-01-31', endsOn: null, count: null, timezone: 'Asia/Shanghai', byWeekday: [], startTimeLocal: null, durationMinutes: null, nextOccurrenceDate: '2026-01-31', updatedAt: '2026-01-01T00:00:00Z' };
+const rule: RecurrenceRuleListItemDto = { id: 'rule', title: '月末整理', kind: 'task', freq: 'monthly', interval: 1, startsOn: '2026-01-31', endsOn: null, count: null, timezone: 'Asia/Shanghai', byWeekday: [], startTimeLocal: null, durationMinutes: null, lunar: null, occasion: null, birthYear: null, nextOccurrenceDate: '2026-01-31', updatedAt: '2026-01-01T00:00:00Z' };
 
 test('month-end previews clamp without moving the original day anchor', () => {
   expect(recurrencePreview(rule, 3)).toEqual(['2026-01-31', '2026-02-28', '2026-03-31']);

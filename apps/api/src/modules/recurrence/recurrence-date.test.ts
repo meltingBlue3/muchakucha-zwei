@@ -317,3 +317,36 @@ describe('nextOccurrenceFor', () => {
     expect(nextOccurrenceFor(rule, parseIsoDate('2026-08-13'))).toEqual(parseIsoDate('2027-06-01'));
   });
 });
+
+describe('lunar yearly rules', () => {
+  const birthday = (startsOn: string, month: number, day: number, extra: Partial<WalkRule> = {}): WalkRule => ({
+    freq: 'yearly', interval: 1, startsOn: parseIsoDate(startsOn), lunar: { month, day }, ...extra,
+  });
+
+  test('falls on the lunar date each year, starting with the first one on or after startsOn', () => {
+    // 十月十五: 2026-11-23, then wherever 十月 falls in each following lunar year.
+    expect(occurrenceDates(birthday('2026-11-11', 10, 15), '2029-12-31')).toEqual(['2026-11-23', '2027-11-12', '2028-11-30', '2029-11-20']);
+    // Already past this lunar year's 十月十五, so the series begins next lunar year.
+    expect(occurrenceDates(birthday('2026-11-24', 10, 15), '2027-12-31')).toEqual(['2027-11-12']);
+  });
+
+  test('counts lunar years for an interval and a count from the first occurrence', () => {
+    expect(occurrenceDates(birthday('2026-11-24', 10, 15, { interval: 2 }), '2031-12-31')).toEqual(['2027-11-12', '2029-11-20', '2031-11-29']);
+    expect(occurrenceDates(birthday('2026-11-11', 10, 15, { count: 2 }))).toEqual(['2026-11-23', '2027-11-12']);
+  });
+
+  test('starts in the lunar year a January date belongs to', () => {
+    // 2027-01-20 is still lunar 2026 (腊月), whose 腊月廿三 is 2027-01-30.
+    expect(occurrenceDates(birthday('2027-01-20', 12, 23), '2028-02-28')).toEqual(['2027-01-30', '2028-01-19']);
+  });
+
+  test('moves 三十 to 廿九 in a short month and ends with the lunar table', () => {
+    // 2027-02-05 is 除夕, the 29th day of a short 腊月.
+    expect(occurrenceDates(birthday('2027-01-01', 12, 30), '2027-12-31')).toEqual(['2027-02-05']);
+    expect(occurrenceDates(birthday('2099-01-01', 1, 1), '2105-12-31')).toEqual(['2099-01-21', '2100-02-09']);
+  });
+
+  test('has a next occurrence within the usual lookahead', () => {
+    expect(nextOccurrenceFor(birthday('2020-01-01', 1, 13), parseIsoDate('2026-11-11'))).toEqual(parseIsoDate('2027-02-18'));
+  });
+});

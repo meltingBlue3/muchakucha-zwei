@@ -19,7 +19,7 @@ jest.mock('../../../ui/date-field', () => ({
 const rule: RecurrenceResponseDto = {
   id: 'rule', updatedAt: '2026-09-01T00:00:00.000Z',
   freq: 'weekly', interval: 1, byWeekday: [1], startsOn: '2026-09-28',
-  endsOn: null, count: null, timezone: 'Asia/Shanghai', startTimeLocal: '09:00', durationMinutes: 60,
+  endsOn: null, count: null, timezone: 'Asia/Shanghai', startTimeLocal: '09:00', durationMinutes: 60, lunar: null, occasion: null, birthYear: null,
 };
 const common = {
   id: 'item', householdId: 'household', title: '家庭安排', description: null,

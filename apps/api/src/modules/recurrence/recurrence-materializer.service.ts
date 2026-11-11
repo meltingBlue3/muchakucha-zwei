@@ -10,6 +10,7 @@ import {
   formatIsoDate,
   localDateTimeToInstant,
   parseIsoDate,
+  lunarAnchorOf,
   walkOccurrences,
   type CalendarDate,
 } from './recurrence-date.js';
@@ -149,6 +150,7 @@ export class RecurrenceMaterializerService {
             freq: rule.freq, interval: rule.interval, byWeekday: rule.byWeekday,
             startsOn: calendarDate(rule.startsOn),
             endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn), count: rule.count,
+            lunar: lunarAnchorOf(rule),
           }, { from: cursor, horizon });
           await this.materializeEventOccurrences(tx, rule, template, occurrences);
           if (occurrences.length < RECURRENCE_MAX_INSTANCES_PER_RUN) break;
@@ -204,6 +206,7 @@ export class RecurrenceMaterializerService {
         startsOn: calendarDate(rule.startsOn),
         endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn),
         count: rule.count,
+        lunar: lunarAnchorOf(rule),
       }, { horizon, from: walkStart });
 
       const created = taskTemplate !== null

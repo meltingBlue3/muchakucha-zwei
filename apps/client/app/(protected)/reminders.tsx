@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Pressable, Switch, View } from 'react-native';
+import { useCallback, useRef, useState, type RefObject } from 'react';
+import { Pressable, View } from 'react-native';
 import Bell from 'lucide-react-native/icons/bell';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import House from 'lucide-react-native/icons/house';
@@ -16,7 +16,7 @@ import { AppDialog } from '../../src/ui/app-dialog';
 import { OptionRow } from '../../src/ui/compose-rows';
 import { PageIntro } from '../../src/ui/page-intro';
 import { Banner, Button, LoadError, LoadingState, Stack, Text } from '../../src/ui/primitives';
-import { SettingsRows, SettingsSection } from '../../src/ui/settings-section';
+import { SettingsRows, SettingsSection, SwitchRow } from '../../src/ui/settings-section';
 import { theme } from '../../src/ui/theme';
 
 type Choosing = 'task' | 'event' | 'time';
@@ -47,28 +47,6 @@ function SettingRow({ label, value, trigger, disabled, onPress }: { label: strin
       <Text variant="bodySm">{value}</Text>
       <ChevronRight size={theme.controlSizes.icon} color={theme.colors.inkFaint} strokeWidth={theme.controlSizes.iconStroke} />
     </Pressable>
-  );
-}
-
-/** A switch as a row; `name` is its accessible name when the label alone would not say what it switches. */
-function SwitchRow({ label, name = label, value, disabled, onChange, children }: { label: string; name?: string; value: boolean; disabled: boolean; onChange(value: boolean): void; children?: ReactNode }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.controlSizes.touchTarget, paddingVertical: theme.spacing[2] }}>
-      <View style={{ flex: 1 }}>
-        <Text>{label}</Text>
-        {children}
-      </View>
-      <Switch
-        accessibilityLabel={name}
-        disabled={disabled}
-        value={value}
-        onValueChange={onChange}
-        // As in the event form: a neutral track when off, ink when on, a white thumb.
-        trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-        thumbColor={theme.colors.surface}
-        ios_backgroundColor={theme.colors.border}
-      />
-    </View>
   );
 }
 

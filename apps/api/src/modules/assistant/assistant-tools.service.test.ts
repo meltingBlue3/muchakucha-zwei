@@ -175,6 +175,7 @@ describe('assistant tool boundary', () => {
       recurrence: {
         id: recordId, updatedAt: version, freq: 'daily', interval: 1, byWeekday: [], startsOn: '2026-10-04',
         endsOn: null, count: null, timezone: 'Asia/Shanghai', materializedThrough: null, startTimeLocal: null, durationMinutes: null,
+        lunar: null, occasion: null, birthYear: null,
       },
     });
     await expect(tools.prepare(actor, call('delete_task', { id: recordId, expectedUpdatedAt: version }))).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED' } });

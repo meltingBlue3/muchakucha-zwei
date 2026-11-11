@@ -146,6 +146,13 @@ const recurrence: Schema = {
     timezone: string(64, 'IANA timezone, for example Asia/Shanghai.'),
     startTimeLocal: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' },
     durationMinutes: { type: 'integer', minimum: 0, maximum: 1440 },
+    lunar: {
+      type: 'object', additionalProperties: false, required: ['month', 'day'],
+      description: 'Only with freq yearly: repeat on this Chinese lunar month and day (农历), such as {"month":10,"day":15} for 十月十五; 冬月 is 11 and 腊月 is 12. startsOn may be any date before the first occurrence.',
+      properties: { month: { type: 'integer', minimum: 1, maximum: 12 }, day: { type: 'integer', minimum: 1, maximum: 30 } },
+    },
+    occasion: { type: 'string', enum: ['birthday'], description: 'Marks a yearly all-day event series as someone\'s birthday.' },
+    birthYear: { type: 'integer', minimum: 1900, maximum: 2100, description: 'Only for a birthday whose year of birth the user stated; the lunar year for a lunar birthday.' },
   },
 };
 

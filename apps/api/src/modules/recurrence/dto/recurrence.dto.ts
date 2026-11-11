@@ -27,6 +27,8 @@ export const RECURRENCE_WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
 export const RECURRENCE_MAX_COUNT = 1000;
 export const RECURRENCE_MAX_INTERVAL = 52;
 export const SERIES_SCOPES = ['this_only', 'this_and_following'] as const;
+export const RECURRENCE_OCCASIONS = ['birthday'] as const;
+export type RecurrenceOccasion = (typeof RECURRENCE_OCCASIONS)[number];
 export type SeriesScope = (typeof SERIES_SCOPES)[number];
 
 export function IsIanaTimeZone(validationOptions?: ValidationOptions): PropertyDecorator {
@@ -52,6 +54,17 @@ export function IsIanaTimeZone(validationOptions?: ValidationOptions): PropertyD
       },
     });
   };
+}
+
+/** A lunar month and day; someone born in a leap month gives the ordinary month. */
+export class LunarAnchorDto {
+  @ApiProperty({ minimum: 1, maximum: 12 })
+  @IsInt() @Min(1) @Max(12)
+  month!: number;
+
+  @ApiProperty({ minimum: 1, maximum: 30, description: '30 falls on the 29th in a year whose month is short.' })
+  @IsInt() @Min(1) @Max(30)
+  day!: number;
 }
 
 export class RecurrenceDto {
@@ -91,9 +104,41 @@ export class RecurrenceDto {
   @ApiPropertyOptional({ minimum: 0, maximum: 1440 })
   @IsOptional() @IsInt() @Min(0) @Max(1440)
   durationMinutes?: number;
+
+  @ApiPropertyOptional({
+    type: () => LunarAnchorDto,
+    description: 'Repeats a yearly rule on this lunar month and day instead of that of startsOn; the first occurrence is the first one on or after startsOn.',
+  })
+  @IsOptional() @ValidateNested() @Type(() => LunarAnchorDto)
+  lunar?: LunarAnchorDto;
+
+  @ApiPropertyOptional({
+    enum: RECURRENCE_OCCASIONS,
+    nullable: true,
+    description: 'Marks a yearly series as a birthday. An edit that omits it keeps the value of the series; null clears it.',
+  })
+  @IsOptional() @IsIn(RECURRENCE_OCCASIONS)
+  occasion?: RecurrenceOccasion | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    minimum: 1900,
+    maximum: 2100,
+    nullable: true,
+    description: 'Year of birth for a birthday, the lunar year for a lunar one. An edit that omits it keeps the value of the series; null clears it.',
+  })
+  @IsOptional() @IsInt() @Min(1900) @Max(2100)
+  birthYear?: number | null;
 }
 
-export class RecurrenceResponseDto {
+/** What a rule repeats on besides its frequency, and what it marks. */
+class SeriesMarksResponse {
+  @ApiProperty({ type: () => LunarAnchorDto, nullable: true }) lunar!: LunarAnchorDto | null;
+  @ApiProperty({ enum: RECURRENCE_OCCASIONS, nullable: true }) occasion!: RecurrenceOccasion | null;
+  @ApiProperty({ type: Number, nullable: true }) birthYear!: number | null;
+}
+
+export class RecurrenceResponseDto extends SeriesMarksResponse {
   @ApiProperty()
   updatedAt!: string;
 
@@ -202,7 +247,7 @@ export class SeriesMutationResponseDto {
   recurrenceRuleId!: string;
 }
 
-export class RecurrenceRuleListItemDto {
+export class RecurrenceRuleListItemDto extends SeriesMarksResponse {
   @ApiProperty()
   updatedAt!: string;
 

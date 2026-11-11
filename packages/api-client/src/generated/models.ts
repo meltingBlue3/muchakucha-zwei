@@ -188,6 +188,15 @@ export interface UpdateEventDto {
   recurrence?: RecurrenceDto;
 }
 
+/** A lunar month and day; someone born in a leap month gives the ordinary month. */
+export interface LunarAnchorDto {
+  month: number;
+  /** 30 falls on the 29th in a year whose month is short. */
+  day: number;
+}
+
+export type RecurrenceOccasion = 'birthday';
+
 export interface RecurrenceDto {
   freq: string;
   interval?: number;
@@ -198,6 +207,12 @@ export interface RecurrenceDto {
   timezone: string;
   startTimeLocal?: string;
   durationMinutes?: number;
+  /** Repeats a yearly rule on this lunar month and day; the first occurrence is the first one on or after startsOn. */
+  lunar?: LunarAnchorDto;
+  /** Marks a yearly series as a birthday. An edit that omits it keeps the value of the series; null clears it. */
+  occasion?: RecurrenceOccasion | null;
+  /** Year of birth, the lunar year for a lunar birthday. An edit that omits it keeps the value of the series; null clears it. */
+  birthYear?: number | null;
 }
 
 export interface RecurrenceResponseDto {
@@ -213,6 +228,9 @@ export interface RecurrenceResponseDto {
   materializedThrough?: string | null;
   startTimeLocal?: string | null;
   durationMinutes?: number | null;
+  lunar: LunarAnchorDto | null;
+  occasion: RecurrenceOccasion | null;
+  birthYear: number | null;
 }
 
 export type SeriesScope = 'this_only' | 'this_and_following';
@@ -264,6 +282,9 @@ export interface RecurrenceRuleListItemDto {
   timezone: string;
   startTimeLocal: string | null;
   durationMinutes: number | null;
+  lunar: LunarAnchorDto | null;
+  occasion: RecurrenceOccasion | null;
+  birthYear: number | null;
   nextOccurrenceDate: string | null;
 }
 

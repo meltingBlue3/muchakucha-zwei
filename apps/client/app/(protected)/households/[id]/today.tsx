@@ -24,6 +24,7 @@ import { HouseholdScreen } from '../../../../src/features/households/household-s
 import { EventCard } from '../../../../src/features/events/event-card';
 import { TaskCard } from '../../../../src/features/tasks/task-card';
 import { toDateIso } from '../../../../src/features/events/calendar-utils';
+import { lunarDateOn, useLunarCalendar } from '../../../../src/features/lunar/lunar-calendar';
 import { partitionTodayTasks } from '../../../../src/features/tasks/today-tasks';
 import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../../../src/ui/primitives';
 import { theme } from '../../../../src/ui/theme';
@@ -37,7 +38,9 @@ export default function TodayRoute() {
   const router = useRouter();
   const desktop = useDesktop();
   // What the pane beside Today holds decides which of Today's columns stay.
-  const detail = (/\/(tasks|events|notes)\/[^/]+(?:\/edit)?$/.exec(usePathname())?.[1] ?? null) as 'tasks' | 'events' | 'notes' | null;
+  // A birthday's form folds Today as an event's does.
+  const opened = /\/(tasks|events|notes|birthdays)\/[^/]+(?:\/edit)?$/.exec(usePathname())?.[1] ?? null;
+  const detail = (opened === 'birthdays' ? 'events' : opened) as 'tasks' | 'events' | 'notes' | null;
   const { rail } = useSidebarRail();
   const openResource = useResourceNavigation();
   const openTaskId = useOpenWindowItem('taskId');
@@ -64,6 +67,7 @@ export default function TodayRoute() {
   const [allUnscheduled, setAllUnscheduled] = useWorkspaceState(`view:${id}:today:allUnscheduled`, false);
   const now = useMinuteClock();
   const currentDate = toDateIso(now.date);
+  const lunarToday = useLunarCalendar() ? lunarDateOn(currentDate) : null;
   // The API pads its range for client time zones; only local dates belong here.
   const todayEvents = useMemo(() => events.filter(event =>
     toDateIso(new Date(event.startTime)) <= currentDate &&
@@ -176,7 +180,7 @@ export default function TodayRoute() {
     [router, householdId, openResource],
   );
 
-  const create = (kind: 'events' | 'tasks' | 'notes') => () => {
+  const create = (kind: 'events' | 'tasks' | 'notes' | 'birthdays') => () => {
     if (kind === 'events') setCalendarDate(todayIso());
     rememberRouteTrigger();
     openResource(`/households/${encodeURIComponent(householdId!)}/${kind}/new`);
@@ -208,6 +212,7 @@ export default function TodayRoute() {
     <Text variant="bodySm">
       {/* On a wide screen the sidebar names the page 今日, so the header carries the date in its summary. */}
       {desktop ? `${formatDate(now.date)} ${formatWeekday(now.date)}` : formatWeekday(now.date)}
+      {lunarToday ? ` · ${lunarToday}` : ''}
       {ready ? ` · ${todayEvents.length} 个日程 · ${todayTasks.length} 件待办` : ''}
       {ready && overdueTasks.length > 0 ? <Text variant="bodySm" color="accent">{` · ${overdueTasks.length} 件逾期`}</Text> : null}
     </Text>
@@ -294,6 +299,7 @@ export default function TodayRoute() {
         { kind: 'events', label: '创建日程', onPress: create('events') },
         { kind: 'tasks', label: '创建任务', onPress: create('tasks') },
         { kind: 'notes', label: '创建笔记', onPress: create('notes') },
+        { kind: 'birthdays', label: '添加生日', onPress: create('birthdays') },
       ]} />}
     >
       <Stack gap={desktop ? 0 : 6} style={desktop ? { flex: 1, minHeight: 0 } : undefined}>

@@ -3518,6 +3518,26 @@
           "successorMembershipId"
         ]
       },
+      "LunarAnchorDto": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 12
+          },
+          "day": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 30,
+            "description": "30 falls on the 29th in a year whose month is short."
+          }
+        },
+        "required": [
+          "month",
+          "day"
+        ]
+      },
       "RecurrenceDto": {
         "type": "object",
         "properties": {
@@ -3567,6 +3587,29 @@
             "type": "number",
             "minimum": 0,
             "maximum": 1440
+          },
+          "lunar": {
+            "description": "Repeats a yearly rule on this lunar month and day instead of that of startsOn; the first occurrence is the first one on or after startsOn.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LunarAnchorDto"
+              }
+            ]
+          },
+          "occasion": {
+            "type": "string",
+            "enum": [
+              "birthday"
+            ],
+            "nullable": true,
+            "description": "Marks a yearly series as a birthday. An edit that omits it keeps the value of the series; null clears it."
+          },
+          "birthYear": {
+            "type": "number",
+            "minimum": 1900,
+            "maximum": 2100,
+            "nullable": true,
+            "description": "Year of birth for a birthday, the lunar year for a lunar one. An edit that omits it keeps the value of the series; null clears it."
           }
         },
         "required": [
@@ -3662,6 +3705,26 @@
       "RecurrenceRuleListItemDto": {
         "type": "object",
         "properties": {
+          "lunar": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LunarAnchorDto"
+              }
+            ]
+          },
+          "occasion": {
+            "type": "string",
+            "enum": [
+              "birthday"
+            ],
+            "nullable": true
+          },
+          "birthYear": {
+            "type": "number",
+            "nullable": true
+          },
           "updatedAt": {
             "type": "string"
           },
@@ -3725,6 +3788,9 @@
           }
         },
         "required": [
+          "lunar",
+          "occasion",
+          "birthYear",
           "updatedAt",
           "id",
           "kind",
@@ -3859,6 +3925,26 @@
       "RecurrenceResponseDto": {
         "type": "object",
         "properties": {
+          "lunar": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LunarAnchorDto"
+              }
+            ]
+          },
+          "occasion": {
+            "type": "string",
+            "enum": [
+              "birthday"
+            ],
+            "nullable": true
+          },
+          "birthYear": {
+            "type": "number",
+            "nullable": true
+          },
           "updatedAt": {
             "type": "string"
           },
@@ -3911,6 +3997,9 @@
           }
         },
         "required": [
+          "lunar",
+          "occasion",
+          "birthYear",
           "updatedAt",
           "id",
           "freq",

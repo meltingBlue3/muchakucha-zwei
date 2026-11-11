@@ -1,6 +1,7 @@
 import type { RecurrenceDto } from '@muchakucha/api-client';
 
 import { Text } from '../../ui/primitives';
+import { formatLunarAnchor } from '../lunar/lunar-recurrence';
 
 const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'] as const;
 const CLAMP_NOTE = '有些月份没有这一天，会自动改到当月最后一天。';
@@ -8,6 +9,7 @@ const CLAMP_NOTE = '有些月份没有这一天，会自动改到当月最后一
 // common years. D-09 requires clamping be explicit rather than silent, and
 // this summary is the only place the user can learn about it.
 const LEAP_DAY_CLAMP_NOTE = '平年没有 2 月 29 日，会自动改到 2 月 28 日。';
+const LUNAR_SHORT_MONTH_NOTE = '农历小月没有三十，会自动改到廿九。';
 
 export interface FormattedRecurrenceSummary {
   summary: string;
@@ -38,6 +40,10 @@ function frequencySummary(rule: RecurrenceDto): string {
     case 'monthly':
       return interval > 1 ? `每 ${interval} 个月的 ${day} 日重复` : `每月 ${day} 日重复`;
     case 'yearly':
+      if (rule.lunar !== undefined) {
+        const lunarDate = `农历${formatLunarAnchor(rule.lunar)}`;
+        return interval > 1 ? `每 ${interval} 年的${lunarDate}重复` : `每年${lunarDate}重复`;
+      }
       return interval > 1 ? `每 ${interval} 年的 ${month} 月 ${day} 日重复` : `每年 ${month} 月 ${day} 日重复`;
     default:
       return '重复';
@@ -61,9 +67,11 @@ export function formatRecurrenceSummary(
     summary,
     clampNote: rule.freq === 'monthly' && day >= 29
       ? CLAMP_NOTE
-      : rule.freq === 'yearly' && month === 2 && day === 29
-        ? LEAP_DAY_CLAMP_NOTE
-        : null,
+      : rule.freq === 'yearly' && rule.lunar !== undefined
+        ? rule.lunar.day === 30 ? LUNAR_SHORT_MONTH_NOTE : null
+        : rule.freq === 'yearly' && month === 2 && day === 29
+          ? LEAP_DAY_CLAMP_NOTE
+          : null,
     timeZoneNote:
       rule.timezone === deviceTimeZone ? null : `按 ${rule.timezone} 的日期重复。`,
   };

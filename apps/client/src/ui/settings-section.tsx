@@ -1,5 +1,5 @@
 import { Children, isValidElement, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { Switch, View } from 'react-native';
 import { Heading, Inline, Stack, Text } from './primitives';
 import { theme } from './theme';
 import { useDesktop } from './use-desktop';
@@ -51,4 +51,26 @@ export function SettingsRows({ children }: { children: ReactNode }) {
   return <View>
     {Children.toArray(children).filter(isValidElement).map((row, index) => <View key={row.key ?? index} style={index > 0 ? { borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator } : undefined}>{row}</View>)}
   </View>;
+}
+
+/** A switch as a row; `name` is its accessible name when the label alone would not say what it switches. */
+export function SwitchRow({ label, name = label, value, disabled, onChange, children }: { label: string; name?: string; value: boolean; disabled: boolean; onChange(value: boolean): void; children?: ReactNode }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.controlSizes.touchTarget, paddingVertical: theme.spacing[2] }}>
+      <View style={{ flex: 1 }}>
+        <Text>{label}</Text>
+        {children}
+      </View>
+      <Switch
+        accessibilityLabel={name}
+        disabled={disabled}
+        value={value}
+        onValueChange={onChange}
+        // As in the event form: a neutral track when off, ink when on, a white thumb.
+        trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+        thumbColor={theme.colors.surface}
+        ios_backgroundColor={theme.colors.border}
+      />
+    </View>
+  );
 }

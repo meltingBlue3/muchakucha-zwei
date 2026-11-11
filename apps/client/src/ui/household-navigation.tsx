@@ -1,3 +1,4 @@
+import Cake from 'lucide-react-native/icons/cake';
 import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
 import NotebookText from 'lucide-react-native/icons/notebook-text';
@@ -69,10 +70,11 @@ export const destinations: ReadonlyArray<{ key: 'today' | 'events' | 'tasks' | '
  * The household's maintenance pages. Phones reach them from the household
  * menu; wide screens list them in the sidebar under the main destinations.
  */
-export const familyPages: ReadonlyArray<{ key: 'settings' | 'labels' | 'recurrence-rules'; label: string; icon: Icon }> = [
+export const familyPages: ReadonlyArray<{ key: 'settings' | 'labels' | 'recurrence-rules' | 'birthdays'; label: string; icon: Icon }> = [
   { key: 'settings', label: '家庭设置', icon: Settings2 },
   { key: 'labels', label: '标签管理', icon: Tag },
   { key: 'recurrence-rules', label: '重复安排', icon: Repeat },
+  { key: 'birthdays', label: '家人生日', icon: Cake },
 ];
 
 export type FamilyPage = typeof familyPages[number]['key'];

@@ -10,7 +10,7 @@ export type SafeIntendedRoute = (typeof SAFE_INTENDED_ROUTES)[number] | `/househ
 export type SessionDestination = SafeIntendedRoute | '/login' | '/offline';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const HOUSEHOLD_PAGES = new Set(['more', 'settings', 'today', 'tasks', 'events', 'notes', 'labels', 'recurrence-rules']);
+const HOUSEHOLD_PAGES = new Set(['more', 'settings', 'today', 'tasks', 'events', 'notes', 'labels', 'recurrence-rules', 'birthdays']);
 const EDITABLE_RESOURCES = new Set(['tasks', 'events', 'notes']);
 
 const isUuid = (value: string | undefined): boolean => value !== undefined && UUID_PATTERN.test(value);
@@ -37,6 +37,7 @@ function isHouseholdPage(value: string): boolean {
   if (segments.length === 2) {
     if (section === 'ownership') return resourceId === 'transfer' || resourceId === 'leave';
     if (EDITABLE_RESOURCES.has(section)) return resourceId === 'new' || isUuid(resourceId);
+    if (section === 'birthdays') return resourceId === 'new';
     return section === 'recurrence-rules' && isUuid(resourceId);
   }
   if (segments.length !== 3 || !isUuid(resourceId)) return false;

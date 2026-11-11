@@ -18,6 +18,8 @@ Read this index only when the owning module or entry point of a request is uncle
 | Calendar month view and event forms | `src/features/events/` |
 | Tasks, filters, status transitions | `src/features/tasks/` |
 | Recurrence pickers, summaries, series scope | `src/features/recurrence/` |
+| Lunar dates in calendars, the per-device 显示农历 choice, lunar repeat anchors | `src/features/lunar/`, `src/platform/preferences/`; conversion in `packages/lunar/` |
+| 家人生日 list and the add-birthday form | `src/features/birthdays/` |
 | Notes and labels | `src/features/notes/`, `src/features/labels/` |
 | Assistant conversations, model settings, action previews | `src/features/assistant/`; routes under `app/(protected)/households/[id]/assistant/` |
 | Shared UI, theme tokens, dialogs | `src/ui/` — see [../design.md](../design.md) |
@@ -33,7 +35,7 @@ Read this index only when the owning module or entry point of a request is uncle
 | Events, tasks, notes, labels | `src/modules/events/`, `tasks/`, `notes/`, `labels/` |
 | Assistant providers, encrypted credentials, tool registry, confirmation loop | `src/modules/assistant/`; boundaries and extension points in [api.md](api.md#assistant) |
 | Personal reminder settings and upcoming plan | `src/modules/reminders/`; contracts in [api.md](api.md#personal-reminders), device reconciliation in [client.md](client.md#local-reminders) |
-| Recurrence rules, materialization, scheduling | `src/modules/recurrence/` |
+| Recurrence rules, materialization, scheduling | `src/modules/recurrence/`; lunar anchors and birthday marks in `series-marks.ts` |
 | Prisma client lifecycle | `src/infrastructure/prisma/` |
 
 ## Tests

@@ -14,13 +14,13 @@ import { getRouteTrigger } from '../platform/overlays/route-trigger';
 import { useDesktop } from './use-desktop';
 import { useWorkspaceStore } from './workspace-state';
 
-export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'households' | 'settings') {
+export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'birthdays' | 'households' | 'settings') {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const router = useRouter();
   const desktop = useDesktop();
   const state = navigation.getState();
-  const baseIndex = state?.routes.slice(0, state.index).reduce((found, route, index) => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id && !/\/(tasks|events|notes|recurrence-rules)\/(new|\[)/.test(route.name) ? index : found, -1) ?? -1;
+  const baseIndex = state?.routes.slice(0, state.index).reduce((found, route, index) => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id && !/\/(tasks|events|notes|recurrence-rules|birthdays)\/(new|\[)/.test(route.name) ? index : found, -1) ?? -1;
   const household = state?.routes.slice(0, state.index).filter(route => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id) ?? [];
   const hasBackground = resource === 'households' ? (state?.index ?? 0) > 0 : household.length > 0;
   /** The window opened over its own section's list, or drew that list itself for a direct link. */
@@ -36,7 +36,7 @@ export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 're
 }
 
 /** Family content opens beside its list on a wide screen; account and setup windows stay centered. */
-const DOCKED_RESOURCES: ReadonlySet<RouteWindowProps['resource']> = new Set(['tasks', 'events', 'notes', 'recurrence-rules']);
+const DOCKED_RESOURCES: ReadonlySet<RouteWindowProps['resource']> = new Set(['tasks', 'events', 'notes', 'recurrence-rules', 'birthdays']);
 
 /**
  * The item whose window is open above this page, so its row can be marked
@@ -78,7 +78,7 @@ export interface RouteWindowProps {
   onClose?: () => void;
   onBackStep?: (() => void) | undefined;
   exitAllowed?: RefObject<boolean>;
-  resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'households' | 'settings';
+  resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'birthdays' | 'households' | 'settings';
   fallback: ReactNode;
   /** Confirmation-only routes use the compact centered window on every width. */
   size?: 'standard' | 'editor';
