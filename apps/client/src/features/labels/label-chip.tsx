@@ -15,6 +15,8 @@ interface LabelChipProps {
   small?: boolean;
   /** Set in a picker: unselected chips are plain outlines, selected ones filled and checked. */
   selected?: boolean;
+  /** A desktop picker: a 24px chip; a chosen one keeps its dot, takes an ink outline and a check after the name. */
+  dense?: boolean;
 }
 
 /**
@@ -43,10 +45,33 @@ export function LabelTags({ labels, max = 1 }: { labels: LabelResponseDto[]; max
  * wash and outline while the name stays in ink: light presets such as yellow
  * would otherwise be unreadable as text.
  */
-export function LabelChip({ label, small = false, selected }: LabelChipProps) {
+export function LabelChip({ label, small = false, selected, dense = false }: LabelChipProps) {
   const unselected = selected === false;
   const activeTheme = useTheme<Theme>();
   const dot = small ? activeTheme.spacing[2] : activeTheme.spacing[2] + activeTheme.spacing[1] / 2;
+  if (dense) {
+    const denseDot = activeTheme.spacing[1] + 2;
+    return (
+      <View
+        accessibilityLabel={`标签：${label.name}`}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: activeTheme.spacing[1] + 1,
+          height: activeTheme.spacing[6],
+          paddingHorizontal: activeTheme.spacing[2] + 2,
+          borderRadius: activeTheme.borderRadii.full,
+          borderWidth: activeTheme.borderWidths.default,
+          borderColor: selected ? activeTheme.colors.ink : activeTheme.colors.border,
+          backgroundColor: activeTheme.colors.surface,
+        }}
+      >
+        <View style={{ width: denseDot, height: denseDot, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} />
+        <Text variant="meta" color="ink" style={{ fontWeight: selected ? '600' : '400' }}>{label.name}</Text>
+        {selected ? <Check size={activeTheme.spacing[3]} color={activeTheme.colors.ink} strokeWidth={activeTheme.controlSizes.iconStroke} /> : null}
+      </View>
+    );
+  }
 
   return (
     <View

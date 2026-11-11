@@ -6,13 +6,12 @@ import { z } from 'zod';
 import type { SessionStateStore } from './session-state';
 import type { SessionTransport } from '../../platform/session/session-transport';
 import {
+  AuthSwitch,
+  AuthTitle,
   Banner,
   Button,
-  Heading,
-  LinkText,
   PasswordField,
   Stack,
-  Text,
   TextField,
 } from '../../ui/primitives';
 
@@ -159,10 +158,7 @@ export const RegisterForm = ({
 
   return (
     <Stack gap={5}>
-      <Stack gap={2}>
-        <Heading>创建你的账户</Heading>
-        <Text>先创建账户，再创建或加入家人的家庭。</Text>
-      </Stack>
+      <AuthTitle title="创建你的账户">先创建账户，再创建或加入家人的家庭。</AuthTitle>
       {formError ? <Banner title="暂时无法创建账户">{formError}</Banner> : null}
       <Controller
         control={control}
@@ -249,7 +245,7 @@ export const RegisterForm = ({
           focusFirstInvalidWebField();
         }}
       />
-      <LinkText style={{ alignSelf: 'center' }} onPress={onLogin}>已有账户？登录</LinkText>
+      <AuthSwitch prompt="已有账户？" label="登录" onPress={onLogin} />
     </Stack>
   );
 };

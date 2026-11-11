@@ -11,7 +11,10 @@ import { AccountNavigation } from '../profile/account-navigation';
 import { AccountMenu } from '../../ui/account-menu';
 import type { ActionNoticeProps } from '../../ui/action-notice';
 import { AccessChangedPanel, AppShell, HouseholdHeader, HouseholdSwitcher, InboxButton } from '../../ui/household-components';
-import { familyPages, householdPath, HouseholdNavigation, type HouseholdTab } from '../../ui/household-navigation';
+import { familyPages, householdPath, HouseholdNavigation, SidebarToggle, type HouseholdTab } from '../../ui/household-navigation';
+import { useSidebarRail } from '../../ui/sidebar-rail';
+import { CommandPalette, SearchEntry, useSearchShortcut } from '../search/command-palette';
+import { useSidebarCounts } from './use-sidebar-counts';
 import { Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 import { useHouseholdContext } from './household-context';
@@ -51,7 +54,10 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
   const screenWidth = useWindowDimensions().width;
   const narrow = screenWidth < theme.layout.navigationBreakpoint;
   const desktop = useDesktop();
-  const rail = desktop && screenWidth < theme.layout.railBreakpoint;
+  const { rail } = useSidebarRail();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchTrigger = useRef<View>(null);
+  useSearchShortcut(desktop, () => setSearchOpen(open => !open));
   const { viewState, households, currentHouseholdId, accessChangedHouseholdName, refreshHouseholds, switchHousehold, rememberHousehold } = useHouseholdContext();
   const [menuOpen, setMenuOpen] = useState(false);
   const switcherTrigger = useRef<View>(null);
@@ -60,6 +66,8 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
 
   // The sidebar's inbox badge: how many invitations wait.
   const inboxCount = useInboxCount(!narrow);
+  // The numbers beside 今日 and 任务.
+  const counts = useSidebarCounts(householdId, desktop);
 
   // A link or a refresh can open another household than the remembered one.
   // Each page adopts its household once, when the list is first ready; it
@@ -116,7 +124,17 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
             householdId={householdId}
             active={active}
             belowActive={subpage}
-            header={<HouseholdHeader trigger={switcherTrigger} householdName={householdName} onOpenSwitcher={openMenu} placement="sidebar" />}
+            header={desktop ? <View style={{ gap: theme.spacing[4] }}>
+              <View style={{ flexDirection: rail ? 'column' : 'row', alignItems: 'center', gap: theme.spacing[1] }}>
+                <View style={rail ? undefined : { flex: 1, minWidth: 0 }}><HouseholdHeader trigger={switcherTrigger} householdName={householdName} onOpenSwitcher={openMenu} placement="sidebar" /></View>
+                <SidebarToggle />
+              </View>
+              <SearchEntry rail={rail} trigger={searchTrigger} onPress={() => setSearchOpen(true)} />
+            </View> : <HouseholdHeader trigger={switcherTrigger} householdName={householdName} onOpenSwitcher={openMenu} placement="sidebar" />}
+            {...(counts ? { badges: {
+              today: { value: counts.today, description: `今天 ${counts.today} 项安排`, tone: 'muted' as const },
+              tasks: { value: counts.overdue, description: `${counts.overdue} 件逾期`, tone: 'accent' as const },
+            } } : {})}
             footer={<View style={{ flexDirection: rail ? 'column' : 'row', alignItems: 'center', gap: theme.spacing[1], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[3] }}><AccountMenu variant="row" /><InboxButton count={inboxCount} /></View>}
           >
             {sidebar}
@@ -140,6 +158,7 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
         visible={menuOpen}
         links={narrow ? familyPages.map(page => ({ label: page.label, icon: page.icon, onPress: () => router.push(householdPath(householdId, page.key)) })) : []}
       />
+      {desktop && searchOpen ? <CommandPalette householdId={householdId} trigger={searchTrigger} onClose={() => setSearchOpen(false)} /> : null}
     </>
   );
 }

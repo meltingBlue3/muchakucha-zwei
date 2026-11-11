@@ -1,7 +1,7 @@
 import type { TaskResponseDto } from '@muchakucha/api-client';
 import { fireEvent, render } from '@testing-library/react-native';
 
-import { partitionTodayTasks } from '../../../../app/(protected)/households/[id]/today';
+import { partitionTodayTasks } from '../today-tasks';
 import { completionToggleTarget, completionActionLabel } from '../task-completion';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { TaskCard } from '../task-card';

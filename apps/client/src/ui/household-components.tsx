@@ -28,6 +28,7 @@ import { usePathname, useRouter } from 'expo-router';
 import React, { forwardRef, useCallback, useRef, useState, type RefObject } from 'react';
 import { AnchoredPopover } from './anchored-popover';
 import { desktopDetailWidth, useDesktop } from './use-desktop';
+import { useSidebarRail } from './sidebar-rail';
 import {
   Modal,
   Platform,
@@ -275,9 +276,8 @@ interface HouseholdHeaderProps {
 
 /** The current household's name with a chevron; it opens the household menu. */
 export const HouseholdHeader = ({ householdName, onOpenSwitcher, placement = 'bar', trigger }: HouseholdHeaderProps) => {
-  const { width } = useWindowDimensions();
   const desktop = useDesktop();
-  const rail = desktop && width < theme.layout.railBreakpoint;
+  const { rail } = useSidebarRail();
   return (
   <Pressable
     ref={trigger}

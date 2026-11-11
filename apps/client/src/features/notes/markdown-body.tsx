@@ -7,9 +7,14 @@ import type { Theme } from '../../ui/theme';
 import { parseMarkdown, safeLink, type MarkdownNode } from './markdown';
 import { useDesktop } from '../../ui/use-desktop';
 
-export function MarkdownBody({ source, tableLabel = '笔记表格，可横向滚动', headingOffset = 0 }: { source: string; tableLabel?: string; headingOffset?: number }) {
+export function MarkdownBody({ source, tableLabel = '笔记表格，可横向滚动', headingOffset = 0, chat = false }: {
+  source: string; tableLabel?: string; headingOffset?: number;
+  /** An assistant reply: on desktop its paragraphs use the conversation's smaller type instead of a note's reading type. */
+  chat?: boolean;
+}) {
   const theme = useTheme<Theme>();
   const desktop = useDesktop();
+  const bodyStyle = desktop ? chat ? theme.typography.chatBody : theme.typography.readingBody : undefined;
   const nodes = useMemo(() => parseMarkdown(source), [source]);
   const [linkError, setLinkError] = useState(false);
   const inline = (tokens: Token[]): ReactNode[] => {
@@ -38,7 +43,7 @@ export function MarkdownBody({ source, tableLabel = '笔记表格，可横向滚
     return walk();
   };
   const render = (items: MarkdownNode[]): ReactNode[] => items.map(({ token, children }, index) => {
-    if (token.type === 'inline') return <Text key={index} selectable style={desktop ? theme.typography.readingBody : undefined}>{inline(token.children ?? [])}</Text>;
+    if (token.type === 'inline') return <Text key={index} selectable style={bodyStyle}>{inline(token.children ?? [])}</Text>;
     if (token.type === 'heading_open') {
       const level = Number(token.tag.slice(1));
       const typography = level === 1 ? theme.typography.heading : level === 2 ? theme.typography.section : level === 3 ? theme.typography.body : level === 4 ? theme.typography.label : theme.typography.bodySm;
@@ -52,7 +57,7 @@ export function MarkdownBody({ source, tableLabel = '笔记表格，可横向滚
     }
     if (token.type === 'hr') return <View key={index} style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }} />;
     if (token.type === 'fence' || token.type === 'code_block') return <ScrollView key={index} tabIndex={0} horizontal><Text selectable style={{ backgroundColor: theme.colors.surfaceMuted, padding: theme.spacing[3] }}>{token.content}</Text></ScrollView>;
-    if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') return <Stack key={index} gap={desktop ? 0 : 2}>{children.map((child, i) => <View key={i} style={{ flexDirection: 'row', gap: theme.spacing[2] }}><Text style={desktop ? theme.typography.readingBody : undefined}>{token.type === 'bullet_list_open' ? '•' : `${Number(token.attrGet('start') ?? 1) + i}.`}</Text><View style={{ flex: 1 }}>{render(child.children)}</View></View>)}</Stack>;
+    if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') return <Stack key={index} gap={desktop ? 0 : 2}>{children.map((child, i) => <View key={i} style={{ flexDirection: 'row', gap: theme.spacing[2] }}><Text style={bodyStyle}>{token.type === 'bullet_list_open' ? '•' : `${Number(token.attrGet('start') ?? 1) + i}.`}</Text><View style={{ flex: 1 }}>{render(child.children)}</View></View>)}</Stack>;
     return <View key={index} style={token.type === 'blockquote_open' ? { borderLeftWidth: theme.borderWidths.focus, borderLeftColor: theme.colors.outline, paddingLeft: theme.spacing[3] } : undefined}>{children.length ? render(children) : <Text selectable>{token.content}</Text>}</View>;
   });
   return <Stack gap={3} testID="markdown-body">{source.trim() ? render(nodes) : <Text color="inkMuted">这篇笔记还没有内容。</Text>}{linkError ? <Text accessibilityRole="alert" color="destructive">无法打开链接，请检查网址后重试。</Text> : null}</Stack>;

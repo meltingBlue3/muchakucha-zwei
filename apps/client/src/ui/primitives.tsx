@@ -20,6 +20,7 @@ import EyeOff from 'lucide-react-native/icons/eye-off';
 import Info from 'lucide-react-native/icons/info';
 
 import { BrandLogo } from './brand-logo';
+import { AuthTodaySample } from './auth-today-sample';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
 import { SheetActionSlot } from './sheet-action';
 import { theme, type Space, type TextVariant, type Theme } from './theme';
@@ -627,13 +628,20 @@ export const AuthShell = ({ children }: PropsWithChildren) => {
   const duration = getMotionDuration(preferences.reducedMotion);
   const { width } = useWindowDimensions();
   const split = Platform.OS === 'web' && width >= theme.layout.navigationBreakpoint;
+  const roomy = width >= theme.layout.railBreakpoint;
+  // Wide: the brand, a headline and a sample day on paper; the form on a floating white panel.
   if (split) return <SafeAreaView role="main" style={{ flex: 1, flexDirection: 'row', backgroundColor: theme.colors.canvas }}>
-    <View style={{ flex: 1, padding: theme.spacing[12], justifyContent: 'center', gap: theme.spacing[12] }}>
+    <View style={{ flex: 1, minWidth: 0, paddingHorizontal: roomy ? theme.layout.authBrandInset : theme.spacing[10], paddingVertical: theme.spacing[12] }}>
       <BrandMark />
-      <Stack gap={4}><Heading variant="display">把日子，过在一起。</Heading><Text color="inkMuted">日程、待办和心里的小事，都有一个共同的去处。</Text></Stack>
-      <Stack gap={4} style={{ padding: theme.spacing[6], backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, maxWidth: theme.layout.authCardMaxWidth, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator }}><Heading variant="section">一家人的今日</Heading><Text variant="bodySm">09:00　一起开始新的一天</Text><Text variant="bodySm">○　记下要做的事</Text><Text variant="bodySm">○　留一张给家人的笔记</Text></Stack>
+      <View style={{ flex: 1, justifyContent: 'center', paddingVertical: theme.spacing[8] }}>
+        <Text style={roomy ? theme.typography.authHero : theme.typography.authHeroCompact}>{'一家人的日程、任务和笔记，\n放在同一张纸上。'}</Text>
+        <Text color="inkMuted" style={{ marginTop: theme.spacing[4], fontSize: theme.typography.readingBody.fontSize }}>今日 · 日历 · 任务 · 笔记 · 助手</Text>
+        {preferences.forcedColors ? null : <View style={{ marginTop: theme.spacing[10] }}><AuthTodaySample /></View>}
+      </View>
     </View>
-    <ScrollView style={{ width: theme.layout.authPanelWidth, flexGrow: 0, backgroundColor: theme.colors.surface }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: theme.spacing[10] }}><View testID="auth-shell" style={{ width: '100%', maxWidth: theme.layout.authFormWidth, alignSelf: 'center' }}><AuthControlSizes.Provider value>{children}</AuthControlSizes.Provider></View></ScrollView>
+    <View style={{ width: theme.layout.authPanelWidth, margin: theme.layout.workspaceInset, marginLeft: 0, borderRadius: theme.layout.workspaceRadius, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, backgroundColor: theme.colors.surface, overflow: 'hidden' }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: theme.spacing[10] }}><View testID="auth-shell" style={{ width: '100%', maxWidth: theme.layout.authFormWidth, alignSelf: 'center' }}><AuthControlSizes.Provider value>{children}</AuthControlSizes.Provider></View></ScrollView>
+    </View>
   </SafeAreaView>;
   return (
     <Screen>
@@ -691,6 +699,25 @@ export const LinkText = ({ children, style, ...props }: LinkTextProps) => {
     </Pressable>
   );
 };
+
+/** A sign-in form's title and the line under it, set larger in the wide two-panel layout. */
+export const AuthTitle = ({ title, children }: { title: string; children: ReactNode }) => {
+  const wide = useContext(AuthControlSizes);
+  return (
+    <Stack gap={wide ? 1 : 2}>
+      <Heading style={wide ? theme.typography.authTitle : undefined}>{title}</Heading>
+      <Text color="inkMuted" variant={wide ? 'bodySm' : 'body'}>{children}</Text>
+    </Stack>
+  );
+};
+
+/** The end of a sign-in form, below a hairline: a question and the link to the other form. */
+export const AuthSwitch = ({ prompt, label, onPress }: { prompt: string; label: string; onPress(): void }) => (
+  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', columnGap: theme.spacing[1], paddingTop: theme.spacing[1], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>
+    <Text variant="bodySm" color="inkMuted">{prompt}</Text>
+    <LinkText onPress={onPress}>{label}</LinkText>
+  </View>
+);
 
 type StatusKind = 'success' | 'expired' | 'resetSuccess' | 'offline';
 type StatusPanelProps = {

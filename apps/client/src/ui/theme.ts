@@ -94,6 +94,12 @@ export const theme = createTheme({
     /** A word tag such as 高, 紧急 or 今天 beside a title or date. */
     tag: { fontSize: 11.5, fontWeight: '400' as const, lineHeight: 18 },
     readingBody: { fontSize: 15, fontWeight: '400' as const, lineHeight: 28 },
+    /** Messages in the desktop assistant conversation. */
+    chatBody: { fontSize: 14, fontWeight: '400' as const, lineHeight: 24 },
+    /** The wide sign-in screen: its headline, narrower below 1280, and the form's title. */
+    authHero: { fontSize: 36, fontWeight: '700' as const, lineHeight: 50 },
+    authHeroCompact: { fontSize: 28, fontWeight: '700' as const, lineHeight: 40 },
+    authTitle: { fontSize: 26, fontWeight: '700' as const, lineHeight: 34 },
     caption: { fontSize: 12, fontWeight: '500' as const, lineHeight: 16 },
     meta: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
     bodySm: { fontSize: 14, fontWeight: '400' as const, lineHeight: 20 },
@@ -242,6 +248,8 @@ export const theme = createTheme({
     /** Horizontal padding of a desktop workspace column; flush lists bleed through it. */
     desktopColumnInset: 24,
     desktopSearchWidth: 220,
+    /** The Ctrl K search panel. */
+    commandPaletteWidth: 560,
     /** The member table's 用户名 and 角色 columns. */
     memberUsernameColumn: 160,
     memberRoleColumn: 120,
@@ -260,6 +268,9 @@ export const theme = createTheme({
     authPanelWidth: 560,
     authFormWidth: 360,
     authControl: 40,
+    /** The wide sign-in screen: the brand side's inset and its sample day's width. */
+    authBrandInset: 72,
+    authSampleWidth: 480,
     desktopSwitcherWidth: 300,
     authWideBreakpoint: 960,
     authLayoutMaxWidth: 1040,

@@ -16,6 +16,7 @@ import { MemberAvatar } from './member-avatar';
 import { Text } from './primitives';
 import { theme } from './theme';
 import { useDesktop } from './use-desktop';
+import { useSidebarRail } from './sidebar-rail';
 
 type AccountPanel = 'closed' | 'menu' | 'profile' | 'logout';
 
@@ -30,7 +31,8 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const desktop = useDesktop();
-  const rail = desktop && variant === 'row' && width < theme.layout.railBreakpoint;
+  const sidebarRail = useSidebarRail().rail;
+  const rail = desktop && variant === 'row' && sidebarRail;
   const trigger = useRef<View>(null);
   const panel = useRef<View>(null);
   const initial = useRef<View>(null);

@@ -4,13 +4,12 @@ import { z } from 'zod';
 import type { SessionStateStore } from './session-state';
 import type { RestoreOutcome, SessionTransport } from '../../platform/session/session-transport';
 import {
+  AuthSwitch,
+  AuthTitle,
   Banner,
   Button,
-  Heading,
-  LinkText,
   PasswordField,
   Stack,
-  Text,
   TextField,
 } from '../../ui/primitives';
 
@@ -123,9 +122,7 @@ export const LoginForm = ({
 
   return (
     <Stack gap={5}>
-      <Stack gap={2}>
-        <Heading>欢迎回来</Heading>
-      </Stack>
+      <AuthTitle title="欢迎回来">登录后回到你的家庭。</AuthTitle>
       {reauthenticationRequired ? (
         <Banner title="需要重新登录">
           登录已过期，请重新登录。完成后我们会带你回到刚才的位置。
@@ -183,7 +180,7 @@ export const LoginForm = ({
         )}
       />
       <Button disabled={isSubmitting} label="登录" loading={isSubmitting} onPress={() => void submit()} />
-      <Stack gap={1} style={{ alignItems: 'center' }}><Text variant="bodySm">第一次来到这里？</Text><LinkText style={{ alignSelf: 'center' }} onPress={onRegister}>创建账户</LinkText></Stack>
+      <AuthSwitch prompt="第一次来到这里？" label="创建账户" onPress={onRegister} />
     </Stack>
   );
 };

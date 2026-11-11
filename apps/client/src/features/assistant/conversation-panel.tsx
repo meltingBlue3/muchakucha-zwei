@@ -13,6 +13,7 @@ import { assistantConversationRecords, type AssistantConversationRecord, type As
 import { AssistantComposer, PromptSuggestions } from './assistant-composer';
 import { useAssistantVoiceInput } from './use-assistant-voice-input';
 import { MarkdownBody } from '../notes/markdown-body';
+import { useDesktop } from '../../ui/use-desktop';
 
 const sectionNames = { events: '日程', tasks: '任务', notes: '笔记' } as const;
 
@@ -66,6 +67,9 @@ export function AssistantConversationPanel({ conversation, busy, disabled, onSen
     } finally { sending.current = false; }
   };
   const records = useMemo(() => assistantConversationRecords(conversation.messages), [conversation.messages]);
+  const desktop = useDesktop();
+  const bubble = desktop ? { ...userBubble, paddingVertical: theme.spacing[2] + 2, paddingHorizontal: theme.spacing[4] } : userBubble;
+  const userText = desktop ? theme.typography.chatBody : undefined;
   return <View style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
     <ScrollView ref={scroll} testID="assistant-transcript" style={{ flex: 1, minHeight: 0 }} keyboardDismissMode={scrollKeyboardDismissMode} keyboardShouldPersistTaps="handled"
       onScroll={event => { const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent; followEnd.current = contentSize.height - layoutMeasurement.height - contentOffset.y < theme.spacing[16]; }} scrollEventThrottle={100}
@@ -74,14 +78,14 @@ export function AssistantConversationPanel({ conversation, busy, disabled, onSen
       {records.length === 0 && !outgoing ? <Stack gap={4} style={{ flex: 1, justifyContent: 'center', paddingVertical: theme.spacing[8] }}>
         <Sparkles size={theme.spacing[8]} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} /><Heading variant="heading" level={2}>今天，想一起安排什么？</Heading><Text color="inkMuted">从一个问题开始，或让我帮你记下要做的事。</Text>
         <PromptSuggestions disabled={blocked || voice.engaged} onPick={prompt => { setMessage(prompt); input.current?.focus(); }} />
-      </Stack> : records.map((item, index) => item.kind === 'query' ? <QueryRecord key={index} record={item} onOpenSource={onOpenSource} /> : <Stack key={index} gap={2} style={item.kind === 'user'
-        ? userBubble
+      </Stack> : records.map((item, index) => item.kind === 'query' ? <QueryRecord key={index} record={item} onOpenSource={onOpenSource} /> : <Stack key={index} gap={desktop ? 1 : 2} style={item.kind === 'user'
+        ? bubble
         : item.kind === 'operation' ? { padding: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: item.failed ? theme.colors.destructiveSoft : theme.colors.successSoft }
         : { paddingVertical: theme.spacing[1] }}>
         {item.kind !== 'user' ? <Inline gap={2}>{item.kind === 'assistant' ? <Sparkles size={theme.controlSizes.icon} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} /> : <CircleCheck size={theme.controlSizes.icon} color={item.failed ? theme.colors.destructive : theme.colors.success} />}<Text variant="caption" color={item.kind === 'assistant' ? 'ink' : 'inkMuted'}>{item.kind === 'operation' ? '执行记录' : '助手'}</Text></Inline> : null}
-        {item.kind === 'assistant' ? <MarkdownBody source={item.content} tableLabel="助手表格，可横向滚动" headingOffset={1} /> : <Text selectable variant={item.kind === 'operation' ? 'bodySm' : 'body'} color={item.failed ? 'destructive' : 'ink'}>{item.content}</Text>}
+        {item.kind === 'assistant' ? <MarkdownBody chat source={item.content} tableLabel="助手表格，可横向滚动" headingOffset={1} /> : <Text selectable variant={item.kind === 'operation' ? 'bodySm' : 'body'} color={item.failed ? 'destructive' : 'ink'} style={item.kind === 'user' ? userText : undefined}>{item.content}</Text>}
       </Stack>)}
-      {outgoing ? <Stack gap={2} style={userBubble}><Text selectable>{outgoing}</Text></Stack> : null}
+      {outgoing ? <Stack gap={2} style={bubble}><Text selectable style={userText}>{outgoing}</Text></Stack> : null}
       {pendingPreview}
       {busy || conversation.state === 'running' ? <LoadingState label="助手正在处理" /> : null}
     </ScrollView>

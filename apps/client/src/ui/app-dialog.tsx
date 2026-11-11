@@ -13,6 +13,8 @@ import { SheetActionSlot, type SheetAction } from './sheet-action';
 import { theme } from './theme';
 import { desktopDetailWidth, useDesktop } from './use-desktop';
 import { AnchoredPopover } from './anchored-popover';
+import { holdsCommandKey, useCommandKeyLabel } from './command-key';
+import { useSidebarRail } from './sidebar-rail';
 
 // React Native Web always renders Modal as a role="dialog" node, so on web that node carries
 // the dialog name and the panel stays a plain container to avoid nested dialogs.
@@ -46,6 +48,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   const { width } = useWindowDimensions();
   const side = docked && width >= theme.layout.navigationBreakpoint;
   const desktop = useDesktop();
+  const { rail } = useSidebarRail();
   const pane = desktop && docked;
   const popover = desktop && anchored;
   // On phones an editor fills the screen like a native compose sheet: close on
@@ -63,9 +66,24 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
     previousTitle.current = title;
     if ((!pane && !popover) || (pane && changed)) focus();
   }, [title, focus, pane, popover]);
+  const commandKey = useCommandKeyLabel();
+  // In a desktop pane, Ctrl+Enter (⌘+Enter on a Mac) submits the form from anywhere inside it.
+  // Listened for while capturing: React Native Web's text fields stop key events from bubbling.
+  useEffect(() => {
+    if (!pane || !sheetAction || Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || !holdsCommandKey(event) || event.isComposing) return;
+      const node = panel.current as unknown as HTMLElement | null;
+      if (!node || !(event.target instanceof Node) || !node.contains(event.target)) return;
+      event.preventDefault();
+      if (!sheetAction.submitting && !sheetAction.disabled) sheetAction.onPress();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [pane, sheetAction]);
   if (popover) return <AnchoredPopover scrollable title={title} trigger={trigger} onClose={close} busy={busy}>{children}{footer}</AnchoredPopover>;
   if (pane) {
-    const sidebar = width < theme.layout.railBreakpoint ? theme.layout.railWidth : theme.layout.navigationWidth;
+    const sidebar = rail ? theme.layout.railWidth : theme.layout.navigationWidth;
     return <View role="region" accessibilityLabel={title} pointerEvents="box-none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}><View ref={panel} testID="app-dialog-panel" style={{ position: 'absolute', pointerEvents: 'auto', right: theme.layout.workspaceInset + theme.borderWidths.default, top: theme.layout.workspaceInset + theme.layout.pageHeaderHeight + theme.borderWidths.default, bottom: theme.layout.workspaceInset + theme.borderWidths.default, ...(reading ? { left: sidebar + theme.layout.notesListWidth + theme.borderWidths.default } : { width: desktopDetailWidth(width) }), backgroundColor: theme.colors.surface, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator, borderBottomRightRadius: theme.layout.workspaceRadius, overflow: 'hidden' }}>
       <Inline gap={1} style={{ height: theme.layout.paneHeaderHeight, paddingLeft: theme.spacing[6], paddingRight: theme.spacing[2] + 2, borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
         {/* A form names itself in the header; a detail keeps the header quiet, since its title follows in large type. */}
@@ -77,7 +95,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
       </Inline>
       {reading && footer ? <View style={{ padding: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>{footer}</View> : null}
       <SheetActionSlot.Provider value={setSheetAction}><ScrollView tabIndex={0} style={{ flex: 1, minHeight: 0 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingVertical: theme.spacing[5], paddingHorizontal: theme.spacing[6], ...(reading ? { width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[6] * 2, alignSelf: 'center' } : {}) }}>{children}</ScrollView></SheetActionSlot.Provider>
-      {!reading && (footer || sheetAction) ? <View style={{ padding: theme.spacing[4], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>{footer}{sheetAction ? <Inline style={{ justifyContent: 'flex-end' }}><Button label="取消" tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></Inline> : null}</View> : null}
+      {!reading && (footer || sheetAction) ? <View style={{ padding: theme.spacing[4], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>{footer}{sheetAction ? <Inline style={{ justifyContent: 'flex-end' }}><Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, paddingLeft: theme.spacing[2], fontFamily: theme.fontFamilies.numeric }}>{`${commandKey} + Enter ${sheetAction.label}`}</Text><Button label="取消" tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></Inline> : null}</View> : null}
     </View></View>;
   }
   const closeButton = (

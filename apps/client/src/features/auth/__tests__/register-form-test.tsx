@@ -204,7 +204,7 @@ describe('username registration form', () => {
 
   test('offers login for an existing account', async () => {
     const { onLogin, view } = await renderForm();
-    await fireEvent.press(view.getByText('已有账户？登录'));
+    await fireEvent.press(view.getByRole('link', { name: '登录' }));
     expect(onLogin).toHaveBeenCalledTimes(1);
   });
 });

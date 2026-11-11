@@ -26,7 +26,7 @@ async function setup(page: Page) {
     else if (path.endsWith('/invitations/inbox') || path.endsWith('/invitations')) body = { invitations: [] };
     else if (path === '/api/v1/households') body = [household, { ...household, id: 'other', name: '父母的家' }];
     else if (path.endsWith(`/${householdId}`)) body = { ...household, members };
-    else if (path.endsWith('/tasks')) body = { tasks };
+    else if (path.endsWith('/tasks')) body = method === 'POST' ? { ...tasks[3], ...route.request().postDataJSON(), id: taskId(99) } : { tasks };
     else if (path.includes('/tasks/')) {
       const task = tasks.find(item => path.endsWith(`/${item.id}`));
       if (task && method === 'PUT') Object.assign(task, route.request().postDataJSON());
@@ -197,6 +197,88 @@ test('a timed task is completed from its ring on the timeline and the completion
   await expect(page.getByText('已完成「检查朵朵的数学作业 2」', { exact: true })).toHaveCount(0);
   await expect(ring).toBeVisible();
   expect(writes).toEqual(['completed', 'pending']);
+});
+
+test('the sidebar counts the day, collapses to a rail and searches the household', async ({ page }, testInfo) => {
+  await setup(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/tasks`);
+  const sidebar = page.getByTestId('global-sidebar');
+  // Two events and one task today, one task overdue; the destinations keep their plain names.
+  await expect(sidebar.getByRole('tab', { name: '今日', exact: true })).toHaveAccessibleDescription('今天 3 项安排');
+  await expect(sidebar.getByRole('tab', { name: '任务', exact: true })).toHaveAccessibleDescription('1 件逾期');
+  // Collapsing is remembered across a reload; expanding again returns the full sidebar.
+  await sidebar.getByRole('button', { name: '收起侧栏', exact: true }).click();
+  await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(64);
+  await page.reload();
+  await expect(sidebar.getByRole('button', { name: '展开侧栏', exact: true })).toBeVisible();
+  expect((await sidebar.boundingBox())!.width).toBe(64);
+  await sidebar.getByRole('button', { name: '展开侧栏', exact: true }).click();
+  await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(248);
+
+  const entry = sidebar.getByRole('button', { name: '搜索', exact: true });
+  const palette = page.getByRole('dialog', { name: '搜索', exact: true });
+  const input = palette.getByRole('combobox', { name: '搜索页面、任务、日程和笔记', exact: true });
+  await page.keyboard.press('Control+K');
+  await expect(input).toBeFocused();
+  await input.fill('朵朵');
+  const options = palette.getByRole('option');
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await expect(palette.getByRole('option', { name: /^日程：朵朵家长会/ })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('search-1440.png') });
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(palette).toHaveCount(0);
+  // Opened from the sidebar, closing returns focus to the search entry.
+  await entry.click();
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(entry).toBeFocused();
+  // A result opens beside its own section's list, here the calendar.
+  await entry.click();
+  await input.fill('家长会');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(`${base}/events/event-2`);
+  await expect(page.getByRole('region', { name: '日程详情', exact: true })).toBeVisible();
+  await expect(page.getByTestId('desktop-month-grid')).toBeVisible();
+  await expect(sidebar.getByRole('tab', { name: '日历', exact: true })).toHaveAttribute('aria-selected', 'true');
+  // Pages are found by name too.
+  await page.keyboard.press('Control+K');
+  await input.fill('标签');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(`${base}/labels`);
+});
+
+test('a desktop pane form names its shortcut, and Ctrl+Enter submits it', async ({ page }) => {
+  await setup(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const created: unknown[] = [];
+  page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/tasks')) created.push(request.postDataJSON()); });
+  await page.goto(`${base}/tasks`);
+  await page.getByRole('button', { name: '创建任务', exact: true }).click();
+  const editor = page.getByRole('region', { name: '创建任务', exact: true });
+  await expect(editor.getByText('Ctrl + Enter 创建', { exact: true })).toBeVisible();
+  // Label chips in a desktop form are 24px.
+  expect((await editor.getByRole('button', { name: '选择标签 学校', exact: true }).boundingBox())!.height).toBe(24);
+  await editor.getByRole('textbox', { name: '任务标题', exact: true }).fill('准备郊游野餐用品');
+  await page.keyboard.press('Control+Enter');
+  await expect.poll(() => created.length).toBe(1);
+  expect(created[0]).toMatchObject({ title: '准备郊游野餐用品' });
+});
+
+test('the wide sign-in screen sets the product beside a floating form', async ({ page }) => {
+  await page.route('**/api/v1/**', route => route.fulfill({ status: 401, json: { error: { code: 'UNAUTHORIZED' } } }));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/login');
+  await expect(page.getByRole('heading', { name: '欢迎回来', exact: true })).toBeVisible();
+  await expect(page.getByText('登录后回到你的家庭。', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('auth-decoration')).toBeVisible();
+  expect((await page.getByTestId('auth-shell').boundingBox())!.width).toBe(360);
+  expect((await page.getByRole('button', { name: '登录', exact: true }).boundingBox())!.height).toBe(40);
+  await expect(page.getByRole('link', { name: '创建账户', exact: true })).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
 
 test('labels are edited in the side pane beside a list that stays usable', async ({ page }) => {

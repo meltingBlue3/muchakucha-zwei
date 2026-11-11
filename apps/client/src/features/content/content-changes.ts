@@ -9,6 +9,13 @@ export function notifyContentChanged(householdId: string, source?: () => unknown
   listeners.forEach(listener => listener(householdId, source));
 }
 
+/** Calls `listener` after every saved change to a household's content, such as a completed task. */
+export function subscribeContentChanges(listener: (householdId: string) => void): () => void {
+  const wrapped = (householdId: string) => listener(householdId);
+  listeners.add(wrapped);
+  return () => { listeners.delete(wrapped); };
+}
+
 export function useContentChanges(householdId: string | null | undefined, refresh: () => unknown) {
   const desktop = useDesktop();
   const path = usePathname();

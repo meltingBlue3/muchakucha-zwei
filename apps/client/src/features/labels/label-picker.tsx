@@ -6,6 +6,7 @@ import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { LabelChip } from './label-chip';
 import type { Theme } from '../../ui/theme';
 import { Spinner, Text } from '../../ui/primitives';
+import { useDesktopDensity } from '../../ui/use-desktop';
 
 interface LabelPickerProps {
   householdId: string;
@@ -15,6 +16,7 @@ interface LabelPickerProps {
 
 export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPickerProps) {
   const activeTheme = useTheme<Theme>();
+  const dense = useDesktopDensity();
   const [allLabels, setAllLabels] = useState<LabelResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -86,7 +88,7 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPi
   }
 
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], ...(dense ? { paddingVertical: activeTheme.spacing[1] + 2 } : {}) }}>
       {allLabels.map((label) => {
         const isSelected = selectedLabelIds.includes(label.id);
         return (
@@ -96,9 +98,10 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPi
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
             accessibilityLabel={`${isSelected ? '取消选择' : '选择'}标签 ${label.name}`}
-            style={({ pressed }) => ({ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}
+            // A fine pointer needs no 44px target, so desktop chips sit in tight rows.
+            style={({ pressed }) => ({ minHeight: dense ? undefined : activeTheme.controlSizes.touchTarget, justifyContent: 'center', borderRadius: activeTheme.borderRadii.full, opacity: pressed ? 0.7 : 1 })}
           >
-            <LabelChip label={label} selected={isSelected} />
+            <LabelChip label={label} selected={isSelected} dense={dense} />
           </Pressable>
         );
       })}
