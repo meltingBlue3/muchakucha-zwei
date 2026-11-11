@@ -29,6 +29,7 @@ import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useHouseholdContext } from '../households/household-context';
 import { mergeLabels, useHouseholdLabels } from '../labels/use-household-labels';
 import { CalendarMonth, type CalendarCellEvent } from './calendar-month';
+import { lunarDescriptionOn, useLunarCalendar } from '../lunar/lunar-calendar';
 import { HouseholdScreen } from '../households/household-screen';
 import { EventCard } from './event-card';
 import { toDateIso, toDateRangeIso } from './calendar-utils';
@@ -64,6 +65,7 @@ export default function CalendarScreen() {
   const requestGeneration = useRef(0);
   const { currentHouseholdId } = useHouseholdContext();
 
+  const lunar = useLunarCalendar();
   const clock = useMinuteClock();
   const today = clock.date;
   const todayIso = toDateIso(today);
@@ -179,6 +181,7 @@ export default function CalendarScreen() {
     const next = new Date(year, month + offset, 1);
     handleSelectDate(toDateIso(next));
   };
+  const lunarLabel = lunar && selectedDateIso ? lunarDescriptionOn(selectedDateIso) : null;
   const dateLabel = selectedDateIso ? formatDate(new Date(`${selectedDateIso}T12:00:00`), { weekday: true }) : '当天日程';
   const activeFilterCount = [recurringFilter !== 'all', labelFilter !== 'all'].filter(Boolean).length;
   const clearFilters = () => { setLabelFilter('all'); setRecurringFilter('all'); };
@@ -240,13 +243,14 @@ export default function CalendarScreen() {
         </AppDialog> : null}
         <View style={{ flexDirection: wide ? 'row' : 'column', gap: desktop ? 0 : activeTheme.spacing[6], alignItems: desktop ? 'stretch' : wide ? 'flex-start' : 'stretch', ...(desktop ? { flex: 1, minHeight: 0 } : {}) }}>
           <View testID="calendar-month-pane" style={{ flex: wide ? 2 : undefined, minWidth: 0 }}>
-            {desktop ? <DesktopMonth year={year} month={month} todayIso={todayIso} selectedDateIso={selectedDateIso} events={filteredEvents} onSelectDate={handleSelectDate} onOpenEvent={handleEventPress} /> : <CalendarMonth
+            {desktop ? <DesktopMonth year={year} month={month} todayIso={todayIso} selectedDateIso={selectedDateIso} events={filteredEvents} onSelectDate={handleSelectDate} onOpenEvent={handleEventPress} lunar={lunar} /> : <CalendarMonth
               todayIso={todayIso}
               year={year}
               month={month}
               eventsByDate={eventsByDate}
               {...(wide ? { eventTitlesByDate } : { eventColorsByDate: eventTitlesByDate })}
               selectedDateIso={selectedDateIso}
+              lunar={lunar}
               mode={compactWeek ? 'week' : 'month'}
               onPrevMonth={() => changeMonth(-1)}
               onNextMonth={() => changeMonth(1)}
@@ -257,7 +261,7 @@ export default function CalendarScreen() {
             />}
           </View>
           {desktop ? <View testID="calendar-agenda-pane" style={{ width: activeTheme.layout.calendarAgendaWidth, minHeight: 0, borderLeftWidth: activeTheme.borderWidths.default, borderLeftColor: activeTheme.colors.separator, ...(paneOpen ? { display: 'none' } : {}) }}>
-            <DesktopDayPane dateIso={selectedDateIso ?? todayIso} todayIso={todayIso} events={selectedDateEvents} openEventId={openEventId ?? null} nowMinutes={clock.minutes} onOpen={handleEventPress} onCreate={handleCreateEvent} onEdit={editEvent} onDelete={deleteEvent}>
+            <DesktopDayPane lunar={lunar} dateIso={selectedDateIso ?? todayIso} todayIso={todayIso} events={selectedDateEvents} openEventId={openEventId ?? null} nowMinutes={clock.minutes} onOpen={handleEventPress} onCreate={handleCreateEvent} onEdit={editEvent} onDelete={deleteEvent}>
               {loading ? <LoadingState label="正在加载日程" /> : null}
               {error ? <LoadError message={error} onRetry={() => void fetchEvents()} retryAccessibilityLabel="重试加载日程" /> : null}
               {!loading && !error && selectedDateEvents.length === 0 ? <EmptyState
@@ -266,7 +270,7 @@ export default function CalendarScreen() {
               /> : null}
             </DesktopDayPane>
           </View> :           <View testID="calendar-agenda-pane" style={{ flex: wide ? 1 : undefined, minWidth: 0 }}>
-            <GroupLabel>{`${dateLabel}${selectedIsToday ? ' · 今天' : ''}`}</GroupLabel>
+            <GroupLabel>{`${dateLabel}${selectedIsToday ? ' · 今天' : ''}${lunarLabel ? ` · ${lunarLabel}` : ''}`}</GroupLabel>
             <Stack gap={3}>
               {loading ? <LoadingState label="正在加载日程" /> : null}
               {error ? <LoadError message={error} onRetry={() => void fetchEvents()} retryAccessibilityLabel="重试加载日程" /> : null}

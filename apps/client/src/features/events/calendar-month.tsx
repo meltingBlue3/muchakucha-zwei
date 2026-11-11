@@ -8,6 +8,7 @@ import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
 import { formatDayLabel, parseDateValue } from '../../ui/date-values';
+import { lunarLabelOn } from '../lunar/lunar-calendar';
 import { getCalendarMonth, getDayNames, formatMonthLabel, toDateIso, type CalendarDay } from './calendar-utils';
 
 /** What a detailed month cell shows for one event. */
@@ -36,6 +37,8 @@ interface CalendarMonthProps {
   eventTitlesByDate?: Map<string, CalendarCellEvent[]>;
   /** Without room for titles, each day's dot takes its first event's color. */
   eventColorsByDate?: Map<string, CalendarCellEvent[]>;
+  /** Shows each day's lunar date, solar term or festival under its number. */
+  lunar?: boolean;
 }
 
 const TITLES_PER_DAY = 3;
@@ -60,6 +63,7 @@ export function CalendarMonth({
   onToggleMode,
   eventTitlesByDate,
   eventColorsByDate,
+  lunar = false,
 }: CalendarMonthProps) {
   const activeTheme = useTheme<Theme>();
   const dayNames = getDayNames();
@@ -118,6 +122,23 @@ export function CalendarMonth({
     </View>
   );
 
+  // Festivals, solar terms and the first of a lunar month stand out in ink;
+  // vermilion stays reserved for today.
+  const lunarText = (day: CalendarDay) => {
+    const label = lunar ? lunarLabelOn(day.iso) : null;
+    if (label === null) return null;
+    const strong = label.kind !== 'day';
+    return (
+      <Text
+        numberOfLines={1}
+        color={day.isCurrentMonth && strong ? 'ink' : 'inkFaint'}
+        style={{ ...activeTheme.typography.lunarDay, fontFamily: activeTheme.fontFamilies.regular }}
+      >
+        {label.text}
+      </Text>
+    );
+  };
+
   return (
     <View style={{ backgroundColor: activeTheme.colors.surface, borderRadius: activeTheme.borderRadii.lg, paddingHorizontal: activeTheme.spacing[2], paddingTop: activeTheme.spacing[1], paddingBottom: onToggleMode ? 0 : activeTheme.spacing[2] }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -150,10 +171,10 @@ export function CalendarMonth({
                 accessibilityLabel={`${formatDayLabel(parseDateValue(day.iso))}${day.isToday ? '，今天' : ''}${eventCount > 0 ? `，${eventCount}个日程` : ''}`}
                 style={({ pressed }) => detailed
                   ? { flex: 1, minWidth: 0, minHeight: activeTheme.spacing[16] + activeTheme.spacing[6], padding: activeTheme.spacing[1], gap: activeTheme.spacing[1] / 2, backgroundColor: pressed ? activeTheme.colors.surfaceSubtle : activeTheme.colors.transparent }
-                  : { flex: 1, minHeight: activeTheme.controlSizes.touchTarget + activeTheme.spacing[2], alignItems: 'center', paddingVertical: activeTheme.spacing[1] }}
+                  : { flex: 1, minHeight: activeTheme.controlSizes.touchTarget + activeTheme.spacing[2] + (lunar ? activeTheme.typography.lunarDay.lineHeight : 0), alignItems: 'center', paddingVertical: activeTheme.spacing[1] }}
               >
                 {({ pressed }) => detailed ? <>
-                  {dayMark(day, selected, false)}
+                  {lunar ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] }}>{dayMark(day, selected, false)}{lunarText(day)}</View> : dayMark(day, selected, false)}
                   {titles.slice(0, TITLES_PER_DAY).map(event => (
                     <View key={event.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], paddingHorizontal: activeTheme.spacing[1] }}>
                       <View style={{ width: activeTheme.spacing[1] + 1, height: activeTheme.spacing[1] + 1, borderRadius: activeTheme.borderRadii.full, backgroundColor: event.color }} />
@@ -163,7 +184,8 @@ export function CalendarMonth({
                   {titles.length > TITLES_PER_DAY ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: activeTheme.spacing[1] }}>{`还有 ${titles.length - TITLES_PER_DAY} 项`}</Text> : null}
                 </> : <>
                   {dayMark(day, selected, pressed)}
-                  <View collapsable={false} style={{ width: activeTheme.spacing[1] + 1, height: activeTheme.spacing[1] + 1, marginTop: activeTheme.spacing[1], borderRadius: activeTheme.borderRadii.full, backgroundColor: eventCount > 0 ? (titles[0]?.color ?? activeTheme.colors.inkFaint) : activeTheme.colors.transparent }} />
+                  {lunarText(day)}
+                  <View collapsable={false} style={{ width: activeTheme.spacing[1] + 1, height: activeTheme.spacing[1] + 1, marginTop: lunar ? activeTheme.spacing[1] / 2 : activeTheme.spacing[1], borderRadius: activeTheme.borderRadii.full, backgroundColor: eventCount > 0 ? (titles[0]?.color ?? activeTheme.colors.inkFaint) : activeTheme.colors.transparent }} />
                 </>}
               </Pressable>
             );

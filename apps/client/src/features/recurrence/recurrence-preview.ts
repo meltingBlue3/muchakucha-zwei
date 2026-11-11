@@ -1,5 +1,7 @@
 import type { RecurrenceRuleListItemDto } from '@muchakucha/api-client';
 
+import { lunarOccurrences } from '../lunar/lunar-recurrence';
+
 const DAY = 86400000;
 const iso = (date: Date) => date.toISOString().slice(0, 10);
 const utc = (value: string) => new Date(`${value}T00:00:00Z`);
@@ -11,6 +13,18 @@ export function recurrencePreview(rule: RecurrenceRuleListItemDto, limit = 5): s
   if (!rule.nextOccurrenceDate || rule.interval < 1 || (rule.count !== null && rule.count <= 0)) return [];
   const start = utc(rule.startsOn);
   if (Number.isNaN(start.getTime())) return [];
+  if (rule.freq === 'yearly' && rule.lunar !== null) {
+    const result: string[] = [];
+    let count = 0;
+    for (const date of lunarOccurrences(rule.startsOn, rule.lunar, rule.interval)) {
+      if (rule.endsOn && date > rule.endsOn) break;
+      count++;
+      if (rule.count !== null && count > rule.count) break;
+      if (date >= rule.nextOccurrenceDate) result.push(date);
+      if (result.length >= limit) break;
+    }
+    return result;
+  }
   const selected = [...new Set(rule.byWeekday.length ? rule.byWeekday : [start.getUTCDay()])].sort((a, b) => a - b);
   const weekStart = start.getTime() - start.getUTCDay() * DAY;
   const result: string[] = [];

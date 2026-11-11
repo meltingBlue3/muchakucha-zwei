@@ -261,7 +261,7 @@ for (const width of [390, 1440]) {
     const repeat = create.getByRole('button', { name: /^日程重复设置/ });
     await repeat.click();
     const options = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复', exact: true });
-    await expect(options.getByRole('radio')).toHaveText(['不重复', '每天', '每周', '每月', '每年', '自定义…']);
+    await expect(options.getByRole('radio')).toHaveText(['不重复', '每天', '每周', '每月', '每年', '每年农历五月十八', '自定义…']);
     await expect(options.getByRole('radio', { name: '不重复' })).toBeChecked();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`repeat-options-${width}.png`) });

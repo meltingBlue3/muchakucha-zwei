@@ -122,7 +122,7 @@ export const AppShell = ({
   const desktop = useDesktop();
   const pathname = usePathname();
   const [pageHeader, setPageHeader] = useState<PageHeader | null>(null);
-  const resourceWindow = /\/(tasks|events|notes|recurrence-rules)\/[^/]+(?:\/edit)?$/.test(pathname);
+  const resourceWindow = /\/(tasks|events|notes|recurrence-rules|birthdays)\/[^/]+(?:\/edit)?$/.test(pathname);
   const notes = accessibilityLabel === '家庭笔记';
   const reserved = desktop && (resourceWindow || detailOpen) && !notes ? paneWidth ?? desktopDetailWidth(width) : 0;
   const desktopActions = Platform.OS === 'web' && width >= theme.layout.navigationBreakpoint;

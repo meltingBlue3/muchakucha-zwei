@@ -44,3 +44,17 @@ test('calendar dates have unambiguous names and expose selection independently f
   await fireEvent.press(view.getByRole('button', { name: '下一个月' }));
   expect(onNextMonth).toHaveBeenCalledTimes(1);
 });
+
+test('lunar dates show under the day numbers only when asked for, and keep day names short', async () => {
+  const month = (lunar: boolean) => (
+    <MuchakuchaThemeProvider>
+      <CalendarMonth year={2026} month={10} todayIso="2026-11-11" selectedDateIso="2026-11-11" eventsByDate={new Map()} onSelectDate={jest.fn()} onPrevMonth={jest.fn()} onNextMonth={jest.fn()} lunar={lunar} />
+    </MuchakuchaThemeProvider>
+  );
+  const view = await render(month(true));
+  // A plain lunar day, the first of a lunar month by its name, and a solar term.
+  for (const text of ['初三', '十月', '立冬', '小雪']) expect(view.getByText(text)).toBeTruthy();
+  expect(view.getByRole('button', { name: '2026年11月11日，今天' })).toBeTruthy();
+  await view.rerender(month(false));
+  expect(view.queryByText('初三')).toBeNull();
+});

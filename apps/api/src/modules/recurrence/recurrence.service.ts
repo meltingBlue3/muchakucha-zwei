@@ -10,6 +10,7 @@ import {
   currentCalendarDateIn,
   formatIsoDate,
   localDateTimeToInstant,
+  lunarAnchorOf,
   nextOccurrenceFor,
   parseIsoDate,
   type CalendarDate,
@@ -21,6 +22,7 @@ import type {
   UpdateRecurrenceRuleDto,
   UpdateSeriesDto,
 } from './dto/recurrence.dto.js';
+import { resolveSeriesMarks, seriesMarksResponse } from './series-marks.js';
 
 type TransactionClient = Prisma.TransactionClient;
 type RecurrenceKind = 'event' | 'task';
@@ -138,6 +140,7 @@ export class RecurrenceService {
         startsOn: calendarDate(rule.startsOn),
         endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn),
         count: rule.count,
+        lunar: lunarAnchorOf(rule),
       }, today);
     } catch (error: unknown) {
       this.logger.error(`next occurrence unavailable for rule ${rule.id} (timezone: ${rule.timezone})`, error);
@@ -156,6 +159,7 @@ export class RecurrenceService {
       timezone: rule.timezone,
       startTimeLocal: rule.startTimeLocal,
       durationMinutes: rule.durationMinutes,
+      ...seriesMarksResponse(rule),
       nextOccurrenceDate: next === null ? null : formatIsoDate(next),
     };
   }
@@ -387,10 +391,16 @@ export class RecurrenceService {
         });
       }
 
+      // Without a new recurrence the successor repeats exactly as before,
+      // lunar anchor included.
+      const successorMarks = recurrence === undefined
+        ? { lunarMonth: occurrence.rule.lunarMonth, lunarDay: occurrence.rule.lunarDay, occasion: occurrence.rule.occasion, birthYear: occurrence.rule.birthYear }
+        : resolveSeriesMarks(recurrence, occurrence.rule);
       const createdRule = await tx.recurrenceRule.create({
         data: {
           householdId: occurrence.rule.householdId,
           createdBy: occurrence.rule.createdBy,
+          ...successorMarks,
           freq: recurrence?.freq ?? occurrence.rule.freq,
           interval: recurrence?.interval ?? occurrence.rule.interval,
           byWeekday: recurrence?.byWeekday ?? occurrence.rule.byWeekday,
@@ -576,6 +586,7 @@ export class RecurrenceService {
       // inherits the old rule's remaining occurrences.
       const successorCount = recurrence.count
         ?? (recurrence.endsOn === undefined ? inheritedCount : null);
+      const successorMarks = resolveSeriesMarks(recurrence, rule);
       const firstOccurrence = nextOccurrenceFor({
         freq: recurrence.freq,
         interval: recurrence.interval ?? 1,
@@ -583,6 +594,7 @@ export class RecurrenceService {
         startsOn: anchorCalendar,
         endsOn: successorEndsOn,
         count: successorCount,
+        lunar: recurrence.lunar ?? null,
       }, anchorCalendar);
       if (firstOccurrence === null) {
         // Reject rather than create a rule that can never produce anything.
@@ -603,6 +615,7 @@ export class RecurrenceService {
         data: {
           householdId: rule.householdId,
           createdBy: rule.createdBy,
+          ...successorMarks,
           freq: recurrence.freq,
           interval: recurrence.interval ?? 1,
           byWeekday: recurrence.byWeekday ?? [],

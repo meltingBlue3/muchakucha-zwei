@@ -26,6 +26,7 @@ import {
   type Frequency,
 } from './recurrence-options';
 import { RecurrenceNotes, formatRecurrenceSummary } from './recurrence-summary';
+import { formatLunarAnchor, lunarAnchorFor } from '../lunar/lunar-recurrence';
 
 const TIMEZONE_ERROR = '无法识别当前设备的时区。请检查系统时区设置后重试。';
 const TURN_OFF_DISABLED_HINT = '如需彻底停止这个重复，请到规则详情页使用「结束此重复」。';
@@ -135,7 +136,7 @@ export function RecurrenceField({ value, onChange, startDate: formStart, name, i
         title: '重复',
         onClose: close,
         onReturn,
-        content: <OptionList preset={preset} summary={summary} disableTurnOff={disableTurnOff} turnOffHint={turnOffHint} timeZoneError={timeZoneError} onChoose={choose} onCustom={openCustom} />,
+        content: <OptionList preset={preset} summary={summary} startDate={startDate} disableTurnOff={disableTurnOff} turnOffHint={turnOffHint} timeZoneError={timeZoneError} onChoose={choose} onCustom={openCustom} />,
       };
     }
     if (stage === 'custom') {
@@ -163,9 +164,10 @@ export function RecurrenceField({ value, onChange, startDate: formStart, name, i
   );
 }
 
-function OptionList({ preset, summary, disableTurnOff, turnOffHint, timeZoneError, onChoose, onCustom }: {
+function OptionList({ preset, summary, startDate, disableTurnOff, turnOffHint, timeZoneError, onChoose, onCustom }: {
   preset: ReturnType<typeof presetOf>;
   summary: string;
+  startDate: string;
   disableTurnOff: boolean;
   turnOffHint: string;
   timeZoneError: boolean;
@@ -175,9 +177,13 @@ function OptionList({ preset, summary, disableTurnOff, turnOffHint, timeZoneErro
   return (
     <Stack gap={2}>
       <View accessibilityRole="radiogroup" accessibilityLabel="重复频率">
-        {PRESET_OPTIONS.map(option => (
-          <OptionRow key={option.value} label={option.label} checked={preset === option.value} disabled={option.value === 'none' && disableTurnOff} onPress={() => onChoose(option.value)} />
-        ))}
+        {PRESET_OPTIONS.map(option => {
+          // The lunar 每年 names the lunar date the start date falls on, and is missing outside the lunar table.
+          const anchor = option.value === 'lunarYearly' ? lunarAnchorFor(startDate) : null;
+          if (option.value === 'lunarYearly' && anchor === null) return null;
+          const label = anchor === null ? option.label : `每年农历${formatLunarAnchor(anchor)}`;
+          return <OptionRow key={option.value} label={label} checked={preset === option.value} disabled={option.value === 'none' && disableTurnOff} onPress={() => onChoose(option.value)} />;
+        })}
         <OptionRow label="自定义…" {...(preset === 'custom' ? { detail: summary } : {})} checked={preset === 'custom'} onPress={onCustom} />
       </View>
       {disableTurnOff ? <Text variant="caption">{turnOffHint}</Text> : null}
@@ -216,6 +222,23 @@ function NumberInput({ value, onChange, label }: { value: string; onChange(value
       accessibilityLabel={label}
       style={{ width: theme.spacing[12], minHeight: theme.controlSizes.touchTarget - theme.spacing[1], textAlign: 'center', borderBottomWidth: theme.borderWidths.focus, borderBottomColor: theme.colors.border, fontSize: theme.typography.body.fontSize, fontFamily: theme.fontFamilies.regular, color: theme.colors.ink }}
     />
+  );
+}
+
+/** 公历 or 农历 for a yearly rule, and the date it then repeats on. */
+function YearlyCalendar({ draft, startDate, month, day, onChange }: { draft: CustomDraft; startDate: string; month: number; day: number; onChange(lunar: boolean): void }) {
+  const anchor = lunarAnchorFor(startDate);
+  const lunar = draft.lunar && anchor !== null;
+  return (
+    <Stack gap={2}>
+      {anchor !== null ? (
+        <View accessibilityRole="radiogroup" accessibilityLabel="按公历或农历重复" style={{ flexDirection: 'row', gap: theme.spacing[1] }}>
+          <Choice label="公历" selected={!lunar} onPress={() => onChange(false)} />
+          <Choice label="农历" selected={lunar} onPress={() => onChange(true)} />
+        </View>
+      ) : null}
+      <Text variant="bodySm">{lunar ? `在每年的农历${formatLunarAnchor(anchor)}重复` : `在每年的 ${month} 月 ${day} 日重复`}</Text>
+    </Stack>
   );
 }
 
@@ -264,7 +287,7 @@ function CustomEditor({ draft, errors, timeZoneError, startDate, ownStart, onCha
       ) : draft.freq === 'monthly' ? (
         <Text variant="bodySm">{`在每月的第 ${Number(day)} 天重复${Number(day) >= 29 ? '；有些月份没有这一天，会自动改到当月最后一天。' : ''}`}</Text>
       ) : draft.freq === 'yearly' ? (
-        <Text variant="bodySm">{`在每年的 ${Number(month)} 月 ${Number(day)} 日重复`}</Text>
+        <YearlyCalendar draft={draft} startDate={startDate} month={Number(month)} day={Number(day)} onChange={lunar => set({ lunar })} />
       ) : null}
 
       {ownStart ? <>

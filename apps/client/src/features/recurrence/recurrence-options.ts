@@ -1,5 +1,7 @@
 import type { RecurrenceDto, RecurrenceResponseDto } from '@muchakucha/api-client';
 
+import { lunarAnchorFor } from '../lunar/lunar-recurrence';
+
 /** The recurrence payload a form submits. */
 export type RecurrenceInput = RecurrenceDto;
 
@@ -8,8 +10,8 @@ const DATE_REQUIRED_ERROR = '请选择重复的截止日期。';
 const TIMEZONE_ERROR = '无法识别当前设备的时区。请检查系统时区设置后重试。';
 
 
-/** Google Calendar's repeat menu: fixed presets plus 自定义…. */
-export type RecurrencePreset = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
+/** Google Calendar's repeat menu: fixed presets plus 自定义…, with a lunar 每年 beside the Gregorian one. */
+export type RecurrencePreset = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'lunarYearly' | 'custom';
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 const FREQUENCIES: readonly string[] = ['daily', 'weekly', 'monthly', 'yearly'];
 
@@ -19,6 +21,7 @@ export const PRESET_OPTIONS: ReadonlyArray<{ value: Exclude<RecurrencePreset, 'c
   { value: 'weekly', label: '每周' },
   { value: 'monthly', label: '每月' },
   { value: 'yearly', label: '每年' },
+  { value: 'lunarYearly', label: '每年（农历）' },
 ];
 
 export const MAX_INTERVAL = 52;
@@ -41,22 +44,38 @@ export function presetOf(rule: RecurrenceDto | null, startDate: string): Recurre
     const days = rule.byWeekday ?? [];
     return days.length === 1 && days[0] === weekdayOf(startDate) ? 'weekly' : 'custom';
   }
+  if (rule.lunar !== undefined) {
+    const anchor = lunarAnchorFor(startDate, rule.lunar);
+    return rule.freq === 'yearly' && anchor?.month === rule.lunar.month && anchor.day === rule.lunar.day ? 'lunarYearly' : 'custom';
+  }
   return FREQUENCIES.includes(rule.freq) ? rule.freq as Frequency : 'custom';
+}
+
+/**
+ * A rule that stops repeating yearly can no longer be a birthday. The server
+ * keeps a series' birthday when an edit omits it, so it is cleared explicitly.
+ */
+function withoutYearlyMarks(rule: RecurrenceDto): RecurrenceDto {
+  if (rule.freq === 'yearly' || (rule.occasion == null && rule.birthYear == null)) return rule;
+  return { ...rule, occasion: null, birthYear: null };
 }
 
 /** A fresh preset rule, keeping server-owned fields (series time and duration) from `previous`. */
 export function presetRule(
-  preset: Frequency,
+  preset: Frequency | 'lunarYearly',
   startDate: string,
   timezone: string,
   previous: RecurrenceDto | null,
 ): RecurrenceDto {
-  const next: RecurrenceDto = { ...(previous ?? {}), freq: preset, interval: 1, startsOn: startDate, timezone };
+  const next: RecurrenceDto = { ...(previous ?? {}), freq: preset === 'lunarYearly' ? 'yearly' : preset, interval: 1, startsOn: startDate, timezone };
   delete next.endsOn;
   delete next.count;
+  delete next.lunar;
   if (preset === 'weekly') next.byWeekday = [weekdayOf(startDate)];
   else delete next.byWeekday;
-  return next;
+  const anchor = preset === 'lunarYearly' ? lunarAnchorFor(startDate, previous?.lunar) : null;
+  if (anchor !== null) next.lunar = anchor;
+  return withoutYearlyMarks(next);
 }
 
 /**
@@ -72,6 +91,8 @@ export function followStartDate(rule: RecurrenceDto, startDate: string, moveWeek
   if (rule.freq === 'weekly' && (days.length === 0 || (moveWeekday && days.length === 1 && days[0] === weekdayOf(rule.startsOn)))) {
     next.byWeekday = [weekdayOf(startDate)];
   }
+  // A lunar date moves with the start date as a Gregorian one does.
+  if (rule.lunar !== undefined && moveWeekday) next.lunar = lunarAnchorFor(startDate, rule.lunar) ?? rule.lunar;
   return next;
 }
 
@@ -89,6 +110,8 @@ export interface CustomDraft {
   startsOn: string;
   /** Local "HH:MM" of each occurrence, or '' for none. */
   startTime: string;
+  /** A yearly rule follows the lunar calendar. */
+  lunar: boolean;
 }
 
 export function draftFromRule(rule: RecurrenceDto | null, startDate: string): CustomDraft {
@@ -103,6 +126,7 @@ export function draftFromRule(rule: RecurrenceDto | null, startDate: string): Cu
     ending: rule?.endsOn !== undefined ? 'date' : rule?.count !== undefined ? 'count' : 'never',
     endsOn: rule?.endsOn ?? '',
     countText: String(rule?.count ?? 13),
+    lunar: rule?.lunar !== undefined,
   };
 }
 
@@ -144,10 +168,13 @@ export function ruleFromDraft(draft: CustomDraft, startDate: string, timezone: s
   delete next.endsOn;
   delete next.count;
   delete next.byWeekday;
+  delete next.lunar;
   if (draft.freq === 'weekly') next.byWeekday = [...new Set(draft.byWeekday)].sort((a, b) => a - b);
   if (draft.ending === 'date') next.endsOn = draft.endsOn;
   if (draft.ending === 'count') next.count = Number(draft.countText);
-  return next;
+  const anchor = draft.freq === 'yearly' && draft.lunar ? lunarAnchorFor(startDate, previous?.lunar) : null;
+  if (anchor !== null) next.lunar = anchor;
+  return withoutYearlyMarks(next);
 }
 
 export function deviceTimeZone(): string | null {
@@ -179,6 +206,9 @@ export function recurrenceInputFromResponse(
     ...(response.durationMinutes === null || response.durationMinutes === undefined
       ? {}
       : { durationMinutes: response.durationMinutes }),
+    ...(response.lunar ? { lunar: { month: response.lunar.month, day: response.lunar.day } } : {}),
+    ...(response.occasion ? { occasion: response.occasion } : {}),
+    ...(response.birthYear ? { birthYear: response.birthYear } : {}),
   };
 }
 
@@ -204,7 +234,9 @@ export function recurrenceErrorsFromApi(error: unknown): Record<string, string> 
             ? TIMEZONE_ERROR
             : leaf === 'byWeekday'
               ? '至少需要选择一天。'
-              : '重复规则没有保存成功。请检查网络后重试。';
+              : leaf === 'lunar'
+                ? '按农历重复只能是每年。'
+                : '重复规则没有保存成功。请检查网络后重试。';
   }
   return messages;
 }

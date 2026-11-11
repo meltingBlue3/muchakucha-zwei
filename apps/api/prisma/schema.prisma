@@ -192,6 +192,14 @@ model RecurrenceRule {
   materializedThrough DateTime? @map("materialized_through") @db.Date
   startTimeLocal      String?   @map("start_time_local") @db.VarChar(5)
   durationMinutes     Int?      @map("duration_minutes")
+  // A yearly series on a lunar month and day, kept in the ordinary month and
+  // moved to 廿九 in a short month. Both null for a Gregorian series.
+  lunarMonth          Int?      @map("lunar_month") @db.SmallInt
+  lunarDay            Int?      @map("lunar_day") @db.SmallInt
+  // 'birthday' marks a birthday series; birthYear (optional) gives ages. For a
+  // lunar birthday it is the lunar year of birth.
+  occasion            String?   @db.VarChar(10)
+  birthYear           Int?      @map("birth_year") @db.SmallInt
   // Series-level template. Generated occurrences read their field values from
   // here, never from a sibling instance row — instances are independently
   // editable (D-02/D-07) and must not become a template for future rows.

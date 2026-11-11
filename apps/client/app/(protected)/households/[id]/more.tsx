@@ -14,6 +14,7 @@ const DESCRIPTIONS: Record<typeof familyPages[number]['key'], { name: string; de
   settings: { name: '打开家庭设置', description: '成员、邀请和家庭名称' },
   labels: { name: '管理标签', description: '给日程和任务分类' },
   'recurrence-rules': { name: '管理重复安排', description: '管理重复的日程和任务' },
+  birthdays: { name: '查看家人生日', description: '公历和农历生日，按下一次排列' },
 };
 
 /** The household's own pages in one list; phones also reach them from the household menu. */

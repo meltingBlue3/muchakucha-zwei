@@ -7,6 +7,7 @@ import {
   formatIsoDate,
   localDateTimeToInstant,
   parseIsoDate,
+  lunarAnchorOf,
   walkOccurrences,
   type CalendarDate,
 } from '../recurrence/recurrence-date.js';
@@ -222,6 +223,7 @@ export class RemindersService {
           freq: rule.freq, interval: rule.interval, byWeekday: rule.byWeekday,
           startsOn: calendarDate(rule.startsOn),
           endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn), count: rule.count,
+          lunar: lunarAnchorOf(rule),
         }, { from: walkFrom, horizon: addDays(today, 2 * REMINDER_WINDOW_DAYS + 1) });
         for (const occurrence of occurrences) {
           const occurrenceDate = formatIsoDate(occurrence);

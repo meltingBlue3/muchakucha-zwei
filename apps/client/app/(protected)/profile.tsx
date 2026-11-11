@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import Bell from 'lucide-react-native/icons/bell';
+import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import CircleUserRound from 'lucide-react-native/icons/circle-user-round';
 import House from 'lucide-react-native/icons/house';
@@ -11,11 +12,12 @@ import { sessionApiClient, sessionStateStore, sessionTransport } from '../../src
 import { useCurrentUser } from '../../src/features/auth/use-current-user';
 import { AccountScreen } from '../../src/features/households/household-screen';
 import { ProfileForm } from '../../src/features/profile/profile-form';
+import { setLunarCalendar, useLunarCalendar } from '../../src/features/lunar/lunar-calendar';
 import { AppDialog } from '../../src/ui/app-dialog';
 import { ListGroup, ListRow, RowSlot } from '../../src/ui/list-group';
 import { PageIntro } from '../../src/ui/page-intro';
 import { Stack, Text } from '../../src/ui/primitives';
-import { SettingsRows, SettingsSection } from '../../src/ui/settings-section';
+import { SettingsRows, SettingsSection, SwitchRow } from '../../src/ui/settings-section';
 import { theme } from '../../src/ui/theme';
 import { useDesktop } from '../../src/ui/use-desktop';
 
@@ -43,8 +45,8 @@ function ProfileFact({ label, value, note, action }: { label: string; value: str
 
 /**
  * 个人中心: the nickname and username as facts with 编辑 beside the nickname
- * (as 家庭名称 in 家庭设置), the person's other pages as rows, and 退出登录
- * at the foot.
+ * (as 家庭名称 in 家庭设置), this device's calendar display, the person's
+ * other pages as rows, and 退出登录 at the foot.
  */
 export default function ProfileRoute() {
   const desktop = useDesktop();
@@ -52,6 +54,7 @@ export default function ProfileRoute() {
   const editTrigger = useRef<View>(null);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const lunar = useLunarCalendar();
   return (
     <AccountScreen accessibilityLabel="个人中心">
       <Stack gap={6}>
@@ -66,6 +69,13 @@ export default function ProfileRoute() {
             <ProfileFact label="用户名" value={user?.username ?? '—'} note="用于登录，暂不支持修改。" />
           </SettingsRows>}
         </SettingsSection>}
+        <SettingsSection title="日历" icon={<CalendarDays size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />} detail="只影响这台设备。">
+          <SettingsRows>
+            <SwitchRow label="显示农历" value={lunar} disabled={false} onChange={setLunarCalendar}>
+              <Text variant="caption">在日历和今日里显示农历日期、节气和传统节日。</Text>
+            </SwitchRow>
+          </SettingsRows>
+        </SettingsSection>
         {!desktop ? <ListGroup>
           {LINKS.map(({ key, label, description, icon: Icon, path }) => (
             <ListRow

@@ -11,6 +11,8 @@ import { formatDate, formatWeekday, toTimeValue } from '../../ui/date-values';
 import { RecurrenceBadge } from '../recurrence/recurrence-badge';
 import { toDateIso } from './calendar-utils';
 import { eventLastDate } from './desktop-month';
+import { lunarDescriptionOn } from '../lunar/lunar-calendar';
+import { birthdayNote } from '../birthdays/birthday-dates';
 
 const dayDate = (iso: string) => new Date(`${iso}T12:00:00`);
 const minuteOf = (iso: string) => { const date = new Date(iso); return date.getHours() * 60 + date.getMinutes(); };
@@ -40,7 +42,7 @@ export function DayAgendaRow({ event, dateIso, selected, onPress, namePrefix = '
   const when = allDay
     ? first === last ? '全天' : `${formatDate(dayDate(first))} – ${formatDate(dayDate(last))}`
     : `${toTimeValue(new Date(event.startTime))}–${toTimeValue(new Date(event.endTime))}`;
-  const detail = [when, event.location, allDay ? event.labels?.[0]?.name : null].filter(Boolean).join(' · ');
+  const detail = [when, birthdayNote(event), event.location, allDay ? event.labels?.[0]?.name : null].filter(Boolean).join(' · ');
   const actions = [
     ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: `编辑日程：${event.title}`, onPress: onEdit }] : []),
     ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除日程：${event.title}`, onPress: onDelete }] : []),
@@ -118,9 +120,11 @@ export function DayAgendaList({ dateIso, events, openEventId, nowMinutes, onOpen
  * The right column of the desktop calendar: the chosen day as a heading with
  * its count, the day's events, and a way to add one on that day.
  */
-export function DesktopDayPane({ dateIso, todayIso, events, openEventId, nowMinutes, onOpen, onCreate, onEdit, onDelete, children }: {
+export function DesktopDayPane({ dateIso, todayIso, events, openEventId, nowMinutes, onOpen, onCreate, onEdit, onDelete, lunar = false, children }: {
   dateIso: string; todayIso: string; events: EventResponseDto[]; openEventId: string | null; nowMinutes: number;
   onOpen(event: EventResponseDto): void; onCreate(): void; children?: ReactNode;
+  /** Names the day's lunar date, festivals and solar term under the heading. */
+  lunar?: boolean;
   onEdit?: (event: EventResponseDto) => (() => void) | undefined; onDelete?: (event: EventResponseDto) => (() => void) | undefined;
 }) {
   const date = dayDate(dateIso);
@@ -131,7 +135,7 @@ export function DesktopDayPane({ dateIso, todayIso, events, openEventId, nowMinu
         <Heading variant="section" level={2}>{`${formatDate(date)} ${formatWeekday(date)}`}</Heading>
         {isToday ? <Chip tone="accent">今天</Chip> : null}
       </View>
-      <Text variant="meta">{events.length ? `${events.length} 个日程` : '没有日程'}</Text>
+      <Text variant="meta">{[lunar ? lunarDescriptionOn(dateIso) : null, events.length ? `${events.length} 个日程` : '没有日程'].filter(Boolean).join(' · ')}</Text>
     </View>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing[3], paddingTop: theme.spacing[4] }}>
       <DayAgendaList dateIso={dateIso} events={events} openEventId={openEventId} nowMinutes={isToday ? nowMinutes : null} onOpen={onOpen} {...(onEdit ? { onEdit } : {})} {...(onDelete ? { onDelete } : {})}>{children}</DayAgendaList>

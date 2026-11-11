@@ -118,7 +118,7 @@ describe('提醒我 in the task form', () => {
   test('on a recurring task it says the choice covers every occurrence', async () => {
     const { view } = await renderTaskForm(savedTask({
       recurrenceRuleId: 'rule', occurrenceDate: '2030-10-01',
-      recurrence: { id: 'rule', freq: 'daily', interval: 1, byWeekday: [], startsOn: '2030-10-01', endsOn: null, count: null, timezone: 'Asia/Shanghai', materializedThrough: null, startTimeLocal: '18:00', durationMinutes: null, updatedAt: '2030-10-01T00:00:00.000Z' },
+      recurrence: { id: 'rule', freq: 'daily', interval: 1, byWeekday: [], startsOn: '2030-10-01', endsOn: null, count: null, timezone: 'Asia/Shanghai', materializedThrough: null, startTimeLocal: '18:00', durationMinutes: null, lunar: null, occasion: null, birthYear: null, updatedAt: '2030-10-01T00:00:00.000Z' },
     }));
     await fireEvent.press(view.getByRole('button', { name: '提醒我，准时提醒（默认）' }));
     expect(view.getByText('只改你自己的提醒，家人不受影响。对这个重复安排的每一次都生效。')).toBeTruthy();

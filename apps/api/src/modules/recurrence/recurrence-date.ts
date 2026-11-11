@@ -1,6 +1,14 @@
 /** Pure calendar arithmetic. No Nest, no Prisma, no I/O. */
+import { LUNAR_LAST_YEAR, lunarAnniversary, toLunar } from '@muchakucha/lunar';
+
 export interface CalendarDate {
   year: number;
+  month: number;
+  day: number;
+}
+
+/** A yearly series' lunar month and day, such as a lunar birthday. */
+export interface LunarAnchor {
   month: number;
   day: number;
 }
@@ -12,6 +20,13 @@ export interface WalkRule {
   startsOn: CalendarDate;
   endsOn?: CalendarDate | null;
   count?: number | null;
+  /** Makes a yearly rule follow the lunar calendar instead of `startsOn`'s month and day. */
+  lunar?: LunarAnchor | null;
+}
+
+/** The lunar anchor stored on a rule row, if it has one. */
+export function lunarAnchorOf(rule: { lunarMonth: number | null; lunarDay: number | null }): LunarAnchor | null {
+  return rule.lunarMonth === null || rule.lunarDay === null ? null : { month: rule.lunarMonth, day: rule.lunarDay };
 }
 
 export const RECURRENCE_MAX_INSTANCES_PER_RUN = 400;
@@ -182,6 +197,23 @@ export function walkOccurrences(rule: WalkRule, options: WalkOptions): CalendarD
   if (rule.freq === 'monthly') {
     for (let index = 0; index < RECURRENCE_MAX_WALK_STEPS; index += 1) {
       const candidate = addMonths(rule.startsOn, index * rule.interval, rule.startsOn.day);
+      if (!mayInclude(rule, candidate, options.horizon)) break;
+      if (!appendOccurrence(occurrences, rule, candidate, options, state)) break;
+    }
+    return occurrences;
+  }
+
+  if (rule.freq === 'yearly' && rule.lunar != null) {
+    // One occurrence every `interval` lunar years, from the first lunar
+    // anniversary on or after `startsOn`. The lunar table ends with lunar
+    // year 2100, and so does the series.
+    const startYear = toLunar(rule.startsOn)?.year;
+    if (startYear === undefined) return occurrences;
+    const inStartYear = lunarAnniversary(startYear, rule.lunar.month, rule.lunar.day);
+    const firstYear = inStartYear !== null && compareDates(inStartYear, rule.startsOn) >= 0 ? startYear : startYear + 1;
+    for (let year = firstYear; year <= LUNAR_LAST_YEAR; year += rule.interval) {
+      const candidate = lunarAnniversary(year, rule.lunar.month, rule.lunar.day);
+      if (candidate === null) break;
       if (!mayInclude(rule, candidate, options.horizon)) break;
       if (!appendOccurrence(occurrences, rule, candidate, options, state)) break;
     }

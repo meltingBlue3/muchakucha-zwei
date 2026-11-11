@@ -14,6 +14,7 @@ import {
   parseIsoDate,
   walkOccurrences,
 } from '../recurrence/recurrence-date.js';
+import { resolveSeriesMarks, seriesMarksResponse } from '../recurrence/series-marks.js';
 
 const TITLE_MIN = 1;
 const TITLE_MAX = 200;
@@ -69,6 +70,10 @@ interface EventRow {
     updatedAt: Date;
     startTimeLocal: string | null;
     durationMinutes: number | null;
+    lunarMonth: number | null;
+    lunarDay: number | null;
+    occasion: string | null;
+    birthYear: number | null;
   } | null;
   labels: Array<{
     label: {
@@ -171,6 +176,7 @@ export class EventsService {
 
     if (input.recurrence !== undefined) {
       const recurrence = input.recurrence;
+      const marks = resolveSeriesMarks(recurrence, null);
       const startsOn = parseRequestDate(recurrence.startsOn, 'recurrence.startsOn');
       const interval = recurrence.interval ?? 1;
       const firstOccurrence = walkOccurrences({
@@ -180,7 +186,9 @@ export class EventsService {
         startsOn,
         endsOn: recurrence.endsOn === undefined ? null : parseRequestDate(recurrence.endsOn, 'recurrence.endsOn'),
         count: recurrence.count ?? null,
-      }, { horizon: addDays(startsOn, Math.max(7, interval * 7)) })[0];
+        lunar: recurrence.lunar ?? null,
+      // A lunar date's first occurrence can be up to a lunar year after startsOn.
+      }, { horizon: addDays(startsOn, recurrence.lunar === undefined ? Math.max(7, interval * 7) : 400 * interval) })[0];
       if (firstOccurrence === undefined) {
         throw new BadRequestException({
           code: 'VALIDATION_FAILED',
@@ -236,6 +244,7 @@ export class EventsService {
             timezone: recurrence.timezone,
             startTimeLocal,
             durationMinutes,
+            ...marks,
             templateTitle: trimmedTitle,
             templateDescription: input.description?.trim() || null,
             templateLocation: input.location?.trim() || null,
@@ -523,6 +532,7 @@ export class EventsService {
         materializedThrough: row.recurrenceRule.materializedThrough?.toISOString().slice(0, 10) ?? null,
         startTimeLocal: row.recurrenceRule.startTimeLocal,
         durationMinutes: row.recurrenceRule.durationMinutes,
+        ...seriesMarksResponse(row.recurrenceRule),
       },
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),
