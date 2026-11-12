@@ -26,7 +26,7 @@ function webDialogName(title: string): object {
   return Platform.OS === 'web' ? { 'aria-label': title } : {};
 }
 
-export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, headerActions, headerNote, reading = false, anchored = false, wide = false }: {
+export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, headerActions, headerNote, reading = false, anchored = false, wide = false, fillContent = false }: {
   title: string;
   busy: boolean;
   onClose(): void;
@@ -47,6 +47,8 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   anchored?: boolean;
   /** Desktop pane only: as wide as Today's 待办 and 接下来 together, for a note written beside Today. */
   wide?: boolean;
+  /** The content fills the viewport and handles its own scrolling. */
+  fillContent?: boolean;
 }) {
   const panel = useRef<View>(null);
   const initial = useRef<View>(null);
@@ -144,7 +146,18 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
               </Inline>
             )}
             <SheetActionSlot.Provider value={sheet ? setSheetAction : null}>
-              <ScrollView {...(Platform.OS === 'web' && size === 'editor' ? { tabIndex: 0 } : {})} keyboardDismissMode={scrollKeyboardDismissMode} keyboardShouldPersistTaps="handled" style={side ? { flex: 1 } : { flexShrink: 1 }} contentContainerStyle={sheet ? { paddingHorizontal: theme.spacing[3], paddingBottom: theme.spacing[6] } : undefined}>{children}</ScrollView>
+              <ScrollView
+                {...(Platform.OS === 'web' && size === 'editor' ? { tabIndex: 0 } : {})}
+                keyboardDismissMode={scrollKeyboardDismissMode}
+                keyboardShouldPersistTaps="handled"
+                scrollEnabled={!fillContent}
+                scrollsChildToFocus={!fillContent}
+                style={side || fillContent ? { flex: 1 } : { flexShrink: 1 }}
+                contentContainerStyle={[
+                  sheet ? { paddingHorizontal: theme.spacing[3], paddingBottom: fillContent ? 0 : theme.spacing[6] } : undefined,
+                  fillContent ? { flex: 1 } : undefined,
+                ]}
+              >{children}</ScrollView>
             </SheetActionSlot.Provider>
             {footer ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], ...(sheet ? { paddingHorizontal: theme.spacing[3] } : {}) }}>{footer}</View> : null}
           </View>

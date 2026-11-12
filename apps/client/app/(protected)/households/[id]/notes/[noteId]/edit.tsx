@@ -10,6 +10,7 @@ import type { NoteResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { NoteForm } from '../../../../../../src/features/notes/note-form';
+import { noteEditorViewport } from '../../../../../../src/features/notes/note-editor-chrome';
 import { NoteWindow } from '../../../../../../src/features/notes/note-window';
 import { Banner, LoadError, LoadingState, Stack } from '../../../../../../src/ui/primitives';
 import type { CreateNoteDto } from '@muchakucha/api-client';
@@ -90,7 +91,7 @@ export default function EditNoteRoute() {
     <NoteWindow draftPrefix={draftPrefix} title="编辑笔记" busy={isSubmitting} onClose={close} exitAllowed={exitAllowed}>
       {loading ? <LoadingState label="正在加载笔记" /> : note === null ? <Stack gap={3}>
         <LoadError message={error ?? '笔记未找到或已被删除。'} onRetry={() => void fetchNote()} />
-      </Stack> : <Stack gap={4}>
+      </Stack> : <Stack gap={4} style={noteEditorViewport}>
         <HouseholdContextNote householdName={householdName} />
         {error ? <Banner>{error}</Banner> : null}
         {conflict.panel}

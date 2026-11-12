@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type ComponentType, type ReactNode, type RefObject } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Platform, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Check from 'lucide-react-native/icons/check';
 
@@ -17,9 +17,9 @@ import { useWindowStep, type RouteWindowStep } from './window-step';
  */
 
 /** A separated group of rows. */
-export function FormSection({ children }: { children: ReactNode }) {
+export function FormSection({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
-    <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingVertical: theme.spacing[2] }}>
+    <View style={[{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingVertical: theme.spacing[2] }, style]}>
       {children}
     </View>
   );

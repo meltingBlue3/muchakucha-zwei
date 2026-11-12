@@ -1,6 +1,6 @@
 import { readTextSelection } from '../../platform/text-selection/text-selection';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import BookOpen from 'lucide-react-native/icons/book-open';
 import Pencil from 'lucide-react-native/icons/pencil';
@@ -10,7 +10,7 @@ import Link from 'lucide-react-native/icons/link';
 import Table from 'lucide-react-native/icons/table';
 import { Button, IconButton, Stack, Text, TextField } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
-import { NoteEditorChromeContext } from './note-editor-chrome';
+import { NoteEditorChromeContext, noteEditorViewport } from './note-editor-chrome';
 import { MarkdownBody } from './markdown-body';
 import { useDesktop } from '../../ui/use-desktop';
 import { headingLevel, insertLink, insertTable, safeLink, setHeading, toggleBold, type MarkdownEdit, type Selection } from './markdown';
@@ -20,7 +20,7 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
   const desktop = useDesktop();
   const input = useRef<TextInput>(null);
   const selection = useRef<Selection>({ start: 0, end: 0 });
-  const [cursor, setCursor] = useState<Selection | undefined>();
+  const [cursor, setCursor] = useState<Selection | undefined>(() => noteEditorViewport ? selection.current : undefined);
   const [preview, setPreview] = useState(false);
   const [panel, setPanel] = useState<'heading' | 'link' | 'table' | null>(null);
   const [label, setLabel] = useState('');
@@ -85,15 +85,16 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
   }), [preview, panel, value, disabled, label, url, columns, rows, error, theme, desktop, apply, closePanel, restore]);
   useEffect(() => { setChrome(chrome); }, [setChrome, chrome]);
   useEffect(() => () => setChrome(null), [setChrome]);
-  return <Stack gap={2}>
-    {preview ? <MarkdownBody source={value} /> : <TextInput
+  const renderedMarkdown = preview ? <MarkdownBody source={value} /> : null;
+  return <Stack gap={2} style={noteEditorViewport}>
+    {preview ? (noteEditorViewport ? <ScrollView>{renderedMarkdown}</ScrollView> : renderedMarkdown) : <TextInput
       ref={input} value={value} editable={!disabled} multiline accessibilityLabel="笔记内容"
       placeholder="写下内容，或用下方按钮添加格式…" placeholderTextColor={theme.colors.inkMuted}
       selection={cursor}
       onSelectionChange={event => { selection.current = event.nativeEvent.selection; setCursor(undefined); }}
       onBlur={() => { selection.current = readTextSelection(input.current) ?? selection.current; }}
       onChangeText={onChange}
-      style={{ minHeight: theme.controlSizes.field * (desktop ? 8 : 4), color: theme.colors.ink, paddingVertical: theme.spacing[3], paddingHorizontal: theme.spacing[2], fontFamily: theme.fontFamilies.regular, fontSize: desktop ? theme.typography.readingBody.fontSize : theme.typography.body.fontSize, lineHeight: desktop ? theme.typography.readingBody.lineHeight : theme.typography.body.lineHeight, textAlignVertical: 'top' }}
+      style={[noteEditorViewport ?? { minHeight: theme.controlSizes.field * (desktop ? 8 : 4) }, { color: theme.colors.ink, paddingVertical: theme.spacing[3], paddingHorizontal: theme.spacing[2], fontFamily: theme.fontFamilies.regular, fontSize: desktop ? theme.typography.readingBody.fontSize : theme.typography.body.fontSize, lineHeight: desktop ? theme.typography.readingBody.lineHeight : theme.typography.body.lineHeight, textAlignVertical: 'top' }]}
     />}
   </Stack>;
 }

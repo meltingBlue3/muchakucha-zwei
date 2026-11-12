@@ -87,9 +87,10 @@ export interface RouteWindowProps {
   fallback: ReactNode;
   /** Confirmation-only routes use the compact centered window on every width. */
   size?: 'standard' | 'editor';
+  fillContent?: boolean;
 }
 
-export function RouteWindow({ title, busy = false, children, footer, headerActions, headerNote, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor', draftPrefix }: RouteWindowProps) {
+export function RouteWindow({ title, busy = false, children, footer, headerActions, headerNote, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor', draftPrefix, fillContent = false }: RouteWindowProps) {
   const focused = useIsFocused();
   const docked = (size === 'editor' || draftPrefix !== undefined) && DOCKED_RESOURCES.has(resource);
   const pane = useDesktop() && docked;
@@ -162,14 +163,14 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
       <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={backgroundInteractive ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
-      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes' && overList} wide={besideToday} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })}>
+      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes' && overList} wide={besideToday} fillContent={fillContent && !step && !confirmation} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })}>
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>
             <ConfirmActions cancelLabel="继续编辑" confirmLabel={confirmation.confirmLabel} destructive={confirmation.destructive ?? false} busy={busy} onCancel={() => setConfirmation(null)} onConfirm={() => { const request = confirmation; confirmationRef.current = null; setConfirmation(null); request.onConfirm(); }} />
           </Stack> : <>
             {/* Keep the editor mounted while a step owns focus. */}
-            <View style={step ? { display: 'none' } : undefined} aria-hidden={Boolean(step)} importantForAccessibility={step ? 'no-hide-descendants' : 'auto'}>
+            <View style={step ? { display: 'none' } : fillContent ? { flex: 1 } : undefined} aria-hidden={Boolean(step)} importantForAccessibility={step ? 'no-hide-descendants' : 'auto'}>
               <WindowStepContext.Provider value={stepHost}><SuspendSheetAction suspended={Boolean(step)}>{children}</SuspendSheetAction></WindowStepContext.Provider>
             </View>
             <WindowStepContext.Provider value={null}>{step?.content}</WindowStepContext.Provider>
