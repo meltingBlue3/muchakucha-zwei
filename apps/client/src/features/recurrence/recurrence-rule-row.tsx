@@ -138,10 +138,11 @@ export function RecurrenceRuleRow({ rule, deviceTimeZone, onPress, selected = fa
     const time = rule.startTimeLocal ? rule.startTimeLocal.slice(0, 5) : '';
     const nextText = formatted.ended ? '已结束' : next ? isToday ? `今天${time ? ` ${time}` : ''}` : formatDate(parseDateValue(next)) : '';
     const KindIcon = rule.kind === 'event' ? CalendarDays : CircleCheck;
-    return <Pressable {...insetFocusRing} accessibilityRole="button" accessibilityLabel={formatted.accessibilityLabel} {...(selected ? { 'aria-current': true } : {})} onPress={onPress} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[4], minHeight: activeTheme.layout.desktopRowHeight + activeTheme.spacing[2], paddingHorizontal: activeTheme.spacing[6], opacity: formatted.ended ? 0.6 : 1, backgroundColor: selected ? activeTheme.colors.canvas : pressed || hovered ? activeTheme.colors.surfaceSubtle : activeTheme.colors.surface })}>
+    return <Pressable {...insetFocusRing} accessibilityRole="button" accessibilityLabel={formatted.accessibilityLabel} {...(selected ? { 'aria-current': true } : {})} onPress={onPress} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[4], minHeight: activeTheme.layout.desktopRowHeight + activeTheme.spacing[2], paddingHorizontal: activeTheme.spacing[6], backgroundColor: selected ? activeTheme.colors.canvas : pressed || hovered ? activeTheme.colors.surfaceSubtle : activeTheme.colors.surface })}>
       {selected ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: activeTheme.borderWidths.focus, backgroundColor: activeTheme.colors.ink }} /> : null}
       <View style={{ width: activeTheme.layout.recurrenceKindColumn, flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] + 2 }}>{rule.kind ? <KindIcon size={activeTheme.controlSizes.icon - 5} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} /> : null}<Text variant="meta">{formatted.kindLabel ?? '—'}</Text></View>
-      <Text variant="bodySm" color="ink" numberOfLines={1} style={{ width: activeTheme.layout.recurrenceTitleColumn }}>{formatted.title}</Text>
+      {/* An ended rule is quieter in colour, not faded: fading took its small text under 4.5:1. 已结束 says it in words. */}
+      <Text variant="bodySm" color={formatted.ended ? 'inkMuted' : 'ink'} numberOfLines={1} style={{ width: activeTheme.layout.recurrenceTitleColumn }}>{formatted.title}</Text>
       <Text variant="meta" numberOfLines={1} style={{ flex: 1 }}>{formatted.summary}</Text>
       <Text variant="time" numberOfLines={1} color={isToday && !formatted.ended ? 'accent' : 'inkMuted'} style={{ width: activeTheme.layout.recurrenceNextColumn, textAlign: 'right' }}>{nextText}</Text>
     </Pressable>;
@@ -156,9 +157,8 @@ export function RecurrenceRuleRow({ rule, deviceTimeZone, onPress, selected = fa
       style={({ pressed }) => ({
         backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.surface,
         minHeight: activeTheme.controlSizes.touchTarget,
-        // `opacity` is never the only signal that a rule has ended — the
-        // `nextLine` below says so in words as well.
-        opacity: formatted.ended ? 0.6 : 1,
+        // An ended rule is told by words (the `nextLine` below) and a quieter
+        // title, never by fading the row, which took its small text under 4.5:1.
         paddingHorizontal: activeTheme.spacing[4],
         paddingVertical: activeTheme.spacing[3],
       })}
@@ -173,7 +173,7 @@ export function RecurrenceRuleRow({ rule, deviceTimeZone, onPress, selected = fa
           }}
         >
           {rule.kind !== null && <RecurrenceKindBadge kind={rule.kind} />}
-          <Text variant="body" numberOfLines={2} style={{ flexShrink: 1 }}>
+          <Text variant="body" color={formatted.ended ? 'inkMuted' : 'ink'} numberOfLines={2} style={{ flexShrink: 1 }}>
             {formatted.title}
           </Text>
         </View>

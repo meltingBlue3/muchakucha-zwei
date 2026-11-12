@@ -1,56 +1,36 @@
-import { RouteWindow, useRouteWindowClose } from '../../../../../../src/ui/route-window';
-import { recurrencePreview } from '../../../../../../src/features/recurrence/recurrence-preview';
-import { useDesktop } from '../../../../../../src/ui/use-desktop';
-import { formatDate, parseDateValue } from '../../../../../../src/ui/date-values';
-import RecurrenceListScreen from '../../../../../../src/features/recurrence/recurrence-list-screen';
-import { DraftNotice } from '../../../../../../src/ui/draft-notice';
-import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
-import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import Ban from 'lucide-react-native/icons/ban';
-import Repeat from 'lucide-react-native/icons/repeat';
 import { useTheme } from '@shopify/restyle';
 import { ApiClientError, type RecurrenceRuleListItemDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
+import { ageOn } from '../../../../../../src/features/birthdays/birthday-dates';
+import { notifyContentChanged } from '../../../../../../src/features/content/content-changes';
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
 import { RecurrenceKindBadge } from '../../../../../../src/features/recurrence/recurrence-kind-badge';
-import {
-  recurrenceInputFromResponse,
-  type RecurrenceInput,
-} from '../../../../../../src/features/recurrence/recurrence-options';
-import { RecurrenceField } from '../../../../../../src/features/recurrence/recurrence-field';
-import { FormRow, FormSection, ROW_CONTENT_INSET, rowIcon } from '../../../../../../src/ui/compose-rows';
-import {
-  formatRuleRow,
-  nextDayIsoIn,
-} from '../../../../../../src/features/recurrence/recurrence-rule-row';
-import {
-  AccessChangedPanel,
-  AppShell,
-} from '../../../../../../src/ui/household-components';
-import { Banner, ConfirmActions, FormActions, FormMessage, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
+import RecurrenceListScreen from '../../../../../../src/features/recurrence/recurrence-list-screen';
+import { recurrencePreview } from '../../../../../../src/features/recurrence/recurrence-preview';
+import { formatRuleRow } from '../../../../../../src/features/recurrence/recurrence-rule-row';
+import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
+import { formatDate, parseDateValue, toDateValue } from '../../../../../../src/ui/date-values';
+import { DetailEditButton, DetailField, DetailPanel } from '../../../../../../src/ui/detail-fields';
+import { AccessChangedPanel, AppShell } from '../../../../../../src/ui/household-components';
+import { Banner, Chip, ConfirmActions, Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
+import { RouteWindow, useRouteWindowClose } from '../../../../../../src/ui/route-window';
 import type { Theme } from '../../../../../../src/ui/theme';
+import { useDesktop } from '../../../../../../src/ui/use-desktop';
+import { useMinuteClock } from '../../../../../../src/ui/use-minute-clock';
 
 const LOAD_ERROR = '无法加载这条重复安排，请检查网络连接后重试。';
-// One copy for every 404 cause. Saying the rule "was taken away" would assert
-// a history the client cannot know, and would confirm that a rule belonging to
-// another household exists at all (T-07-46) — so this says only what is true
-// from the user's side: they cannot see it.
+// One copy for every 404 cause (T-07-46): it says only what is true from the
+// user's side, that they cannot see the rule.
 const NOT_FOUND_ERROR = '这条重复安排不存在，或者你已经看不到它了。';
-const SCOPE_NOTE = '更改会从明天开始生效，今天和之前的安排都保留。';
-const SAVE_CONFIRM_PROMPT = '这会影响明天起的每一次。';
-const SAVE_ERROR = '更改没有保存成功。这条重复规则没有发生任何改变，请重试。';
-const SAVE_FORBIDDEN = '只有创建者、管理员或所有者可以修改这条重复规则。';
 const END_ACTION = '结束此重复';
 const END_CONFIRM_PROMPT = '确定结束？明天起不再重复，今天和之前的安排都保留。';
 const END_ERROR = '没有结束成功。这个重复安排没有发生任何改变，请重试。';
 const END_FORBIDDEN = '只有创建者、管理员或所有者可以结束这条重复规则。';
 const ENDED_NOTE = '这个重复已经结束了。';
-const TURN_OFF_HINT = '要停止这个重复，请使用下方的「结束此重复」。';
-const ENDS_ON_ERROR = '截止日期必须晚于明天。';
 
 function resolveDeviceTimeZone(): string {
   try {
@@ -60,6 +40,23 @@ function resolveDeviceTimeZone(): string {
   }
 }
 
+const pad = (value: number) => String(value).padStart(2, '0');
+
+/** 16:30–17:30 for a timed event, 20:00 for a task, 全天 for an all-day event; null when a task has no time. */
+function timeOf(rule: RecurrenceRuleListItemDto): string | null {
+  if (!rule.startTimeLocal) return rule.kind === 'event' ? '全天' : null;
+  const start = rule.startTimeLocal.slice(0, 5);
+  if (rule.kind !== 'event' || !rule.durationMinutes) return start;
+  const [hours = 0, minutes = 0] = start.split(':').map(Number);
+  const end = hours * 60 + minutes + rule.durationMinutes;
+  return `${start}–${pad(Math.floor(end / 60) % 24)}:${pad(end % 60)}`;
+}
+
+/**
+ * 重复安排详情: what the rule is and when it falls next, read before anything
+ * is changed. 编辑 in the title bar opens the editor; 结束此重复 sits at the
+ * foot and asks first, in the same window. An ended rule offers neither.
+ */
 export default function RecurrenceRuleDetailRoute() {
   const desktop = useDesktop();
   const { id, ruleId } = useLocalSearchParams<{ id: string; ruleId: string }>();
@@ -67,6 +64,7 @@ export default function RecurrenceRuleDetailRoute() {
   const exitAllowed = useRef(false);
   const { close: dismiss } = useRouteWindowClose('recurrence-rules');
   const activeTheme = useTheme<Theme>();
+  const todayIso = toDateValue(useMinuteClock().date);
   const {
     viewState,
     households,
@@ -76,32 +74,18 @@ export default function RecurrenceRuleDetailRoute() {
   } = useHouseholdContext();
 
   const [rule, setRule] = useState<RecurrenceRuleListItemDto | null>(null);
-  const [recurrence, setRecurrence] = useWorkspaceState<RecurrenceInput | null>(`draft:${id}:recurrence-rules:${ruleId}:form`, null);
   const loadedOnce = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [writeError, setWriteError] = useState<string | null>(null);
-  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
 
   const householdId = id ?? currentHouseholdId;
   const deviceTimeZone = resolveDeviceTimeZone();
-  const busy = saving || ending;
-
-  const workspace = useWorkspaceStore();
-  const draftPrefix = `draft:${id}:recurrence-rules:${ruleId}:`;
-  const conflict = useEditConflict(draftPrefix, rule, async () => {
-    const token = await sessionTransport.getAccessToken();
-    if (!token) throw new Error('Session expired');
-    return sessionApiClient.getRecurrenceRule(token, householdId!, ruleId!);
-  }, setRule);
 
   const fetchRule = useCallback(async () => {
-    if (householdId === undefined || householdId === '' || ruleId === undefined || ruleId === '') {
-      return;
-    }
+    if (householdId === undefined || householdId === '' || ruleId === undefined || ruleId === '') return;
     if (!loadedOnce.current) setLoading(true);
     setError(null);
     try {
@@ -110,101 +94,47 @@ export default function RecurrenceRuleDetailRoute() {
         setError('登录已过期，请重新登录。');
         return;
       }
-      const result = await sessionApiClient.getRecurrenceRule(token, householdId, ruleId);
-      captureEditBaseline(workspace, draftPrefix, result);
-      setRule(result);
-      // The picker is seeded once from the authoritative rule. A refetch after
-      // a failed write must not silently discard edits the user still has on
-      // screen, so the seed only happens while there is nothing to lose.
-      setRecurrence((current) => current ?? recurrenceInputFromResponse(result));
+      setRule(await sessionApiClient.getRecurrenceRule(token, householdId, ruleId));
       loadedOnce.current = true;
     } catch (caught: unknown) {
-      setError(
-        caught instanceof ApiClientError && caught.status === 404 ? NOT_FOUND_ERROR : LOAD_ERROR,
-      );
+      setError(caught instanceof ApiClientError && caught.status === 404 ? NOT_FOUND_ERROR : LOAD_ERROR);
     } finally {
       setLoading(false);
     }
-  }, [householdId, ruleId, workspace, draftPrefix, setRecurrence]);
+  }, [householdId, ruleId]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void fetchRule();
-    }, [fetchRule]),
-  );
+  // Coming back from the editor re-reads the rule it just saved.
+  useFocusEffect(useCallback(() => { void fetchRule(); }, [fetchRule]));
 
-  const backToList = useCallback(() => {
-    if (householdId === undefined || householdId === '') return;
-    // Return to the list and let its `useFocusEffect` re-read authoritative
-    // state. Nothing is updated optimistically on the way out.
-    exitAllowed.current = true;
-    void router.dismissTo(`/households/${encodeURIComponent(householdId)}/recurrence-rules`);
-  }, [householdId, router]);
+  const handleEdit = useCallback(() => {
+    if (householdId === undefined || householdId === '' || ruleId === undefined) return;
+    rememberRouteTrigger();
+    router.push(`/households/${encodeURIComponent(householdId)}/recurrence-rules/${encodeURIComponent(ruleId)}/edit`);
+  }, [householdId, ruleId, router]);
 
-  // Only a confirm action writes. The trigger below merely opens this row.
-  const handleConfirmSave = useCallback(async () => {
-    if (householdId === undefined || householdId === '' || ruleId === undefined || ruleId === '') {
-      return;
-    }
-    if (recurrence === null) return;
-    setSaving(true);
-    setWriteError(null);
-    try {
-      const token = await sessionTransport.getAccessToken();
-      if (token === null) {
-        setWriteError(SAVE_ERROR);
-        return;
-      }
-      await sessionApiClient.updateRecurrenceRule(token, householdId, ruleId, { recurrence, expectedUpdatedAt: conflict.precondition.expectedUpdatedAt });
-      workspace.clear(draftPrefix);
-      setSaveConfirmOpen(false);
-      backToList();
-    } catch (caught: unknown) {
-      if (conflict.handle(caught)) { setSaveConfirmOpen(false); return; }
-      // Every picker edit is kept: a failed write changed nothing server-side,
-      // so throwing away the user's input would be the only real loss.
-      setWriteError(
-        caught instanceof ApiClientError && caught.status === 403 ? SAVE_FORBIDDEN : SAVE_ERROR,
-      );
-    } finally {
-      setSaving(false);
-    }
-  }, [householdId, ruleId, recurrence, backToList, conflict, workspace, draftPrefix]);
-
+  // Only the confirm action writes; 结束此重复 merely opens the question.
   const handleConfirmEnd = useCallback(async () => {
-    if (householdId === undefined || householdId === '' || ruleId === undefined || ruleId === '') {
-      return;
-    }
+    if (householdId === undefined || householdId === '' || ruleId === undefined || ruleId === '') return;
     setEnding(true);
-    setWriteError(null);
+    setEndError(null);
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setWriteError(END_ERROR);
+        setEndError(END_ERROR);
         return;
       }
       await sessionApiClient.endRecurrenceRule(token, householdId, ruleId);
       setEndConfirmOpen(false);
-      backToList();
+      // The list keeps the rule and says it has ended; nothing is guessed on the way out.
+      notifyContentChanged(householdId);
+      exitAllowed.current = true;
+      dismiss();
     } catch (caught: unknown) {
-      setWriteError(
-        caught instanceof ApiClientError && caught.status === 403 ? END_FORBIDDEN : END_ERROR,
-      );
+      setEndError(caught instanceof ApiClientError && caught.status === 403 ? END_FORBIDDEN : END_ERROR);
     } finally {
       setEnding(false);
     }
-  }, [householdId, ruleId, backToList]);
-
-  const formatted = rule === null ? null : formatRuleRow(rule, deviceTimeZone);
-  const ended = formatted?.ended ?? false;
-  // The split anchor: tomorrow in the RULE's timezone. Memoized so the picker's
-  // startsOn-sync effect sees a stable value instead of a fresh one per render.
-  const anchor = useMemo(
-    () => (rule === null ? null : nextDayIsoIn(rule.timezone)),
-    [rule],
-  );
-  // The split starts tomorrow, so an end date must come after it.
-  const endsOnInvalid = anchor !== null && recurrence?.endsOn !== undefined && recurrence.endsOn <= anchor;
+  }, [householdId, ruleId, dismiss]);
 
   if (viewState === 'accessChanged') {
     return (
@@ -229,104 +159,103 @@ export default function RecurrenceRuleDetailRoute() {
     );
   }
 
+  const formatted = rule === null ? null : formatRuleRow(rule, deviceTimeZone);
+  const ended = formatted?.ended ?? false;
+  const writable = rule !== null && !ended;
   const close = () => {
-    if (saveConfirmOpen) setSaveConfirmOpen(false);
-    else if (endConfirmOpen) setEndConfirmOpen(false);
-    else dismiss();
+    if (endConfirmOpen) { setEndConfirmOpen(false); setEndError(null); } else dismiss();
   };
+  // A phone asks in a compact dialog; the wide pane keeps its place and asks inside it.
+  const size = endConfirmOpen && !desktop ? 'standard' : 'editor';
+  const footer = writable && !endConfirmOpen ? (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={END_ACTION}
+        disabled={ending}
+        onPress={() => { setEndError(null); setEndConfirmOpen(true); }}
+        style={({ pressed }) => ({ minHeight: desktop ? activeTheme.layout.desktopControl : activeTheme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: activeTheme.spacing[2], marginLeft: -activeTheme.spacing[2], borderRadius: activeTheme.borderRadii.md, backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.transparent })}
+      >
+        <Text variant="label" color="destructive">{END_ACTION}</Text>
+      </Pressable>
+    </View>
+  ) : undefined;
+
   return (
-      <RouteWindow draftPrefix={draftPrefix} resource="recurrence-rules" size={saveConfirmOpen || endConfirmOpen ? 'standard' : 'editor'} title={saveConfirmOpen ? '确认保存重复安排' : endConfirmOpen ? '结束重复安排' : '重复安排'} busy={busy} onClose={close} onBackStep={saveConfirmOpen || endConfirmOpen ? close : undefined} exitAllowed={exitAllowed} fallback={<RecurrenceListScreen />}>
-        {saveConfirmOpen || endConfirmOpen ? <Stack gap={3}>
-          <Text>{saveConfirmOpen ? SAVE_CONFIRM_PROMPT : END_CONFIRM_PROMPT}</Text>
-          {writeError ? <Banner>{writeError}</Banner> : null}
-          <ConfirmActions confirmLabel={saveConfirmOpen ? '确认保存' : '确认结束'} destructive={endConfirmOpen} busy={busy} onCancel={close} onConfirm={() => { void (saveConfirmOpen ? handleConfirmSave() : handleConfirmEnd()); }} />
-        </Stack> : <>
-        <Stack gap={4}>
-          {writeError !== null && <Banner>{writeError}</Banner>}
+    <RouteWindow
+      resource="recurrence-rules"
+      size={size}
+      title={endConfirmOpen ? '结束重复安排' : '重复安排详情'}
+      busy={ending}
+      onClose={close}
+      onBackStep={endConfirmOpen ? close : undefined}
+      exitAllowed={exitAllowed}
+      fallback={<RecurrenceListScreen />}
+      {...(footer ? { footer } : {})}
+      {...(writable && !endConfirmOpen ? { headerActions: <DetailEditButton accessibilityLabel="编辑重复安排" disabled={ending} onPress={handleEdit} /> } : {})}
+    >
+      {endConfirmOpen ? <Stack gap={3}>
+        <Text>{END_CONFIRM_PROMPT}</Text>
+        {endError ? <Banner>{endError}</Banner> : null}
+        <ConfirmActions confirmLabel="确认结束" destructive busy={ending} onCancel={close} onConfirm={() => { void handleConfirmEnd(); }} />
+      </Stack> : <Stack gap={desktop ? 4 : 5}>
+        {loading ? <LoadingState label="正在加载重复安排" /> : null}
+        {error !== null ? <LoadError message={error} onRetry={() => void fetchRule()} /> : null}
+        {rule !== null && formatted !== null ? <>
+          <Stack gap={2}>
+            {rule.kind !== null ? <View style={{ alignSelf: 'flex-start' }}><RecurrenceKindBadge kind={rule.kind} /></View> : null}
+            {/* Never truncated: the title is the rule's identity. */}
+            <Heading level={2} style={desktop ? activeTheme.typography.paneTitle : undefined}>{rule.title}</Heading>
+          </Stack>
+          <RuleFields rule={rule} summary={formatted.summary} notes={[formatted.clampNote, formatted.timeZoneNote]} ended={ended} todayIso={todayIso} />
+          {ended ? <Text color="inkMuted">{ENDED_NOTE}</Text> : <Upcoming rule={rule} todayIso={todayIso} />}
+        </> : null}
+      </Stack>}
+    </RouteWindow>
+  );
+}
 
-          {loading && <LoadingState label="正在加载重复安排" />}
+function RuleFields({ rule, summary, notes, ended, todayIso }: { rule: RecurrenceRuleListItemDto; summary: string; notes: Array<string | null>; ended: boolean; todayIso: string }) {
+  const activeTheme = useTheme<Theme>();
+  const desktop = useDesktop();
+  const time = timeOf(rule);
+  const next = rule.nextOccurrenceDate;
+  const age = next && rule.occasion === 'birthday' ? ageOn(rule, next) : null;
+  const nextValue = ended || !next ? '已结束' : (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[2] }}>
+      {/* The same size as the plain values beside it: smaller in the wide pane only. */}
+      <Text variant={desktop ? 'bodySm' : 'body'} color="ink">{`${formatDate(parseDateValue(next), { weekday: true })}${age === null ? '' : ` · ${age} 岁`}`}</Text>
+      {next === todayIso ? <Chip tone="accent">今天</Chip> : null}
+    </View>
+  );
+  return (
+    <DetailPanel>
+      <DetailField label="重复规则" value={summary} notes={notes} />
+      {time ? <DetailField label="时间" value={time} /> : null}
+      <DetailField label="开始" value={formatDate(parseDateValue(rule.startsOn))} />
+      <DetailField label="下一次" value={nextValue} />
+      {rule.occasion === 'birthday' && rule.birthYear !== null ? <DetailField label="出生年份" value={`${rule.birthYear} 年`} /> : null}
+    </DetailPanel>
+  );
+}
 
-          {error !== null && <LoadError message={error} onRetry={() => void fetchRule()} />}
-
-          {rule !== null && formatted !== null && anchor !== null && (
-            <Stack gap={0}>
-              <DraftNotice />
-              {conflict.panel}
-              <FormRow>
-                <Stack gap={2} style={{ flex: 1, paddingVertical: activeTheme.spacing[3] }}>
-                  {/* Never truncated: the template title is the rule's identity. */}
-                  <Heading level={2}>{formatted.title}</Heading>
-                  <View style={{
-                    alignItems: 'center',
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    gap: activeTheme.spacing[2],
-                  }}>
-                    {rule.kind !== null && <RecurrenceKindBadge kind={rule.kind} />}
-                    <Text variant="caption" color={ended ? 'inkMuted' : 'ink'}>
-                      {formatted.nextLine}
-                    </Text>
-                  </View>
-                </Stack>
-              </FormRow>
-
-              {desktop && !ended ? <Stack gap={2} style={{ paddingVertical: activeTheme.spacing[4] }}><Heading variant="section">接下来 5 次</Heading>{recurrencePreview(rule).map(date => <Text key={date} variant="time">{formatDate(parseDateValue(date), { weekday: true })}{rule.startTimeLocal ? ` ${rule.startTimeLocal}` : ''}</Text>)}<Text variant="caption">按当前规则预览 · {rule.timezone}</Text></Stack> : null}
-
-              <FormSection>
-                {/* `startDate` is the split anchor (tomorrow), NOT the rule's
-                    original startsOn: saved changes apply from tomorrow on.
-                    不重复 stays disabled; ending the series is its own action. */}
-                <RecurrenceField
-                  name="重复规则"
-                  icon={rowIcon(Repeat)}
-                  value={recurrence}
-                  onChange={setRecurrence}
-                  startDate={anchor}
-                  disabled={ended || busy}
-                  disableTurnOff
-                  turnOffHint={TURN_OFF_HINT}
-                />
-                {/* Always visible, because a rule-level edit can only ever mean
-                    "this and everything after". A scope sheet with one live
-                    option would be noise, so there is none. */}
-                <Text variant="caption" color="inkMuted" style={{ paddingLeft: ROW_CONTENT_INSET, paddingBottom: activeTheme.spacing[2] }}>{SCOPE_NOTE}</Text>
-                {endsOnInvalid ? <View style={{ paddingLeft: ROW_CONTENT_INSET }}><FormMessage>{ENDS_ON_ERROR}</FormMessage></View> : null}
-              </FormSection>
-
-              <FormSection>
-                <FormRow icon={rowIcon(Ban)}>
-                  <Pressable
-                    accessibilityLabel={END_ACTION}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: ended || busy || endConfirmOpen }}
-                    disabled={ended || busy || endConfirmOpen}
-                    onPress={() => setEndConfirmOpen(true)}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      justifyContent: 'center',
-                      minHeight: activeTheme.controlSizes.touchTarget,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
-                  >
-                    <Text color={ended || busy ? 'disabled' : 'destructive'}>{END_ACTION}</Text>
-                  </Pressable>
-                </FormRow>
-                {ended && (
-                  <Text variant="caption" color="inkMuted" style={{ paddingLeft: ROW_CONTENT_INSET }}>{ENDED_NOTE}</Text>
-                )}
-              </FormSection>
-
-              <FormActions
-                onCancel={close}
-                onSubmit={() => setSaveConfirmOpen(true)}
-                submitting={false}
-                submitLabel="保存"
-                disabled={ended || busy || saveConfirmOpen || recurrence === null || endsOnInvalid}
-              />
-            </Stack>
-          )}
-        </Stack>
-        </>}
-      </RouteWindow>
+/** The next few dates under the current rule, so a change can be checked before it is made. */
+function Upcoming({ rule, todayIso }: { rule: RecurrenceRuleListItemDto; todayIso: string }) {
+  const activeTheme = useTheme<Theme>();
+  const desktop = useDesktop();
+  const dates = recurrencePreview(rule);
+  if (dates.length === 0) return null;
+  const time = rule.startTimeLocal ? ` ${rule.startTimeLocal.slice(0, 5)}` : '';
+  return (
+    <Stack gap={2} style={desktop ? { borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[4] } : undefined}>
+      <Text variant={desktop ? 'meta' : 'label'} color={desktop ? 'inkFaint' : 'inkMuted'}>{`接下来 ${dates.length} 次`}</Text>
+      {dates.map(date => (
+        <View key={date} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}>
+          <Text variant="time" color="ink">{`${formatDate(parseDateValue(date), { weekday: true })}${time}`}</Text>
+          {date === todayIso ? <Chip tone="accent">今天</Chip> : null}
+        </View>
+      ))}
+      <Text variant="caption" color="inkFaint" style={{ fontWeight: '400' }}>{`按当前规则推算 · ${rule.timezone}`}</Text>
+    </Stack>
   );
 }

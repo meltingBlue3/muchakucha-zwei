@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import type { RecurrenceRuleListItemDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
+import { useContentChanges } from '../content/content-changes';
 import { useHouseholdContext } from '../households/household-context';
 import { HouseholdScreen } from '../households/household-screen';
 import { toDateIso } from '../events/calendar-utils';
@@ -99,6 +100,9 @@ export default function BirthdayListScreen() {
     void fetchBirthdays();
     return () => { requestGeneration.current++; };
   }, [fetchBirthdays]));
+
+  // A birthday's rule saved or ended in the pane beside the list.
+  useContentChanges(householdId, fetchBirthdays);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

@@ -109,12 +109,24 @@ for (const width of [1024, 1280, 1440, 1920]) {
     await expect(detail.getByRole('heading', { name: '检查朵朵的数学作业 2', exact: true })).toBeVisible();
     await detail.getByRole('button', { name: '编辑任务', exact: true }).click();
     const edit = page.getByRole('region', { name: '编辑任务', exact: true });
-    await edit.getByRole('textbox', { name: '任务标题', exact: true }).fill('待保存的家庭安排');
+    const title = edit.getByRole('textbox', { name: '任务标题', exact: true });
+    // An editor nothing was changed in gives way without asking.
+    await expect(title).toHaveValue('检查朵朵的数学作业 2');
     await first.click();
-    const confirmation = page.getByRole('region', { name: '切换条目？', exact: true });
+    await expect(detail.getByRole('heading', { name: '交物业费 1', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await second.click();
+    await detail.getByRole('button', { name: '编辑任务', exact: true }).click();
+    await title.fill('待保存的家庭安排');
+    await first.click();
+    // Changes ask first, in a dialog of its own; the editor stays in the pane behind it.
+    const confirmation = page.getByRole('dialog', { name: '修改还没有保存', exact: true });
     await expect(confirmation).toBeVisible();
+    await expect(title).toHaveValue('待保存的家庭安排');
+    await page.screenshot({ path: testInfo.outputPath(`switch-question-${width}.png`) });
     await confirmation.getByRole('button', { name: '继续编辑', exact: true }).click();
-    await expect(edit.getByRole('textbox', { name: '任务标题', exact: true })).toHaveValue('待保存的家庭安排');
+    await expect(confirmation).toHaveCount(0);
+    await expect(title).toHaveValue('待保存的家庭安排');
     await first.click();
     await confirmation.getByRole('button', { name: '保留草稿并切换', exact: true }).click();
     await expect(detail.getByRole('heading', { name: '交物业费 1', exact: true })).toBeVisible();
@@ -268,6 +280,39 @@ test('a desktop pane form names its shortcut, and Ctrl+Enter submits it', async 
   expect(created[0]).toMatchObject({ title: '准备郊游野餐用品' });
 });
 
+test('a rule opens for reading, and its editor gives way to another rule without asking until something changes', async ({ page }) => {
+  await setup(page);
+  const rule = (id: string, title: string) => ({ id, kind: 'task', title, freq: 'daily', interval: 1, byWeekday: [], startsOn: '2026-11-01', endsOn: null, count: null, timezone: 'Asia/Shanghai', startTimeLocal: null, durationMinutes: null, lunar: null, occasion: null, birthYear: null, nextOccurrenceDate: '2026-11-10', updatedAt: version });
+  const rules = [rule('77777777-7777-4777-8777-000000000001', '倒垃圾'), rule('77777777-7777-4777-8777-000000000002', '浇花')];
+  await page.route(url => url.pathname.startsWith('/api/v1/') && url.pathname.includes('/recurrence-rules'), route => {
+    const path = new URL(route.request().url()).pathname;
+    return route.fulfill({ json: path.endsWith('/recurrence-rules') ? { rules, total: rules.length } : rules.find(item => path.endsWith(item.id)) });
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/recurrence-rules`);
+  const first = page.getByRole('button', { name: /^任务重复安排：倒垃圾，/ });
+  const second = page.getByRole('button', { name: /^任务重复安排：浇花，/ });
+  await first.click();
+  const detail = page.getByRole('region', { name: '重复安排详情', exact: true });
+  await expect(detail.getByRole('heading', { name: '倒垃圾', exact: true })).toBeVisible();
+  await detail.getByRole('button', { name: '编辑重复安排', exact: true }).click();
+  const edit = page.getByRole('region', { name: '编辑重复安排', exact: true });
+  const repeat = edit.getByRole('button', { name: /^重复规则，/ });
+  await expect(repeat).toHaveAccessibleName('重复规则，每天重复');
+  // Opening the editor, which moves the rule's start to tomorrow, is not a change.
+  await second.click();
+  await expect(detail.getByRole('heading', { name: '浇花', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await detail.getByRole('button', { name: '编辑重复安排', exact: true }).click();
+  await repeat.click();
+  await page.getByRole('region', { name: '重复', exact: true }).getByRole('radio', { name: '每周' }).click();
+  await first.click();
+  const question = page.getByRole('dialog', { name: '修改还没有保存', exact: true });
+  await expect(question).toBeVisible();
+  await question.getByRole('button', { name: '保留草稿并切换', exact: true }).click();
+  await expect(detail.getByRole('heading', { name: '倒垃圾', exact: true })).toBeVisible();
+});
+
 test('the wide sign-in screen sets the product beside a floating form', async ({ page }) => {
   await page.route('**/api/v1/**', route => route.fulfill({ status: 401, json: { error: { code: 'UNAUTHORIZED' } } }));
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -379,6 +424,18 @@ test('labels are edited in the side pane beside a list that stays usable', async
   await expect(pane.getByLabel('编辑标签名称')).toHaveValue('家务');
   await expect(home).toHaveAttribute('aria-current', 'true');
   await expect(school).not.toHaveAttribute('aria-current', 'true');
+  // A changed label asks first, in a dialog of its own: labels keep no drafts, so switching drops the change.
+  await pane.getByLabel('编辑标签名称').fill('家务活');
+  await school.click();
+  const question = page.getByRole('dialog', { name: '修改还没有保存', exact: true });
+  await expect(question.getByText('切换后，这些修改会丢失。', { exact: true })).toBeVisible();
+  await expect(pane.getByLabel('编辑标签名称')).toHaveValue('家务活');
+  await question.getByRole('button', { name: '继续编辑', exact: true }).click();
+  await expect(pane.getByLabel('编辑标签名称')).toHaveValue('家务活');
+  await school.click();
+  await question.getByRole('button', { name: '放弃修改并切换', exact: true }).click();
+  await expect(pane.getByLabel('编辑标签名称')).toHaveValue('学校');
+  await home.click();
   // Delete, cancel and save share one footer row, with delete apart at the start.
   const remove = (await pane.getByRole('button', { name: '删除标签', exact: true }).boundingBox())!;
   const cancel = (await pane.getByRole('button', { name: '取消', exact: true }).boundingBox())!;

@@ -380,19 +380,31 @@ for (const width of [390, 1440]) {
       await route.fulfill({ json: path.endsWith('/recurrence-rules') ? { rules: [rule] } : rule });
     });
     await page.setViewportSize({ width, height: 900 });
+    const role = (page.viewportSize()?.width ?? 0) >= 1024 ? 'region' as const : 'dialog' as const;
     await page.goto(`${base}/recurrence-rules/${ruleId}`);
-    const window = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复安排', exact: true });
+    // A rule opens for reading: what it is, when it falls next, and the two ways to change it.
+    const detail = page.getByRole(role, { name: '重复安排详情', exact: true });
+    await expect(detail.getByRole('heading', { name: '倒垃圾', exact: true })).toBeVisible();
+    await expect(detail.getByText('每周一重复，永不结束', { exact: true })).toBeVisible();
+    await expect(detail.getByText('接下来 5 次', { exact: true })).toBeVisible();
+    await expect(detail.getByRole('button', { name: '结束此重复', exact: true })).toBeEnabled();
+    await expect(detail.getByRole('button', { name: /^重复规则，/ })).toHaveCount(0);
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`rule-detail-${width}.png`) });
+
+    await detail.getByRole('button', { name: '编辑重复安排', exact: true }).click();
+    const window = page.getByRole(role, { name: '编辑重复安排', exact: true });
     const repeat = window.getByRole('button', { name: /^重复规则，/ });
     await expect(repeat).toHaveAccessibleName('重复规则，每周一重复');
     await expect(window.getByText('更改会从明天开始生效，今天和之前的安排都保留。', { exact: true })).toBeVisible();
-    await expect(window.getByRole('button', { name: '结束此重复', exact: true })).toBeEnabled();
+    await expect(window.getByRole('button', { name: '结束此重复', exact: true })).toHaveCount(0);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`rule-window-${width}.png`) });
 
     await repeat.click();
     const options = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复', exact: true });
     await expect(options.getByRole('radio', { name: '不重复' })).toBeDisabled();
-    await expect(options.getByText('要停止这个重复，请使用下方的「结束此重复」。', { exact: true })).toBeVisible();
+    await expect(options.getByText('要停止这个重复，请在重复安排详情里使用「结束此重复」。', { exact: true })).toBeVisible();
     await options.getByRole('radio', { name: '自定义…' }).click();
     const custom = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '自定义重复', exact: true });
     await expect(custom.getByRole('checkbox', { name: '星期一' })).toBeChecked();
@@ -404,7 +416,9 @@ for (const width of [390, 1440]) {
     const confirm = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '确认保存重复安排', exact: true });
     await expect(confirm.getByText('这会影响明天起的每一次。', { exact: true })).toBeVisible();
     await confirm.getByRole('button', { name: '确认保存', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/recurrence-rules`);
+    // Saving returns to the detail, which reads the rule again.
+    await expect(page).toHaveURL(`${base}/recurrence-rules/${ruleId}`);
     expect(saved!.recurrence).toMatchObject({ freq: 'weekly', interval: 2, byWeekday: [1], startsOn: '2030-06-16' });
+    await expect(detail.getByText('每 2 周的周一重复，永不结束', { exact: true })).toBeVisible();
   });
 }
