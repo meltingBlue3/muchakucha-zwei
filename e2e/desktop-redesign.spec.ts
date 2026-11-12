@@ -362,6 +362,19 @@ test.describe('desktop motion', () => {
   });
 });
 
+test('标签管理 creates through the shared button: in the page header on a wide screen, bottom right on a phone', async ({ page }) => {
+  await setup(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/labels`);
+  await expect(page.getByTestId('desktop-page-header').getByTestId('header-create')).toHaveAccessibleName('创建标签');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const create = page.getByTestId('floating-create');
+  await expect(create).toHaveAccessibleName('创建标签');
+  await expect(page.getByRole('button', { name: '创建标签' })).toHaveCount(1);
+  await create.click();
+  await expect(page.getByRole('dialog', { name: '创建标签', exact: true })).toBeVisible();
+});
+
 test('labels are edited in the side pane beside a list that stays usable', async ({ page }) => {
   await setup(page);
   await page.setViewportSize({ width: 1440, height: 900 });

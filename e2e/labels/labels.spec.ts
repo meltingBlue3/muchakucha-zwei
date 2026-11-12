@@ -78,7 +78,7 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   const householdPath = `/households/${encodeURIComponent(householdId)}`;
 
   await loginUsernameFixture(page, owner.username, password, `${householdPath}/labels`);
-  await expect(page.getByText('还没有标签，点击“创建”为日程和任务分类。')).toBeVisible();
+  await expect(page.getByText('还没有标签，创建一个来给日程和任务分类。')).toBeVisible();
 
   // --- Create with a chosen color ---
   await page.getByRole('button', { name: '创建标签', exact: true }).click();
@@ -148,7 +148,7 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   await page.getByRole('button', { name: '更多操作：标签 学习', exact: true }).click();
   await page.getByRole('menuitem', { name: '删除标签 学习', exact: true }).click();
   await page.getByRole('button', { name: '确认删除标签 学习' }).click();
-  await expect(page.getByText('还没有标签，点击“创建”为日程和任务分类。')).toBeVisible();
+  await expect(page.getByText('还没有标签，创建一个来给日程和任务分类。')).toBeVisible();
 
   const detached = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/tasks/${task!.id}`);
   expect(detached.body.labels).toEqual([]);
