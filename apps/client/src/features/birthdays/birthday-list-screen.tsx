@@ -9,11 +9,13 @@ import { HouseholdScreen } from '../households/household-screen';
 import { toDateIso } from '../events/calendar-utils';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { formatDate } from '../../ui/date-values';
-import { ListGroup, ListRow, RowSlot } from '../../ui/list-group';
+import { FloatingCreateButton } from '../../ui/floating-create-button';
+import { ListGroup, ListRow } from '../../ui/list-group';
 import { PageIntro } from '../../ui/page-intro';
-import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
+import { EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 import { useOpenWindowItem } from '../../ui/route-window';
+import { useDesktop } from '../../ui/use-desktop';
 import { useResourceNavigation } from '../../ui/use-resource-navigation';
 import { useMinuteClock } from '../../ui/use-minute-clock';
 import { ageOn, birthdayDateOf } from './birthday-dates';
@@ -27,29 +29,53 @@ function countdown(nextIso: string, todayIso: string): string {
   return days === 0 ? '今天' : days === 1 ? '明天' : `${days} 天后`;
 }
 
-function BirthdayRow({ rule, todayIso, selected, onPress }: { rule: RecurrenceRuleListItemDto; todayIso: string; selected: boolean; onPress(): void }) {
+/** The wide table's column titles, lined up with the text of the rows below. */
+function BirthdayColumns() {
+  const caption = (label: string, style: { flex: number } | { width: number; textAlign: 'right' }) => (
+    <Text variant="caption" color="inkFaint" style={[style, { fontWeight: '400' }]}>{label}</Text>
+  );
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], height: theme.layout.desktopControl + theme.spacing[1], paddingHorizontal: theme.spacing[5] }}>
+      {caption('名称', { flex: 1 })}
+      {caption('生日', { flex: 1 })}
+      {caption('年龄', { width: theme.layout.birthdayAgeColumn, textAlign: 'right' })}
+      {caption('下一次', { width: theme.layout.birthdayNextColumn, textAlign: 'right' })}
+    </View>
+  );
+}
+
+function BirthdayRow({ rule, todayIso, selected, desktop, onPress }: { rule: RecurrenceRuleListItemDto; todayIso: string; selected: boolean; desktop: boolean; onPress(): void }) {
   const next = rule.nextOccurrenceDate!;
   const age = ageOn(rule, next);
+  const date = rule.lunar ? birthdayDateOf(rule) : `每年 ${birthdayDateOf(rule)}`;
   const when = formatDate(new Date(`${next}T12:00:00`), { weekday: true });
-  const detail = rule.lunar ? `${birthdayDateOf(rule)} · ${when}` : `每年 ${birthdayDateOf(rule)} · ${when}`;
   const soon = countdown(next, todayIso);
+  const today = soon === '今天';
+  const accessibilityLabel = `${rule.title}，${date} · ${when}，${soon}${age === null ? '' : `，${age} 岁`}`;
+  if (desktop) {
+    return (
+      <ListRow accessibilityLabel={accessibilityLabel} selected={selected} onPress={onPress}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4] }}>
+          <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flex: 1 }}>{rule.title}</Text>
+          <Text variant="meta" numberOfLines={1} style={{ flex: 1 }}>{date}</Text>
+          <Text variant="time" color="inkMuted" numberOfLines={1} style={{ width: theme.layout.birthdayAgeColumn, textAlign: 'right' }}>{age === null ? '—' : `${age} 岁`}</Text>
+          <Text variant="time" color={today ? 'accent' : 'inkMuted'} numberOfLines={1} style={{ width: theme.layout.birthdayNextColumn, textAlign: 'right' }}>{today ? '今天' : `${when} · ${soon}`}</Text>
+        </View>
+      </ListRow>
+    );
+  }
   return (
     <ListRow
-      accessibilityLabel={`${rule.title}，${detail}，${soon}${age === null ? '' : `，${age} 岁`}`}
+      accessibilityLabel={accessibilityLabel}
       selected={selected}
       onPress={onPress}
-      leading={<RowSlot width={theme.controlSizes.touchTarget}>
-        <View style={{ width: theme.controlSizes.avatar, height: theme.controlSizes.avatar, borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surfaceMuted }}>
-          <Text variant="label" color="inkMuted">{rule.title.slice(0, 1)}</Text>
-        </View>
-      </RowSlot>}
       trailing={<View style={{ alignItems: 'flex-end' }}>
-        <Text variant="bodySm" color={soon === '今天' ? 'accent' : 'ink'}>{soon}</Text>
+        <Text variant="bodySm" color={today ? 'accent' : 'ink'}>{soon}</Text>
         {age === null ? null : <Text variant="meta">{`${age} 岁`}</Text>}
       </View>}
     >
       <Text variant="body" numberOfLines={1}>{rule.title}</Text>
-      <Text variant="meta" numberOfLines={1}>{detail}</Text>
+      <Text variant="meta" numberOfLines={1}>{`${date} · ${when}`}</Text>
     </ListRow>
   );
 }
@@ -64,6 +90,7 @@ export default function BirthdayListScreen() {
   const router = useRouter();
   const openResource = useResourceNavigation();
   const openRuleId = useOpenWindowItem('ruleId');
+  const desktop = useDesktop();
   const { currentHouseholdId } = useHouseholdContext();
   const householdId = id ?? currentHouseholdId;
   const todayIso = toDateIso(useMinuteClock().date);
@@ -112,24 +139,26 @@ export default function BirthdayListScreen() {
     router.push(`/households/${encodeURIComponent(householdId)}/birthdays/new`);
   }, [householdId, router]);
 
-  const add = <Button label="添加生日" size="compact" tone="secondary" onPress={addBirthday} />;
+  const loaded = !loading && error === null;
   return (
-    <HouseholdScreen active="birthdays" subpage accessibilityLabel="家人生日" width="reading" refreshing={refreshing} onRefresh={handleRefresh}>
-      <Stack gap={5}>
-        <PageIntro title="家人生日" subtitle="按下一次生日排列；农历生日每年都换算成当年的日期。" action={birthdays.length ? add : undefined} />
+    <HouseholdScreen active="birthdays" subpage accessibilityLabel="家人生日" width="reading" refreshing={refreshing} onRefresh={handleRefresh} floatingAction={<FloatingCreateButton label="添加生日" onPress={addBirthday} />}>
+      <Stack gap={desktop ? 0 : 5}>
+        <PageIntro title="家人生日" subtitle={desktop ? `${loaded ? `${birthdays.length} 个 · ` : ''}按下一次生日排列` : '按下一次生日排列；农历生日每年都换算成当年的日期。'} />
         {loading ? <LoadingState label="正在加载家人生日" /> : null}
         {error !== null ? <LoadError message={error} onRetry={() => void fetchBirthdays()} retryAccessibilityLabel="重试加载家人生日" /> : null}
-        {!loading && error === null && birthdays.length === 0 ? (
-          <EmptyState title="记下家人的生日" message="公历、农历都可以，每年会自动出现在日历里，到时提醒你。" action={<Button label="添加生日" onPress={addBirthday} />} />
+        {loaded && birthdays.length === 0 ? (
+          <EmptyState title="记下家人的生日" message="公历、农历都可以，每年会自动出现在日历里，到时提醒你。" />
         ) : null}
         {birthdays.length ? (
-          <ListGroup>
+          <ListGroup flush>
+            {desktop ? <BirthdayColumns /> : null}
             {birthdays.map(rule => (
               <BirthdayRow
                 key={rule.id}
                 rule={rule}
                 todayIso={todayIso}
                 selected={rule.id === openRuleId}
+                desktop={desktop}
                 onPress={() => openResource(`/households/${encodeURIComponent(householdId!)}/recurrence-rules/${encodeURIComponent(rule.id)}`)}
               />
             ))}

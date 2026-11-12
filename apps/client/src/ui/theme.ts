@@ -261,6 +261,9 @@ export const theme = createTheme({
     recurrenceKindColumn: 64,
     recurrenceTitleColumn: 200,
     recurrenceNextColumn: 96,
+    /** The birthday table's 年龄 and 下一次 columns; 名称 and 生日 share the rest. */
+    birthdayAgeColumn: 56,
+    birthdayNextColumn: 168,
     accountNavWidth: 220,
     /** The content beside the account navigation. */
     accountContentWidth: 640,
