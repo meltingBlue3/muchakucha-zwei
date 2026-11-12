@@ -37,12 +37,22 @@ const ENDED_DETAIL_NOTE = '这个重复已经结束了。';
 const wide = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1024;
 const windowRole = (page: Page) => wide(page) ? 'region' as const : 'dialog' as const;
 
-/** The wide list is a table: the next date sits in its own column as 「11月11日周三」, and an ended rule reads 「已结束」 there. */
-function nextColumn(page: Page, iso: string): string {
-  if (!wide(page)) return `下一次 ${iso}`;
+/** 「11月11日」, with the year only when it is not this one. */
+function shortDate(iso: string): string {
   const date = new Date(`${iso}T12:00:00`);
   const year = date.getFullYear() === new Date().getFullYear() ? '' : `${date.getFullYear()}年`;
-  return `${year}${date.getMonth() + 1}月${date.getDate()}日周${DAY_NAMES[date.getDay()]}`;
+  return `${year}${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+/** 「11月11日周三」, as the rule's detail gives its next date. */
+function weekdayDate(iso: string): string {
+  return `${shortDate(iso)}周${DAY_NAMES[new Date(`${iso}T12:00:00`).getDay()]}`;
+}
+
+/** The wide list is a table: the next date sits in its own column as 「11月11日」, or 「今天」 for today, and an ended rule reads 「已结束」 there. */
+function nextColumn(page: Page, iso: string): string {
+  if (!wide(page)) return `下一次 ${iso}`;
+  return iso === localIsoDate(0) ? '今天' : shortDate(iso);
 }
 const endedRowLine = (page: Page) => wide(page) ? '已结束' : ENDED_ROW_LINE;
 
@@ -240,7 +250,7 @@ function ruleListScreen(page: Page) {
 }
 
 function ruleDetailScreen(page: Page) {
-  return page.getByRole(windowRole(page), { name: /^(重复安排|确认保存重复安排|结束重复安排)$/ });
+  return page.getByRole(windowRole(page), { name: /^(重复安排详情|编辑重复安排|确认保存重复安排|结束重复安排)$/ });
 }
 
 async function openRuleList(page: Page, householdId: string): Promise<void> {
@@ -377,7 +387,7 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(endTrigger).toBeVisible();
     // Nothing has been written: the screen still shows the original next
     // occurrence, and so does the server.
-    await expect(detail.getByText(`下一次 ${tomorrow}`, { exact: true })).toBeVisible();
+    await expect(detail.getByText(weekdayDate(tomorrow), { exact: true })).toBeVisible();
     expect((await listRules(account.accessToken, householdId))
       .find((rule) => rule.id === eventRuleId)?.nextOccurrenceDate).toBe(tomorrow);
 
@@ -440,7 +450,7 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(list.getByText(endedRowLine(page), { exact: true })).toBeVisible();
     await expectNoSeriousAxeViolations(page);
 
-    // The confirmation replaces the editor in the same window. Focus starts
+    // The confirmation replaces the detail in the same window. Focus starts
     // on close and cycles back through the confirmation and cancel actions.
     await list.getByLabel(`任务重复安排：${activeTitle}，每天重复，永不结束`).click();
     await expect(detail).toBeVisible();
@@ -464,14 +474,14 @@ test.describe('recurrence rule addendum journeys', () => {
     await detail.getByLabel('取消').click();
     await expect(detail.getByText(END_CONFIRM_PROMPT, { exact: true })).toHaveCount(0);
 
-    // The ended rule's detail: the state is carried by words plus
-    // `aria-disabled` on every write entry point, never by opacity alone.
+    // The ended rule's detail says so in words, never by opacity alone, and
+    // offers no way to edit or end it again.
     await openRuleList(page, householdId);
     await list.getByLabel(new RegExp(`重复安排：${endedTitle}，`)).click();
     await expect(detail).toBeVisible();
     await expect(detail.getByText(ENDED_DETAIL_NOTE, { exact: true })).toBeVisible();
-    await expect(detail.getByLabel(END_ACTION)).toHaveAttribute('aria-disabled', 'true');
-    await expect(detail.getByRole('button', { name: '保存', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await expect(detail.getByLabel(END_ACTION)).toHaveCount(0);
+    await expect(detail.getByRole('button', { name: '编辑重复安排', exact: true })).toHaveCount(0);
   });
 });
 
@@ -479,7 +489,7 @@ test('a direct rule window preserves draft choices and saves only after confirma
   const account = await prepareAccount('window-edit');
   const householdId = await createHousehold(account.accessToken, '重复安排窗口');
   const ruleId = await createDailyTaskRule(account.accessToken, householdId, '每周整理');
-  await loginUsernameFixture(page, account.username, password, `/households/${householdId}/recurrence-rules/${ruleId}`);
+  await loginUsernameFixture(page, account.username, password, `/households/${householdId}/recurrence-rules/${ruleId}/edit`);
   const repeat = page.getByRole('button', { name: /^重复规则，/ });
   await expect(repeat).toHaveAccessibleName('重复规则，每天重复');
   await repeat.click();
@@ -509,7 +519,8 @@ test('a direct rule window preserves draft choices and saves only after confirma
   await expect(repeat).toHaveAccessibleName(/^重复规则，每周.重复$/);
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('button', { name: '确认保存', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/households/${householdId}/recurrence-rules$`));
+  // Saving lands on the rule's detail.
+  await expect(page).toHaveURL(new RegExp(`/households/${householdId}/recurrence-rules/${ruleId}$`));
   const saved = await listRules(account.accessToken, householdId);
   expect(saved.some(rule => rule.freq === 'weekly')).toBe(true);
   const todayTasks = await listTasks(account.accessToken, householdId);

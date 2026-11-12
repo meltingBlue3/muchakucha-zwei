@@ -198,7 +198,7 @@ describe('RecurrenceRuleRow', () => {
     expect(view.getByLabelText(new RegExp(longTitle))).toBeTruthy();
   });
 
-  test('says an ended rule has ended in words, not only through opacity', async () => {
+  test('says an ended rule has ended in words', async () => {
     const view = await renderRow({ ...baseRule, nextOccurrenceDate: null });
 
     expect(view.getByText('这个重复已经结束')).toBeTruthy();

@@ -10,6 +10,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { RecurrenceRuleListItemDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
+import { useContentChanges } from '../content/content-changes';
 import { useHouseholdContext } from '../households/household-context';
 import { RecurrenceRuleRow } from '../recurrence/recurrence-rule-row';
 import { HouseholdScreen } from '../households/household-screen';
@@ -89,6 +90,9 @@ export default function RecurrenceRulesIndexRoute() {
       return () => { requestGeneration.current++; };
     }, [fetchRules]),
   );
+
+  // A rule saved or ended in the pane beside the list.
+  useContentChanges(householdId, fetchRules);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
