@@ -141,6 +141,14 @@ jest.mock('react-native/Libraries/Core/Devtools/getDevServer', () => ({
   }),
 }));
 
+// jest-expo stubs expo's dev-server message socket, but it resolves `expo`
+// from its own install. pnpm keeps two copies of expo@57.0.9 that differ only
+// in their react-dom peer: the root's (jest-expo's) and this app's. Its stub
+// therefore misses the copy the app loads, whose Expo.fx opens the socket on
+// import under __DEV__ and throws outside a dev-server bundle. Stub this
+// app's copy too.
+jest.mock('expo/src/async-require/messageSocket', () => undefined);
+
 const rejectUnmockedRequest = (input: Parameters<typeof fetch>[0]) =>
   Promise.reject(new Error(`Unmocked network request: ${String(input)}`));
 
