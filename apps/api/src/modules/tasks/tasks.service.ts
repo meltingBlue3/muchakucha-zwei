@@ -16,11 +16,10 @@ import { TASK_STATUSES } from './dto/create-task.dto.js';
 import type { UpdateTaskDto } from './dto/update-task.dto.js';
 import { RecurrenceMaterializerService } from '../recurrence/recurrence-materializer.service.js';
 import {
-  addDays,
   formatIsoDate,
   localDateTimeToInstant,
   parseIsoDate,
-  walkOccurrences,
+  firstOccurrence as firstOccurrenceOf,
 } from '../recurrence/recurrence-date.js';
 import { resolveSeriesMarks, seriesMarksResponse } from '../recurrence/series-marks.js';
 
@@ -196,7 +195,7 @@ export class TasksService {
       const marks = resolveSeriesMarks(recurrence, null);
       const startsOn = parseRequestDate(recurrence.startsOn, 'recurrence.startsOn');
       const interval = recurrence.interval ?? 1;
-      const firstOccurrence = walkOccurrences({
+      const firstOccurrence = firstOccurrenceOf({
         freq: recurrence.freq,
         interval,
         byWeekday: recurrence.byWeekday ?? [],
@@ -204,8 +203,7 @@ export class TasksService {
         endsOn: recurrence.endsOn === undefined ? null : parseRequestDate(recurrence.endsOn, 'recurrence.endsOn'),
         count: recurrence.count ?? null,
         lunar: recurrence.lunar ?? null,
-      // A lunar date's first occurrence can be up to a lunar year after startsOn.
-      }, { horizon: addDays(startsOn, recurrence.lunar === undefined ? Math.max(7, interval * 7) : 400 * interval) })[0];
+      });
       if (firstOccurrence === undefined) {
         throw new BadRequestException({
           code: 'VALIDATION_FAILED',

@@ -2,10 +2,10 @@ import { describe, expect, test } from 'vitest';
 import { allDayBounds, describeNow, localStamp } from './assistant-time.js';
 
 describe('assistant wall-clock views', () => {
-  test('the current time is the user’s local date and weekday, not the UTC day', () => {
-    expect(describeNow('Asia/Shanghai', new Date('2026-10-05T16:30:00Z'))).toBe('2026-10-06 周二 00:30（Asia/Shanghai，UTC+08:00）');
-    expect(describeNow('UTC', new Date('2026-10-05T16:30:00Z'))).toBe('2026-10-05 周一 16:30（UTC，UTC+00:00）');
-    expect(describeNow('America/New_York', new Date('2026-10-06T02:00:00Z'))).toBe('2026-10-05 周一 22:00（America/New_York，UTC-04:00）');
+  test('the current time is the user’s local date, weekday and lunar date, not the UTC day', () => {
+    expect(describeNow('Asia/Shanghai', new Date('2026-10-05T16:30:00Z'))).toBe('2026-10-06 周二 农历八月廿六 00:30（Asia/Shanghai，UTC+08:00）');
+    expect(describeNow('UTC', new Date('2026-10-05T16:30:00Z'))).toBe('2026-10-05 周一 农历八月廿五 16:30（UTC，UTC+00:00）');
+    expect(describeNow('America/New_York', new Date('2026-10-06T02:00:00Z'))).toBe('2026-10-05 周一 农历八月廿五 22:00（America/New_York，UTC-04:00）');
   });
 
   test('due stamps omit local midnight the way the app stores a date without a time', () => {

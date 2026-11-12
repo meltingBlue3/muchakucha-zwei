@@ -10,6 +10,8 @@ import { AssistantProvider } from '../../src/modules/assistant/assistant-provide
 import { AssistantProviderFailure } from '../../src/modules/assistant/assistant-transport.js';
 import type { AssistantCompletion } from '../../src/modules/assistant/assistant.types.js';
 import type { AssistantConversationResponseDto, AssistantProviderResponseDto } from '../../src/modules/assistant/dto/assistant.dto.js';
+import { addDays, currentCalendarDateIn, formatIsoDate } from '../../src/modules/recurrence/recurrence-date.js';
+import { formatLunarMonthDay, toLunar } from '@muchakucha/lunar';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
 const accessSecret = 'assistant-test-access-secret-longer-than-thirty-two-bytes';
@@ -364,6 +366,51 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect(modelContext).not.toContain('不能出现在查询中');
     expect(response.json().pendingActions).toEqual([]);
     expect((await notes(owner, householdId)).total).toBe(1);
+  });
+
+  test('a lunar birthday goes from a lookup to a confirmed series whose next date and age the assistant reads back', async () => {
+    const today = currentCalendarDateIn('Asia/Shanghai');
+    const todayLunar = toLunar(today)!;
+    // Ten days out is past the yearly generation window, so only the rule knows this date. A leap-month
+    // date would repeat in the ordinary month instead, so the test skips past one.
+    let target = addDays(today, 10);
+    while (toLunar(target)!.leap) target = addDays(target, 1);
+    const { year, month, day } = toLunar(target)!;
+    const targetIso = formatIsoDate(target);
+    const todayIso = formatIsoDate(today);
+    const provider = await createProvider(owner, householdId);
+    let conversation = await createConversation(owner, householdId, provider.id);
+    // The model looks the date up, then proposes the series with today as its start time.
+    complete.mockResolvedValueOnce(tool('find_lunar_dates', { month, day })).mockResolvedValueOnce(tool('create_event', {
+      title: '外婆的农历生日', allDay: true, startTime: `${todayIso}T00:00:00+08:00`, endTime: `${todayIso}T23:59:59+08:00`,
+      recurrence: { freq: 'yearly', startsOn: todayIso, timezone: 'Asia/Shanghai', lunar: { month, day }, occasion: 'birthday', birthYear: 1940 },
+    }));
+    const proposal = await send(owner, householdId, conversation, `记一下外婆的生日，农历${formatLunarMonthDay(month, day)}，1940 年生的`);
+    expect(proposal.statusCode).toBe(200);
+    expect(complete.mock.calls[0]?.[2][0]?.content).toContain(`农历${formatLunarMonthDay(todayLunar.month, todayLunar.day, todayLunar.leap)}`);
+    expect(JSON.stringify(complete.mock.calls[1]?.[2])).toContain(targetIso);
+    conversation = proposal.json() as AssistantConversationResponseDto;
+    // The card shows the date the series will start on, not the date the model wrote.
+    expect(conversation.pendingActions).toMatchObject([{ name: 'create_event', arguments: {
+      startTime: new Date(`${targetIso}T00:00:00+08:00`).toISOString(),
+      recurrence: { startsOn: targetIso, lunar: { month, day }, occasion: 'birthday', birthYear: 1940 },
+    } }]);
+    const decided = await decide(owner, householdId, conversation);
+    expect(decided.statusCode).toBe(200);
+    const rules = await request(owner, 'GET', `/households/${householdId}/recurrence-rules`);
+    expect(rules.json().rules).toEqual([expect.objectContaining({
+      title: '外婆的农历生日', lunar: { month, day }, occasion: 'birthday', birthYear: 1940, nextOccurrenceDate: targetIso,
+    })]);
+
+    conversation = decided.json() as AssistantConversationResponseDto;
+    const asked = complete.mock.calls.length;
+    complete.mockResolvedValueOnce(tool('list_recurring_series', { birthdays: true }));
+    expect((await send(owner, householdId, conversation, '外婆下次过生日是哪天？满几岁？')).statusCode).toBe(200);
+    const read = complete.mock.calls[asked + 1]?.[2].at(-1);
+    expect(read?.role).toBe('tool');
+    expect((JSON.parse(read!.content) as { data: { items: unknown[] } }).data.items).toEqual([expect.objectContaining({
+      title: '外婆的农历生日', nextLocal: expect.stringMatching(new RegExp(`^${targetIso} 周`)), lunarDate: `农历${formatLunarMonthDay(month, day)}`, nextAge: year - 1940,
+    })]);
   });
 
   test('proposes a note without writing and creates it once after approval despite a duplicate decision', async () => {

@@ -8,6 +8,7 @@ import { DetailField } from '../../ui/detail-fields';
 import { formatDate, formatDateTime } from '../../ui/date-values';
 import { theme } from '../../ui/theme';
 import { formatDueDate } from '../tasks/task-utils';
+import { formatLunarAnchor } from '../lunar/lunar-recurrence';
 import { changedLines, suspiciousShrink, type ChangedLine } from './action-changes';
 import { useAssistantQuery } from './assistant-runtime';
 
@@ -34,11 +35,12 @@ const fieldNames: Record<string, string> = {
   title: '标题', name: '名称', description: '说明', body: '正文', startTime: '开始时间', endTime: '结束时间', allDay: '全天', location: '地点', dueDate: '截止时间',
   status: '状态', priority: '优先级', assigneeIds: '负责人', labelIds: '标签', color: '颜色', recurrence: '重复规则', freq: '频率', interval: '间隔',
   byWeekday: '星期', startsOn: '开始日期', endsOn: '结束日期', count: '次数', timezone: '时区', startTimeLocal: '当地开始时间', durationMinutes: '时长（分钟）',
+  lunar: '农历日期', occasion: '类型', birthYear: '出生年份',
 };
-const valueNames: Record<string, string> = { pending: '待办', in_progress: '进行中', completed: '已完成', low: '低', medium: '中', high: '高', urgent: '紧急', daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年' };
+const valueNames: Record<string, string> = { pending: '待办', in_progress: '进行中', completed: '已完成', low: '低', medium: '中', high: '高', urgent: '紧急', daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年', birthday: '生日' };
 const hiddenFields = new Set(['id', 'expectedUpdatedAt', 'expectedRuleUpdatedAt', 'expectedName', 'expectedColor']);
 const dateFields = new Set(['startTime', 'endTime', 'dueDate', 'startsOn', 'endsOn']);
-const enumFields = new Set(['status', 'priority', 'freq']);
+const enumFields = new Set(['status', 'priority', 'freq', 'occasion']);
 const textFields = new Set(['description', 'body']);
 // Lines shown per text change; the rest are summarized as a count.
 const SHOWN_CHANGED_LINES = 40;
@@ -59,6 +61,10 @@ function valueText(key: string, value: unknown, context: ActionPreviewContext): 
     if (key === 'assigneeIds') return value.map(id => context.members[String(id)] ?? '无法识别的成员').join('、');
     return value.map(item => valueText(key, item, context)).join('、');
   }
+  if (key === 'lunar' && typeof value === 'object' && typeof (value as { month?: unknown }).month === 'number' && typeof (value as { day?: unknown }).day === 'number') {
+    return `农历${formatLunarAnchor(value as { month: number; day: number })}`;
+  }
+  if (key === 'birthYear' && typeof value === 'number') return `${value} 年`;
   if (typeof value === 'object') return Object.entries(value).map(([childKey, item]) => `${fieldNames[childKey] ?? childKey}：${valueText(childKey, item, context)}`).join('\n');
   if (typeof value === 'string') {
     if (key === 'dueDate' && /^\d{4}-\d{2}-\d{2}T/.test(value)) return formatDueDate(value) || value;
