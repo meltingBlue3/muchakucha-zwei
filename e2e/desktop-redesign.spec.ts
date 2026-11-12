@@ -390,3 +390,37 @@ test('labels are edited in the side pane beside a list that stays usable', async
   await pane.getByRole('button', { name: '删除标签', exact: true }).click();
   await expect(page.getByText(/日程和任务本身会保留/)).toBeVisible();
 });
+
+test('家人生日 is framed like the other family lists: create in the header, rows edge to edge', async ({ page }, testInfo) => {
+  await setup(page);
+  const birthday = (id: string, title: string, lunar: { month: number; day: number } | null, next: string) => ({ id, kind: 'event', title, freq: 'YEARLY', interval: 1, byWeekday: [], startsOn: next, endsOn: null, count: null, timezone: 'Asia/Shanghai', startTimeLocal: null, durationMinutes: null, lunar, occasion: 'birthday', birthYear: 1968, nextOccurrenceDate: next, updatedAt: version });
+  const rules = [birthday('birthday-1', '妈妈的生日', null, '2026-11-10'), birthday('birthday-2', '外婆的农历生日', { month: 11, day: 8 }, '2026-12-17')];
+  await page.route(url => url.pathname.endsWith('/recurrence-rules'), route => route.fulfill({ json: { rules, total: rules.length } }));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  // The row around a row's button: what the hover tint and the hairlines span.
+  const rowFrame = async (name: string | RegExp) => {
+    const box = (await page.getByRole('button', { name }).first().locator('xpath=../..').boundingBox())!;
+    return [box.x, box.width];
+  };
+  await page.goto(`${base}/labels`);
+  const labelRow = await rowFrame('标签：学校');
+  // Edge to edge: from the sidebar's edge to the workspace's right border.
+  expect(labelRow).toEqual([249, 1440 - 249 - 9]);
+
+  await page.goto(`${base}/birthdays`);
+  const header = page.getByTestId('desktop-page-header');
+  await expect(header.getByRole('button', { name: '添加生日', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '添加生日' })).toHaveCount(1);
+  await expect(header.getByText('2 个 · 按下一次生日排列')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^妈妈的生日，每年 11月10日 · 11月10日周二，今天，58 岁$/ })).toBeVisible();
+  expect(await rowFrame(/^妈妈的生日，/)).toEqual(labelRow);
+  expect(await rowFrame(/^外婆的农历生日，/)).toEqual(labelRow);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath('birthdays-1440.png') });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByTestId('floating-create')).toHaveAccessibleName('添加生日');
+  await expect(page.getByRole('button', { name: '添加生日' })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^外婆的农历生日，农历冬月初八 · 12月17日周四，37 天后，/ })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('birthdays-390.png') });
+});
