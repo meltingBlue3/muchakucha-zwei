@@ -13,6 +13,7 @@ export type { RouteWindowStep };
 import { getRouteTrigger } from '../platform/overlays/route-trigger';
 import { useDesktop } from './use-desktop';
 import { useWorkspaceStore } from './workspace-state';
+import { UnsavedSwitchDialog } from './unsaved-switch-dialog';
 
 export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'birthdays' | 'households' | 'settings') {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -52,7 +53,7 @@ export function useOpenWindowItem(param: 'taskId' | 'eventId' | 'noteId' | 'rule
  * window or the list whose card menu opened it. A direct link has nothing
  * behind it, so it lands on the item's detail window instead.
  */
-export function useEditWindowExit(resource: 'tasks' | 'events' | 'notes', itemId: string | undefined) {
+export function useEditWindowExit(resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules', itemId: string | undefined) {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { hasBackground } = useRouteWindowClose(resource);
@@ -109,6 +110,10 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
   const [confirmation, setConfirmation] = useState<WindowConfirmationRequest | null>(null);
   const confirmationRef = useRef(confirmation);
   confirmationRef.current = confirmation;
+  // Leaving unsaved changes for another item in the list: asked in a dialog of its own, over the pane.
+  const [pendingSwitch, setPendingSwitch] = useState<{ go(): void } | null>(null);
+  const pendingSwitchRef = useRef(pendingSwitch);
+  pendingSwitchRef.current = pendingSwitch;
   const navigation = useNavigation();
   const { close: dismiss, hasBackground, overList, background: backgroundRoute } = useRouteWindowClose(resource);
   // Beside Today a note takes the room of 待办 and 接下来, which Today folds away for it.
@@ -133,13 +138,14 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
       const switchingItem = targetId !== undefined && targetId !== draftPrefix?.split(':')[3];
       if (pane && draftPrefix && switchingItem && event.data.action.type === 'REPLACE' && workspace.hasDrafts(draftPrefix) && !busy && !step && !onBackStep) {
         event.preventDefault();
-        setConfirmation({ title: '切换条目？', message: '当前修改还没有保存。草稿会保留，之后可以继续编辑。', confirmLabel: '保留草稿并切换', onConfirm: () => { confirmedSwitch.current = true; navigation.dispatch(event.data.action); } });
+        if (!pendingSwitchRef.current) setPendingSwitch({ go: () => { confirmedSwitch.current = true; navigation.dispatch(event.data.action); } });
         return;
       }
-      if (busy || confirmationRef.current || step || onBackStep) {
+      if (busy || pendingSwitchRef.current || confirmationRef.current || step || onBackStep) {
         event.preventDefault();
         if (!busy) {
-          if (confirmationRef.current) setConfirmation(null);
+          if (pendingSwitchRef.current) setPendingSwitch(null);
+          else if (confirmationRef.current) setConfirmation(null);
           else if (step) step.onClose();
           else onBackStep?.();
         }
@@ -165,6 +171,7 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
           </>}
         </WindowConfirmation.Provider>
       </AppDialog> : null}
+      {focused && pendingSwitch ? <UnsavedSwitchDialog onKeepEditing={() => setPendingSwitch(null)} onSwitch={() => { const request = pendingSwitch; pendingSwitchRef.current = null; setPendingSwitch(null); request.go(); }} /> : null}
     </DialogBackground.Provider>
   );
 }

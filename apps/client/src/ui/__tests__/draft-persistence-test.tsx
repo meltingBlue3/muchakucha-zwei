@@ -116,3 +116,20 @@ test('recurring form drafts retain weekday numbers and allow turning an existing
   expect(compatibleDraft({ title: '不再重复', recurrence: null }, initial)).toBe(true);
   expect(compatibleDraft({ title: '错误', recurrence: { ...recurrence, byWeekday: 'Monday' } }, initial)).toBe(false);
 });
+
+test('opening an editor is not an edit: its base version neither counts as a draft nor persists alone', () => {
+  const { open, values } = disk();
+  const store = open('alice');
+  const item = 'draft:family-a:tasks:task-1:';
+  store.set(`${item}baseVersion`, '2026-11-10T02:00:00Z');
+  store.set(`${item}baseRuleVersion`, '');
+  expect(store.hasDrafts(item)).toBe(false);
+  expect(store.hasDrafts()).toBe(false);
+  expect(values.get('alice')).toBeUndefined();
+  // Once a field changes, the version travels with it so a restored draft still detects conflicts.
+  store.set(`${item}form`, { title: '改过的标题' });
+  expect(store.hasDrafts(item)).toBe(true);
+  const restarted = open('alice');
+  expect(restarted.get(`${item}baseVersion`)).toBe('2026-11-10T02:00:00Z');
+  expect(restarted.hasDrafts(item)).toBe(true);
+});
