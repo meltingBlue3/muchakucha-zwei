@@ -1,6 +1,6 @@
 import { WindowConfirmation, type WindowConfirmationRequest } from './window-confirmation';
 import { ConfirmActions, Stack, Text } from './primitives';
-import { useGlobalSearchParams, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useGlobalSearchParams, useIsFocused, useLocalSearchParams, useNavigation, useRoute, useRouter } from 'expo-router';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { View } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
@@ -17,22 +17,26 @@ import { UnsavedSwitchDialog } from './unsaved-switch-dialog';
 
 export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'birthdays' | 'households' | 'settings') {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { key } = useRoute();
   const navigation = useNavigation();
   const router = useRouter();
   const desktop = useDesktop();
   const state = navigation.getState();
-  const baseIndex = state?.routes.slice(0, state.index).reduce((found, route, index) => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id && !/\/(tasks|events|notes|recurrence-rules|birthdays)\/(new|\[)/.test(route.name) ? index : found, -1) ?? -1;
-  const household = state?.routes.slice(0, state.index).filter(route => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id) ?? [];
-  const hasBackground = resource === 'households' ? (state?.index ?? 0) > 0 : household.length > 0;
+  // A retained detail still owns its fallback list when the editor is focused.
+  const routeIndex = state?.routes.findIndex(route => route.key === key) ?? -1;
+  const previousRoutes = state?.routes.slice(0, Math.max(0, routeIndex)) ?? [];
+  const baseIndex = previousRoutes.reduce((found, route, index) => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id && !/\/(tasks|events|notes|recurrence-rules|birthdays)\/(new|\[)/.test(route.name) ? index : found, -1);
+  const household = previousRoutes.filter(route => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id);
+  const hasBackground = resource === 'households' ? previousRoutes.length > 0 : household.length > 0;
   /** The window opened over its own section's list, or drew that list itself for a direct link. */
   const top = household[household.length - 1];
   const overList = !top || top.name.startsWith(`households/[id]/${resource}/`);
   const close = useCallback(() => {
-    if (desktop && baseIndex >= 0 && state) navigation.dispatch({ type: 'POP', payload: { count: state.index - baseIndex } });
+    if (desktop && baseIndex >= 0) navigation.dispatch({ type: 'POP', payload: { count: routeIndex - baseIndex } });
     else if (hasBackground) router.back();
     else if (resource === 'households') router.replace('/household-handoff');
     else router.replace(`/households/${encodeURIComponent(id)}/${resource}`);
-  }, [hasBackground, router, id, resource, desktop, baseIndex, state, navigation]);
+  }, [hasBackground, router, id, resource, desktop, baseIndex, routeIndex, navigation]);
   return { close, hasBackground, overList, background: top?.name };
 }
 
@@ -116,6 +120,7 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
   pendingSwitchRef.current = pendingSwitch;
   const navigation = useNavigation();
   const { close: dismiss, hasBackground, overList, background: backgroundRoute } = useRouteWindowClose(resource);
+  const backgroundInteractive = pane ? !hasBackground : focused;
   // Beside Today a note takes the room of 待办 and 接下来, which Today folds away for it.
   const besideToday = resource === 'notes' && backgroundRoute === 'households/[id]/today';
   const trigger = useRef(getRouteTrigger());
@@ -154,7 +159,7 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
   }, [navigation, busy, confirmation, step, onBackStep, exitAllowed, pane, workspace, draftPrefix]);
   return (
     <DialogBackground.Provider value={hasBackground ? parentBackground : background}>
-      <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={pane && hasBackground ? 'none' : focused ? 'auto' : 'none'}>
+      <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={backgroundInteractive ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
       {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes' && overList} wide={besideToday} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })}>
