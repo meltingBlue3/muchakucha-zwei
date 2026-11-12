@@ -3,7 +3,7 @@ import type { AssistantMessage } from './assistant.types.js';
 
 /** Enough to name a record and decide whether to read it again. Versions are left out on purpose:
  * an edit must start from a fresh read, never from an earlier turn. */
-const BRIEF_FIELDS = ['id', 'title', 'name', 'displayName', 'userId', 'status', 'allDay', 'startLocal', 'endLocal', 'dueLocal', 'color'];
+const BRIEF_FIELDS = ['id', 'title', 'name', 'displayName', 'userId', 'status', 'allDay', 'startLocal', 'endLocal', 'dueLocal', 'nextLocal', 'lunarDate', 'age', 'nextAge', 'color'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

@@ -5,6 +5,8 @@ import type { TasksService } from '../tasks/tasks.service.js';
 import type { NotesService } from '../notes/notes.service.js';
 import type { LabelsService } from '../labels/labels.service.js';
 import type { HouseholdsService } from '../households/households.service.js';
+import type { RecurrenceService } from '../recurrence/recurrence.service.js';
+import type { RecurrenceRuleListItemDto } from '../recurrence/dto/recurrence.dto.js';
 import { AssistantToolsService } from './assistant-tools.service.js';
 import type { AssistantToolCall } from './assistant.types.js';
 
@@ -24,6 +26,11 @@ const task = {
   myReminder: { mode: 'default' as const, minutesBefore: null },
 };
 const label = { id: recordId, householdId: actor.householdId, name: '家务', color: '#EF4444', createdBy: actor.userId, createdAt: version };
+const series = {
+  id: recordId, updatedAt: version, freq: 'yearly', interval: 1, byWeekday: [], startsOn: '2026-11-23', endsOn: null, count: null,
+  timezone: 'Asia/Shanghai', startTimeLocal: '00:00', durationMinutes: 1440, lunar: null, occasion: null, birthYear: null,
+};
+const rule = (fields: Partial<RecurrenceRuleListItemDto>): RecurrenceRuleListItemDto => ({ ...series, kind: 'event', title: '重复安排', nextOccurrenceDate: null, ...fields });
 
 function fixtures(role: 'OWNER' | 'ADMIN' | 'MEMBER' = 'OWNER') {
   const events = {
@@ -59,12 +66,15 @@ function fixtures(role: 'OWNER' | 'ADMIN' | 'MEMBER' = 'OWNER') {
       members: [{ membershipId: recordId, userId: actor.userId, displayName: '小明', username: 'xiaoming', role, isCurrentUser: true }],
     }),
   };
+  const recurrence = {
+    listRules: vi.fn<RecurrenceService['listRules']>().mockResolvedValue({ rules: [], total: 0 }),
+  };
   const tools = new AssistantToolsService(
     events as unknown as EventsService, tasks as unknown as TasksService,
     notes as unknown as NotesService, labels as unknown as LabelsService,
-    households as unknown as HouseholdsService,
+    households as unknown as HouseholdsService, recurrence as unknown as RecurrenceService,
   );
-  return { tools, events, tasks, notes, labels, households };
+  return { tools, events, tasks, notes, labels, households, recurrence };
 }
 
 const call = (name: string, args: Record<string, unknown> = {}): AssistantToolCall => ({ id: 'call-1', name, arguments: args });
@@ -77,7 +87,7 @@ describe('assistant tool boundary', () => {
     });
     expect(notes.list).not.toHaveBeenCalled();
     const definitions = tools.definitions();
-    expect(definitions).toHaveLength(21);
+    expect(definitions).toHaveLength(24);
     expect(definitions.filter(tool => tool.mutates)).toHaveLength(12);
     definitions[0]!.name = 'changed';
     expect(tools.definitions()[0]!.name).toBe('list_events');
@@ -280,5 +290,97 @@ describe('assistant tool boundary', () => {
     expect(prepared.arguments).toMatchObject({ startTime: '2026-10-06T16:00:00.000Z', endTime: '2026-10-08T15:59:59.000Z' });
     await tools.execute(actor, prepared);
     expect(events.create).toHaveBeenCalledWith(actor.userId, actor.householdId, expect.objectContaining({ startTime: '2026-10-06T16:00:00.000Z', endTime: '2026-10-08T15:59:59.000Z' }));
+  });
+});
+
+describe('lunar dates and series', () => {
+  test('lunar_calendar bounds its range, and find_lunar_dates takes either a name or a lunar date', async () => {
+    const { tools } = fixtures();
+    await expect(tools.execute(actor, call('lunar_calendar', { startDate: '2026-11-12' }))).resolves.toEqual({
+      days: [{ date: '2026-11-12', weekday: '周四', lunar: '农历十月初四', lunarYear: '丙午马年' }],
+    });
+    await expect(tools.execute(actor, call('lunar_calendar', { startDate: '2026-11-01', endDate: '2027-01-02' }))).rejects.toMatchObject({
+      response: { code: 'VALIDATION_FAILED', details: [{ field: 'endDate', codes: ['range_too_long'] }] },
+    });
+    await expect(tools.execute(actor, call('lunar_calendar', { startDate: '2026-11-01', endDate: '2027-01-02', notableOnly: true }))).resolves.toMatchObject({
+      days: expect.arrayContaining([expect.objectContaining({ date: '2026-12-22', observances: ['冬至'] })]),
+    });
+    for (const args of [{ name: '中秋节', month: 8 }, { month: 8 }, { month: 8, day: 15, leap: true }, { name: '圣诞节' }]) {
+      await expect(tools.execute(actor, call('find_lunar_dates', args))).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED' } });
+    }
+  });
+
+  test('find_lunar_dates starts from today in the conversation time zone', async () => {
+    // 2026-11-23 00:30 in Shanghai, still the 22nd in UTC.
+    vi.useFakeTimers({ now: new Date('2026-11-22T16:30:00Z'), toFake: ['Date'] });
+    try {
+      const { tools } = fixtures();
+      await expect(tools.execute(actor, call('find_lunar_dates', { month: 10, day: 15 }))).resolves.toMatchObject({
+        from: '2026-11-23', dates: [{ date: '2026-11-23', weekday: '周一', lunar: '农历十月十五' }],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('list_recurring_series gives the next birthday and its age from the rule alone', async () => {
+    const { tools, recurrence, events } = fixtures();
+    recurrence.listRules.mockResolvedValue({ total: 3, rules: [
+      rule({ title: '倒垃圾', freq: 'weekly', byWeekday: [4], nextOccurrenceDate: '2026-11-12' }),
+      rule({ title: '外婆的农历生日', lunar: { month: 11, day: 8 }, occasion: 'birthday', birthYear: 1940, nextOccurrenceDate: '2026-12-16' }),
+      rule({ title: '爸爸的生日', occasion: 'birthday', startsOn: '2027-03-02', nextOccurrenceDate: '2027-03-02' }),
+    ] });
+    const result = await tools.execute(actor, call('list_recurring_series', { birthdays: true })) as { total: number; items: Array<Record<string, unknown>> };
+    expect(result).toMatchObject({
+      total: 2, items: [
+        { title: '外婆的农历生日', nextLocal: '2026-12-16 周三', lunarDate: '农历冬月初八', nextAge: 86, occasion: 'birthday' },
+        { title: '爸爸的生日', nextLocal: '2027-03-02 周二' },
+      ],
+    });
+    // Without a year of birth there is no age; versions are left out, since the assistant cannot edit a series.
+    expect(result.items[1]).not.toHaveProperty('nextAge');
+    expect(result.items[0]).not.toHaveProperty('updatedAt');
+    await expect(tools.execute(actor, call('list_recurring_series', { query: '垃圾' }))).resolves.toMatchObject({ total: 1, items: [{ title: '倒垃圾', nextLocal: '2026-11-12 周四' }] });
+    expect(events.list).not.toHaveBeenCalled();
+  });
+
+  test('a birthday occurrence read back carries its lunar date and age', async () => {
+    const { tools, events } = fixtures();
+    events.getById.mockResolvedValue({
+      ...event, title: '妈妈的农历生日', allDay: true, startTime: '2026-11-22T16:00:00.000Z', endTime: '2026-11-23T15:59:59.000Z',
+      recurrenceRuleId: recordId, occurrenceDate: '2026-11-23',
+      recurrence: { ...series, materializedThrough: null, lunar: { month: 10, day: 15 }, occasion: 'birthday', birthYear: 1968 },
+    });
+    await expect(tools.execute(actor, call('get_event', { id: recordId }))).resolves.toMatchObject({
+      startLocal: '2026-11-23 周一', lunarDate: '农历十月十五', age: 58,
+    });
+  });
+
+  test('a new lunar birthday is proposed on its first date, and that is what gets written', async () => {
+    const { tools, events } = fixtures();
+    const prepared = await tools.prepare(actor, call('create_event', {
+      title: '妈妈的农历生日', allDay: true, startTime: '2026-11-12T00:00:00+08:00', endTime: '2026-11-12T23:59:59+08:00',
+      recurrence: { freq: 'yearly', startsOn: '2026-11-12', timezone: 'Asia/Shanghai', lunar: { month: 10, day: 15 }, occasion: 'birthday', birthYear: 1968 },
+    }));
+    expect(prepared.arguments).toMatchObject({
+      startTime: '2026-11-22T16:00:00.000Z', endTime: '2026-11-23T15:59:59.000Z',
+      recurrence: { startsOn: '2026-11-23', lunar: { month: 10, day: 15 }, occasion: 'birthday', birthYear: 1968 },
+    });
+    await tools.execute(actor, prepared);
+    expect(events.create).toHaveBeenCalledWith(actor.userId, actor.householdId, expect.objectContaining({
+      startTime: '2026-11-22T16:00:00.000Z', recurrence: expect.objectContaining({ startsOn: '2026-11-23' }),
+    }));
+  });
+
+  test('any new series whose start time falls on another day is proposed on its first occurrence', async () => {
+    const { tools } = fixtures();
+    // A Tuesday start time for a rule that repeats on Thursdays from Monday 2026-11-09.
+    const prepared = await tools.prepare(actor, call('create_event', {
+      title: '羽毛球', startTime: '2026-11-10T19:00:00+08:00', endTime: '2026-11-10T21:00:00+08:00',
+      recurrence: { freq: 'weekly', byWeekday: [4], startsOn: '2026-11-09', timezone: 'Asia/Shanghai' },
+    }));
+    expect(prepared.arguments).toMatchObject({
+      startTime: '2026-11-12T11:00:00.000Z', endTime: '2026-11-12T13:00:00.000Z', recurrence: { startsOn: '2026-11-09' },
+    });
   });
 });

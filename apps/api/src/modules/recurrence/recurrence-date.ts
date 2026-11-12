@@ -236,6 +236,18 @@ export function walkOccurrences(rule: WalkRule, options: WalkOptions): CalendarD
 }
 
 /**
+ * A new rule's first occurrence, on or after `startsOn`, or undefined when
+ * `endsOn` or `count` leaves none. Creating a series puts its first instance
+ * here, whatever date the request's start time carries. A lunar date can be up
+ * to a lunar year after `startsOn`; any other rule's first date falls within
+ * its first `interval` weeks.
+ */
+export function firstOccurrence(rule: WalkRule): CalendarDate | undefined {
+  const horizon = addDays(rule.startsOn, rule.lunar == null ? Math.max(7, rule.interval * 7) : 400 * rule.interval);
+  return walkOccurrences(rule, { horizon })[0];
+}
+
+/**
  * Computes a rule's next occurrence ON OR AFTER `from` by walking the rule,
  * not by querying already-generated rows. Under D-11's per-frequency
  * lookahead a healthy weekly rule routinely has zero future instance rows —
