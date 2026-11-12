@@ -14,6 +14,7 @@ import {
   walkOccurrences,
   type CalendarDate,
 } from './recurrence-date.js';
+import { recurringEventEnd } from './recurring-event-end.js';
 
 export { RECURRENCE_MAX_INSTANCES_PER_RUN } from './recurrence-date.js';
 import { RECURRENCE_LOCK_NAMESPACE } from './recurrence-lock.js';
@@ -276,7 +277,6 @@ export class RecurrenceMaterializerService {
     occurrences: CalendarDate[],
   ): Promise<number> {
     const time = localTime(rule.startTimeLocal);
-    const durationMs = (rule.durationMinutes ?? 0) * 60_000;
     const created = await tx.event.createManyAndReturn({
       data: occurrences.map((occurrence) => {
         const startTime = localDateTimeToInstant(occurrence, time.hour, time.minute, rule.timezone);
@@ -285,7 +285,7 @@ export class RecurrenceMaterializerService {
           title: rule.templateTitle,
           description: rule.templateDescription,
           startTime,
-          endTime: new Date(startTime.getTime() + durationMs),
+          endTime: recurringEventEnd(occurrence, startTime, rule),
           allDay: rule.templateAllDay,
           location: rule.templateLocation,
           createdBy: rule.createdBy,

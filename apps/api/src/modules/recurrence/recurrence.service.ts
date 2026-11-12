@@ -15,6 +15,7 @@ import {
   parseIsoDate,
   type CalendarDate,
 } from './recurrence-date.js';
+import { recurringEventEnd } from './recurring-event-end.js';
 import type {
   RecurrenceRuleListItemDto,
   RecurrenceRuleListResponseDto,
@@ -457,6 +458,11 @@ export class RecurrenceService {
         });
       } else {
         const template = eventSource!;
+        const endTime = input.endTime !== undefined
+          ? new Date(input.endTime)
+          : template.allDay && nextAllDay && input.startTime === undefined
+            ? recurringEventEnd(calendarDate(occurrence.occurrenceDate), template.startTime, occurrence.rule, template.endTime)
+            : template.endTime;
         await tx.event.deleteMany({
           where: { recurrenceRuleId: occurrence.rule.id, occurrenceDate: { gte: splitDate } },
         });
@@ -469,7 +475,7 @@ export class RecurrenceService {
             title: nextTitle,
             description: nextDescription,
             startTime: input.startTime === undefined ? template.startTime : new Date(input.startTime),
-            endTime: input.endTime === undefined ? template.endTime : new Date(input.endTime),
+            endTime,
             allDay: nextAllDay,
             location: nextLocation,
             labels: { create: nextLabelIds.map((labelId) => ({ labelId })) },
@@ -721,7 +727,7 @@ export class RecurrenceService {
             title: createdRule.templateTitle,
             description: createdRule.templateDescription,
             startTime: seedInstant,
-            endTime: new Date(seedInstant.getTime() + (createdRule.durationMinutes ?? 0) * 60_000),
+            endTime: recurringEventEnd(firstOccurrence, seedInstant, createdRule),
             allDay: createdRule.templateAllDay,
             location: createdRule.templateLocation,
             labels: { create: (eventSource?.labels ?? []).map(({ labelId }) => ({ labelId })) },
