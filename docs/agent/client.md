@@ -67,7 +67,8 @@ Updates omit unchanged fields, so clearing an optional value requires sending it
 Client unit tests are Jest, run from the client package:
 
 ```sh
-pnpm --filter client test          # jest --runInBand
+pnpm --filter client test                          # whole suite, parallel workers
+pnpm --filter client exec jest <path-or-pattern>   # one file or a subset
 ```
 
-A direct `jest` invocation skips the runner setup and fails on `clearMocksOnScope`. Test files must be named `src/**/__tests__/*-test.tsx`; any other name matches no pattern and silently runs zero tests. Add `pnpm --recursive typecheck` for type-level changes, and see [testing.md](testing.md) when a change needs browser evidence.
+Keep `jest` and `@types/jest` on the major that `jest-expo` is built on (29 today); a newer Jest breaks every suite through the React Native test environment. Test files must be named `src/**/__tests__/*-test.tsx`; any other name matches no pattern and silently runs zero tests. Add `pnpm --recursive typecheck` for type-level changes, and see [testing.md](testing.md) when a change needs browser evidence.

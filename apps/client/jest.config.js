@@ -1,42 +1,29 @@
-const { createRequire } = require('node:module');
-
-const reactNativeEnvironment = require('jest-expo/jest-preset').testEnvironment;
-const reactNativeEnvironmentRequire = createRequire(reactNativeEnvironment);
-const { ModuleMocker } = reactNativeEnvironmentRequire('jest-mock');
-
-if (typeof ModuleMocker.prototype.clearMocksOnScope !== 'function') {
-  ModuleMocker.prototype.clearMocksOnScope = function clearMocksOnScope(scope) {
-    for (const key of Object.keys(scope)) {
-      const descriptor = Object.getOwnPropertyDescriptor(scope, key);
-      if (descriptor == null || !('value' in descriptor)) {
-        continue;
-      }
-      const value = descriptor.value;
-      if (
-        value != null &&
-        (typeof value === 'object' || typeof value === 'function') &&
-        '_isMockFunction' in value &&
-        this.isMockFunction(value) &&
-        typeof value.mockClear === 'function'
-      ) {
-        value.mockClear();
-      }
-    }
-  };
-}
+const { availableParallelism } = require('node:os');
+const { transformIgnorePatterns } = require('jest-expo/jest-preset');
 
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',
+  // Jest defaults to one worker per CPU thread minus one. Every worker loads
+  // the React Native environment and, on a cold cache, transforms the same
+  // modules, so on a 16-core / 32-thread machine 31 workers were slower than 8
+  // and pushed the first render in a file past the 5-second test timeout.
+  // Machines with fewer than 9 threads keep Jest's default.
+  maxWorkers: Math.min(8, Math.max(availableParallelism() - 1, 1)),
+  // The preset sends every react-native* file through Babel. These two already
+  // ship as plain CommonJS, yet took about 30% of a cold run's transform time,
+  // repeated in every worker.
+  transformIgnorePatterns: [
+    ...transformIgnorePatterns,
+    '/node_modules/react-native-svg/lib/commonjs/',
+    '/node_modules/react-native/Libraries/Renderer/implementations/',
+  ],
   clearMocks: true,
   restoreMocks: true,
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
     '^lucide-react-native/icons/(.*)$': '<rootDir>/node_modules/lucide-react-native/dist/cjs/icons/$1.js',
   },
-  // React Native 0.86's environment uses Jest 29's ModuleMocker. Jest 30 calls
-  // this scoped cleanup hook, so add the forward-compatible no-secret shim.
-  testEnvironment: reactNativeEnvironment,
   testEnvironmentOptions: {
     customExportConditions: ['require', 'react-native'],
   },
