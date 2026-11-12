@@ -33,15 +33,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Generate the Prisma client
+        id: prisma
         run: pnpm --filter api prisma:generate
 
+      # The three checks are independent: each still runs when an earlier one
+      # fails, so one red step does not hide the state of the others.
       - name: Typecheck
+        if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
         run: pnpm --recursive typecheck
 
       - name: Quick tests
+        if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
         run: pnpm test:quick
 
       - name: OpenAPI drift
+        if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
         run: pnpm openapi:check
 
   api-integration:
