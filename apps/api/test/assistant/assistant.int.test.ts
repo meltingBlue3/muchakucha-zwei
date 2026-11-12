@@ -75,9 +75,9 @@ function assistant(actor: ActorFixture, householdId: string, method: 'GET' | 'PO
   return request(actor, method, `/households/${householdId}/assistant${path}`, payload);
 }
 
-async function createProvider(actor: ActorFixture, householdId: string, visibility: 'private' | 'household' = 'private'): Promise<AssistantProviderResponseDto> {
+async function createProvider(actor: ActorFixture, householdId: string, visibility: 'private' | 'household' = 'private', baseUrl = 'https://api.example.com/v1'): Promise<AssistantProviderResponseDto> {
   const response = await assistant(actor, householdId, 'POST', '/providers', {
-    name: '家庭模型', protocol: 'openai-compatible', baseUrl: 'https://api.example.com/v1', model: 'test-tool-model', visibility, apiKey: providerSecret,
+    name: '家庭模型', protocol: 'openai-compatible', baseUrl, model: 'test-tool-model', visibility, apiKey: providerSecret,
   });
   expect(response.statusCode).toBe(201);
   return response.json() as AssistantProviderResponseDto;
@@ -143,8 +143,9 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
   });
 
   test('stores encrypted credentials and returns only credential availability', async () => {
-    const provider = await createProvider(owner, householdId);
-    expect(provider).toMatchObject({ hasCredential: true, ownedByMe: true, visibility: 'private' });
+    const baseUrl = 'http://models.example.com:8080/v1';
+    const provider = await createProvider(owner, householdId, 'private', baseUrl);
+    expect(provider).toMatchObject({ baseUrl, hasCredential: true, ownedByMe: true, visibility: 'private' });
     expect(provider).not.toHaveProperty('apiKey');
     expect(provider).not.toHaveProperty('encryptedApiKey');
     const list = await assistant(owner, householdId, 'GET', '/providers');
@@ -156,18 +157,19 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect(row?.encrypted_api_key).not.toContain(providerSecret);
     const conversation = await createConversation(owner, householdId, provider.id);
     expect((await send(owner, householdId, conversation)).statusCode).toBe(200);
-    expect(complete.mock.calls[0]?.[0].apiKey).toBe(providerSecret);
+    expect(complete.mock.calls[0]?.[0]).toMatchObject({ baseUrl, apiKey: providerSecret });
     expect(JSON.stringify(complete.mock.calls[0]?.slice(1))).not.toContain(providerSecret);
   });
 
   test('a connection check runs one harmless tool round trip and never sends household data', async () => {
     const form = { protocol: 'openai-compatible', baseUrl: 'https://api.example.com/v1/', model: 'test-tool-model' };
     complete.mockResolvedValueOnce({ ...tool('connection_check', {}), replay: { reasoning_content: '调用检查工具。' } });
-    const typed = await assistant(member, householdId, 'POST', '/providers/check', { ...form, apiKey: 'sk-typed-into-the-form' });
+    const typedUrl = 'http://models.example.com:8080/v1';
+    const typed = await assistant(member, householdId, 'POST', '/providers/check', { ...form, baseUrl: `${typedUrl}/`, apiKey: 'sk-typed-into-the-form' });
     expect(typed.statusCode).toBe(200);
     expect(typed.json()).toEqual({ toolCalling: true });
     const [config, , messages, definitions] = complete.mock.calls[0]!;
-    expect(config).toEqual({ protocol: 'openai-compatible', baseUrl: 'https://api.example.com/v1', model: 'test-tool-model', apiKey: 'sk-typed-into-the-form' });
+    expect(config).toEqual({ protocol: 'openai-compatible', baseUrl: typedUrl, model: 'test-tool-model', apiKey: 'sk-typed-into-the-form' });
     expect(messages).toEqual([{ role: 'user', content: 'connection check' }]);
     expect(definitions.map(definition => definition.name)).toEqual(['connection_check']);
     // The result goes back in a second request, carrying what the model needs returned, as every run step does.

@@ -83,7 +83,7 @@ EXPO_PUBLIC_API_ORIGIN=http://<开发机局域网 IP>:3100 pnpm --filter client 
 | Anthropic 对话 | `https://api.anthropic.com/v1` |
 | 百炼 Qwen-ASR 转写 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 
-地址填写 API 目录，由应用追加请求路径。只支持公网 HTTPS，禁止 URL 凭证、查询参数、片段及私网地址，不跟随重定向；API 服务器必须能直接访问该地址。
+地址填写 API 目录，由应用追加请求路径。支持 API 服务器能直接访问的公网 HTTP 和 HTTPS 地址。地址不能带凭证、查询参数或片段。服务端拒绝私网地址，也不跟随重定向。使用 HTTP 时，API 密钥和请求内容以明文传输。
 
 使用时注意：
 

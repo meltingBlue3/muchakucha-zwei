@@ -97,7 +97,7 @@ const RUN_FAILURES: Record<string, string> = {
   HOUSEHOLD_NOT_FOUND: '你已无法访问这个家庭。',
   ASSISTANT_CREDENTIAL_UNAVAILABLE: '无法读取模型凭证。请配置创建者重新填写 API 密钥。',
   ASSISTANT_NOT_CONFIGURED: '服务器尚未启用助手凭证加密，请联系服务管理员。',
-  ASSISTANT_ENDPOINT_INVALID: '服务地址不可用：只支持公网 HTTPS 地址。',
+  ASSISTANT_ENDPOINT_INVALID: '服务地址不可用：只支持公网 HTTP 或 HTTPS 地址。',
 };
 
 /** An unexpected error's message can quote upstream text or a credential, so only its type and frames are logged. */
