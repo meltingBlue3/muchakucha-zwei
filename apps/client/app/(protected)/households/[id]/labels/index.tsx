@@ -17,6 +17,7 @@ import { Button, ConfirmActions, EmptyState, FormActions, LoadError, LoadingStat
 import { labelColorPresets, labelTint, type Theme } from '../../../../../src/ui/theme';
 import { getRouteTrigger, rememberRouteTrigger } from '../../../../../src/platform/overlays/route-trigger';
 import { focusFieldOnOpen } from '../../../../../src/platform/keyboard/focus-on-open';
+import { UnsavedSwitchDialog } from '../../../../../src/ui/unsaved-switch-dialog';
 
 type LabelAction = { kind: 'create' } | { kind: 'edit' | 'delete'; label: LabelResponseDto };
 
@@ -147,14 +148,14 @@ export default function LabelsIndexRoute() {
       </ListGroup>
     </Stack>
   </HouseholdScreen>
-    {action && canManage ? <AppDialog title={pendingAction ? '切换标签？' : action.kind === 'create' ? '创建标签' : action.kind === 'edit' ? '编辑标签' : '删除标签'} size={desktop && action.kind !== 'delete' ? 'editor' : 'standard'} docked={desktop && (action.kind !== 'delete' || deletingFromPane)} busy={busy} onClose={close} trigger={trigger} footer={desktop && !pendingAction && action.kind !== 'delete' ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
+    {action && canManage ? <AppDialog title={action.kind === 'create' ? '创建标签' : action.kind === 'edit' ? '编辑标签' : '删除标签'} size={desktop && action.kind !== 'delete' ? 'editor' : 'standard'} docked={desktop && (action.kind !== 'delete' || deletingFromPane)} busy={busy} onClose={close} trigger={trigger} footer={desktop && action.kind !== 'delete' ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
       {/* Deleting is a quieter, separate choice at the far edge; the two answers to the form sit together on the right. */}
       {action.kind === 'edit' ? <Pressable accessibilityRole="button" accessibilityLabel="删除标签" disabled={busy} onPress={() => { setDeletingFromPane(true); setAction({ kind: 'delete', label: action.label }); }} style={({ pressed }) => ({ minHeight: theme.layout.desktopControl, justifyContent: 'center', paddingHorizontal: theme.spacing[2], marginLeft: -theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}><Text variant="label" color={busy ? 'inkMuted' : 'destructive'}>删除标签</Text></Pressable> : null}
       <View style={{ flex: 1 }} />
       <Button label="取消" tone="secondary" size="compact" disabled={busy} onPress={close} />
       <Button label={action.kind === 'create' ? '创建' : '保存'} size="compact" loading={busy} onPress={() => void submit()} />
     </View> : null}>
-      {pendingAction ? <Stack gap={4}><Text>当前标签还有未保存的修改。</Text><ConfirmActions cancelLabel="继续编辑" confirmLabel="放弃修改并切换" onCancel={() => setPendingAction(null)} onConfirm={() => { applyOpen(pendingAction); setPendingAction(null); }} /></Stack> : <Stack gap={4}>
+      <Stack gap={4}>
         {action.kind === 'delete' ? <Text>删除“{action.label.name}”后，它会从所有日程和任务中移除，日程和任务本身会保留。</Text> : <>
           <TextField ref={nameInput} autoFocus={!desktop && focusFieldOnOpen} label={action.kind === 'create' ? '标签名称' : '编辑标签名称'} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameError(null); }} maxLength={30} disabled={busy} {...(nameError === null ? {} : { error: nameError })} returnKeyType="done" onSubmitEditing={() => void submit()} />
           <Stack gap={2}>
@@ -177,7 +178,9 @@ export default function LabelsIndexRoute() {
         </>}
         {actionError ? <Text color="destructive" accessibilityRole="alert">{actionError}</Text> : null}
         {action.kind === 'delete' ? <ConfirmActions cancelLabel="取消删除" confirmLabel="确认删除" confirmAccessibilityLabel={`确认删除标签 ${action.label.name}`} destructive busy={busy} onCancel={close} onConfirm={() => void submit()} /> : !desktop ? <FormActions onCancel={close} onSubmit={() => void submit()} submitting={busy} submitLabel={action.kind === 'create' ? '创建' : '保存'} /> : null}
-      </Stack>}
+      </Stack>
     </AppDialog> : null}
+    {/* Labels keep no drafts, so switching away from unsaved changes loses them. */}
+    {pendingAction ? <UnsavedSwitchDialog discards onKeepEditing={() => setPendingAction(null)} onSwitch={() => { applyOpen(pendingAction); setPendingAction(null); }} /> : null}
   </>;
 }

@@ -1,6 +1,14 @@
 import type { DraftStorage } from '../platform/drafts/draft-storage';
 
 function isDraft(key: string): boolean { return /^draft:[^:]+:[^:]+:[^:]+:/.test(key); }
+/**
+ * Bookkeeping an editor keeps beside its draft, such as the version it was
+ * opened at (see `edit-conflict.tsx`). Opening an editor writes it, so on its
+ * own it is not an edit: it neither counts as one nor is persisted without one.
+ */
+function isDraftRecord(key: string): boolean { return /:(baseVersion|baseRuleVersion)$/.test(key); }
+/** `draft:<household>:<resource>:<item>:`, the prefix every field of one editor shares. */
+function draftItem(key: string): string { return `${key.split(':').slice(0, 4).join(':')}:`; }
 
 export function createWorkspaceState(storage?: DraftStorage) {
   const values = new Map<string, unknown>();
@@ -13,7 +21,8 @@ export function createWorkspaceState(storage?: DraftStorage) {
   const persist = () => {
     if (storage === undefined || accountId === null) return;
     try {
-      const drafts = Object.fromEntries([...values].filter(([key]) => dirtyDrafts.has(key)));
+      const edited = new Set([...dirtyDrafts].filter((key) => !isDraftRecord(key)).map(draftItem));
+      const drafts = Object.fromEntries([...values].filter(([key]) => dirtyDrafts.has(key) && (!isDraftRecord(key) || edited.has(draftItem(key)))));
       if (Object.keys(drafts).length === 0) storage.remove(accountId);
       else storage.write(accountId, JSON.stringify({ version: 1, drafts }));
       persistenceError = false;
@@ -76,7 +85,8 @@ export function createWorkspaceState(storage?: DraftStorage) {
       for (const key of values.keys()) if (key.startsWith(prefix)) { values.delete(key); dirtyDrafts.delete(key); }
       persist(); emit();
     },
-    hasDrafts: (prefix = 'draft:') => [...dirtyDrafts].some((key) => key.startsWith(prefix)),
+    /** Whether anything under `prefix` was edited; an editor's own bookkeeping does not count. */
+    hasDrafts: (prefix = 'draft:') => [...dirtyDrafts].some((key) => key.startsWith(prefix) && !isDraftRecord(key)),
     persistenceFailed: () => persistenceError,
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   };
