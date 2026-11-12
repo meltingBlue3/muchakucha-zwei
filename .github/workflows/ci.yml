@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A newer push to the same pull request supersedes the run in progress.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Typecheck, quick tests, OpenAPI drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # Reads the pnpm version from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate the Prisma client
+        run: pnpm --filter api prisma:generate
+
+      - name: Typecheck
+        run: pnpm --recursive typecheck
+
+      - name: Quick tests
+        run: pnpm test:quick
+
+      - name: OpenAPI drift
+        run: pnpm openapi:check
+
+  api-integration:
+    name: API integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        # Throwaway CI-only values, mirrored in the job env below.
+        env:
+          POSTGRES_DB: muchakucha_test
+          POSTGRES_USER: muchakucha_test
+          POSTGRES_PASSWORD: muchakucha_ci_only
+          TZ: UTC
+          PGTZ: UTC
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U muchakucha_test -d muchakucha_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      NODE_ENV: test
+      WEB_ORIGIN: http://127.0.0.1:8081
+      API_ORIGIN: http://127.0.0.1:3000
+      # The database name keeps the standalone `test` segment that
+      # apps/api/test/reset-database.ts requires before it truncates.
+      TEST_POSTGRES_DB: muchakucha_test
+      TEST_POSTGRES_USER: muchakucha_test
+      TEST_POSTGRES_PASSWORD: muchakucha_ci_only
+      TEST_POSTGRES_PORT: 55432
+      DATABASE_URL: postgresql://muchakucha_test:muchakucha_ci_only@127.0.0.1:55432/muchakucha_test
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate the Prisma client
+        run: pnpm --filter api prisma:generate
+
+      # Setup applies `prisma migrate deploy` and resets the database itself.
+      - name: Integration tests
+        run: pnpm --filter api test:integration
