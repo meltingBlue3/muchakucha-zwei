@@ -1,4 +1,3 @@
-import Plus from 'lucide-react-native/icons/plus';
 import { useDesktop } from '../../../../../src/ui/use-desktop';
 import { CardActionsMenu } from '../../../../../src/ui/card-actions-menu';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -12,6 +11,7 @@ import { canManageLabels } from '../../../../../src/features/labels/label-permis
 import { HouseholdScreen } from '../../../../../src/features/households/household-screen';
 import { ListGroup, ListRow } from '../../../../../src/ui/list-group';
 import { AppDialog } from '../../../../../src/ui/app-dialog';
+import { FloatingCreateButton } from '../../../../../src/ui/floating-create-button';
 import { PageIntro } from '../../../../../src/ui/page-intro';
 import { Button, ConfirmActions, EmptyState, FormActions, LoadError, LoadingState, Stack, Text, TextField } from '../../../../../src/ui/primitives';
 import { labelColorPresets, labelTint, type Theme } from '../../../../../src/ui/theme';
@@ -116,12 +116,12 @@ export default function LabelsIndexRoute() {
     } finally { setBusy(false); }
   };
 
-  return <><HouseholdScreen detailOpen={action !== null && (action.kind !== 'delete' || deletingFromPane)} active="labels" subpage accessibilityLabel="标签管理" width="reading" refreshing={refreshing} onRefresh={() => void refresh()}>
+  return <><HouseholdScreen detailOpen={action !== null && (action.kind !== 'delete' || deletingFromPane)} active="labels" subpage accessibilityLabel="标签管理" width="reading" refreshing={refreshing} onRefresh={() => void refresh()} floatingAction={canManage ? <FloatingCreateButton label="创建标签" onPress={() => open({ kind: 'create' })} /> : undefined}>
     <Stack gap={5}>
-      <PageIntro title="标签管理" subtitle={`${desktop && !loading && !error ? `${labels.length} 个 · ` : ''}${canManage ? '给日程和任务分类，全家共用。' : '标签由所有者和管理员维护，你可以给日程和任务使用它们。'}`} action={canManage ? <Button label={desktop ? '创建标签' : '创建'} accessibilityLabel="创建标签" {...(desktop ? { icon: (color: string) => <Plus size={theme.controlSizes.icon - 4} color={color} strokeWidth={theme.focus.width} /> } : {})} onPress={() => open({ kind: 'create' })} /> : undefined} />
+      <PageIntro title="标签管理" subtitle={`${desktop && !loading && !error ? `${labels.length} 个 · ` : ''}${canManage ? '给日程和任务分类，全家共用。' : '标签由所有者和管理员维护，你可以给日程和任务使用它们。'}`} />
       {loading ? <LoadingState label="正在加载标签" /> : null}
       {error ? <LoadError message={error} onRetry={() => void fetchLabels()} /> : null}
-      {!loading && !error && !labels.length ? <EmptyState message={canManage ? '还没有标签，点击“创建”为日程和任务分类。' : '还没有标签，所有者或管理员创建后即可使用。'} /> : null}
+      {!loading && !error && !labels.length ? <EmptyState message={canManage ? '还没有标签，创建一个来给日程和任务分类。' : '还没有标签，所有者或管理员创建后即可使用。'} /> : null}
       <ListGroup flush>
         {labels.map(label => {
           const dot = <View style={{ width: desktop ? theme.spacing[2] + 2 : theme.spacing[3], height: desktop ? theme.spacing[2] + 2 : theme.spacing[3], borderRadius: theme.borderRadii.full, backgroundColor: label.color }} />;

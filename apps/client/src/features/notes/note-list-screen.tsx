@@ -120,7 +120,7 @@ export default function NotesListRoute() {
       </View> : null}
     >
       <Stack gap={5}>
-        <PageIntro title="笔记" {...(notes.length > 0 ? { subtitle: `${notes.length} 篇，最近更新的在前` } : {})} action={desktop ? <SearchField label="搜索笔记" placeholder="按标题搜索" value={query} onChangeText={setQuery} /> : null} />
+        <PageIntro title="笔记" {...(notes.length > 0 ? { subtitle: `${notes.length} 篇 · 最近更新的在前` } : {})} action={desktop ? <SearchField label="搜索笔记" placeholder="按标题搜索" value={query} onChangeText={setQuery} /> : null} />
 
         {!desktop && (notes.length > 0 || query !== '') && (
           <SearchField label="搜索笔记" placeholder="按标题搜索" value={query} onChangeText={setQuery} />
