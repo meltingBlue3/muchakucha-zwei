@@ -7,10 +7,12 @@ import House from 'lucide-react-native/icons/house';
 import Smartphone from 'lucide-react-native/icons/smartphone';
 import type { UpdateReminderSettingsDto } from '@muchakucha/api-client';
 import { AccountScreen } from '../../src/features/households/household-screen';
+import { BackgroundReminderSettingsRow } from '../../src/features/reminders/background-reminder-guide';
 import { EnableNotificationsButton, useAlarmLockScreen, useNotificationPermission } from '../../src/features/reminders/notification-permission';
 import { useReminderSettings } from '../../src/features/reminders/reminder-settings';
 import { ALARM_DETAIL, minutesLabel, TIMED_REMINDER_MINUTES, type ReminderKind } from '../../src/features/reminders/reminder-rules';
 import { alarmsSupported } from '../../src/platform/reminders/reminder-alarm';
+import { backgroundReminderGuide } from '../../src/platform/reminders/background-reminder-guide';
 import { remindersSupported } from '../../src/platform/reminders/reminder-notifications';
 import { AppDialog } from '../../src/ui/app-dialog';
 import { OptionRow } from '../../src/ui/compose-rows';
@@ -119,10 +121,11 @@ export default function RemindersRoute() {
               <View style={deviceRow}>
                 <View style={{ flex: 1 }}>
                   <Text>通知</Text>
-                  <Text variant="meta">{permission === 'granted' ? '提醒到时间会在这台手机上弹出。' : '通知未开启，提醒不会出现。'}</Text>
+                  <Text variant="meta">{permission === 'granted' ? '这台手机已允许显示提醒。' : '通知未开启，提醒不会出现。'}</Text>
                 </View>
                 {permission === 'granted' ? <Text variant="bodySm">已开启</Text> : <EnableNotificationsButton permission={permission} onPress={() => void enable()} />}
               </View>
+              {backgroundReminderGuide !== null ? <BackgroundReminderSettingsRow /> : null}
               {alarmsSupported ? (
                 <View style={deviceRow}>
                   <View style={{ flex: 1 }}>
@@ -181,7 +184,7 @@ export default function RemindersRoute() {
 
         <Text variant="caption">
           {remindersSupported
-            ? '提醒由这台手机按时弹出。家人刚分给你的任务，要等你打开 App 后才会排上提醒。'
+            ? '提醒由这台手机安排。家人刚分给你的任务，要等你打开 App 后才会排上提醒。'
             : '网页不会弹出提醒，这里的设置在手机 App 上生效。'}
         </Text>
       </Stack>
