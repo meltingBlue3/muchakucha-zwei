@@ -6,17 +6,21 @@ import { TasksService } from '../tasks/tasks.service.js';
 import { NotesService } from '../notes/notes.service.js';
 import { LabelsService } from '../labels/labels.service.js';
 import { HouseholdsService } from '../households/households.service.js';
+import { RecurrenceService } from '../recurrence/recurrence.service.js';
+import { firstOccurrence, formatIsoDate, localDateTimeToInstant, parseIsoDate, type CalendarDate } from '../recurrence/recurrence-date.js';
+import type { RecurrenceDto } from '../recurrence/dto/recurrence.dto.js';
 import { assertEditVersion } from '../shared/edit-version.js';
-import { allDayBounds, localDateOf, localMidnight, localStamp, shiftDate } from './assistant-time.js';
+import { allDayBounds, localDateOf, localMidnight, localStamp, shiftDate, wallClock, weekdayOf } from './assistant-time.js';
+import { findLunarDates, formatAnchor, lunarCalendar, occurrenceFacts } from './assistant-lunar.js';
 import type { AssistantActor, AssistantToolActor, AssistantToolCall, AssistantToolDefinition } from './assistant.types.js';
 import {
   CreateEventArguments, CreateLabelArguments, CreateNoteArguments, CreateTaskArguments,
-  DeleteContentArguments, DeleteLabelArguments, DeleteOccurrenceArguments,
-  GetContentArguments, IdArguments, ListArguments, ListEventsArguments, ListTasksArguments,
+  DeleteContentArguments, DeleteLabelArguments, DeleteOccurrenceArguments, FindLunarDatesArguments,
+  GetContentArguments, IdArguments, ListArguments, ListEventsArguments, ListSeriesArguments, ListTasksArguments, LunarCalendarArguments,
   UpdateEventArguments, UpdateLabelArguments, UpdateNoteArguments, UpdateTaskArguments,
-  editProperties, eventListProperties, eventProperties, getContentProperties, idProperties,
-  labelProperties, labelSnapshotProperties, labelsProperty, listProperties, noteProperties,
-  occurrenceEditProperties, recurrenceProperty, taskListProperties, taskProperties,
+  editProperties, eventListProperties, eventProperties, findLunarDatesProperties, getContentProperties, idProperties,
+  labelProperties, labelSnapshotProperties, labelsProperty, listProperties, lunarCalendarProperties, noteProperties,
+  occurrenceEditProperties, recurrenceProperty, seriesListProperties, taskListProperties, taskProperties,
 } from './assistant-tool-arguments.js';
 
 type Properties = Record<string, Record<string, unknown>>;
@@ -39,6 +43,9 @@ interface ExpectedVersion {
 type Household = NonNullable<Awaited<ReturnType<HouseholdsService['getHousehold']>>>;
 
 const PAGE_PREVIEW_CHARACTERS = 1000;
+/** Days lunar_calendar returns in one call, and with notableOnly, where only festivals and terms come back. */
+const LUNAR_CALENDAR_DAYS = 62;
+const LUNAR_NOTABLE_DAYS = 400;
 
 function invalid(field: string, code: string): never {
   throw new BadRequestException({
@@ -169,13 +176,19 @@ function withoutReminder<T extends { myReminder?: unknown }>(item: T): Omit<T, '
   return content;
 }
 
-function withEventTimes<T extends { startTime: string; endTime: string; allDay: boolean; myReminder?: unknown }>(event: T, timeZone: string) {
+type SeriesMarks = Parameters<typeof occurrenceFacts>[0];
+
+/** An occurrence of a lunar or birthday series also carries its lunar date and the age it marks. */
+function withEventTimes<T extends { startTime: string; endTime: string; allDay: boolean; occurrenceDate?: string | null; recurrence?: SeriesMarks; myReminder?: unknown }>(event: T, timeZone: string) {
   const mode = event.allDay ? 'date' : 'datetime';
-  return { ...withoutReminder(event), startLocal: localStamp(event.startTime, timeZone, mode), endLocal: localStamp(event.endTime, timeZone, mode) };
+  return {
+    ...withoutReminder(event), startLocal: localStamp(event.startTime, timeZone, mode), endLocal: localStamp(event.endTime, timeZone, mode),
+    ...occurrenceFacts(event.recurrence, event.occurrenceDate),
+  };
 }
 
-function withDueTime<T extends { dueDate?: string | null; myReminder?: unknown }>(task: T, timeZone: string) {
-  return { ...withoutReminder(task), dueLocal: task.dueDate ? localStamp(task.dueDate, timeZone, 'due') : null };
+function withDueTime<T extends { dueDate?: string | null; occurrenceDate?: string | null; recurrence?: SeriesMarks; myReminder?: unknown }>(task: T, timeZone: string) {
+  return { ...withoutReminder(task), dueLocal: task.dueDate ? localStamp(task.dueDate, timeZone, 'due') : null, ...occurrenceFacts(task.recurrence, task.occurrenceDate) };
 }
 
 /** An impossible date such as 2026-02-30 is left as is for validateDueDate to reject. */
@@ -189,6 +202,36 @@ function normalizeAllDay(args: Arguments, timeZone: string): Arguments {
   const start = typeof args.startTime === 'string' ? args.startTime : undefined;
   const end = typeof args.endTime === 'string' ? args.endTime : undefined;
   return { ...args, ...allDayBounds(start, end, timeZone) };
+}
+
+/**
+ * A new series starts on its rule's first date, whatever date startTime carries: the events service keeps
+ * only startTime's local time and the event's length. Moving the proposal there shows the user the date
+ * that will be written. A lunar rule's startsOn moves too, which leaves its dates unchanged.
+ */
+function normalizeSeriesStart(args: Arguments): Arguments {
+  const recurrence = args.recurrence as RecurrenceDto | undefined;
+  if (recurrence === undefined || typeof args.startTime !== 'string' || typeof args.endTime !== 'string') return args;
+  let first: CalendarDate | undefined;
+  let start: Date;
+  try {
+    first = firstOccurrence({
+      freq: recurrence.freq, interval: recurrence.interval ?? 1, byWeekday: recurrence.byWeekday ?? [],
+      startsOn: parseIsoDate(recurrence.startsOn), endsOn: recurrence.endsOn === undefined ? null : parseIsoDate(recurrence.endsOn),
+      count: recurrence.count ?? null, lunar: recurrence.lunar ?? null,
+    });
+    if (first === undefined) return args;
+    const [hour = 0, minute = 0] = wallClock(new Date(args.startTime), recurrence.timezone).time.split(':').map(Number);
+    start = localDateTimeToInstant(first, hour, minute, recurrence.timezone);
+  } catch {
+    // An impossible date or zone is left for the events service to reject with its own field.
+    return args;
+  }
+  const length = Date.parse(args.endTime) - Date.parse(args.startTime);
+  return {
+    ...args, startTime: start.toISOString(), endTime: new Date(start.getTime() + length).toISOString(),
+    ...(recurrence.lunar === undefined ? {} : { recurrence: { ...recurrence, startsOn: formatIsoDate(first) } }),
+  };
 }
 
 function validateDueDate(value: string | undefined): void {
@@ -208,8 +251,10 @@ export class AssistantToolsService {
     private readonly notes: NotesService,
     private readonly labels: LabelsService,
     private readonly households: HouseholdsService,
+    private readonly recurrence: RecurrenceService,
   ) {
     this.registerReadTools();
+    this.registerLunarTools();
     this.registerEventTools();
     this.registerTaskTools();
     this.registerNoteTools();
@@ -316,6 +361,38 @@ export class AssistantToolsService {
       IdArguments, idProperties, ['id'], false, (actor, args) => this.label(actor, args.id));
   }
 
+  private registerLunarTools(): void {
+    this.register('lunar_calendar', `Read the Chinese lunar date (农历), festivals and solar terms of each Gregorian day from startDate through endDate, inclusive; endDate defaults to startDate. Up to ${LUNAR_CALENDAR_DAYS} days, or ${LUNAR_NOTABLE_DAYS} with notableOnly, which returns only days with a festival or solar term. Covers lunar years 1900 to 2100.`,
+      LunarCalendarArguments, lunarCalendarProperties, ['startDate'], false, async (_actor, args) => {
+        const end = args.endDate ?? args.startDate;
+        assertDateRange(args.startDate, end);
+        const days = (Date.parse(end) - Date.parse(args.startDate)) / 86_400_000 + 1;
+        if (days > (args.notableOnly === true ? LUNAR_NOTABLE_DAYS : LUNAR_CALENDAR_DAYS)) invalid('endDate', 'range_too_long');
+        return lunarCalendar(args.startDate, end, args.notableOnly === true);
+      });
+    this.register('find_lunar_dates', 'Find Gregorian dates on or after fromDate for a lunar month and day, or for a festival or solar term by name. Without lunarYear a lunar date repeats as a lunar birthday does: in the ordinary month even for someone born in a leap month, and on 廿九 when the month has no 三十; these are the dates a yearly lunar recurrence produces. With lunarYear it converts that one exact date, such as a birth date, and leap picks the leap month of that year. Each date lists its weekday, lunar date, lunar year and observances; a note explains a moved or missing date.',
+      FindLunarDatesArguments, findLunarDatesProperties, [], false, async (actor, args) => {
+        const lunarDate = args.month !== undefined || args.day !== undefined || args.leap !== undefined || args.lunarYear !== undefined;
+        if (args.name !== undefined && lunarDate) invalid('name', 'name_or_lunar_date');
+        if (args.name === undefined && (args.month === undefined || args.day === undefined)) invalid('month', 'name_or_lunar_date');
+        if (args.leap !== undefined && args.lunarYear === undefined) invalid('leap', 'requires_lunar_year');
+        const from = args.fromDate ?? localDateOf(new Date(), actor.timeZone);
+        return { from, ...findLunarDates(args, from) };
+      });
+    this.register('list_recurring_series', 'Search repeating schedules (event and task series) by title. Each lists its rule and nextLocal, the next date computed from the rule even when not generated yet; null once the series has ended. Results are sorted by next date. A lunar series names its date in lunarDate. Birthday series have occasion birthday, and nextAge is the age on the next birthday (周岁, in lunar years for a lunar birthday). birthdays true returns only birthday series.',
+      ListSeriesArguments, seriesListProperties, [], false, async (actor, args) => {
+        const { rules } = await this.recurrence.listRules(actor.userId, actor.householdId);
+        const series = rules.filter(rule => args.birthdays !== true || rule.occasion === 'birthday').map(({ updatedAt: _version, nextOccurrenceDate: next, ...rule }) => {
+          const { age } = occurrenceFacts(rule, next);
+          return {
+            ...rule, nextLocal: next === null ? null : `${next} ${weekdayOf(next)}`,
+            ...(rule.lunar === null ? {} : { lunarDate: formatAnchor(rule.lunar) }), ...(age === undefined ? {} : { nextAge: age }),
+          };
+        });
+        return paginate(series, args);
+      });
+  }
+
   private registerEventTools(): void {
     this.register('create_event', 'Propose creating an event. Times must include UTC/offset. With allDay true, times are widened to whole local days in the user\'s time zone. Optional recurrence creates a series; do not infer missing times or recurrence scope.',
       CreateEventArguments, { ...eventProperties, ...recurrenceProperty }, ['title', 'startTime', 'endTime'], true,
@@ -323,7 +400,7 @@ export class AssistantToolsService {
       async (actor, args) => {
         await this.household(actor);
         if (Date.parse(args.endTime) <= Date.parse(args.startTime)) invalid('endTime', 'must_be_after_start');
-      }, normalizeAllDay);
+      }, (args, timeZone) => normalizeSeriesStart(normalizeAllDay(args, timeZone)));
     this.register('update_event', 'Propose updating this event occurrence only; this does not change its series. Copy expectedUpdatedAt from get_event and expectedRuleUpdatedAt from recurrence.updatedAt for recurring occurrences. labelIds replaces labels.',
       UpdateEventArguments, { ...idProperties, ...occurrenceEditProperties, ...eventProperties, ...labelsProperty }, ['id', 'expectedUpdatedAt'], true,
       (actor, { id, ...args }) => this.events.update(actor.userId, actor.householdId, id, args),

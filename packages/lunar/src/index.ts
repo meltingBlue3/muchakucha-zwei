@@ -356,6 +356,9 @@ const SOLAR_FESTIVALS: ReadonlyMap<string, string> = new Map([
   ['9-10', '教师节'], ['10-1', '国庆节'],
 ]);
 
+/** Every festival `observancesOn` can name, lunar ones first. The solar terms are `SOLAR_TERMS`. */
+export const FESTIVALS: readonly string[] = [...LUNAR_FESTIVALS.values(), '除夕', ...SOLAR_FESTIVALS.values(), '母亲节', '父亲节'];
+
 /** The day of the month that is the `nth` Sunday. */
 function nthSunday(year: number, month: number, nth: number): number {
   const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();

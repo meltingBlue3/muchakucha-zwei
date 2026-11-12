@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  FESTIVALS,
   LUNAR_FIRST_YEAR,
   LUNAR_LAST_YEAR,
   SOLAR_TERMS,
@@ -13,6 +14,7 @@ import {
   lunarAnniversary,
   lunarDayLabel,
   lunarMonthLength,
+  observancesOn,
   solarTermOn,
   toLunar,
   type SolarDate,
@@ -196,6 +198,14 @@ describe('labels', () => {
     expect(lunarDayLabel(solar('2026-11-09'))).toEqual({ text: '十月', kind: 'month' });
     expect(lunarDayLabel(solar('2025-07-25'))).toEqual({ text: '闰六月', kind: 'month' });
     expect(lunarDayLabel(solar('2026-11-11'))).toEqual({ text: '初三', kind: 'day' });
+  });
+
+  it('lists every festival a year observes, and nothing else', () => {
+    const seen = new Set<string>();
+    for (let ms = Date.UTC(2026, 0, 1); ms < Date.UTC(2027, 0, 1); ms += DAY_MS) {
+      for (const name of observancesOn(solarAt(ms))) seen.add(name);
+    }
+    expect([...seen].sort()).toEqual([...FESTIVALS, ...SOLAR_TERMS].sort());
   });
 
   it('spells out a day for screen readers with everything it observes', () => {

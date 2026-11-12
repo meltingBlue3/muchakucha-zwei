@@ -1,3 +1,4 @@
+import { formatLunarMonthDay, toLunar } from '@muchakucha/lunar';
 import { addDays, formatIsoDate, localDateTimeToInstant, parseIsoDate } from '../recurrence/recurrence-date.js';
 
 /**
@@ -6,9 +7,9 @@ import { addDays, formatIsoDate, localDateTimeToInstant, parseIsoDate } from '..
  */
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'] as const;
 
-interface WallClock { date: string; time: string; offset: string }
+export interface WallClock { date: string; time: string; offset: string }
 
-function wallClock(instant: Date, timeZone: string): WallClock {
+export function wallClock(instant: Date, timeZone: string): WallClock {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'longOffset',
   }).formatToParts(instant);
@@ -18,14 +19,22 @@ function wallClock(instant: Date, timeZone: string): WallClock {
   return { date: `${part('year')}-${part('month')}-${part('day')}`, time: `${part('hour')}:${part('minute')}`, offset: `UTC${offset}` };
 }
 
-function weekday(date: string): string {
+export function weekdayOf(date: string): string {
   const { year, month, day } = parseIsoDate(date);
   return WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]!;
 }
 
+/** 农历十月初四 for a calendar date, or null outside the lunar years the app covers. */
+export function lunarDateOf(date: string): string | null {
+  const lunar = toLunar(parseIsoDate(date));
+  return lunar === null ? null : `农历${formatLunarMonthDay(lunar.month, lunar.day, lunar.leap)}`;
+}
+
+/** The lunar date rides along so the model never has to work it out for "today". */
 export function describeNow(timeZone: string, now: Date = new Date()): string {
   const clock = wallClock(now, timeZone);
-  return `${clock.date} ${weekday(clock.date)} ${clock.time}（${timeZone}，${clock.offset}）`;
+  const lunar = lunarDateOf(clock.date);
+  return `${clock.date} ${weekdayOf(clock.date)}${lunar === null ? '' : ` ${lunar}`} ${clock.time}（${timeZone}，${clock.offset}）`;
 }
 
 export function localDateOf(instant: string | Date, timeZone: string): string {
@@ -35,7 +44,7 @@ export function localDateOf(instant: string | Date, timeZone: string): string {
 /** `due` shows local midnight as a bare date: the app stores a due date without a time that way. */
 export function localStamp(instant: string, timeZone: string, mode: 'datetime' | 'date' | 'due' = 'datetime'): string {
   const clock = wallClock(new Date(instant), timeZone);
-  const day = `${clock.date} ${weekday(clock.date)}`;
+  const day = `${clock.date} ${weekdayOf(clock.date)}`;
   return mode === 'date' || (mode === 'due' && clock.time === '00:00') ? day : `${day} ${clock.time}`;
 }
 

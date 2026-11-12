@@ -229,6 +229,14 @@ test('confirmation translates structured recurrence fields while preserving user
   expect(result.fields.find(field => field.label === '重复规则')?.value).toContain('频率：每周\n星期：周一、周五\n时区：Asia/Shanghai');
 });
 
+test('confirmation names a lunar birthday in words', () => {
+  const result = assistantActionDetails({ id: 'call', name: 'create_event', arguments: {
+    title: '外婆的农历生日', allDay: true, startTime: '2026-12-15T16:00:00.000Z', endTime: '2026-12-16T15:59:59.000Z',
+    recurrence: { freq: 'yearly', startsOn: '2026-12-16', timezone: 'Asia/Shanghai', lunar: { month: 11, day: 8 }, occasion: 'birthday', birthYear: 1940 },
+  } }, { target: null, members: {}, labels: {} });
+  expect(result.fields.find(field => field.label === '重复规则')?.value).toContain('时区：Asia/Shanghai\n农历日期：农历冬月初八\n类型：生日\n出生年份：1940 年');
+});
+
 test('an edit shows what it replaces, and a note body edit lists removed lines and warns about lost content', () => {
   const kept = '保留的第一段';
   const lost = '会被删掉的长段落'.repeat(40);

@@ -31,7 +31,7 @@ describe('assistant model context', () => {
       { role: 'assistant', content: '好的。' },
       { role: 'user', content: '旧对话里没有时间的消息' },
     ], 'Asia/Shanghai');
-    expect(context[0]).toEqual({ role: 'user', content: '（2026-10-05 周一 23:30（Asia/Shanghai，UTC+08:00））\n明天提醒我买菜' });
+    expect(context[0]).toEqual({ role: 'user', content: '（2026-10-05 周一 农历八月廿五 23:30（Asia/Shanghai，UTC+08:00））\n明天提醒我买菜' });
     expect(context[2]).toEqual({ role: 'user', content: '旧对话里没有时间的消息' });
   });
 });

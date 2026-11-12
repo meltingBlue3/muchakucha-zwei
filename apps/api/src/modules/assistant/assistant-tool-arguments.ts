@@ -6,6 +6,7 @@ import { UpdateTaskDto } from '../tasks/dto/update-task.dto.js';
 import { CreateNoteDto } from '../notes/dto/create-note.dto.js';
 import { UpdateNoteDto } from '../notes/dto/update-note.dto.js';
 import { CreateLabelDto, UpdateLabelDto } from '../labels/dto/create-label.dto.js';
+import { OBSERVANCE_NAMES } from './assistant-lunar.js';
 
 export class ListArguments {
   @IsOptional() @IsString() @MaxLength(200)
@@ -47,6 +48,45 @@ export class ListTasksArguments extends ListArguments {
 
   @IsOptional() @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/)
   dueThrough?: string;
+}
+
+export class ListSeriesArguments extends ListArguments {
+  @IsOptional() @IsBoolean()
+  birthdays?: boolean;
+}
+
+export class LunarCalendarArguments {
+  @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  startDate!: string;
+
+  @IsOptional() @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  endDate?: string;
+
+  @IsOptional() @IsBoolean()
+  notableOnly?: boolean;
+}
+
+export class FindLunarDatesArguments {
+  @IsOptional() @IsInt() @Min(1) @Max(12)
+  month?: number;
+
+  @IsOptional() @IsInt() @Min(1) @Max(30)
+  day?: number;
+
+  @IsOptional() @IsBoolean()
+  leap?: boolean;
+
+  @IsOptional() @IsInt() @Min(1900) @Max(2100)
+  lunarYear?: number;
+
+  @IsOptional() @IsIn(OBSERVANCE_NAMES)
+  name?: string;
+
+  @IsOptional() @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  fromDate?: string;
+
+  @IsOptional() @IsInt() @Min(1) @Max(10)
+  count?: number;
 }
 
 export class IdArguments {
@@ -142,7 +182,8 @@ const recurrence: Schema = {
     freq: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'yearly'] },
     interval: { type: 'integer', minimum: 1, maximum: 52 },
     byWeekday: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, maxItems: 7 },
-    startsOn: date, endsOn: date, count: { type: 'integer', minimum: 1, maximum: 1000 },
+    startsOn: { ...date, description: 'The first date of the series. A daily, weekly, monthly or Gregorian yearly rule repeats from it (a yearly one on its month and day). With lunar it may be any date up to the first occurrence. The first event lands on the rule’s first date; startTime and endTime give only its time of day and length.' },
+    endsOn: date, count: { type: 'integer', minimum: 1, maximum: 1000 },
     timezone: string(64, 'IANA timezone, for example Asia/Shanghai.'),
     startTimeLocal: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' },
     durationMinutes: { type: 'integer', minimum: 0, maximum: 1440 },
@@ -186,6 +227,17 @@ export const labelSnapshotProperties = { expectedName: labelProperties.name, exp
 export const labelsProperty = { labelIds: uuidArray };
 export const recurrenceProperty = { recurrence };
 export const eventListProperties = { ...listProperties, startDate: date, endDate: date, recurring: { type: 'boolean' } };
+export const seriesListProperties = { ...listProperties, birthdays: { type: 'boolean', description: 'Only birthday series.' } };
+export const lunarCalendarProperties = { startDate: date, endDate: date, notableOnly: { type: 'boolean' } };
+export const findLunarDatesProperties = {
+  month: { type: 'integer', minimum: 1, maximum: 12, description: 'Lunar month: 1 is 正月, 11 is 冬月, 12 is 腊月.' },
+  day: { type: 'integer', minimum: 1, maximum: 30, description: 'Lunar day: 1 is 初一, 30 is 三十.' },
+  leap: { type: 'boolean', description: 'Only with lunarYear: the leap month (闰月) that repeats this month number.' },
+  lunarYear: { type: 'integer', minimum: 1900, maximum: 2100, description: 'Converts one exact date, such as a lunar birth date. A lunar year is named by the Gregorian year its 正月初一 falls in.' },
+  name: { type: 'string', enum: OBSERVANCE_NAMES, description: 'A festival or solar term, instead of month and day.' },
+  fromDate: { ...date, description: 'Earliest date to return; defaults to today in the user’s time zone.' },
+  count: { type: 'integer', minimum: 1, maximum: 10, default: 1 },
+};
 export const taskListProperties = {
   ...listProperties, status: taskProperties.status, priority: taskProperties.priority,
   assigneeId: uuid, recurring: { type: 'boolean' }, dueFrom: date, dueThrough: date,
