@@ -107,6 +107,7 @@ EXPO_PUBLIC_API_ORIGIN=http://<开发机局域网 IP>:3100 pnpm --filter client 
 ## 检查与开发约定
 
 - 按 [testing.md](agent/testing.md#pick-the-smallest-sufficient-check) 选择检查，命令统一见其 [Commands](agent/testing.md#commands)。集成测试和 E2E 会清空数据库，只能使用回环地址、库名含独立 `test` 片段的可丢弃数据库；连接与迁移步骤见 [environment.md](agent/environment.md#test-services)。
+- 每个指向 `main` 的 PR 由 [CI](../.github/workflows/ci.yml) 运行类型检查、`pnpm test:quick`、`pnpm openapi:check` 与 API 集成测试；Playwright 尚未接入。
 - API 契约通过 `pnpm openapi:generate` 生成，并用 `pnpm openapi:check` 检查；`packages/api-client` 仅存生成产物。
 - 协作编辑提交原始 `expectedUpdatedAt`，重复实例另带 `expectedRuleUpdatedAt`。冲突时整次修改不写入，保留草稿及原始版本，查看最新内容后再整理保存；刷新或重试不能自动接受新版本。草稿实现见 [client.md](agent/client.md#drafts)。
 - 成员离开家庭保留共享内容，清理其任务负责人关系及后续重复分配；所有者需先交接所有权。角色与权限入口见 [context.md](agent/context.md#api)。

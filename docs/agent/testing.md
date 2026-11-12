@@ -28,6 +28,8 @@ pnpm exec playwright test -c playwright.ui.config.ts   # mocked API, no database
 pnpm openapi:check
 ```
 
+CI ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) runs the typecheck, `pnpm test:quick`, `pnpm openapi:check` and the API integration tests on every pull request to `main`; the Playwright suites are not in CI yet.
+
 Filter Playwright by title with `-g`, not by `file:line`: a line filter silently matches nothing once the file shifts. A run started in the background takes an explicit `-c <config>` path; without it Playwright resolves a different config and reports "No tests found".
 
 `playwright.ui.config.ts` intercepts every API request and runs the specs in its `testMatch`, at 390×844 unless a test sets its own size. It is the fast check for pure UI regressions and proves nothing about server behavior. `playwright.config.ts` runs every spec in `e2e/`, these included, at its 1280×720 default, so a test written for one layout pins its viewport.
