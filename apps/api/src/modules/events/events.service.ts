@@ -13,6 +13,7 @@ import {
   parseIsoDate,
   firstOccurrence as firstOccurrenceOf,
 } from '../recurrence/recurrence-date.js';
+import { recurringEventEnd } from '../recurrence/recurring-event-end.js';
 import { resolveSeriesMarks, seriesMarksResponse } from '../recurrence/series-marks.js';
 
 const TITLE_MIN = 1;
@@ -69,6 +70,7 @@ interface EventRow {
     updatedAt: Date;
     startTimeLocal: string | null;
     durationMinutes: number | null;
+    templateAllDay: boolean;
     lunarMonth: number | null;
     lunarDay: number | null;
     occasion: string | null;
@@ -265,7 +267,7 @@ export class EventsService {
             title: trimmedTitle,
             description: input.description?.trim() || null,
             startTime: occurrenceStart,
-            endTime: new Date(occurrenceStart.getTime() + durationMinutes * 60_000),
+            endTime: recurringEventEnd(firstOccurrence, occurrenceStart, rule),
             allDay: input.allDay ?? false,
             location: input.location?.trim() || null,
             createdBy: actorId,
@@ -505,17 +507,21 @@ export class EventsService {
   // ---- Mapping ----
 
   private toResponse(row: EventRow, myReminder: ReminderChoiceDto): EventResponseDto {
+    const occurrenceDate = row.occurrenceDate?.toISOString().slice(0, 10) ?? null;
+    const endTime = row.allDay && occurrenceDate !== null && row.recurrenceRule !== null
+      ? recurringEventEnd(parseIsoDate(occurrenceDate), row.startTime, row.recurrenceRule, row.endTime)
+      : row.endTime;
     return {
       id: row.id,
       householdId: row.householdId,
       title: row.title,
       description: row.description,
       startTime: row.startTime.toISOString(),
-      endTime: row.endTime.toISOString(),
+      endTime: endTime.toISOString(),
       allDay: row.allDay,
       location: row.location,
       recurrenceRuleId: row.recurrenceRuleId,
-      occurrenceDate: row.occurrenceDate?.toISOString().slice(0, 10) ?? null,
+      occurrenceDate,
       cancelledAt: row.cancelledAt?.toISOString() ?? null,
       recurrence: row.recurrenceRule === null ? null : {
         id: row.recurrenceRule.id,

@@ -297,6 +297,50 @@ describe('recurring events', () => {
 
   });
 
+  test('keeps a yearly all-day event within one calendar day', async () => {
+    const owner = await insertActor('yearly-all-day-owner');
+    const householdId = await createHousehold(owner.accessToken);
+    const created = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      title: 'Annual all-day event',
+      allDay: true,
+      startTime: '2035-11-12T00:00:00+08:00',
+      endTime: '2035-11-12T23:59:59+08:00',
+      recurrence: { freq: 'yearly', startsOn: '2035-11-12', timezone: 'Asia/Shanghai' },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().endTime).toBe('2035-11-12T15:59:59.000Z');
+
+    const listed = await eventApi(owner.accessToken, householdId, 'GET',
+      '?startDate=2036-11-12&endDate=2036-11-13&expandRecurring=true');
+    expect(listed.statusCode).toBe(200);
+    const { events } = listed.json() as { events: Array<{ id: string; endTime: string }> };
+    expect(events).toMatchObject([{
+      allDay: true,
+      occurrenceDate: '2036-11-12',
+      startTime: '2036-11-11T16:00:00.000Z',
+      endTime: '2036-11-12T15:59:59.000Z',
+    }]);
+    const occurrence = events[0]!;
+    const stored = await withDatabase((client) => client.query<{ end_time: Date }>(
+      'SELECT "end_time" FROM "events" WHERE "id" = $1', [occurrence.id],
+    ));
+    expect(stored.rows[0]?.end_time.toISOString()).toBe(occurrence.endTime);
+
+    // Reproduce a row saved by the old materializer, then re-read through the calendar API.
+    await withDatabase((client) => client.query(
+      'UPDATE "events" SET "end_time" = $2 WHERE "id" = $1', [occurrence.id, '2036-11-12T16:00:00.000Z'],
+    ));
+    const existing = await eventApi(owner.accessToken, householdId, 'GET',
+      '?startDate=2036-11-12&endDate=2036-11-13&expandRecurring=true');
+    expect(existing.json().events).toMatchObject([{ id: occurrence.id, endTime: occurrence.endTime }]);
+
+    const editedEnd = '2036-11-13T15:59:59.000Z';
+    const edited = await eventApi(owner.accessToken, householdId, 'PUT', `/${occurrence.id}`, { endTime: editedEnd });
+    expect(edited.statusCode).toBe(200);
+    const readBack = await eventApi(owner.accessToken, householdId, 'GET', `/${occurrence.id}`);
+    expect(readBack.json().endTime).toBe(editedEnd);
+  });
+
   test('returns a null household watermark when no recurrence rule exists', async () => {
     const owner = await insertActor('event-watermark-empty');
     const householdId = await createHousehold(owner.accessToken);
@@ -365,6 +409,7 @@ describe('recurring events', () => {
       endTime: `${formatIsoDate(addDays(parseIsoDate(startsOn), 1))}T01:00:00.000Z`,
     });
     expect(exactlyOneDay.statusCode).toBe(201);
+    expect(Date.parse(exactlyOneDay.json().endTime) - Date.parse(exactlyOneDay.json().startTime)).toBe(86_400_000);
   });
 });
 
