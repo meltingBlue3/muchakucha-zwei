@@ -39,7 +39,6 @@ A request spanning several rows reads only those rows. Links inside a playbook f
 - Preserve unrelated working-tree changes. Review only the files this task touched.
 - Commands and versions live in `package.json` and [docs/development.md](docs/development.md). Read them there instead of trusting a remembered command.
 - Report the result, the checks actually run, and anything left unverified. State a skipped step rather than implying it.
-- Finished work reaches `main` through its own pull request, one per feature or fix: when the human asks to commit, commit on a branch, push it, and open the PR against `main` for the human to merge. The PR list is how the human tracks what landed when.
 
 ## Standing safety
 

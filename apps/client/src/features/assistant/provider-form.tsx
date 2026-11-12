@@ -60,7 +60,12 @@ export function AssistantProviderForm({ initial, busy, onSubmit, onCancel, onChe
   const modelRef = useRef<TextInput>(null);
   const keyRef = useRef<TextInput>(null);
   const [check, setCheck] = useState<CheckResult | null>(null);
-  const validUrl = (() => { try { const url = new URL(baseUrl); return url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash; } catch { return false; } })();
+  const validUrl = (() => {
+    try {
+      const url = new URL(baseUrl);
+      return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password && !url.search && !url.hash;
+    } catch { return false; }
+  })();
   const input = (): AssistantProviderInput => ({ name: name.trim(), protocol, baseUrl: baseUrl.trim().replace(/\/$/, ''), model: model.trim(), visibility, ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) });
   // A result belongs to the values it checked; editing any of them hides it.
   const checkKey = JSON.stringify([protocol, baseUrl.trim(), model.trim(), apiKey.trim()]);
@@ -110,8 +115,8 @@ export function AssistantProviderForm({ initial, busy, onSubmit, onCancel, onChe
     <TextField ref={nameRef} label="配置名称" value={name} onChangeText={setName} maxLength={80} disabled={busy} submitAttempt={attempts} {...(attempts && !name.trim() ? { error: '请输入配置名称。' } : {})} placeholder={transcription ? '例如：语音转写' : '例如：家庭助手'} />
     {transcription ? null : <AssistantChoice label="模型协议" options={[{ value: 'openai-compatible', label: 'OpenAI 兼容' }, { value: 'anthropic', label: 'Anthropic' }]} value={protocol} disabled={busy} onChange={chooseProtocol} />}
     <TextField ref={urlRef} label="服务地址" value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" maxLength={500} disabled={busy} submitAttempt={connectionAttempts}
-      hint={transcription ? `填写百炼的 OpenAI 兼容地址，例如 ${defaultUrls['qwen-asr']}。` : `填写完整 API 基础地址，例如 ${defaultUrls[protocol]}。`} {...(connectionAttempts && !validUrl ? { error: '请输入 HTTPS 地址，不包含密码、查询参数或片段。' } : {})} />
-    <Text variant="caption">支持提供商和自建服务的公网 HTTPS 地址；暂不接入局域网或本机地址。</Text>
+      hint={transcription ? `填写百炼的 OpenAI 兼容地址，例如 ${defaultUrls['qwen-asr']}。` : `填写完整 API 基础地址，例如 ${defaultUrls[protocol]}。`} {...(connectionAttempts && !validUrl ? { error: '请输入 HTTP 或 HTTPS 地址，且地址中不能含有用户名、密码、查询参数或片段。' } : {})} />
+    <Text variant="caption">支持公网 HTTP 和 HTTPS 地址。HTTP 会以明文传输密钥和请求内容。</Text>
     <TextField ref={modelRef} label="模型名称" value={model} onChangeText={setModel} autoCapitalize="none" autoCorrect={false} maxLength={120} disabled={busy} submitAttempt={connectionAttempts} hint={transcription ? `例如 ${QWEN_ASR_MODEL}。` : '填写提供商支持工具调用的模型标识。'} {...(connectionAttempts && !model.trim() ? { error: '请输入模型名称。' } : {})} />
     <PasswordField ref={keyRef} label="API 密钥" value={apiKey} onChangeText={setApiKey} autoCapitalize="none" autoCorrect={false} autoComplete="off" maxLength={4096} disabled={busy} submitAttempt={connectionAttempts}
       hint={initial ? '已保存的密钥不会显示。留空保留原密钥，填写后替换。' : '密钥由服务器加密保存，不保存到本机草稿。'} {...(connectionAttempts && !initial && !apiKey.trim() ? { error: '请输入 API 密钥。' } : {})} />

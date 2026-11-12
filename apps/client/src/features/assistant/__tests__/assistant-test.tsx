@@ -54,8 +54,9 @@ test('creating a household provider requires an explicit credential and explains
   expect(submit).not.toHaveBeenCalled();
   expect(view.getByText('请输入 API 密钥。')).toBeTruthy();
   await fireEvent.changeText(view.getByLabelText('API 密钥'), 'example-key');
+  await fireEvent.changeText(view.getByLabelText('服务地址'), 'http://models.example.com:8080/v1');
   await fireEvent.press(view.getByRole('button', { name: '创建' }));
-  expect(submit).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'example-key', visibility: 'household' }));
+  expect(submit).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'example-key', baseUrl: 'http://models.example.com:8080/v1', visibility: 'household' }));
 });
 
 test('a connection check uses the form values, needs no name, and its result belongs to the values it checked', async () => {
@@ -70,8 +71,9 @@ test('a connection check uses the form values, needs no name, and its result bel
   expect(view.getByText('请输入 API 密钥。')).toBeTruthy();
   expect(view.queryByText('请输入配置名称。')).toBeNull();
   await fireEvent.changeText(view.getByLabelText('API 密钥'), 'example-key');
+  await fireEvent.changeText(view.getByLabelText('服务地址'), 'http://models.example.com:8080/v1');
   await fireEvent.press(view.getByRole('button', { name: '测试连接' }));
-  expect(check).toHaveBeenCalledWith(expect.objectContaining({ protocol: 'openai-compatible', baseUrl: 'https://api.openai.com/v1', model: 'tool-model', apiKey: 'example-key' }));
+  expect(check).toHaveBeenCalledWith(expect.objectContaining({ protocol: 'openai-compatible', baseUrl: 'http://models.example.com:8080/v1', model: 'tool-model', apiKey: 'example-key' }));
   await view.findByText('连接正常，模型可以调用工具并读取结果。');
   await fireEvent.changeText(view.getByLabelText('API 密钥'), 'another-key');
   expect(view.queryByText('连接正常，模型可以调用工具并读取结果。')).toBeNull();

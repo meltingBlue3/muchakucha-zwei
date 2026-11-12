@@ -12,7 +12,7 @@ const errorMessages: Record<string, string> = {
   ASSISTANT_CONVERSATION_FULL: '这段对话已经太长，请创建新的对话继续。',
   ASSISTANT_CONVERSATION_LIMIT_REACHED: '已有 100 段对话，请先删除不再需要的对话。',
   ASSISTANT_PROVIDER_LIMIT_REACHED: '你在这个家庭已有 20 项模型配置，请先删除不用的配置。',
-  ASSISTANT_ENDPOINT_INVALID: '服务地址只能是公网 HTTPS 地址，不能带用户名、密码、查询参数或片段。',
+  ASSISTANT_ENDPOINT_INVALID: '请输入公网 HTTP 或 HTTPS 地址，且地址中不能含有用户名、密码、查询参数或片段。',
   ASSISTANT_PROVIDER_AUTH_FAILED: '模型服务拒绝了 API 密钥，请检查或更新密钥。',
   ASSISTANT_PROVIDER_QUOTA_EXCEEDED: '模型服务账户额度不足，请检查余额或套餐。',
   ASSISTANT_PROVIDER_RATE_LIMITED: '模型服务请求过于频繁，请稍后重试。',

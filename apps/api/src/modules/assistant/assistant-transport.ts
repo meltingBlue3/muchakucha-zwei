@@ -1,6 +1,7 @@
 import { BadGatewayException, BadRequestException, GatewayTimeoutException } from '@nestjs/common';
 import { lookup } from 'node:dns/promises';
-import { request } from 'node:https';
+import { request as requestHttp } from 'node:http';
+import { request as requestHttps } from 'node:https';
 import { BlockList, isIP } from 'node:net';
 
 const MAX_BODY_BYTES = 1_048_576;
@@ -34,7 +35,7 @@ export function isPublicAssistantAddress(address: string): boolean {
 function unsafeEndpoint(): BadRequestException {
   return new BadRequestException({
     code: 'ASSISTANT_ENDPOINT_INVALID',
-    message: 'The assistant endpoint must be a public HTTPS URL without credentials, query or fragment.',
+    message: 'The assistant endpoint must be a public HTTP or HTTPS URL without credentials, query or fragment.',
   });
 }
 
@@ -117,7 +118,7 @@ export function validateAssistantBaseUrl(value: string): URL {
   try { url = new URL(value); } catch { throw unsafeEndpoint(); }
   const hostname = hostnameOf(url);
   const normalized = hostname.toLowerCase().replace(/\.$/, '');
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password || url.search || url.hash
     || !hostname || /(^|\.)(localhost|local|internal)$/.test(normalized)
     || (isIP(hostname) !== 0 && !isPublicAssistantAddress(hostname))) throw unsafeEndpoint();
   return url;
@@ -151,6 +152,7 @@ export type AssistantTransport = (url: URL, headers: Record<string, string>, bod
 export const postAssistantJson: AssistantTransport = async (url, headers, body) => {
   validateAssistantBaseUrl(url.href);
   const selected = await resolvePublicAddress(hostnameOf(url));
+  const request = url.protocol === 'http:' ? requestHttp : requestHttps;
   const payload = JSON.stringify(body);
   if (Buffer.byteLength(payload) > MAX_BODY_BYTES) throw new BadRequestException({ code: 'ASSISTANT_CONTEXT_TOO_LARGE', message: 'The assistant conversation is too large.' });
   return new Promise<unknown>((resolve, reject) => {

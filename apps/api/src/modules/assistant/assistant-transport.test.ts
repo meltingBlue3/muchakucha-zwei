@@ -1,17 +1,19 @@
 import { BadRequestException } from '@nestjs/common';
 import { EventEmitter } from 'node:events';
-import type { RequestOptions } from 'node:https';
+import type { RequestOptions } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { isPublicAssistantAddress, postAssistantJson, validateAssistantBaseUrl } from './assistant-transport.js';
 
-const { dnsLookup, httpsRequest } = vi.hoisted(() => ({ dnsLookup: vi.fn(), httpsRequest: vi.fn() }));
+const { dnsLookup, httpRequest, httpsRequest } = vi.hoisted(() => ({ dnsLookup: vi.fn(), httpRequest: vi.fn(), httpsRequest: vi.fn() }));
 vi.mock('node:dns/promises', () => ({ lookup: dnsLookup }));
+vi.mock('node:http', () => ({ request: httpRequest }));
 vi.mock('node:https', () => ({ request: httpsRequest }));
 
 describe('assistant endpoint validation', () => {
   test.each([
-    'http://api.example.com/v1', 'https://user:password@api.example.com/v1', 'https://api.example.com/v1?key=secret',
+    'ftp://api.example.com/v1', 'http://10.0.0.1/v1', 'http://user:password@api.example.com/v1',
+    'https://user:password@api.example.com/v1', 'https://api.example.com/v1?key=secret',
     'https://api.example.com/v1#fragment', 'https://localhost/v1', 'https://a.localhost./v1', 'https://box.local/v1',
     'https://127.1/v1', 'https://2130706433/v1', 'https://0x7f000001/v1', 'https://10.0.0.1/v1',
     'https://169.254.169.254/v1', 'https://100.100.100.200/v1', 'https://168.63.129.16/v1',
@@ -30,7 +32,7 @@ describe('assistant endpoint validation', () => {
   });
 });
 
-describe('assistant HTTPS transport', () => {
+describe('assistant transport', () => {
   let options: RequestOptions | undefined;
   let response: PassThrough & { statusCode: number };
   let requestEmitter: EventEmitter & { end: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> };
@@ -43,7 +45,7 @@ describe('assistant HTTPS transport', () => {
     responseBody = '{"ok":true}';
     statusCode = 200;
     dnsLookup.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
-    httpsRequest.mockImplementation((_url: URL, requestOptions: RequestOptions, callback: (result: typeof response) => void) => {
+    const mockRequest = (_url: URL, requestOptions: RequestOptions, callback: (result: typeof response) => void) => {
       options = requestOptions;
       requestEmitter = Object.assign(new EventEmitter(), { end: vi.fn(), destroy: vi.fn() });
       requestEmitter.end.mockImplementation(() => {
@@ -51,13 +53,20 @@ describe('assistant HTTPS transport', () => {
         queueMicrotask(() => { callback(response); response.end(responseBody); });
       });
       return requestEmitter;
-    });
+    };
+    httpRequest.mockImplementation(mockRequest);
+    httpsRequest.mockImplementation(mockRequest);
   });
 
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-  test('pins the validated DNS address and disables shared sockets', async () => {
-    await expect(postAssistantJson(new URL('https://provider.example.com/v1/messages'), { 'x-api-key': 'secret' }, {})).resolves.toEqual({ ok: true });
+  test.each(['http', 'https'])('sends %s requests with pinned DNS and disables shared sockets', async (scheme) => {
+    const url = new URL(`${scheme}://provider.example.com:8080/v1/messages`);
+    await expect(postAssistantJson(url, { 'x-api-key': 'secret' }, { model: 'example-model' })).resolves.toEqual({ ok: true });
+    const [selected, unused] = scheme === 'http' ? [httpRequest, httpsRequest] : [httpsRequest, httpRequest];
+    expect(selected).toHaveBeenCalledExactlyOnceWith(url, expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ 'x-api-key': 'secret' }) }), expect.any(Function));
+    expect(unused).not.toHaveBeenCalled();
+    expect(requestEmitter.end).toHaveBeenCalledWith('{"model":"example-model"}');
     expect(dnsLookup).toHaveBeenCalledTimes(1);
     expect(options?.agent).toBe(false);
     expect(options?.signal).toBeInstanceOf(AbortSignal);
@@ -70,9 +79,10 @@ describe('assistant HTTPS transport', () => {
     expect(dnsLookup).toHaveBeenCalledTimes(1);
   });
 
-  test('rejects a hostname if even one DNS answer is private', async () => {
+  test.each(['http', 'https'])('rejects a %s hostname if even one DNS answer is private', async (scheme) => {
     dnsLookup.mockResolvedValue([{ address: '8.8.8.8', family: 4 }, { address: '127.0.0.1', family: 4 }]);
-    await expect(postAssistantJson(new URL('https://provider.example.com/v1/messages'), {}, {})).rejects.toMatchObject({ response: { code: 'ASSISTANT_ENDPOINT_INVALID' } });
+    await expect(postAssistantJson(new URL(`${scheme}://provider.example.com/v1/messages`), {}, {})).rejects.toMatchObject({ response: { code: 'ASSISTANT_ENDPOINT_INVALID' } });
+    expect(httpRequest).not.toHaveBeenCalled();
     expect(httpsRequest).not.toHaveBeenCalled();
   });
 
@@ -84,15 +94,16 @@ describe('assistant HTTPS transport', () => {
   });
 
   test.each([
-    [301, 'ASSISTANT_PROVIDER_FAILED'], [302, 'ASSISTANT_PROVIDER_FAILED'], [307, 'ASSISTANT_PROVIDER_FAILED'],
-    [401, 'ASSISTANT_PROVIDER_AUTH_FAILED'], [500, 'ASSISTANT_PROVIDER_UNAVAILABLE'],
-  ])('does not follow redirects or expose upstream error bodies (%i)', async (status, code) => {
+    ['http', 302, 'ASSISTANT_PROVIDER_FAILED'], ['https', 301, 'ASSISTANT_PROVIDER_FAILED'],
+    ['https', 302, 'ASSISTANT_PROVIDER_FAILED'], ['https', 307, 'ASSISTANT_PROVIDER_FAILED'],
+    ['https', 401, 'ASSISTANT_PROVIDER_AUTH_FAILED'], ['https', 500, 'ASSISTANT_PROVIDER_UNAVAILABLE'],
+  ])('does not follow redirects or expose upstream error bodies (%s %i)', async (scheme, status, code) => {
     statusCode = status;
     responseBody = 'secret credentials and personal data';
-    const pending = postAssistantJson(new URL('https://provider.example.com/v1/messages'), {}, {});
+    const pending = postAssistantJson(new URL(`${scheme}://provider.example.com/v1/messages`), {}, {});
     await expect(pending).rejects.toMatchObject({ response: { code } });
     try { await pending; } catch (error) { expect(JSON.stringify(error)).not.toContain(responseBody); }
-    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    expect(httpRequest.mock.calls.length + httpsRequest.mock.calls.length).toBe(1);
     expect(response.destroyed).toBe(true);
   });
 
