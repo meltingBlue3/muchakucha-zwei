@@ -32,11 +32,10 @@ grep -c "47.117.148.16" <输出目录>/_expo/static/js/web/entry-*.js   # 必须
 
 ## 还没迁移的页面
 
-共享组件已迁移。其余批次可按表里的顺序推进。
+共享组件与登录注册已迁移。其余批次可按表里的顺序推进。
 
 | 批次 | 位置 | 文件 | 行 | 备注 |
 | --- | --- | --- | --- | --- |
-| 登录注册 | `src/features/auth`、`app/(auth)` | 4 | 约 45 | |
 | 家庭与账户 | `src/features/households`、`src/features/inbox`、`src/features/profile/account-navigation.tsx`；`app/(protected)` 下家庭、成员、邀请、所有权的路由，以及 `inbox.tsx`、`household-handoff.tsx`、`_layout.tsx` | 约 20 | 约 190 | `household-settings.tsx` 占 59 行 |
 | 任务 | `src/features/tasks`、`households/[id]/tasks/*` | 9 | 约 156 | |
 | 日历与今日 | `src/features/events`、`households/[id]/events/*`、`today.tsx` | 13 | 约 147 | |

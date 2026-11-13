@@ -1,6 +1,8 @@
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { useTranslation } from '../../i18n';
+import { authErrorKey } from './auth-error-key';
 import type { SessionStateStore } from './session-state';
 import type { RestoreOutcome, SessionTransport } from '../../platform/session/session-transport';
 import {
@@ -14,8 +16,8 @@ import {
 } from '../../ui/primitives';
 
 const loginSchema = z.object({
-  username: z.string().trim().min(1, '请输入用户名。').transform((value) => value.normalize('NFC')),
-  password: z.string().min(1, '请输入密码。'),
+  username: z.string().trim().min(1, 'errors.usernameRequired').transform((value) => value.normalize('NFC')),
+  password: z.string().min(1, 'errors.passwordRequired'),
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
@@ -46,6 +48,7 @@ export const LoginForm = ({
   sessionStateStore,
   sessionTransport,
 }: LoginFormProps) => {
+  const { t } = useTranslation(['auth', 'common']);
   const {
     clearErrors,
     control,
@@ -71,7 +74,7 @@ export const LoginForm = ({
     if (outcome.kind === 'reauthRequired') {
       await sessionTransport.clear();
       sessionStateStore.enterReauthenticationRequired(outcome.reason);
-      setError('root.server', { message: '登录已过期，请重新登录。' });
+      setError('root.server', { message: 'errors.sessionExpired' });
       return;
     }
     sessionStateStore.enterUnauthenticated();
@@ -97,8 +100,8 @@ export const LoginForm = ({
     } catch (error) {
       setError('root.server', {
         message: isUnauthorized(error)
-          ? '用户名或密码不正确，请重新输入。'
-          : '这次没有完成。请检查网络后重试。',
+          ? 'errors.invalidCredentials'
+          : 'common:genericError',
       });
     }
   });
@@ -106,7 +109,7 @@ export const LoginForm = ({
   const validateField = (field: keyof LoginValues) => {
     const result = loginSchema.shape[field].safeParse(getValues(field));
     if (result.success) clearErrors(field);
-    else setError(field, { message: result.error.issues[0]?.message ?? '请检查输入。' });
+    else setError(field, { message: result.error.issues[0]?.message ?? 'errors.checkInput' });
   };
   // An empty field is reported only on submit; an error already shown follows
   // the input as the user corrects it.
@@ -119,16 +122,17 @@ export const LoginForm = ({
   };
 
   const formError = errors.root?.server?.message;
+  const errorText = (key: string) => t(authErrorKey(key));
 
   return (
     <Stack gap={5}>
-      <AuthTitle title="欢迎回来">登录后回到你的家庭。</AuthTitle>
+      <AuthTitle title={t('login.title')}>{t('login.intro')}</AuthTitle>
       {reauthenticationRequired ? (
-        <Banner title="需要重新登录">
-          登录已过期，请重新登录。完成后我们会带你回到刚才的位置。
+        <Banner title={t('login.reauthTitle')}>
+          {t('login.reauthDetail')}
         </Banner>
       ) : null}
-      {formError ? <Banner title="暂时无法登录">{formError}</Banner> : null}
+      {formError ? <Banner title={t('login.failed')}>{errorText(formError)}</Banner> : null}
       <Controller
         control={control}
         name="username"
@@ -139,8 +143,8 @@ export const LoginForm = ({
             autoCapitalize="none"
             autoComplete="username"
             autoCorrect={false}
-            {...(errors.username?.message === undefined ? {} : { error: errors.username.message })}
-            label="用户名"
+            {...(errors.username?.message === undefined ? {} : { error: errorText(errors.username.message) })}
+            label={t('username')}
             returnKeyType="next"
             submitBehavior="submit"
             onSubmitEditing={() => setFocus('password')}
@@ -164,8 +168,8 @@ export const LoginForm = ({
             disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="current-password"
-            {...(errors.password?.message === undefined ? {} : { error: errors.password.message })}
-            label="密码"
+            {...(errors.password?.message === undefined ? {} : { error: errorText(errors.password.message) })}
+            label={t('password')}
             onBlur={() => {
               onBlur();
               validateOnBlur('password');
@@ -179,8 +183,8 @@ export const LoginForm = ({
           />
         )}
       />
-      <Button disabled={isSubmitting} label="登录" loading={isSubmitting} onPress={() => void submit()} />
-      <AuthSwitch prompt="第一次来到这里？" label="创建账户" onPress={onRegister} />
+      <Button disabled={isSubmitting} label={t('login.action')} loading={isSubmitting} onPress={() => void submit()} />
+      <AuthSwitch prompt={t('login.registerPrompt')} label={t('register.action')} onPress={onRegister} />
     </Stack>
   );
 };
