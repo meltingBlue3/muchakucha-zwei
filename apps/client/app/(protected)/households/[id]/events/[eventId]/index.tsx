@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../../src/i18n';
 import { EventWindow } from '../../../../../../src/features/events/event-window';
 import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -30,6 +31,7 @@ export default function EventDetailRoute() {
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
+  useTranslation('recurrence');
   const desktop = useDesktop();
   const [event, setEvent] = useState<EventResponseDto | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,15 +1,9 @@
 import type { RecurrenceDto } from '@muchakucha/api-client';
 
+import { i18n, useTranslation } from '../../i18n';
+import { weekdayName } from '../../ui/date-values';
 import { Text } from '../../ui/primitives';
 import { formatLunarAnchor } from '../lunar/lunar-recurrence';
-
-const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'] as const;
-const CLAMP_NOTE = '有些月份没有这一天，会自动改到当月最后一天。';
-// A yearly rule anchored on 2 月 29 日 genuinely clamps to 2 月 28 日 in
-// common years. D-09 requires clamping be explicit rather than silent, and
-// this summary is the only place the user can learn about it.
-const LEAP_DAY_CLAMP_NOTE = '平年没有 2 月 29 日，会自动改到 2 月 28 日。';
-const LUNAR_SHORT_MONTH_NOTE = '农历小月没有三十，会自动改到廿九。';
 
 export interface FormattedRecurrenceSummary {
   summary: string;
@@ -23,30 +17,31 @@ function dateParts(date: string): { month: number; day: number } {
 }
 
 function frequencySummary(rule: RecurrenceDto): string {
+  const t = i18n.getFixedT(null, 'recurrence');
   const { month, day } = dateParts(rule.startsOn);
   const interval = rule.interval ?? 1;
 
   switch (rule.freq) {
     case 'daily':
-      return interval > 1 ? `每 ${interval} 天重复` : '每天重复';
+      return t(interval > 1 ? 'dailyInterval' : 'daily', { interval });
     case 'weekly': {
       const weekdays = [...new Set(rule.byWeekday ?? [])]
-        .filter((weekday) => weekday >= 0 && weekday < DAY_NAMES.length)
+        .filter((weekday) => weekday >= 0 && weekday < 7)
         // Listed from Monday, so Sunday comes last as it does in the weekday picker.
         .sort((left, right) => (left + 6) % 7 - (right + 6) % 7)
-        .map((weekday) => DAY_NAMES[weekday]);
-      return interval > 1 ? `每 ${interval} 周的周${weekdays.join('、')}重复` : `每周${weekdays.join('、')}重复`;
+        .map(weekdayName)
+        .join('、');
+      if (weekdays === '') return t(interval > 1 ? 'weeklyAnyInterval' : 'weeklyAny', { interval });
+      return t(interval > 1 ? 'weeklyInterval' : 'weekly', { interval, weekdays });
     }
     case 'monthly':
-      return interval > 1 ? `每 ${interval} 个月的 ${day} 日重复` : `每月 ${day} 日重复`;
+      return t(interval > 1 ? 'monthlyInterval' : 'monthly', { interval, day });
     case 'yearly':
-      if (rule.lunar !== undefined) {
-        const lunarDate = `农历${formatLunarAnchor(rule.lunar)}`;
-        return interval > 1 ? `每 ${interval} 年的${lunarDate}重复` : `每年${lunarDate}重复`;
-      }
-      return interval > 1 ? `每 ${interval} 年的 ${month} 月 ${day} 日重复` : `每年 ${month} 月 ${day} 日重复`;
+      return rule.lunar === undefined
+        ? t(interval > 1 ? 'yearlyInterval' : 'yearly', { interval, month, day })
+        : t(interval > 1 ? 'lunarYearlyInterval' : 'lunarYearly', { interval, date: formatLunarAnchor(rule.lunar) });
     default:
-      return '重复';
+      return t('repeat');
   }
 }
 
@@ -54,26 +49,27 @@ export function formatRecurrenceSummary(
   rule: RecurrenceDto,
   deviceTimeZone: string,
 ): FormattedRecurrenceSummary {
+  const t = i18n.getFixedT(null, 'recurrence');
   const { month, day } = dateParts(rule.startsOn);
   let summary = frequencySummary(rule);
 
   if (rule.endsOn !== undefined) {
-    summary += `，到 ${rule.endsOn} 为止`;
+    summary = t('until', { summary, end: rule.endsOn });
   } else if (rule.count !== undefined) {
-    summary += `，共 ${rule.count} 次`;
+    summary = t('count', { summary, count: rule.count });
   }
 
   return {
     summary,
     clampNote: rule.freq === 'monthly' && day >= 29
-      ? CLAMP_NOTE
+      ? t('clampMonth')
       : rule.freq === 'yearly' && rule.lunar !== undefined
-        ? rule.lunar.day === 30 ? LUNAR_SHORT_MONTH_NOTE : null
+        ? rule.lunar.day === 30 ? t('clampLunar') : null
         : rule.freq === 'yearly' && month === 2 && day === 29
-          ? LEAP_DAY_CLAMP_NOTE
+          ? t('clampLeap')
           : null,
     timeZoneNote:
-      rule.timezone === deviceTimeZone ? null : `按 ${rule.timezone} 的日期重复。`,
+      rule.timezone === deviceTimeZone ? null : t('timeZone', { timezone: rule.timezone }),
   };
 }
 
@@ -84,6 +80,7 @@ interface RecurrenceSummaryProps {
 
 /** The clamp and time-zone caveats alone, for places that already show the summary line. */
 export function RecurrenceNotes({ rule, deviceTimeZone }: RecurrenceSummaryProps) {
+  useTranslation('recurrence');
   const formatted = formatRecurrenceSummary(rule, deviceTimeZone);
   const notes = [formatted.clampNote, formatted.timeZoneNote].filter((note): note is string => note !== null);
   if (notes.length === 0) return null;

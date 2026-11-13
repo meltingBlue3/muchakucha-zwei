@@ -10,6 +10,7 @@ import { Text } from './primitives';
 import { theme } from './theme';
 import { useDesktopDensity } from './use-desktop';
 import { RowInteraction } from './row-interaction';
+import { useTranslation } from '../i18n';
 
 type ActionIcon = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 interface ActionLook { label: string; icon: ActionIcon; destructive?: boolean }
@@ -25,9 +26,9 @@ export type CardAction = ({ kind: 'edit' | 'delete' } | ({ kind?: undefined } & 
   onPress(trigger: View | null): void;
 };
 
-const STANDARD_LOOK: Record<'edit' | 'delete', ActionLook> = {
-  edit: { label: '编辑', icon: Pencil },
-  delete: { label: '删除', icon: Trash2, destructive: true },
+const STANDARD_LOOK: Record<'edit' | 'delete', Omit<ActionLook, 'label'>> = {
+  edit: { icon: Pencil },
+  delete: { icon: Trash2, destructive: true },
 };
 
 /**
@@ -39,6 +40,7 @@ export function CardActionsMenu(props: { subject: string; actions: CardAction[];
 }
 
 function ActionsMenu({ subject, actions, disabled = false }: { subject: string; actions: CardAction[]; disabled?: boolean }) {
+  const { t } = useTranslation(['shared', 'common']);
   const dense = useDesktopDensity();
   const hovered = useContext(RowInteraction);
   const [focused, setFocused] = useState(false);
@@ -52,7 +54,7 @@ function ActionsMenu({ subject, actions, disabled = false }: { subject: string; 
   const initial = useRef<View>(null);
   const close = useCallback(() => setOpen(false), []);
   const focus = useOverlayFocus({ mode: open ? 'menu' : 'closed', panel, initial, trigger, onClose: close });
-  const menuLabel = `更多操作：${subject}`;
+  const menuLabel = t('moreActions', { subject });
   const panelHeight = actions.length * control + theme.spacing[4];
   return <>
     <Pressable ref={trigger} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} accessibilityRole="button" accessibilityLabel={menuLabel} accessibilityState={{ disabled, expanded: open }} aria-expanded={open} aria-haspopup="menu" disabled={disabled} onPress={() => {
@@ -66,11 +68,11 @@ function ActionsMenu({ subject, actions, disabled = false }: { subject: string; 
         <Pressable accessible={false} tabIndex={-1} testID="card-menu-dismiss" onPress={close} style={StyleSheet.absoluteFill} />
         <View ref={panel} accessibilityRole="menu" accessibilityLabel={menuLabel} accessibilityViewIsModal style={{ position: 'absolute', top: Math.max(insets.top, Math.min(anchor.top, height - insets.bottom - panelHeight - theme.spacing[2])), right: anchor.right, minWidth: theme.controlSizes.touchTarget * 3, backgroundColor: theme.colors.surface, padding: theme.spacing[2], borderRadius: theme.borderRadii.lg, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, boxShadow: theme.shadow.soft }}>
           {actions.map((action, index) => {
-            const { label, icon: Icon, destructive = false } = action.kind ? STANDARD_LOOK[action.kind] : action;
+            const { icon: Icon, destructive = false } = action.kind ? STANDARD_LOOK[action.kind] : action;
             return (
               <Pressable {...insetFocusRing} key={action.accessibilityLabel} ref={index === 0 ? initial : undefined} accessibilityRole="menuitem" accessibilityLabel={action.accessibilityLabel} onPress={() => { close(); requestAnimationFrame(() => action.onPress(trigger.current)); }} style={({ pressed }) => ({ minHeight: control, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? (destructive ? theme.colors.destructiveSoft : theme.colors.surfaceMuted) : theme.colors.surface })}>
                 <Icon size={theme.controlSizes.icon} color={destructive ? theme.colors.destructive : theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} />
-                <Text variant="label" color={destructive ? 'destructive' : 'ink'}>{label}</Text>
+                <Text variant="label" color={destructive ? 'destructive' : 'ink'}>{action.kind ? t(`common:${action.kind}`) : action.label}</Text>
               </Pressable>
             );
           })}

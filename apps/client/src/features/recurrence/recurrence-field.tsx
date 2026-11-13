@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import type { RecurrenceDto } from '@muchakucha/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
@@ -70,6 +71,7 @@ type Stage = 'closed' | 'options' | 'custom';
  * intervals, weekdays and an end condition.
  */
 export function RecurrenceField({ value, onChange, startDate: formStart, name, icon, disabled = false, disableTurnOff = false, turnOffHint = TURN_OFF_DISABLED_HINT, errors = {}, ownStart = false }: RecurrenceFieldProps) {
+  useTranslation('recurrence');
   // Where the rule is anchored: its own start when it owns one, else the form's.
   const startDate = ownStart && value ? value.startsOn : formStart;
   const [stage, setStage] = useState<Stage>('closed');

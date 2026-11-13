@@ -5,6 +5,7 @@ import Search from 'lucide-react-native/icons/search';
 import X from 'lucide-react-native/icons/x';
 import { theme } from './theme';
 import { useDesktopDensity } from './use-desktop';
+import { useTranslation } from '../i18n';
 
 /**
  * A quiet sunken search box with a magnifier. Its name is announced rather
@@ -16,6 +17,7 @@ export function SearchField({ label, placeholder, value, onChangeText }: {
   value: string;
   onChangeText(text: string): void;
 }) {
+  const { t } = useTranslation('shared');
   const [focused, setFocused] = useState(false);
   const dense = useDesktopDensity();
   const input = useRef<TextInput>(null);
@@ -50,7 +52,7 @@ export function SearchField({ label, placeholder, value, onChangeText }: {
         style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', color: theme.colors.ink, fontFamily: theme.fontFamilies.regular, fontSize: dense ? theme.typography.meta.fontSize : theme.typography.body.fontSize, paddingHorizontal: theme.spacing[2], outlineStyle: 'none' } as never}
       />
       {value !== '' ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="清空搜索" onPress={() => onChangeText('')} style={{ minWidth: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget, minHeight: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget - theme.spacing[1], alignItems: 'center', justifyContent: 'center' }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('searchClear')} onPress={() => onChangeText('')} style={{ minWidth: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget, minHeight: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget - theme.spacing[1], alignItems: 'center', justifyContent: 'center' }}>
           <X size={theme.controlSizes.icon - theme.spacing[1]} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
         </Pressable>
       ) : dense && !focused ? <View accessible={false} style={{ borderWidth: theme.borderWidths.default, borderColor: theme.colors.outline, borderRadius: theme.spacing[1], paddingHorizontal: theme.spacing[1] + 1 }}><Text variant="caption" color="inkFaint" style={{ fontFamily: theme.fontFamilies.numeric, fontSize: theme.typography.tag.fontSize - 0.5, lineHeight: theme.spacing[4] }}>/</Text></View> : null}

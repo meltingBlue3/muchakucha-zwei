@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { Text } from './primitives';
 import { theme } from './theme';
+import { useTranslation } from '../i18n';
 
 export interface ActionNoticeProps {
   message: string;
@@ -75,6 +76,7 @@ export function useActionNoticeDismissal(notice: ActionNoticeProps | null | unde
  * touching anywhere else on the page or leaving the page.
  */
 export function ActionNotice({ message, actionLabel, actionAccessibilityLabel, onAction, onDismiss, busy = false, onTouchCapture }: ActionNoticeProps & { onTouchCapture?: () => boolean }) {
+  const { t } = useTranslation('shared');
   return (
     <View
       {...(onTouchCapture ? { onStartShouldSetResponderCapture: onTouchCapture } : {})}
@@ -83,7 +85,7 @@ export function ActionNotice({ message, actionLabel, actionAccessibilityLabel, o
       style={{ width: '100%', maxWidth: theme.layout.dialogMaxWidth, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], paddingLeft: theme.spacing[4], paddingRight: theme.spacing[1], paddingVertical: theme.spacing[1], backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, boxShadow: theme.shadow.soft }}
     >
       <Text variant="bodySm" color="ink" numberOfLines={2} style={{ flex: 1, minWidth: 0 }}>{message}</Text>
-      <NoticeButton label="忽略" color="inkMuted" disabled={busy} onPress={onDismiss} />
+      <NoticeButton label={t('dismiss')} color="inkMuted" disabled={busy} onPress={onDismiss} />
       <NoticeButton label={actionLabel} accessibilityLabel={actionAccessibilityLabel} color="link" disabled={busy} onPress={onAction} />
     </View>
   );

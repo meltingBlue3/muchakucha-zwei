@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../../src/i18n';
 import { notifyContentChanged, useContentChanges } from '../../../../../../src/features/content/content-changes';
 import { TaskWindow } from '../../../../../../src/features/tasks/task-window';
 import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
@@ -42,6 +43,7 @@ export default function TaskDetailRoute() {
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId: string }>();
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
+  useTranslation('recurrence');
   const desktop = useDesktop();
   const userId = useCurrentUser()?.id ?? '';
   const [task, setTask] = useState<TaskResponseDto | null>(null);

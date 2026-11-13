@@ -5,11 +5,13 @@ import { useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { theme } from './theme';
 import { Heading, IconButton, Inline } from './primitives';
 import X from 'lucide-react-native/icons/x';
+import { useTranslation } from '../i18n';
 
 export function AnchoredPopover({ title, trigger, onClose, children, width = theme.layout.desktopSwitcherWidth, scrollable = false, busy = false }: {
   title: string; trigger: RefObject<View | null>; onClose(): void; children: ReactNode; width?: number;
   scrollable?: boolean; busy?: boolean;
 }) {
+  const { t } = useTranslation('common');
   const panel = useRef<View>(null);
   const initial = useRef<View>(null);
   const viewport = useWindowDimensions();
@@ -22,6 +24,6 @@ export function AnchoredPopover({ title, trigger, onClose, children, width = the
   // The layer fills the window, so `bottom` is measured from the window's foot and the dismiss layer covers everything.
   return <Portal><View pointerEvents="box-none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
     <Pressable accessible={false} tabIndex={-1} onPress={onClose} style={{ position: 'absolute', inset: 0 }} />
-    {anchor ? <View ref={panel} role="dialog" accessibilityLabel={title} testID="app-dialog-panel" style={{ position: 'absolute', left: anchor.left, ...(anchor.top === undefined ? { bottom: anchor.bottom } : { top: anchor.top }), width, maxHeight: Math.min(theme.layout.switcherMaxHeight, viewport.height - theme.spacing[16], anchor.room), backgroundColor: theme.colors.surface, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, borderRadius: theme.borderRadii.md, padding: theme.spacing[4], boxShadow: theme.shadow.raised, gap: theme.spacing[3] }}><Inline><Heading ref={initial} tabIndex={-1} variant="label" style={{ flex: 1 }}>{title}</Heading><IconButton disabled={busy} label={`关闭${title}`} appearance="plain" icon={<X size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={onClose} /></Inline>{scrollable ? <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">{children}</ScrollView> : children}</View> : null}
+    {anchor ? <View ref={panel} role="dialog" accessibilityLabel={title} testID="app-dialog-panel" style={{ position: 'absolute', left: anchor.left, ...(anchor.top === undefined ? { bottom: anchor.bottom } : { top: anchor.top }), width, maxHeight: Math.min(theme.layout.switcherMaxHeight, viewport.height - theme.spacing[16], anchor.room), backgroundColor: theme.colors.surface, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, borderRadius: theme.borderRadii.md, padding: theme.spacing[4], boxShadow: theme.shadow.raised, gap: theme.spacing[3] }}><Inline><Heading ref={initial} tabIndex={-1} variant="label" style={{ flex: 1 }}>{title}</Heading><IconButton disabled={busy} label={t('close', { title })} appearance="plain" icon={<X size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={onClose} /></Inline>{scrollable ? <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">{children}</ScrollView> : children}</View> : null}
   </View></Portal>;
 }

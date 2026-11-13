@@ -10,6 +10,7 @@ import { DatePickerPanel, PickerActions, TimePickerPanel } from './picker-panels
 import { useWindowStep, type RouteWindowStep } from './window-step';
 import { useDesktop, useDesktopDensity } from './use-desktop';
 import { AnchoredPopover } from './anchored-popover';
+import { useTranslation } from '../i18n';
 
 export { formatDateLabel } from './date-values';
 
@@ -36,8 +37,6 @@ type DateFieldProps = {
   align?: 'start' | 'end';
 };
 
-const PICKER_TITLES = { date: '选择日期', time: '选择时间' } as const;
-
 /**
  * Pickers follow Google Calendar on each platform: Android opens the system
  * Material 3 dialogs, iOS shows the native calendar or wheel in a window
@@ -57,6 +56,7 @@ export function DateField({
   appearance = 'field',
   align = 'start',
 }: DateFieldProps) {
+  const { t } = useTranslation(['picker', 'common']);
   const activeTheme = useTheme<Theme>();
   const desktop = useDesktop();
   const dense = useDesktopDensity();
@@ -64,21 +64,22 @@ export function DateField({
   const trigger = useRef<View>(null);
   const plain = appearance === 'plain';
   const isEmpty = value === '';
+  const title = t(`select.${mode}`);
   const displayValue = isEmpty
-    ? (placeholder ?? (mode === 'date' ? '选择日期' : '选择时间'))
+    ? (placeholder ?? title)
     : mode === 'date' ? formatDateLabel(value) : value;
-  const name = accessibilityLabel ?? label ?? (mode === 'date' ? '日期' : '时间');
+  const name = accessibilityLabel ?? label ?? t(`name.${mode}`);
 
   const close = useCallback(() => setOpen(false), []);
   const apply = useCallback((next: string) => { setOpen(false); onChange(next); }, [onChange]);
   const pickerValue = value === '' && pickerDefault !== undefined ? pickerDefault : value;
   const panel = open ? <PickerPanel mode={mode} value={pickerValue} onConfirm={apply} onCancel={close} /> : null;
   const step = useMemo<RouteWindowStep | null>(() => open && Platform.OS !== 'android' && !desktop ? {
-    title: PICKER_TITLES[mode],
+    title: title,
     content: panel,
     onClose: close,
     onReturn: () => (trigger.current as unknown as { focus?(): void } | null)?.focus?.(),
-  } : null, [open, mode, panel, close, desktop]);
+  } : null, [open, title, panel, close, desktop]);
   const inWindow = useWindowStep(step);
 
   const press = () => {
@@ -87,12 +88,12 @@ export function DateField({
         value: mode === 'date' ? parseDateValue(pickerValue) : parseTimeValue(pickerValue),
         mode,
         design: 'material',
-        title: PICKER_TITLES[mode],
+        title: title,
         // No is24Hour: the dialog then follows the phone's 12/24-hour setting, so
         // someone who reads 11:41 at night picks 11 PM rather than 11 in the morning.
         firstDayOfWeek: 1,
-        positiveButton: { label: '确定' },
-        negativeButton: { label: '取消' },
+        positiveButton: { label: t('common:confirm') },
+        negativeButton: { label: t('common:cancel') },
         onChange: (event: DateTimePickerEvent, selected?: Date) => {
           if (event.type === 'set' && selected !== undefined) onChange(mode === 'date' ? toDateValue(selected) : toTimeValue(selected));
         },
@@ -126,14 +127,14 @@ export function DateField({
         ref={trigger}
         onPress={press}
         disabled={disabled}
-        accessibilityLabel={`${name}，${displayValue}`}
+        accessibilityLabel={t('fieldName', { name, value: displayValue })}
         accessibilityRole="button"
         accessibilityState={{ disabled, expanded: open }}
         style={({ pressed }) => [fieldStyle, { borderRadius: plain ? activeTheme.borderRadii.sm : activeTheme.borderRadii.md, backgroundColor: pressed ? activeTheme.colors.surfaceMuted : plain ? activeTheme.colors.transparent : activeTheme.colors.surface }]}
       >
         <Text {...(dense ? { variant: 'bodySm' as const } : {})} color={isEmpty ? 'inkMuted' : 'ink'}>{displayValue}</Text>
       </Pressable>
-      {desktop && open ? <AnchoredPopover title={PICKER_TITLES[mode]} onClose={close} trigger={trigger}>{panel}</AnchoredPopover> : !inWindow && open ? <AppDialog title={PICKER_TITLES[mode]} busy={false} onClose={close} trigger={trigger}>{panel}</AppDialog> : null}
+      {desktop && open ? <AnchoredPopover title={title} onClose={close} trigger={trigger}>{panel}</AnchoredPopover> : !inWindow && open ? <AppDialog title={title} busy={false} onClose={close} trigger={trigger}>{panel}</AppDialog> : null}
     </View>
   );
 }
@@ -147,6 +148,7 @@ function PickerPanel({ mode, value, onConfirm, onCancel }: { mode: 'date' | 'tim
 
 /** Native iOS calendar or wheel, confirmed explicitly like the other platforms. */
 function IosPickerPanel({ mode, value, onConfirm, onCancel }: { mode: 'date' | 'time'; value: string; onConfirm(value: string): void; onCancel(): void }) {
+  const { i18n } = useTranslation('picker');
   const [draft, setDraft] = useState(() => mode === 'date' ? parseDateValue(value) : parseTimeValue(value));
   return (
     <View>
@@ -154,7 +156,7 @@ function IosPickerPanel({ mode, value, onConfirm, onCancel }: { mode: 'date' | '
         value={draft}
         mode={mode}
         display={mode === 'date' ? 'inline' : 'spinner'}
-        locale="zh-Hans-CN"
+        locale={i18n.language === 'ja' ? 'ja-JP' : 'zh-Hans-CN'}
         onChange={(_event, selected) => { if (selected !== undefined) setDraft(selected); }}
       />
       <PickerActions onCancel={onCancel} onConfirm={() => onConfirm(mode === 'date' ? toDateValue(draft) : toTimeValue(draft))} />

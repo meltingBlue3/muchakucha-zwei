@@ -79,7 +79,7 @@ async function openCalendar(page: Page) {
 
 async function openNewEvent(page: Page) {
   await openCalendar(page);
-  await page.getByLabel('创建日程').click();
+  await page.getByRole('button', { name: '创建日程', exact: true }).click();
   await expect(page.getByRole(windowRole(page), { name: '创建日程' })).toBeVisible();
 }
 
@@ -92,17 +92,10 @@ async function openCustomWeekly(page: Page) {
 }
 
 async function openEventDetail(page: Page, fixture: Fixture) {
-  await openCalendar(page);
   const day = new Date().getDate();
   await page.getByLabel(new RegExp(`^\\d{4}年\\d{1,2}月${day}日(?:，今天)?，\\d+个日程$`)).click();
-  await page.getByLabel(`日程：${fixture.title}，重复`).click();
+  await page.getByRole('button', { name: `日程：${fixture.title}`, exact: true }).click();
   await expect(page.getByRole(windowRole(page), { name: '日程详情' })).toBeVisible();
-}
-
-async function openEventEdit(page: Page, fixture: Fixture) {
-  await openEventDetail(page, fixture);
-  await page.getByLabel('编辑日程').click();
-  await expect(page.getByRole(windowRole(page), { name: '编辑日程' })).toBeVisible();
 }
 
 async function expectNoSeriousAxeViolations(page: Page) {
@@ -120,14 +113,13 @@ test.describe('event recurrence accessibility', () => {
     await loginFixture(page, fixture.username);
     await openCalendar(page);
     await expectNoSeriousAxeViolations(page);
-    await page.getByLabel('创建日程').click();
+    await page.getByRole('button', { name: '创建日程', exact: true }).click();
     await expectNoSeriousAxeViolations(page);
-    await page.getByLabel('取消').click();
-    const day = new Date().getDate();
-    await page.getByLabel(new RegExp(`^\\d{4}年\\d{1,2}月${day}日(?:，今天)?，\\d+个日程$`)).click();
-    await page.getByLabel(`日程：${fixture.title}，重复`).click();
+    await page.getByRole('region', { name: '创建日程', exact: true }).getByRole('button', { name: '取消', exact: true }).click();
+    await openEventDetail(page, fixture);
     await expectNoSeriousAxeViolations(page);
-    await page.getByLabel('编辑日程').click();
+    await page.getByRole(windowRole(page), { name: '日程详情', exact: true }).getByRole('button', { name: '编辑日程', exact: true }).click();
+    await expect(page.getByRole(windowRole(page), { name: '编辑日程', exact: true })).toBeVisible();
     await expectNoSeriousAxeViolations(page);
   });
 

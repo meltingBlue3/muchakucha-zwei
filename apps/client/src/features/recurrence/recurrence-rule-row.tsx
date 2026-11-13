@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import type { RecurrenceRuleListItemDto } from '@muchakucha/api-client';
 import { useTheme } from '@shopify/restyle';
 import { Pressable, View } from 'react-native';
@@ -130,6 +131,7 @@ interface RecurrenceRuleRowProps {
 
 export function RecurrenceRuleRow({ rule, deviceTimeZone, onPress, selected = false }: RecurrenceRuleRowProps) {
   const activeTheme = useTheme<Theme>();
+  useTranslation('recurrence');
   const desktop = useDesktop();
   const formatted = formatRuleRow(rule, deviceTimeZone);
   if (desktop) {
