@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="reminder_alarm_channel_name">アラームのリマインダー</string>
+  <string name="reminder_alarm_channel_description">目覚まし時計のように鳴るリマインダー</string>
+  <string name="reminder_alarm_dismiss">確認しました</string>
+  <string name="reminder_alarm_snooze">10分後に再通知</string>
+  <string name="reminder_alarm_details">詳細を見る</string>
+</resources>

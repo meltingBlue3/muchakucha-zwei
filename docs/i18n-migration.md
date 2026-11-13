@@ -42,9 +42,8 @@ grep -c "47.117.148.16" <输出目录>/_expo/static/js/web/entry-*.js   # 必须
 
 ## 迁移之外的任务
 
-1. **Android 闹铃模块。** `apps/client/modules/reminder-alarm` 的 5 个 Kotlin 文件里有 8 行中文，改成 Android 字符串资源并加日文。需要新安装包。
-2. **麦克风权限说明。** `apps/client/app.json` 里 `expo-audio` 的 `microphonePermission` 是中文，由系统弹窗显示，需要按语言配置。需要新安装包。
-3. **和历的计算包。** 新建 `packages/wareki`：年号表（明治到令和），以及按规则推算的日本祝日（固定日、快乐星期一、振替休日、国民の休日，春分和秋分按日本时间取日）。沿用 [packages/lunar](../packages/lunar/src/index.ts) 的约定：单个 TypeScript 文件，只用可擦除的语法，带测试。太阳黄经的算法可以参考 lunar 包里的 VSOP87 级数。这一项不依赖界面设计，可以先做；界面部分见下面。
+1. **麦克风权限说明。** `apps/client/app.json` 里 `expo-audio` 的 `microphonePermission` 是中文，由系统弹窗显示，需要按语言配置。需要新安装包。
+2. **和历的计算包。** 新建 `packages/wareki`：年号表（明治到令和），以及按规则推算的日本祝日（固定日、快乐星期一、振替休日、国民の休日，春分和秋分按日本时间取日）。沿用 [packages/lunar](../packages/lunar/src/index.ts) 的约定：单个 TypeScript 文件，只用可擦除的语法，带测试。太阳黄经的算法可以参考 lunar 包里的 VSOP87 级数。这一项不依赖界面设计，可以先做；界面部分见下面。
 
 ## 待决定，定下来之前不要动
 

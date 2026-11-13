@@ -26,6 +26,10 @@ class ReminderAlarmModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("ReminderAlarm")
 
+    Function("setLanguage") { language: String ->
+      if (language == "ja" || language == "zh-Hans") AlarmLanguage.set(context, language)
+    }
+
     AsyncFunction("schedule") { id: String, fireAt: Double, title: String, body: String, url: String ->
       val store = AlarmStore.scheduled(context)
       val alarm = Alarm(id, fireAt.toLong(), title, body, url)

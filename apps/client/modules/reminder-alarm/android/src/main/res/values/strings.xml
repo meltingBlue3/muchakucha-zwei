@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="reminder_alarm_channel_name">闹铃提醒</string>
+  <string name="reminder_alarm_channel_description">像闹钟一样响铃的提醒</string>
+  <string name="reminder_alarm_dismiss">知道了</string>
+  <string name="reminder_alarm_snooze">10 分钟后再响</string>
+  <string name="reminder_alarm_details">查看详情</string>
+</resources>

@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.Intent
 import org.json.JSONObject
 
-/** One reminder that rings: what the alarm screen says, and the deep link its 查看 opens. */
+/** One reminder that rings: what the alarm screen says, and the deep link the details button opens. */
 data class Alarm(val id: String, val fireAt: Long, val title: String, val body: String, val url: String) {
   fun toJson(): String = JSONObject()
     .put("id", id)
@@ -56,7 +56,7 @@ class AlarmStore private constructor(context: Context, name: String, val snoozed
     /** What the app scheduled from the server's list; it reconciles these. */
     fun scheduled(context: Context) = AlarmStore(context, "scheduled", snoozed = false)
 
-    /** 稍后再响 belongs to the phone alone, so the app's reconciling leaves it be. */
+    /** Snoozing belongs to the phone alone, so the app's reconciling leaves it be. */
     fun snoozed(context: Context) = AlarmStore(context, "snoozed", snoozed = true)
 
     fun both(context: Context) = listOf(scheduled(context), snoozed(context))

@@ -22,15 +22,27 @@ internal object AlarmNotifications {
       @Suppress("DEPRECATION")
       return Notification.Builder(context).setPriority(Notification.PRIORITY_MAX)
     }
+    val strings = AlarmLanguage.localizedContext(context)
     // Silent: the service plays the alarm itself, on the alarm volume.
-    val channel = NotificationChannel(CHANNEL, "闹铃提醒", NotificationManager.IMPORTANCE_HIGH).apply {
-      description = "像闹钟一样响铃的提醒"
+    val channel = NotificationChannel(CHANNEL, strings.getString(R.string.reminder_alarm_channel_name), NotificationManager.IMPORTANCE_HIGH).apply {
+      description = strings.getString(R.string.reminder_alarm_channel_description)
       setSound(null, null)
       enableVibration(false)
       lockscreenVisibility = Notification.VISIBILITY_PUBLIC
     }
     manager(context).createNotificationChannel(channel)
     return Notification.Builder(context, CHANNEL)
+  }
+
+  /** Rename the existing channel in place when the interface language changes. */
+  fun refreshChannel(context: Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val manager = manager(context)
+    val channel = manager.getNotificationChannel(CHANNEL) ?: return
+    val strings = AlarmLanguage.localizedContext(context)
+    channel.name = strings.getString(R.string.reminder_alarm_channel_name)
+    channel.description = strings.getString(R.string.reminder_alarm_channel_description)
+    manager.createNotificationChannel(channel)
   }
 
   // The status bar icon and color that the expo-notifications plugin writes from app.json.
@@ -47,6 +59,7 @@ internal object AlarmNotifications {
 
   /** Covers the lock screen with the alarm screen, or drops down over whatever is in use. */
   fun ringing(context: Context, alarm: Alarm): Notification {
+    val strings = AlarmLanguage.localizedContext(context)
     val screen = PendingIntent.getActivity(context, 0, Intent(context, AlarmActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), FLAGS)
     return builder(context)
       .branded(context)
@@ -57,8 +70,8 @@ internal object AlarmNotifications {
       .setOngoing(true)
       .setContentIntent(screen)
       .setFullScreenIntent(screen, true)
-      .addAction(action(AlarmService.SNOOZE_LABEL, AlarmService.command(context, AlarmService.ACTION_SNOOZE)))
-      .addAction(action(AlarmService.DISMISS_LABEL, AlarmService.command(context, AlarmService.ACTION_DISMISS)))
+      .addAction(action(strings.getString(R.string.reminder_alarm_snooze), AlarmService.command(context, AlarmService.ACTION_SNOOZE)))
+      .addAction(action(strings.getString(R.string.reminder_alarm_dismiss), AlarmService.command(context, AlarmService.ACTION_DISMISS)))
       .build()
   }
 

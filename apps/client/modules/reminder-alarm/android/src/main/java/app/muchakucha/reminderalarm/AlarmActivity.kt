@@ -120,6 +120,7 @@ class AlarmActivity : Activity() {
   }
 
   private fun layout(alarm: Alarm): View {
+    val strings = AlarmLanguage.localizedContext(this)
     val full = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     val content = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL
@@ -129,13 +130,13 @@ class AlarmActivity : Activity() {
       addView(text(alarm.title, 30f, INK, bold = true).apply { setPadding(0, dp(24), 0, 0) }, full)
       if (alarm.body.isNotEmpty()) addView(text(alarm.body, 18f, INK_MUTED).apply { setPadding(0, dp(12), 0, 0) }, full)
       addView(View(this@AlarmActivity), LinearLayout.LayoutParams(0, 0, 1f))
-      addView(button(AlarmService.DISMISS_LABEL, filled = true) { AlarmService.send(this@AlarmActivity, AlarmService.ACTION_DISMISS) }, full)
+      addView(button(strings.getString(R.string.reminder_alarm_dismiss), filled = true) { AlarmService.send(this@AlarmActivity, AlarmService.ACTION_DISMISS) }, full)
       addView(
-        button(AlarmService.SNOOZE_LABEL, filled = false) { AlarmService.send(this@AlarmActivity, AlarmService.ACTION_SNOOZE) },
+        button(strings.getString(R.string.reminder_alarm_snooze), filled = false) { AlarmService.send(this@AlarmActivity, AlarmService.ACTION_SNOOZE) },
         LinearLayout.LayoutParams(full).apply { topMargin = dp(12) },
       )
       addView(
-        button("查看详情", filled = false) { open(alarm) }.apply { background = null; paintFlags = paintFlags or Paint.UNDERLINE_TEXT_FLAG },
+        button(strings.getString(R.string.reminder_alarm_details), filled = false) { open(alarm) }.apply { background = null; paintFlags = paintFlags or Paint.UNDERLINE_TEXT_FLAG },
         LinearLayout.LayoutParams(full).apply { topMargin = dp(8) },
       )
     }
