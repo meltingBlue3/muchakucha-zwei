@@ -1,3 +1,4 @@
+import { i18n } from '../../i18n';
 import MarkdownIt from 'markdown-it';
 import type Token from 'markdown-it/lib/token.mjs';
 
@@ -66,12 +67,13 @@ export function insertLink(value: string, selection: Selection, label: string, u
   return replaceSelection(value, selection, `[${escaped || url}](<${url.replace(/</g, '%3C').replace(/>/g, '%3E')}>)`);
 }
 export function insertTable(value: string, selection: Selection, columns: number, rows: number): MarkdownEdit {
-  const header = '| ' + Array.from({ length: columns }, (_, i) => `列 ${i + 1}`).join(' | ') + ' |';
+  const headings = Array.from({ length: columns }, (_, i) => i18n.t('notes:format.column', { number: i + 1 }));
+  const header = '| ' + headings.join(' | ') + ' |';
   const divider = '| ' + Array(columns).fill('---').join(' | ') + ' |';
-  const row = '| ' + Array(columns).fill('内容').join(' | ') + ' |';
+  const row = '| ' + Array(columns).fill(i18n.t('notes:format.cell')).join(' | ') + ' |';
   const prefix = selection.start ? '\n\n' : '';
   const table = prefix + [header, divider, ...Array<string>(rows).fill(row)].join('\n') + '\n\n';
   const result = replaceSelection(value, selection, table);
   const start = selection.start + prefix.length + 2;
-  return { ...result, selection: { start, end: start + 3 } };
+  return { ...result, selection: { start, end: start + (headings[0]?.length ?? 0) } };
 }

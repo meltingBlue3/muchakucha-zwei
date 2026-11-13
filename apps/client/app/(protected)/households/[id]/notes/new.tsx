@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../src/i18n';
 import { notifyContentChanged } from '../../../../../src/features/content/content-changes';
 import { useWorkspaceStore } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams } from 'expo-router';
@@ -13,6 +14,7 @@ import { Banner, Stack } from '../../../../../src/ui/primitives';
 import type { CreateNoteDto } from '@muchakucha/api-client';
 
 export default function CreateNoteRoute() {
+  const { t } = useTranslation(['notes', 'auth', 'shared']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const { households } = useHouseholdContext();
   const householdName = households.find(household => household.id === id)?.name ?? '';
@@ -21,7 +23,7 @@ export default function CreateNoteRoute() {
   const { close } = useNoteWindowClose();
   const exitAllowed = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'createError' | null>(null);
 
   const handleSubmit = useCallback(
     async (data: CreateNoteDto) => {
@@ -30,7 +32,7 @@ export default function CreateNoteRoute() {
       try {
         const token = await sessionTransport.getAccessToken();
         if (token === null) {
-          setError('登录已过期，请重新登录。');
+          setError('auth:errors.sessionExpired');
           return;
         }
         await sessionApiClient.createNote(token, id!, data);
@@ -39,7 +41,7 @@ export default function CreateNoteRoute() {
         exitAllowed.current = true;
         close();
       } catch {
-        setError('创建笔记失败，请重试。');
+        setError('createError');
       } finally {
         setIsSubmitting(false);
       }
@@ -48,15 +50,15 @@ export default function CreateNoteRoute() {
   );
 
   return (
-    <NoteWindow draftPrefix={draftPrefix} title="创建笔记" busy={isSubmitting} exitAllowed={exitAllowed}>
+    <NoteWindow draftPrefix={draftPrefix} title={t('create')} busy={isSubmitting} exitAllowed={exitAllowed}>
       <Stack gap={4} style={noteEditorViewport}>
         <HouseholdContextNote householdName={householdName} />
-        {error !== null ? <Banner>{error}</Banner> : null}
+        {error !== null ? <Banner>{t(error)}</Banner> : null}
         <NoteForm
           draftKey={draftPrefix + 'form'}
           onSubmit={handleSubmit}
           onCancel={close}
-          submitLabel="创建"
+          submitLabel={t('shared:create')}
           isSubmitting={isSubmitting}
         />
       </Stack>

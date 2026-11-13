@@ -35,7 +35,7 @@ function todayIso(): string {
 }
 
 export default function TodayRoute() {
-  const { t } = useTranslation(['today', 'tasks', 'events', 'households', 'auth', 'navigation']);
+  const { t } = useTranslation(['today', 'tasks', 'events', 'households', 'auth', 'navigation', 'notes']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const desktop = useDesktop();
@@ -300,7 +300,7 @@ export default function TodayRoute() {
       floatingAction={<FloatingCreateButton actions={[
         { kind: 'events', label: t('events:create'), onPress: create('events') },
         { kind: 'tasks', label: t('tasks:create'), onPress: create('tasks') },
-        { kind: 'notes', label: t('createNote'), onPress: create('notes') },
+        { kind: 'notes', label: t('notes:create'), onPress: create('notes') },
         { kind: 'birthdays', label: t('createBirthday'), onPress: create('birthdays') },
       ]} />}
     >
