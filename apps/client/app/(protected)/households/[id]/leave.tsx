@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../src/i18n';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ApiClientError } from '@muchakucha/api-client';
@@ -7,14 +8,16 @@ import { HouseholdActionWindow, useHouseholdActionClose } from '../../../../src/
 import { Banner, ConfirmActions, Stack, Text } from '../../../../src/ui/primitives';
 
 export default function LeaveHouseholdMembershipPage() {
-  const { id, householdName = '此家庭' } = useLocalSearchParams<{ id: string; householdName?: string }>();
+  const { t } = useTranslation(['households', 'auth']);
+  const { id, householdName: routeHouseholdName } = useLocalSearchParams<{ id: string; householdName?: string }>();
   const router = useRouter();
   const close = useHouseholdActionClose();
   const exitAllowed = useRef(false);
   const { enterAccessChanged } = useHouseholdContext();
   const submitting = useRef(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const householdName = routeHouseholdName ?? t('governance.householdFallback');
+  const [error, setError] = useState<'governance.transferRequired' | 'governance.leaveNetworkError' | 'auth:errors.sessionExpired' | null>(null);
 
   async function leave() {
     if (submitting.current) return;
@@ -24,34 +27,34 @@ export default function LeaveHouseholdMembershipPage() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期，请重新登录。');
+        setError('auth:errors.sessionExpired');
         return;
       }
       await sessionApiClient.leaveHouseholdMembership(token, id);
-      enterAccessChanged(householdName, id);
+      enterAccessChanged(routeHouseholdName, id);
       exitAllowed.current = true;
       router.replace('/households');
     } catch (err) {
       if (err instanceof ApiClientError && err.status === 404) {
-        enterAccessChanged(householdName, id);
+        enterAccessChanged(routeHouseholdName, id);
         exitAllowed.current = true;
         router.replace('/households');
         return;
       }
       setError(err instanceof ApiClientError && err.status === 403
-        ? '请先转移家庭所有权，再离开家庭。'
-        : '离开家庭失败，请检查网络连接后重试。');
+        ? 'governance.transferRequired'
+        : 'governance.leaveNetworkError');
     } finally {
       submitting.current = false;
       setBusy(false);
     }
   }
 
-  return <HouseholdActionWindow title="确认离开家庭" busy={busy} onClose={close} exitAllowed={exitAllowed}>
+  return <HouseholdActionWindow title={t('governance.confirmLeave')} busy={busy} onClose={close} exitAllowed={exitAllowed}>
     <Stack gap={4}>
-      {error ? <Banner title="离开失败">{error}</Banner> : null}
-      <Text>离开「{householdName}」后，你将无法访问这个家庭。共享日程、任务和笔记会保留在家庭中。重新加入需要家人邀请。</Text>
-      <ConfirmActions cancelLabel="取消离开" confirmLabel="确认离开家庭" destructive busy={busy} onCancel={close} onConfirm={() => void leave()} />
+      {error ? <Banner title={t('governance.leaveFailed')}>{t(error)}</Banner> : null}
+      <Text>{t('governance.leaveMemberDetail', { householdName })}</Text>
+      <ConfirmActions cancelLabel={t('governance.cancelLeave')} confirmLabel={t('governance.confirmLeave')} destructive busy={busy} onCancel={close} onConfirm={() => void leave()} />
     </Stack>
   </HouseholdActionWindow>;
 }

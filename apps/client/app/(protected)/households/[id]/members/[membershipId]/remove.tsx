@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../../src/i18n';
 import { HouseholdActionWindow, useHouseholdActionClose } from '../../../../../../src/features/households/household-action-window';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -22,6 +23,7 @@ const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000'
  * (membership loss freeze, cache clear, explicit routing).
  */
 export default function RemoveMemberPage() {
+  const { t } = useTranslation('households');
   const router = useRouter();
   const close = useHouseholdActionClose();
   const exitAllowed = useRef(false);
@@ -33,11 +35,11 @@ export default function RemoveMemberPage() {
   }>();
   const householdId = params.id;
   const membershipId = params.membershipId;
-  const displayName = params.displayName ?? '此成员';
+  const displayName = params.displayName ?? t('governance.memberFallback');
   const targetRole = (params.role ?? 'MEMBER') as string;
 
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<'governance.removeError' | undefined>(undefined);
 
   const handleRemove = useCallback(async () => {
     const accessToken = sessionTransport.getAccessToken();
@@ -57,7 +59,7 @@ export default function RemoveMemberPage() {
       exitAllowed.current = true;
       close();
     } catch (_err: unknown) {
-      setError('移除失败，当前家庭状态未改变。请重试。');
+      setError('governance.removeError');
       setBusy(false);
     }
   }, [householdId, membershipId, close]);
@@ -78,11 +80,11 @@ export default function RemoveMemberPage() {
 
   const isAdminTarget = targetRole === 'ADMIN';
 
-  return <HouseholdActionWindow title={`将 ${displayName} 从家庭中移除？`} busy={busy} onClose={handleSafeAction} exitAllowed={exitAllowed}>
+  return <HouseholdActionWindow title={t('governance.removeTitle', { displayName })} busy={busy} onClose={handleSafeAction} exitAllowed={exitAllowed}>
     <Stack gap={4}>
-      {error ? <Banner title="成员移除失败">{error}</Banner> : null}
-      <Text>{isAdminTarget ? `${displayName} 将失去对家庭的所有管理权限和访问权。` : `${displayName} 将失去对家庭的访问权。此操作不可撤销。`}</Text>
-      <ConfirmActions cancelLabel="保留成员资格" confirmLabel="移除成员" destructive busy={busy} onCancel={handleSafeAction} onConfirm={() => void handleRemove()} />
+      {error ? <Banner title={t('governance.removeFailed')}>{t(error)}</Banner> : null}
+      <Text>{isAdminTarget ? t('governance.removeAdminDetail', { displayName }) : t('governance.removeMemberDetail', { displayName })}</Text>
+      <ConfirmActions cancelLabel={t('governance.keepMembership')} confirmLabel={t('governance.confirmRemove')} destructive busy={busy} onCancel={handleSafeAction} onConfirm={() => void handleRemove()} />
     </Stack>
   </HouseholdActionWindow>;
 }

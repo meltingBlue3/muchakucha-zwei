@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 
@@ -7,6 +8,7 @@ import { HouseholdScreen } from '../households/household-screen';
 import { HouseholdSettings } from '../households/household-settings';
 
 export default function HouseholdSettingsRoute() {
+  const { t } = useTranslation(['households', 'navigation']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const { viewState, households, currentHouseholdId, enterAccessChanged, applyHouseholdName } = useHouseholdContext();
 
@@ -27,7 +29,7 @@ export default function HouseholdSettingsRoute() {
 
   // The frame shows the access-changed and not-found states; settings never load for them.
   if (viewState === 'accessChanged' || householdId === '') {
-    return <HouseholdScreen active="settings" subpage accessibilityLabel="家庭设置">{null}</HouseholdScreen>;
+    return <HouseholdScreen active="settings" subpage accessibilityLabel={t('navigation:pages.settings')}>{null}</HouseholdScreen>;
   }
 
   return (

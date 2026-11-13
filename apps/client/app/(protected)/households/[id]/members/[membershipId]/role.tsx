@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../../src/i18n';
 import { HouseholdActionWindow, useHouseholdActionClose } from '../../../../../../src/features/households/household-action-window';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -16,6 +17,7 @@ const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000'
  * - Demotion (ADMIN->MEMBER): Window confirmation with safe-action-first ordering.
  */
 export default function ChangeMemberRolePage() {
+  const { t } = useTranslation('households');
   const router = useRouter();
   const close = useHouseholdActionClose();
   const exitAllowed = useRef(false);
@@ -27,11 +29,11 @@ export default function ChangeMemberRolePage() {
   }>();
   const householdId = params.id;
   const membershipId = params.membershipId;
-  const displayName = params.displayName ?? '此成员';
+  const displayName = params.displayName ?? t('governance.memberFallback');
   const currentRole = (params.role ?? 'MEMBER') as 'ADMIN' | 'MEMBER';
 
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<'governance.roleError' | undefined>(undefined);
 
   const isPromotion = currentRole === 'MEMBER';
   const newRole: 'ADMIN' | 'MEMBER' = isPromotion ? 'ADMIN' : 'MEMBER';
@@ -55,7 +57,7 @@ export default function ChangeMemberRolePage() {
       exitAllowed.current = true;
       close();
     } catch (_err: unknown) {
-      setError('没有完成，当前家庭状态未改变。请重试。');
+      setError('governance.roleError');
       setBusy(false);
     }
   }, [householdId, membershipId, newRole, close]);
@@ -74,12 +76,12 @@ export default function ChangeMemberRolePage() {
     return null;
   }
 
-  return <HouseholdActionWindow title={isPromotion ? `将 ${displayName} 提升为管理员？` : `将 ${displayName} 改为成员？`} busy={busy} onClose={handleSafeAction} exitAllowed={exitAllowed}>
+  return <HouseholdActionWindow title={isPromotion ? t('governance.promoteTitle', { displayName }) : t('governance.demoteTitle', { displayName })} busy={busy} onClose={handleSafeAction} exitAllowed={exitAllowed}>
     <Stack gap={4}>
-      {error ? <Banner title="角色变更失败">{error}</Banner> : null}
-      <Text>{isPromotion ? '对方将获得邀请和管理普通成员的权限。' : '对方将不能再邀请或管理成员。'}</Text>
+      {error ? <Banner title={t('governance.roleFailed')}>{t(error)}</Banner> : null}
+      <Text>{isPromotion ? t('governance.promoteDetail') : t('governance.demoteDetail')}</Text>
       {/* A demotion takes rights away, so it reads as destructive; a promotion does not. */}
-      <ConfirmActions cancelLabel={isPromotion ? '保留成员权限' : '保留管理员权限'} confirmLabel={isPromotion ? '确认提升为管理员' : '降级为成员'} destructive={!isPromotion} busy={busy} onCancel={handleSafeAction} onConfirm={() => void handleRoleChange()} />
+      <ConfirmActions cancelLabel={isPromotion ? t('governance.keepMember') : t('governance.keepAdmin')} confirmLabel={isPromotion ? t('governance.confirmPromote') : t('demote')} destructive={!isPromotion} busy={busy} onCancel={handleSafeAction} onConfirm={() => void handleRoleChange()} />
     </Stack>
   </HouseholdActionWindow>;
 }

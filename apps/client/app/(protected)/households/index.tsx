@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../src/i18n';
 import { HouseholdSetup } from '../../../src/ui/account-components';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -15,6 +16,7 @@ import { Button, LoadError, Spinner, Stack, Text } from '../../../src/ui/primiti
 import { theme } from '../../../src/ui/theme';
 
 export default function HouseholdsIndexRoute() {
+  const { t } = useTranslation(['households', 'profile', 'auth']);
   const router = useRouter();
   const {
     viewState,
@@ -68,7 +70,7 @@ export default function HouseholdsIndexRoute() {
   if (viewState === 'accessChanged') {
     const hasOtherHouseholds = households.length > 0;
     return (
-      <AppShell accessibilityLabel="家庭访问权已变化">
+      <AppShell accessibilityLabel={t('accessChanged')}>
         <AccessChangedPanel
           hasOtherHouseholds={hasOtherHouseholds}
           {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
@@ -87,10 +89,10 @@ export default function HouseholdsIndexRoute() {
   // ---- Resolving state ----
   if (viewState === 'resolving') {
     return (
-      <AppShell accessibilityLabel="正在加载家庭">
-        <Stack accessibilityLabel="正在加载家庭列表" gap={6} style={{ alignItems: 'center', paddingTop: 48 }}>
-          <Spinner label="正在加载家庭" />
-          <Text variant="bodySm">正在加载家庭列表</Text>
+      <AppShell accessibilityLabel={t('loading')}>
+        <Stack accessibilityLabel={t('loadingList')} gap={6} style={{ alignItems: 'center', paddingTop: 48 }}>
+          <Spinner label={t('loading')} />
+          <Text variant="bodySm">{t('loadingList')}</Text>
         </Stack>
       </AppShell>
     );
@@ -99,7 +101,7 @@ export default function HouseholdsIndexRoute() {
   // ---- Offline retained or ready with no households ----
   if (viewState === 'noHousehold') {
     return (
-      <AppShell accessibilityLabel="还没有家庭" title="设置家庭" showProfile>
+      <AppShell accessibilityLabel={t('noHousehold')} title={t('setupAction')} showProfile>
         <Stack style={{ width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center' }}>
           <HouseholdSetup onCreate={() => router.push('/households/new')} onJoin={() => router.push('/inbox')} />
         </Stack>
@@ -109,7 +111,7 @@ export default function HouseholdsIndexRoute() {
 
   // ---- Ready (with households) ----
   return (
-    <AppShell accessibilityLabel="家庭选择" title="我的家庭" showProfile>
+    <AppShell accessibilityLabel={t('chooseTitle')} title={t('profile:links.households.label')} showProfile>
       <Stack gap={6}>
         {currentHousehold !== null ? (
           <HouseholdHeader
@@ -119,7 +121,7 @@ export default function HouseholdsIndexRoute() {
         ) : null}
 
         {viewState === 'offlineRetained' ? (
-          <LoadError title="暂时无法连接" message="当前为离线内容，管理操作需要联网。家庭列表为空时，也不代表你尚未加入家庭。" retryLabel="重新加载家庭" retrying={isSwitching} onRetry={() => void handleRetrySwitch()} />
+          <LoadError title={t('auth:offline.title')} message={t('offlineList')} retryLabel={t('reload')} retrying={isSwitching} onRetry={() => void handleRetrySwitch()} />
         ) : null}
 
         {switchError && currentHousehold !== null ? (
@@ -131,15 +133,15 @@ export default function HouseholdsIndexRoute() {
 
         {isSwitching ? (
           <Stack gap={4} style={{ alignItems: 'center', paddingVertical: theme.spacing[8] }}>
-            <Spinner label="正在切换家庭" />
-            <Text variant="bodySm">正在切换家庭</Text>
+            <Spinner label={t('switching')} />
+            <Text variant="bodySm">{t('switching')}</Text>
           </Stack>
         ) : (
           <Stack gap={4}>
             <Text variant="bodySm">
               {currentHousehold !== null
-                ? '本设备上次选择的家庭已在列表顶部。选择另一个家庭即可切换。'
-                : '选择一个家庭继续。'}
+                ? t('lastSelected')
+                : t('choose')}
             </Text>
 
             {households.map((household) => (
@@ -152,7 +154,7 @@ export default function HouseholdsIndexRoute() {
             ))}
 
             <Button
-              label="创建家庭"
+              label={t('create')}
               onPress={() => void router.push('/households/new')}
             />
           </Stack>

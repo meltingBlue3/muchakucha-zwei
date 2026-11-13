@@ -1,3 +1,4 @@
+import { useTranslation } from '../../src/i18n';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { useHouseholdContext } from '../../src/features/households/household-context';
@@ -7,6 +8,7 @@ import { Spinner, Stack, Text } from '../../src/ui/primitives';
 import { theme } from '../../src/ui/theme';
 
 export default function HouseholdHandoffRoute() {
+  const { t } = useTranslation('households');
   const router = useRouter();
   const { viewState, households, currentHouseholdId, accessChangedHouseholdName, refreshHouseholds } = useHouseholdContext();
   useEffect(() => {
@@ -18,7 +20,7 @@ export default function HouseholdHandoffRoute() {
   }, [viewState, currentHouseholdId, router]);
 
   return (
-    <AppShell title="设置家庭" accessibilityLabel="设置家庭" showProfile>
+    <AppShell title={t('setupAction')} accessibilityLabel={t('setupAction')} showProfile>
       <Stack gap={6} style={{ width: '100%', maxWidth: theme.layout.authCardMaxWidth, alignSelf: 'center' }}>
         {viewState === 'noHousehold' ? (
           <HouseholdSetup onCreate={() => router.push('/households/new')} onJoin={() => router.push('/inbox')} />
@@ -28,7 +30,7 @@ export default function HouseholdHandoffRoute() {
             onChooseOther={() => { void refreshHouseholds().then(() => router.replace('/households')); }}
             onCreateNew={() => router.push('/households/new')} />
         ) : (
-          <Stack gap={4} style={{ alignItems: 'center', padding: theme.spacing[8] }}><Spinner label="正在加载家庭" /><Text variant="bodySm">正在为你打开家庭空间…</Text></Stack>
+          <Stack gap={4} style={{ alignItems: 'center', padding: theme.spacing[8] }}><Spinner label={t('loading')} /><Text variant="bodySm">{t('opening')}</Text></Stack>
         )}
       </Stack>
     </AppShell>

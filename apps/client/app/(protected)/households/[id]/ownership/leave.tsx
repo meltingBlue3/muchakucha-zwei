@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../src/i18n';
 import { HouseholdActionWindow, useHouseholdActionClose } from '../../../../../src/features/households/household-action-window';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -26,6 +27,7 @@ const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000'
  * membership-loss state (freeze, clear cache, explicit routing).
  */
 export default function LeaveHouseholdPage() {
+  const { t } = useTranslation('households');
   const router = useRouter();
   const close = useHouseholdActionClose();
   const exitAllowed = useRef(false);
@@ -38,12 +40,13 @@ export default function LeaveHouseholdPage() {
   }>();
   const householdId = params.id;
   const successorMembershipId = params.successorMembershipId;
-  const successorDisplayName = params.successorDisplayName ?? '此成员';
-  const householdName = params.householdName ?? '此家庭';
+  const successorDisplayName = params.successorDisplayName ?? t('governance.memberFallback');
+  const routeHouseholdName = params.householdName;
+  const householdName = routeHouseholdName ?? t('governance.householdFallback');
 
   const [stage, setStage] = useState<'consequence' | 'final'>('consequence');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<'governance.leaveError' | undefined>(undefined);
 
   const handleConfirm = useCallback(async () => {
     const accessToken = sessionTransport.getAccessToken();
@@ -65,16 +68,16 @@ export default function LeaveHouseholdPage() {
       // loss and render the explicit access-changed explanation before any
       // further routing. If the user has no other households, they land on
       // the D-01 create/accept handoff page.
-      enterAccessChanged(householdName, householdId);
+      enterAccessChanged(routeHouseholdName, householdId);
       exitAllowed.current = true;
       router.replace('/households');
     } catch (_err: unknown) {
-      setError('离开家庭失败，当前家庭状态未改变。请重试。');
+      setError('governance.leaveError');
       setBusy(false);
       // On failure, return to consequence stage so user can re-evaluate.
       setStage('consequence');
     }
-  }, [enterAccessChanged, householdId, householdName, successorMembershipId, router, close]);
+  }, [enterAccessChanged, householdId, routeHouseholdName, successorMembershipId, router, close]);
 
   const handleCancel = useCallback(() => {
     close();
@@ -96,13 +99,13 @@ export default function LeaveHouseholdPage() {
   }
 
   const closeStep = () => { if (stage === 'final') setStage('consequence'); else handleCancel(); };
-  return <HouseholdActionWindow title={stage === 'final' ? '确认离开家庭' : '离开家庭'} busy={busy} onClose={closeStep} onBackStep={stage === 'final' ? closeStep : undefined} exitAllowed={exitAllowed}>
+  return <HouseholdActionWindow title={stage === 'final' ? t('governance.confirmLeave') : t('governance.leave')} busy={busy} onClose={closeStep} onBackStep={stage === 'final' ? closeStep : undefined} exitAllowed={exitAllowed}>
     <Stack gap={4}>
-      {error ? <Banner>{error}</Banner> : null}
-      <Text>你即将离开「{householdName}」，并将所有权移交给 {successorDisplayName}。离开后你将无法访问家庭，共享日程、任务和笔记会保留在家庭中。</Text>
-      {stage === 'final' ? <Text>请确认上述变更。此操作不可撤销。</Text> : null}
+      {error ? <Banner>{t(error)}</Banner> : null}
+      <Text>{t('governance.leaveOwnerDetail', { householdName, successorDisplayName })}</Text>
+      {stage === 'final' ? <Text>{t('governance.finalDetail')}</Text> : null}
       {/* Only the final step commits, so only it carries the destructive treatment. */}
-      <ConfirmActions cancelLabel="取消离开" confirmLabel={stage === 'consequence' ? '继续' : '确认离开家庭'} destructive={stage !== 'consequence'} busy={busy} onCancel={() => { exitAllowed.current = true; handleCancel(); }} onConfirm={() => { if (stage === 'consequence') handleContinue(); else void handleConfirm(); }} />
+      <ConfirmActions cancelLabel={t('governance.cancelLeave')} confirmLabel={stage === 'consequence' ? t('governance.continue') : t('governance.confirmLeave')} destructive={stage !== 'consequence'} busy={busy} onCancel={() => { exitAllowed.current = true; handleCancel(); }} onConfirm={() => { if (stage === 'consequence') handleContinue(); else void handleConfirm(); }} />
     </Stack>
   </HouseholdActionWindow>;
 }

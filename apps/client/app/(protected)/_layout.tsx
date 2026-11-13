@@ -1,3 +1,4 @@
+import { useTranslation } from '../../src/i18n';
 import { draftWorkspace } from '../../src/ui/workspace-runtime';
 import { WorkspaceStateProvider } from '../../src/ui/workspace-state';
 import { Stack } from 'expo-router';
@@ -21,6 +22,7 @@ import { RouteSurface } from '../../src/platform/layout/route-surface';
  * losing navigation state during household switches.
  */
 function ResolvingGate({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation('households');
   const { viewState } = useHouseholdContext();
   const blurTarget = useRef<View>(null);
 
@@ -32,14 +34,14 @@ function ResolvingGate({ children }: { children: React.ReactNode }) {
       {children}
       {viewState === 'resolving' ? (
         <View style={styles.overlay}>
-          <AppShell accessibilityLabel="正在加载家庭">
+          <AppShell accessibilityLabel={t('loading')}>
             <UIStack
-              accessibilityLabel="正在加载家庭列表"
+              accessibilityLabel={t('loadingList')}
               gap={6}
               style={styles.spinnerContainer}
             >
-              <Spinner label="正在加载家庭" />
-              <Text variant="bodySm">正在加载家庭列表</Text>
+              <Spinner label={t('loading')} />
+              <Text variant="bodySm">{t('loadingList')}</Text>
             </UIStack>
           </AppShell>
         </View>

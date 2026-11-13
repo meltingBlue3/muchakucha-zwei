@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../../src/i18n';
 import { HouseholdActionWindow, useHouseholdActionClose } from '../../../../../../src/features/households/household-action-window';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -10,6 +11,7 @@ import { Banner, ConfirmActions, Stack, Text } from '../../../../../../src/ui/pr
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
 export default function RevokeInvitationPage() {
+  const { t } = useTranslation('households');
   const router = useRouter();
   const close = useHouseholdActionClose();
   const exitAllowed = useRef(false);
@@ -18,7 +20,7 @@ export default function RevokeInvitationPage() {
     invitationId: string;
   }>();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<'governance.revokeError' | undefined>(undefined);
 
   const handleSafeAction = useCallback(() => {
     close();
@@ -42,7 +44,7 @@ export default function RevokeInvitationPage() {
       exitAllowed.current = true;
       close();
     } catch (_err: unknown) {
-      setError('撤销失败，家庭邀请状态未改变。请重试。');
+      setError('governance.revokeError');
       setBusy(false);
     }
   }, [householdId, invitationId, close]);
@@ -57,11 +59,11 @@ export default function RevokeInvitationPage() {
     return null;
   }
 
-  return <HouseholdActionWindow title="撤销邀请？" busy={busy} onClose={handleSafeAction} exitAllowed={exitAllowed}>
+  return <HouseholdActionWindow title={t('governance.revokeTitle')} busy={busy} onClose={handleSafeAction} exitAllowed={exitAllowed}>
     <Stack gap={4}>
-      {error ? <Banner title="撤销失败">{error}</Banner> : null}
-      <Text>撤销后，对方将无法接受这份邀请。</Text>
-      <ConfirmActions cancelLabel="保留邀请" confirmLabel="撤销邀请" destructive busy={busy} onCancel={handleSafeAction} onConfirm={() => void handleRevoke()} />
+      {error ? <Banner title={t('governance.revokeFailed')}>{t(error)}</Banner> : null}
+      <Text>{t('governance.revokeDetail')}</Text>
+      <ConfirmActions cancelLabel={t('governance.keepInvitation')} confirmLabel={t('governance.revokeAction')} destructive busy={busy} onCancel={handleSafeAction} onConfirm={() => void handleRevoke()} />
     </Stack>
   </HouseholdActionWindow>;
 }
