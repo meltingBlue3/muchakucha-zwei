@@ -1393,6 +1393,44 @@ export const zh = {
       ASSISTANT_PROVIDER_TIMEOUT: '语音转写服务响应超时，请稍后重试。',
     },
   },
+  search: {
+    entry: '搜索',
+    input: '搜索页面、任务、日程和笔记',
+    results: '搜索结果',
+    pages: '页面',
+    events: '日程',
+    untitledNote: '无标题笔记',
+    option: '{{group}}：{{title}}',
+    optionDetail: '{{group}}：{{title}}，{{detail}}',
+    loading: '正在搜索',
+    loadingContent: '正在载入任务、日程和笔记…',
+    loadFailed: '任务、日程和笔记没有载入，只能搜索页面。',
+    empty: '没有找到「{{query}}」',
+    chooseShortcut: '↑↓ 选择',
+    openShortcut: 'Enter 打开',
+    closeShortcut: 'Esc 关闭',
+  },
+  householdMore: {
+    main: '家庭空间',
+    pages: {
+      settings: {
+        name: '打开家庭设置',
+        description: '成员、邀请和家庭名称',
+      },
+      labels: {
+        name: '管理标签',
+        description: '给日程和任务分类',
+      },
+      'recurrence-rules': {
+        name: '管理重复安排',
+        description: '管理重复的日程和任务',
+      },
+      birthdays: {
+        name: '查看家人生日',
+        description: '公历和农历生日，按下一次排列',
+      },
+    },
+  },
 };
 
 export type Catalog = typeof zh;

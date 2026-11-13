@@ -32,12 +32,11 @@ grep -c "47.117.148.16" <输出目录>/_expo/static/js/web/entry-*.js   # 必须
 
 ## 还没迁移的页面
 
-共享组件、登录注册、家庭与账户、任务、日历与今日、笔记、重复安排、标签、提醒、助手已迁移。其余批次可按表里的顺序推进。
+共享组件、登录注册、家庭与账户、任务、日历与今日、笔记、重复安排、标签、提醒、助手、搜索和「更多」已迁移。
 
 | 批次 | 位置 | 文件 | 行 | 备注 |
 | --- | --- | --- | --- | --- |
 | 生日 | `src/features/birthdays`、`households/[id]/birthdays/new.tsx`、`src/features/lunar/lunar-calendar.ts` | 6 | 约 61 | 先等「待决定」里的前两项 |
-| 其他 | `src/features/search/command-palette.tsx`（24 行）、`households/[id]/more.tsx` 的描述（6 行） | 2 | 30 | |
 
 `apps/api` 里家庭、任务、日程、重复规则的中文错误提示不用翻译：客户端从不显示 API 的 `message`，各功能自己把错误码对应到文案。
 

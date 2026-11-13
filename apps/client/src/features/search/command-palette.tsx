@@ -43,11 +43,11 @@ interface Content {
 /** Results per kind; the rest are reached by a longer query or from the page's own list. */
 const GROUP_LIMIT = 5;
 
-const accountPages: ReadonlyArray<{ path: '/profile' | '/reminders' | '/inbox'; label: string; icon: Icon }> = [
-  { path: '/profile', label: '个人资料', icon: UserRound },
-  { path: '/reminders', label: '提醒', icon: Bell },
-  { path: '/inbox', label: '收件箱', icon: Inbox },
-];
+const accountPages = [
+  { path: '/profile', label: 'profile:title', icon: UserRound },
+  { path: '/reminders', label: 'profile:links.reminders.label', icon: Bell },
+  { path: '/inbox', label: 'profile:links.inbox.label', icon: Inbox },
+] as const;
 
 const normalize = (text: string) => text.normalize('NFKC').toLowerCase();
 
@@ -80,19 +80,20 @@ export function Keycap({ children }: { children: string }) {
  * icon when the sidebar is a rail.
  */
 export function SearchEntry({ rail, trigger, onPress }: { rail: boolean; trigger: RefObject<View | null>; onPress(): void }) {
+  const { t } = useTranslation('search');
   const commandKey = useCommandKeyLabel();
   return (
     <Pressable
       ref={trigger}
       accessibilityRole="button"
-      accessibilityLabel="搜索"
+      accessibilityLabel={t('entry')}
       {...{ 'aria-keyshortcuts': 'Control+K Meta+K' }}
       onPress={onPress}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: rail ? 'center' : 'flex-start', gap: theme.spacing[2], height: theme.layout.desktopControl, paddingHorizontal: rail ? 0 : theme.spacing[2] + 2, borderRadius: theme.borderRadii.sm, backgroundColor: pressed || hovered ? theme.colors.surfaceSelected : theme.colors.surfaceMuted })}
     >
       <Search size={theme.controlSizes.icon - 6} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
       {rail ? null : <>
-        <Text variant="meta" color="inkMuted" style={{ flex: 1 }}>搜索</Text>
+        <Text variant="meta" color="inkMuted" style={{ flex: 1 }}>{t('entry')}</Text>
         <Keycap>{`${commandKey} K`}</Keycap>
       </>}
     </Pressable>
@@ -126,7 +127,7 @@ export function useSearchShortcut(enabled: boolean, toggle: () => void) {
  */
 export function CommandPalette({ householdId, trigger, onClose }: { householdId: string; trigger: RefObject<View | null>; onClose(): void }) {
   const router = useRouter();
-  const { t } = useTranslation('navigation');
+  const { t } = useTranslation(['search', 'navigation', 'profile', 'tasks', 'notes', 'common']);
   const pathname = usePathname();
   const panel = useRef<View>(null);
   const input = useRef<TextInput>(null);
@@ -178,22 +179,22 @@ export function CommandPalette({ householdId, trigger, onClose }: { householdId:
   const hits = useMemo((): Hit[] => {
     const q = normalize(query.trim());
     const pages: Hit[] = [
-      ...destinations.map(({ key, icon }) => ({ id: `page:${key}`, group: '页面', title: t(`pages.${key}`), icon, open: () => go(() => { if (pathname !== householdPath(householdId, key)) router.replace(householdPath(householdId, key)); }) })),
-      ...familyPages.map(({ key, icon }) => ({ id: `page:${key}`, group: '页面', title: t(`pages.${key}`), icon, open: () => go(() => { if (pathname !== householdPath(householdId, key)) router.push(householdPath(householdId, key)); }) })),
-      ...accountPages.map(({ path, label, icon }) => ({ id: `page:${path}`, group: '页面', title: label, icon, open: () => go(() => { if (pathname !== path) router.push(path); }) })),
+      ...destinations.map(({ key, icon }) => ({ id: `page:${key}`, group: t('pages'), title: t(`navigation:pages.${key}`), icon, open: () => go(() => { if (pathname !== householdPath(householdId, key)) router.replace(householdPath(householdId, key)); }) })),
+      ...familyPages.map(({ key, icon }) => ({ id: `page:${key}`, group: t('pages'), title: t(`navigation:pages.${key}`), icon, open: () => go(() => { if (pathname !== householdPath(householdId, key)) router.push(householdPath(householdId, key)); }) })),
+      ...accountPages.map(({ path, label, icon }) => ({ id: `page:${path}`, group: t('pages'), title: t(label), icon, open: () => go(() => { if (pathname !== path) router.push(path); }) })),
     ];
     if (!q) return pages;
     const matchedPages = pages.filter(page => normalize(page.title).includes(q));
     if (!content) return matchedPages;
     const now = Date.now();
     const tasks = ranked(content.tasks, task => score(q, task.title, task.description)).map((task): Hit => ({
-      id: `task:${task.id}`, group: '任务', title: task.title, icon: CircleCheck,
-      detail: task.status === 'completed' ? '已完成' : formatDueDate(task.dueDate ?? null) || undefined,
+      id: `task:${task.id}`, group: t('navigation:pages.tasks'), title: task.title, icon: CircleCheck,
+      detail: task.status === 'completed' ? t('tasks:status.completed') : formatDueDate(task.dueDate ?? null) || undefined,
       open: () => openItem('tasks', task.id),
     }));
     // The nearest events in time come first: what is coming up, then what just happened.
     const events = ranked([...content.events].sort((a, b) => Math.abs(Date.parse(a.startTime) - now) - Math.abs(Date.parse(b.startTime) - now)), event => score(q, event.title, event.location, event.description)).map((event): Hit => ({
-      id: `event:${event.id}`, group: '日程', title: event.title, icon: CalendarDays,
+      id: `event:${event.id}`, group: t('events'), title: event.title, icon: CalendarDays,
       detail: event.allDay ? formatDate(new Date(event.startTime)) : formatDateTime(new Date(event.startTime)),
       open: () => {
         const start = new Date(event.startTime);
@@ -204,8 +205,8 @@ export function CommandPalette({ householdId, trigger, onClose }: { householdId:
       },
     }));
     const notes = ranked(content.notes, note => score(q, note.title, note.body)).map((note): Hit => ({
-      id: `note:${note.id}`, group: '笔记', title: note.title || '无标题笔记', icon: NotebookText,
-      detail: `更新于 ${formatDate(new Date(note.updatedAt))}`,
+      id: `note:${note.id}`, group: t('navigation:pages.notes'), title: note.title || t('untitledNote'), icon: NotebookText,
+      detail: t('notes:updated', { date: formatDate(new Date(note.updatedAt)) }),
       open: () => openItem('notes', note.id),
     }));
     return [...matchedPages, ...tasks, ...events, ...notes];
@@ -218,7 +219,7 @@ export function CommandPalette({ householdId, trigger, onClose }: { householdId:
   const loading = !content && !failed && query.trim() !== '';
 
   return (
-    <Modal {...(Platform.OS === 'web' ? { 'aria-label': '搜索' } : {})} transparent visible animationType="none" onShow={focus} onRequestClose={onClose}>
+    <Modal {...(Platform.OS === 'web' ? { 'aria-label': t('entry') } : {})} transparent visible animationType="none" onShow={focus} onRequestClose={onClose}>
       <View style={{ flex: 1 }}>
         <DialogBackdrop onPress={onClose} blur={false} testID="command-palette" />
         <View pointerEvents="box-none" style={{ flex: 1, alignItems: 'center', paddingTop: '12%', paddingHorizontal: theme.spacing[5] }}>
@@ -227,11 +228,11 @@ export function CommandPalette({ householdId, trigger, onClose }: { householdId:
               <Search size={theme.controlSizes.icon - 2} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
               <TextInput
                 ref={input}
-                accessibilityLabel="搜索页面、任务、日程和笔记"
+                accessibilityLabel={t('input')}
                 role="combobox"
                 aria-expanded
                 {...{ 'aria-controls': listId, ...(hits.length ? { 'aria-activedescendant': optionId(current) } : {}) }}
-                placeholder="搜索页面、任务、日程和笔记"
+                placeholder={t('input')}
                 placeholderTextColor={theme.colors.inkFaint}
                 value={query}
                 onChangeText={setQuery}
@@ -248,7 +249,7 @@ export function CommandPalette({ householdId, trigger, onClose }: { householdId:
               <Keycap>Esc</Keycap>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" style={{ flexShrink: 1 }} contentContainerStyle={{ padding: theme.spacing[2] }}>
-              <View nativeID={listId} {...({ role: 'listbox' } as object)} aria-label="搜索结果">
+              <View nativeID={listId} {...({ role: 'listbox' } as object)} aria-label={t('results')}>
                 {hits.map((hit, index) => {
                   const Glyph = hit.icon;
                   const selected = index === current;
@@ -260,7 +261,9 @@ export function CommandPalette({ householdId, trigger, onClose }: { householdId:
                         nativeID={optionId(index)}
                         role="option"
                         aria-selected={selected}
-                        accessibilityLabel={`${hit.group}：${hit.title}${hit.detail ? `，${hit.detail}` : ''}`}
+                        accessibilityLabel={hit.detail
+                          ? t('optionDetail', { group: hit.group, title: hit.title, detail: hit.detail })
+                          : t('option', { group: hit.group, title: hit.title })}
                         tabIndex={-1}
                         onHoverIn={() => setActive(index)}
                         onPress={hit.open}
@@ -274,17 +277,17 @@ export function CommandPalette({ householdId, trigger, onClose }: { householdId:
                   );
                 })}
               </View>
-              {loading ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], padding: theme.spacing[3] }}><Spinner label="正在搜索" /><Text variant="meta">正在载入任务、日程和笔记…</Text></View> : null}
+              {loading ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], padding: theme.spacing[3] }}><Spinner label={t('loading')} /><Text variant="meta">{t('loadingContent')}</Text></View> : null}
               {failed && query.trim() ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], padding: theme.spacing[3] }}>
-                <Text variant="meta" color="destructive" accessibilityRole="alert" style={{ flexShrink: 1 }}>任务、日程和笔记没有载入，只能搜索页面。</Text>
-                <Pressable accessibilityRole="button" onPress={() => setAttempt(value => value + 1)}><Text variant="meta" color="link" style={{ textDecorationLine: 'underline' }}>重试</Text></Pressable>
+                <Text variant="meta" color="destructive" accessibilityRole="alert" style={{ flexShrink: 1 }}>{t('loadFailed')}</Text>
+                <Pressable accessibilityRole="button" onPress={() => setAttempt(value => value + 1)}><Text variant="meta" color="link" style={{ textDecorationLine: 'underline' }}>{t('common:retry')}</Text></Pressable>
               </View> : null}
-              {!loading && !hits.length ? <Text variant="meta" accessibilityRole="alert" style={{ padding: theme.spacing[3] }}>{`没有找到「${query.trim()}」`}</Text> : null}
+              {!loading && !hits.length ? <Text variant="meta" accessibilityRole="alert" style={{ padding: theme.spacing[3] }}>{t('empty', { query: query.trim() })}</Text> : null}
             </ScrollView>
             <View style={{ flexDirection: 'row', gap: theme.spacing[4], paddingHorizontal: theme.spacing[4], paddingVertical: theme.spacing[2], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, backgroundColor: theme.colors.surfaceSubtle }}>
-              <Text variant="caption" color="inkFaint" style={{ fontWeight: '400' }}>↑↓ 选择</Text>
-              <Text variant="caption" color="inkFaint" style={{ fontWeight: '400' }}>Enter 打开</Text>
-              <Text variant="caption" color="inkFaint" style={{ fontWeight: '400' }}>Esc 关闭</Text>
+              <Text variant="caption" color="inkFaint" style={{ fontWeight: '400' }}>{t('chooseShortcut')}</Text>
+              <Text variant="caption" color="inkFaint" style={{ fontWeight: '400' }}>{t('openShortcut')}</Text>
+              <Text variant="caption" color="inkFaint" style={{ fontWeight: '400' }}>{t('closeShortcut')}</Text>
             </View>
           </View>
         </View>
