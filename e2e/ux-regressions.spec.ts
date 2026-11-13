@@ -164,6 +164,32 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
+test('Japanese household invitations use localized form and confirmation text', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 320, height: 844 } });
+  try {
+    const page = await context.newPage();
+    await setup(page);
+    await page.route(`**/api/v1/households/${a}`, route => route.fulfill({
+      json: { ...household(a), members: [{ membershipId: 'member', userId: 'user', displayName: '小林', username: 'lin', role: 'OWNER', isCurrentUser: true }] },
+    }));
+    await page.route(`**/api/v1/households/${a}/invitations`, route => route.fulfill({
+      json: route.request().method() === 'POST'
+        ? { code: 'INVITATION_SENT', invitationId: 'invite', message: '邀请已发送到对方的收件箱。' }
+        : { invitations: [] },
+    }));
+    await page.goto(`/households/${a}/settings`);
+    await page.getByRole('button', { name: '家族を招待', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '家族を招待', exact: true });
+    await dialog.getByRole('textbox', { name: 'ユーザー名', exact: true }).fill('another_member');
+    await dialog.getByRole('button', { name: '招待を送信', exact: true }).click();
+    await expect(dialog.getByText('相手の受信箱に招待を送りました。')).toBeVisible();
+    const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+    expect(violations.filter(v => v.impact === 'serious' || v.impact === 'critical')).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
+
 for (const width of [390, 1440]) {
   test(`household settings allow members to leave and require owner transfer at ${width}px`, async ({ page }) => {
     await setup(page);

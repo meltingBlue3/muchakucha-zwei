@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { formatDateTime } from '../../ui/date-values';
 import type { GetHouseholdResponseDto, InboxInvitationDto, InvitationInboxResponseDto } from '@muchakucha/api-client';
 import { useCallback, useRef, useState } from 'react';
@@ -16,10 +17,11 @@ export function useInbox({ api, getAccessToken, onAccepted }: {
   getAccessToken(): string | null | Promise<string | null>;
   onAccepted(household: GetHouseholdResponseDto): Promise<void>;
 }): InboxListProps {
+  const { t } = useTranslation(['inbox', 'households']);
   const [invitations, setInvitations] = useState<InboxInvitationDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>();
-  const [notice, setNotice] = useState<string>();
+  const [error, setError] = useState<'loadFailed' | 'joinedOpenFailed' | 'unavailable' | 'responseFailed'>();
+  const [notice, setNotice] = useState<{ key: 'joined' | 'declined'; name: string }>();
   const [busyId, setBusyId] = useState<string>();
   const busy = useRef(false);
   const generation = useRef(0);
@@ -34,7 +36,7 @@ export function useInbox({ api, getAccessToken, onAccepted }: {
       const result = await api.listInvitationInbox(token);
       if (current === generation.current) setInvitations(result.invitations);
     } catch {
-      if (current === generation.current) setError('暂时无法加载收件箱，请检查网络后重试。');
+      if (current === generation.current) setError('loadFailed');
     } finally {
       if (current === generation.current) setLoading(false);
     }
@@ -57,35 +59,35 @@ export function useInbox({ api, getAccessToken, onAccepted }: {
       if (accept) {
         const household = await api.acceptInvitation(token, { invitationId: invitation.id });
         setInvitations(current => current.filter(item => item.id !== invitation.id));
-        setNotice(`已加入「${household.name}」。`);
-        try { await onAccepted(household); } catch { setError('你已加入家庭，请从“我的家庭”进入。'); }
+        setNotice({ key: 'joined', name: household.name });
+        try { await onAccepted(household); } catch { setError('joinedOpenFailed'); }
       } else {
         await api.declineInvitation(token, { invitationId: invitation.id });
         setInvitations(current => current.filter(item => item.id !== invitation.id));
-        setNotice(`已拒绝「${invitation.householdName}」的邀请。`);
+        setNotice({ key: 'declined', name: invitation.householdName });
       }
     } catch (failure) {
       const unavailable = typeof failure === 'object' && failure !== null && 'status' in failure && (failure.status === 409 || failure.status === 404);
       if (unavailable) setInvitations(current => current.filter(item => item.id !== invitation.id));
-      setError(unavailable ? '这份邀请已处理、撤销或过期，已从列表移除。' : '这次没有完成，请检查网络后重试。');
+      setError(unavailable ? 'unavailable' : 'responseFailed');
     } finally { busy.current = false; setBusyId(undefined); }
   };
 
   const messages: InboxMessage[] = invitations.map(invitation => ({
     id: invitation.id,
-    category: '家庭邀请',
-    summary: `${invitation.inviterDisplayName}邀请你加入「${invitation.householdName}」`,
+    category: t('category'),
+    summary: t('summary', { inviter: invitation.inviterDisplayName, name: invitation.householdName }),
     createdAt: invitation.createdAt,
     details: [
-      { label: '发送时间', value: formatDateTime(new Date(invitation.createdAt)) },
-      { label: '状态', value: '待接受' },
-      { label: '加入后的身份', value: '普通成员，可以查看和编辑家庭共享的日程、任务和笔记。' },
-      { label: '有效期至', value: formatDateTime(new Date(invitation.expiresAt)) },
+      { label: t('sentAt'), value: formatDateTime(new Date(invitation.createdAt)) },
+      { label: t('status'), value: t('households:invitationStatus.pending') },
+      { label: t('roleAfterJoin'), value: t('memberDetail') },
+      { label: t('expiresAt'), value: formatDateTime(new Date(invitation.expiresAt)) },
     ],
     actions: [
-      { id: 'accept', label: '接受', accessibilityLabel: `接受「${invitation.householdName}」的邀请`, primary: true, run: () => respond(invitation, true) },
-      { id: 'decline', label: '拒绝', accessibilityLabel: `拒绝「${invitation.householdName}」的邀请`, run: () => respond(invitation, false) },
+      { id: 'accept', label: t('accept'), accessibilityLabel: t('acceptName', { name: invitation.householdName }), primary: true, run: () => respond(invitation, true) },
+      { id: 'decline', label: t('decline'), accessibilityLabel: t('declineName', { name: invitation.householdName }), run: () => respond(invitation, false) },
     ],
   }));
-  return { messages, loading, busy: busyId !== undefined, error, notice, reload: load };
+  return { messages, loading, busy: busyId !== undefined, error: error ? t(error) : undefined, notice: notice ? t(notice.key, { name: notice.name }) : undefined, reload: load };
 }

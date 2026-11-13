@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../src/i18n';
 import { HouseholdActionWindow, useHouseholdActionClose } from '../../../../../src/features/households/household-action-window';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -21,6 +22,7 @@ const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000'
  * in safe-first DOM order; AppDialog owns focus containment.
  */
 export default function TransferOwnershipPage() {
+  const { t } = useTranslation('households');
   const router = useRouter();
   const close = useHouseholdActionClose();
   const exitAllowed = useRef(false);
@@ -32,12 +34,12 @@ export default function TransferOwnershipPage() {
   }>();
   const householdId = params.id;
   const successorMembershipId = params.successorMembershipId;
-  const successorDisplayName = params.successorDisplayName ?? '此成员';
-  const householdName = params.householdName ?? '此家庭';
+  const successorDisplayName = params.successorDisplayName ?? t('governance.memberFallback');
+  const householdName = params.householdName ?? t('governance.householdFallback');
 
   const [stage, setStage] = useState<'consequence' | 'final'>('consequence');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<'governance.transferError' | undefined>(undefined);
 
   const handleConfirm = useCallback(async () => {
     const accessToken = sessionTransport.getAccessToken();
@@ -58,7 +60,7 @@ export default function TransferOwnershipPage() {
       exitAllowed.current = true;
       close();
     } catch (_err: unknown) {
-      setError('所有权转移失败，当前家庭状态未改变。请重试。');
+      setError('governance.transferError');
       setBusy(false);
       // On failure, return to consequence stage so user can re-evaluate.
       setStage('consequence');
@@ -85,13 +87,13 @@ export default function TransferOwnershipPage() {
   }
 
   const closeStep = () => { if (stage === 'final') setStage('consequence'); else handleCancel(); };
-  return <HouseholdActionWindow title={stage === 'final' ? '最终确认：转移所有权' : '转移家庭所有权'} busy={busy} onClose={closeStep} onBackStep={stage === 'final' ? closeStep : undefined} exitAllowed={exitAllowed}>
+  return <HouseholdActionWindow title={stage === 'final' ? t('governance.transferFinal') : t('governance.transferTitle')} busy={busy} onClose={closeStep} onBackStep={stage === 'final' ? closeStep : undefined} exitAllowed={exitAllowed}>
     <Stack gap={4}>
-      {error ? <Banner>{error}</Banner> : null}
-      <Text>你即将把「{householdName}」的所有权转移给 {successorDisplayName}。转移后你将成为普通成员，失去管理家庭的权限。</Text>
-      {stage === 'final' ? <Text>请确认上述变更。此操作不可撤销。</Text> : null}
+      {error ? <Banner>{t(error)}</Banner> : null}
+      <Text>{t('governance.transferDetail', { householdName, successorDisplayName })}</Text>
+      {stage === 'final' ? <Text>{t('governance.finalDetail')}</Text> : null}
       {/* Only the final step commits, so only it carries the destructive treatment. */}
-      <ConfirmActions cancelLabel="取消转移" confirmLabel={stage === 'consequence' ? '继续' : '确认转移所有权'} destructive={stage !== 'consequence'} busy={busy} onCancel={() => { exitAllowed.current = true; handleCancel(); }} onConfirm={() => { if (stage === 'consequence') handleContinue(); else void handleConfirm(); }} />
+      <ConfirmActions cancelLabel={t('governance.cancelTransfer')} confirmLabel={stage === 'consequence' ? t('governance.continue') : t('governance.confirmTransfer')} destructive={stage !== 'consequence'} busy={busy} onCancel={() => { exitAllowed.current = true; handleCancel(); }} onConfirm={() => { if (stage === 'consequence') handleContinue(); else void handleConfirm(); }} />
     </Stack>
   </HouseholdActionWindow>;
 }

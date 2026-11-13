@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../src/i18n';
 import { AppShell } from '../../../src/ui/household-components';
 import { RouteWindow } from '../../../src/ui/route-window';
 import { Controller, useForm } from 'react-hook-form';
@@ -9,7 +10,6 @@ import { sessionApiClient, sessionTransport } from '../../../src/features/auth/s
 import { useHouseholdContext } from '../../../src/features/households/household-context';
 import { Banner, Button, Heading, Stack, Text, TextField } from '../../../src/ui/primitives';
 
-const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
 const NAME_MIN = 1;
 const NAME_MAX = 40;
 
@@ -21,12 +21,13 @@ const nameSchema = z
       const codePointCount = [...value.normalize('NFC')].length;
       return codePointCount >= NAME_MIN && codePointCount <= NAME_MAX;
     },
-    { message: `请输入 1–${NAME_MAX} 个字符的家庭名称。` },
+    { message: 'nameLength' },
   );
 
 type HouseholdFormValues = { name: string };
 
 export default function NewHouseholdRoute() {
+  const { t } = useTranslation(['households', 'common', 'navigation']);
   const router = useRouter();
   const exitAllowed = useRef(false);
   const { refreshHouseholds } = useHouseholdContext();
@@ -52,7 +53,7 @@ export default function NewHouseholdRoute() {
       clearErrors('name');
       return true;
     }
-    setError('name', { message: parsed.error.issues[0]?.message ?? '请检查家庭名称。' });
+    setError('name', { message: 'nameLength' });
     return false;
   };
 
@@ -78,12 +79,12 @@ export default function NewHouseholdRoute() {
     clearErrors();
     const parsed = nameSchema.safeParse(values.name);
     if (!parsed.success) {
-      setError('name', { message: parsed.error.issues[0]?.message ?? '请检查家庭名称。' });
+      setError('name', { message: 'nameLength' });
       return;
     }
     const accessToken = sessionTransport.getAccessToken();
     if (accessToken === null) {
-      setError('root.server', { message: GENERIC_ERROR });
+      setError('root.server', { message: 'common:genericError' });
       return;
     }
     const normalizedName = parsed.data.normalize('NFC');
@@ -95,26 +96,26 @@ export default function NewHouseholdRoute() {
       );
       setSuccessHouseholdId(household.id);
     } catch {
-      setError('root.server', { message: GENERIC_ERROR });
+      setError('root.server', { message: 'common:genericError' });
     }
   });
 
   if (successHouseholdId !== null) {
     return (
-      <RouteWindow title="创建家庭" resource="households" busy={isSubmitting || entering} exitAllowed={exitAllowed} fallback={<AppShell title="家庭"><Text>一起管理家里的日程、任务和笔记。</Text></AppShell>}>
+      <RouteWindow title={t('create')} resource="households" busy={isSubmitting || entering} exitAllowed={exitAllowed} fallback={<AppShell title={t('navigation:family')}><Text>{t('familyIntro')}</Text></AppShell>}>
         <Stack gap={6}>
           <Stack gap={2}>
-            <Text variant="label" color="success">准备好了</Text>
-            <Heading>家庭已创建</Heading>
+            <Text variant="label" color="success">{t('createdReady')}</Text>
+            <Heading>{t('createdTitle')}</Heading>
           </Stack>
           <Stack accessibilityLiveRegion="polite" accessibilityRole={'status' as never} gap={1}>
-            <Text>家庭已创建。你现在是这个家庭的所有者。</Text>
+            <Text>{t('createdOwner')}</Text>
           </Stack>
-          <Text variant="bodySm">先添加一件小事，也可以稍后到「家庭 → 家庭设置」邀请家人。</Text>
-          {enterError ? <Banner title="暂时无法进入">家庭已经创建，无需重复创建。请重试进入。</Banner> : null}
+          <Text variant="bodySm">{t('createdNext')}</Text>
+          {enterError ? <Banner title={t('enterFailed')}>{t('enterRetryDetail')}</Banner> : null}
           <Button
             loading={entering}
-            label="进入家庭"
+            label={t('enter')}
             onPress={() => void handleEnterHousehold()}
           />
         </Stack>
@@ -123,13 +124,13 @@ export default function NewHouseholdRoute() {
   }
 
   return (
-    <RouteWindow title="创建家庭" resource="households" busy={isSubmitting || entering} exitAllowed={exitAllowed} fallback={<AppShell title="家庭"><Text>一起管理家里的日程、任务和笔记。</Text></AppShell>}>
+    <RouteWindow title={t('create')} resource="households" busy={isSubmitting || entering} exitAllowed={exitAllowed} fallback={<AppShell title={t('navigation:family')}><Text>{t('familyIntro')}</Text></AppShell>}>
       <Stack gap={6}>
         <Stack gap={2}>
-          <Text>给你们的共享空间起个名字。只需这一步，之后可以再邀请家人。</Text>
+          <Text>{t('createIntro')}</Text>
         </Stack>
         {errors.root?.server?.message ? (
-          <Banner title="创建失败">{errors.root.server.message}</Banner>
+          <Banner title={t('createFailed')}>{t('common:genericError')}</Banner>
         ) : null}
         <Controller
           control={control}
@@ -139,11 +140,11 @@ export default function NewHouseholdRoute() {
               autoCapitalize="words"
               autoComplete="off"
               disabled={isSubmitting}
-              {...(errors.name?.message === undefined ? {} : { error: errors.name.message })}
-              label="家庭名称"
+              {...(errors.name?.message === undefined ? {} : { error: t('nameLength', { min: NAME_MIN, max: NAME_MAX }) })}
+              label={t('name')}
               submitAttempt={submitCount}
-              hint="1–40 个字符，之后可以在家庭设置中修改。"
-              placeholder="例如：我们的小家"
+              hint={t('nameHint')}
+              placeholder={t('namePlaceholder')}
               returnKeyType="done"
               onSubmitEditing={() => { if (!isSubmitting) void submit(); }}
               onBlur={() => {
@@ -163,7 +164,7 @@ export default function NewHouseholdRoute() {
         />
         <Button
           disabled={isSubmitting}
-          label="创建家庭"
+          label={t('create')}
           loading={isSubmitting}
           onPress={() => void submit()}
         />

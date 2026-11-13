@@ -52,9 +52,9 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
   subpage?: boolean;
   children: ReactNode;
 }) {
+  const { t } = useTranslation(['households', 'navigation']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { t } = useTranslation('navigation');
   const screenWidth = useWindowDimensions().width;
   const narrow = screenWidth < theme.layout.navigationBreakpoint;
   const desktop = useDesktop();
@@ -94,7 +94,7 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
 
   if (viewState === 'accessChanged') {
     return (
-      <AppShell accessibilityLabel="家庭访问权已变化">
+      <AppShell accessibilityLabel={t('accessChanged')}>
         <AccessChangedPanel
           hasOtherHouseholds={households.length > 0}
           {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
@@ -107,8 +107,8 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
 
   if (householdId === undefined || householdId === null || householdId === '') {
     return (
-      <AppShell accessibilityLabel="页面未找到">
-        <Stack gap={4}><Text>这个页面暂时无法访问。</Text></Stack>
+      <AppShell accessibilityLabel={t('pageMissing')}>
+        <Stack gap={4}><Text>{t('pageUnavailable')}</Text></Stack>
       </AppShell>
     );
   }
@@ -138,8 +138,8 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
               <SearchEntry rail={rail} trigger={searchTrigger} onPress={() => setSearchOpen(true)} />
             </View> : <HouseholdHeader trigger={switcherTrigger} householdName={householdName} onOpenSwitcher={openMenu} placement="sidebar" />}
             {...(counts ? { badges: {
-              today: { value: counts.today, description: `今天 ${counts.today} 项安排`, tone: 'muted' as const },
-              tasks: { value: counts.overdue, description: `${counts.overdue} 件逾期`, tone: 'accent' as const },
+              today: { value: counts.today, description: t('todayCount', { count: counts.today }), tone: 'muted' as const },
+              tasks: { value: counts.overdue, description: t('overdueCount', { count: counts.overdue }), tone: 'accent' as const },
             } } : {})}
             footer={<View style={{ flexDirection: rail ? 'column' : 'row', alignItems: 'center', gap: theme.spacing[1], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[3] }}><AccountMenu variant="row" /><InboxButton count={inboxCount} /></View>}
           >
@@ -162,7 +162,7 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
         onClose={() => setMenuOpen(false)}
         onSelect={(next) => { void handleSwitch(next); }}
         visible={menuOpen}
-        links={narrow ? familyPages.map(page => ({ label: t(`pages.${page.key}`), icon: page.icon, onPress: () => router.push(householdPath(householdId, page.key)) })) : []}
+        links={narrow ? familyPages.map(page => ({ label: t(`navigation:pages.${page.key}`), icon: page.icon, onPress: () => router.push(householdPath(householdId, page.key)) })) : []}
       />
       {desktop && searchOpen ? <CommandPalette householdId={householdId} trigger={searchTrigger} onClose={() => setSearchOpen(false)} /> : null}
     </>
@@ -206,15 +206,17 @@ export function AccountScreen({ accessibilityLabel, refreshing, onRefresh, showI
  * the account navigation.
  */
 function AccountContent({ children }: { children: ReactNode }) {
+  const { t } = useTranslation('profile');
   const setShellHeader = useContext(PageHeaderContext);
   const user = useCurrentUser();
   const [section, setSection] = useState<PageHeader | null>(null);
   const who = user ? `${user.displayName} · ${user.username}` : undefined;
+  const title = t('pageTitle');
   useLayoutEffect(() => {
     if (!setShellHeader) return undefined;
-    setShellHeader({ title: '个人中心', ...(who ? { subtitle: who } : {}) });
+    setShellHeader({ title, ...(who ? { subtitle: who } : {}) });
     return () => setShellHeader(null);
-  }, [setShellHeader, who]);
+  }, [setShellHeader, title, who]);
   return <PageHeaderContext.Provider value={setSection}>
     {section ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], marginBottom: theme.spacing[5] }}>
       <Heading level={2} style={theme.typography.paneTitle}>{section.title}</Heading>

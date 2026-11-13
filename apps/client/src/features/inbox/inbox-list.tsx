@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import Mail from 'lucide-react-native/icons/mail';
 import { useDesktop } from '../../ui/use-desktop';
 import { useRef, useState } from 'react';
@@ -36,6 +37,7 @@ export interface InboxListProps {
 }
 
 export function InboxList({ messages, loading, busy, error, notice, reload }: InboxListProps) {
+  const { t } = useTranslation('inbox');
   const desktop = useDesktop();
   const [selectedId, setSelectedId] = useState<string>();
   const trigger = useRef<View>(null);
@@ -56,26 +58,29 @@ export function InboxList({ messages, loading, busy, error, notice, reload }: In
   const windowActions = (message: InboxMessage) => [...message.actions].sort((a, b) => Number(Boolean(a.primary)) - Number(Boolean(b.primary))).map(action => (
     <Button key={action.id} label={action.label} accessibilityLabel={action.accessibilityLabel} tone={action.primary ? 'primary' : 'secondary'} disabled={busy || loading} onPress={() => run(action)} style={{ flexGrow: 1, flexBasis: theme.controlSizes.touchTarget * 3 }} />
   ));
-  return <View ref={container} tabIndex={-1} accessibilityLabel="消息列表">
+  return <View ref={container} tabIndex={-1} accessibilityLabel={t('messageList')}>
     <Stack gap={3}>
       {notice ? <View accessibilityLiveRegion="polite"><Text variant="bodySm">{notice}</Text></View> : null}
       {error ? <LoadError message={error} disabled={busy || loading} onRetry={() => { void reload(); }} /> : null}
-      {loading && messages.length === 0 ? <LoadingState label="正在加载消息" /> : null}
-      {!loading && !error && messages.length === 0 ? <EmptyState title="暂无消息" message="新的通知会显示在这里。" /> : null}
+      {loading && messages.length === 0 ? <LoadingState label={t('loading')} /> : null}
+      {!loading && !error && messages.length === 0 ? <EmptyState title={t('emptyTitle')} message={t('emptyDetail')} /> : null}
       {messages.length > 0 ? <View style={{ backgroundColor: theme.colors.surface, borderRadius: desktop ? theme.borderRadii.md : theme.borderRadii.lg, overflow: 'hidden', ...(desktop ? { borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator } : {}) }}>
-        {messages.map((message, index) => <View key={message.id} testID={`inbox-row-${message.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], borderBottomWidth: index < messages.length - 1 ? theme.borderWidths.default : 0, borderBottomColor: theme.colors.separator, paddingHorizontal: theme.spacing[2], ...(desktop ? { paddingLeft: theme.spacing[4], paddingRight: theme.spacing[3] } : {}) }}>
-          {desktop ? <View style={{ width: theme.controlSizes.avatar + 8, height: theme.controlSizes.avatar + 8, borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}><Mail size={theme.controlSizes.icon - 4} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /></View> : null}
-          <Pressable {...insetFocusRing} ref={node => { if (node) rowTriggers.current.set(message.id, node); else rowTriggers.current.delete(message.id); }} accessibilityRole="button" accessibilityLabel={`查看消息：${message.summary}`} accessibilityHint="打开消息详情"
-            disabled={busy} onPress={() => { trigger.current = rowTriggers.current.get(message.id) ?? null; setSelectedId(message.id); }}
-            style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[4], backgroundColor: pressed ? theme.colors.surfaceSubtle : theme.colors.transparent })}>
-            <Text variant="bodySm" color="ink" numberOfLines={2}>{message.summary}</Text>
-            <Text variant="caption" style={{ marginTop: theme.spacing[1] }}>{formatDate(new Date(message.createdAt))}{desktop ? ' 收到' : ''}</Text>
-          </Pressable>
-          <View style={{ flexDirection: 'row', flexShrink: 0, gap: theme.spacing[2], paddingRight: theme.spacing[1] }}>{actions(message)}</View>
-        </View>)}
+        {messages.map((message, index) => {
+          const date = formatDate(new Date(message.createdAt));
+          return <View key={message.id} testID={`inbox-row-${message.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1], borderBottomWidth: index < messages.length - 1 ? theme.borderWidths.default : 0, borderBottomColor: theme.colors.separator, paddingHorizontal: theme.spacing[2], ...(desktop ? { paddingLeft: theme.spacing[4], paddingRight: theme.spacing[3] } : {}) }}>
+            {desktop ? <View style={{ width: theme.controlSizes.avatar + 8, height: theme.controlSizes.avatar + 8, borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}><Mail size={theme.controlSizes.icon - 4} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /></View> : null}
+            <Pressable {...insetFocusRing} ref={node => { if (node) rowTriggers.current.set(message.id, node); else rowTriggers.current.delete(message.id); }} accessibilityRole="button" accessibilityLabel={t('openMessage', { summary: message.summary })} accessibilityHint={t('openHint')}
+              disabled={busy} onPress={() => { trigger.current = rowTriggers.current.get(message.id) ?? null; setSelectedId(message.id); }}
+              style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[4], backgroundColor: pressed ? theme.colors.surfaceSubtle : theme.colors.transparent })}>
+              <Text variant="bodySm" color="ink" numberOfLines={2}>{message.summary}</Text>
+              <Text variant="caption" style={{ marginTop: theme.spacing[1] }}>{desktop ? t('receivedAt', { date }) : date}</Text>
+            </Pressable>
+            <View style={{ flexDirection: 'row', flexShrink: 0, gap: theme.spacing[2], paddingRight: theme.spacing[1] }}>{actions(message)}</View>
+          </View>;
+        })}
       </View> : null}
     </Stack>
-    {selected ? <AppDialog title="消息详情" busy={busy} trigger={trigger} onClose={() => setSelectedId(undefined)}>
+    {selected ? <AppDialog title={t('details')} busy={busy} trigger={trigger} onClose={() => setSelectedId(undefined)}>
       <Stack gap={4}>
         <Text variant="caption">{selected.category}</Text>
         <Text variant="section">{selected.summary}</Text>

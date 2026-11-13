@@ -1,3 +1,4 @@
+import { useTranslation } from '../../src/i18n';
 import { router } from 'expo-router';
 import { useCallback } from 'react';
 import type { GetHouseholdResponseDto } from '@muchakucha/api-client';
@@ -10,6 +11,7 @@ import { PageIntro } from '../../src/ui/page-intro';
 import { Stack } from '../../src/ui/primitives';
 
 export default function InboxRoute() {
+  const { t } = useTranslation(['inbox', 'profile']);
   const { refreshHouseholds, switchHousehold } = useHouseholdContext();
   const getAccessToken = useCallback(() => sessionTransport.getAccessToken(), []);
   const onAccepted = useCallback(async (household: GetHouseholdResponseDto) => {
@@ -18,9 +20,9 @@ export default function InboxRoute() {
     router.replace(`/households/${household.id}`);
   }, [refreshHouseholds, switchHousehold]);
   const inbox = useInbox({ api: sessionApiClient, getAccessToken, onAccepted });
-  return <AccountScreen accessibilityLabel="收件箱" showInbox={false} refreshing={inbox.loading} onRefresh={() => { void inbox.reload(); }}>
+  return <AccountScreen accessibilityLabel={t('profile:links.inbox.label')} showInbox={false} refreshing={inbox.loading} onRefresh={() => { void inbox.reload(); }}>
     <Stack>
-      <PageIntro title="收件箱" {...(!inbox.loading && inbox.messages.length ? { subtitle: `${inbox.messages.length} 项待处理` } : {})} />
+      <PageIntro title={t('profile:links.inbox.label')} {...(!inbox.loading && inbox.messages.length ? { subtitle: t('pendingCount', { count: inbox.messages.length }) } : {})} />
       <InboxList {...inbox} />
     </Stack>
   </AccountScreen>;

@@ -60,11 +60,12 @@ for (const width of [320, 390, 1440]) {
     expect((await roster.json()).members).toEqual(expect.arrayContaining([expect.objectContaining({ username: recipient.username, role: 'MEMBER' })]));
     // Global inbox entry remains available after joining a household, beside the account menu:
     // before it in a phone's header, after the account row at the foot of the wide sidebar.
-    const inboxIcon = await page.getByRole('button', { name: '收件箱', exact: true }).boundingBox();
+    const inboxEntry = page.getByRole('button', { name: width >= 1024 ? '收件箱，2 项待处理' : '收件箱', exact: true });
+    const inboxIcon = await inboxEntry.boundingBox();
     const profileIcon = await page.getByRole('button', { name: '个人中心', exact: true }).boundingBox();
     if (width >= 1024) expect(profileIcon!.x + profileIcon!.width).toBeLessThanOrEqual(inboxIcon!.x + 1);
     else expect(inboxIcon!.x + inboxIcon!.width).toBeLessThanOrEqual(profileIcon!.x + 1);
-    await page.getByRole('button', { name: '收件箱', exact: true }).click();
+    await inboxEntry.click();
     await expect(page.getByRole('button', { name: /^查看消息：/ })).toHaveCount(2);
   });
 }

@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import UserPlus from 'lucide-react-native/icons/user-plus';
 import { useDesktop } from '../../ui/use-desktop';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
@@ -30,10 +31,8 @@ import { Banner, Button, ConfirmActions, EmptyState, Inline, LoadError, LoadingS
 import { theme } from '../../ui/theme';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 
-const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
-const PERMISSION_DENIED = '你没有重命名此家庭的权限。';
-const RENAME_SUCCESS = '家庭名称已更新。';
-const INVITE_ALREADY_MEMBER = '这个账户已经是该家庭的成员。';
+type RequestError = 'common:genericError';
+type SettingsError = RequestError | 'settings.renamePermission' | 'settings.alreadyMember' | 'settings.userNotFound';
 
 export type HouseholdSettingsApi = Pick<HouseholdApi, 'getHousehold' | 'updateHousehold' | 'sendHouseholdInvitation' | 'listInvitations' | 'resendInvitation' | 'revokeInvitation'>;
 
@@ -63,8 +62,8 @@ export interface HouseholdSettingsProps {
 type ViewState =
   | { kind: 'loading' }
   | { kind: 'ready'; data: GetHouseholdResponseDto }
-  | { kind: 'error'; message: string }
-  | { kind: 'inconsistent'; message: string };
+  | { kind: 'error'; message: RequestError }
+  | { kind: 'inconsistent'; message: 'settings.inconsistentMembers' };
 
 export function HouseholdSettings({
   householdId,
@@ -77,7 +76,8 @@ export function HouseholdSettings({
   onInviteAccessChanged,
   frame = (accessibilityLabel, content) => <AppShell accessibilityLabel={accessibilityLabel}>{content}</AppShell>,
 }: HouseholdSettingsProps) {
-  const intro = (name: string) => <PageIntro title="家庭设置" subtitle={name} />;
+  const { t } = useTranslation(['households', 'common', 'profile', 'navigation']);
+  const intro = (name: string) => <PageIntro title={t('navigation:pages.settings')} subtitle={name} />;
   const router = useRouter();
   const { width } = useWindowDimensions();
   const desktop = useDesktop();
@@ -91,7 +91,7 @@ export function HouseholdSettings({
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
   const revokePending = useRef(false);
-  const [revokeError, setRevokeError] = useState<string>();
+  const [revokeError, setRevokeError] = useState<RequestError | 'governance.revokeError'>();
   const [viewState, setViewState] = useState<ViewState>({ kind: 'loading' });
   // Bumping an attempt re-runs its load; a failed load is otherwise a dead end.
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -102,19 +102,19 @@ export function HouseholdSettings({
   // ---- Rename form state ----
   const [renameValue, setRenameValue] = useState('');
   const [renameSubmitting, setRenameSubmitting] = useState(false);
-  const [renameSuccess, setRenameSuccess] = useState<string | undefined>(undefined);
-  const [renameError, setRenameError] = useState<string | undefined>(undefined);
+  const [renameSuccess, setRenameSuccess] = useState<'settings.renamed' | undefined>(undefined);
+  const [renameError, setRenameError] = useState<SettingsError | undefined>(undefined);
 
   // ---- Invitation form state ----
   const [inviteUsername, setInviteUsername] = useState('');
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
-  const [inviteSuccess, setInviteSuccess] = useState<string | undefined>(undefined);
-  const [inviteError, setInviteError] = useState<string | undefined>(undefined);
+  const [inviteSuccess, setInviteSuccess] = useState<'settings.inviteSent' | 'settings.inviteResent' | undefined>(undefined);
+  const [inviteError, setInviteError] = useState<SettingsError | undefined>(undefined);
 
   // ---- Invitation list state ----
   const [invitationList, setInvitationList] = useState<InvitationListItemDto[]>([]);
   const [invitationListLoading, setInvitationListLoading] = useState(false);
-  const [invitationListError, setInvitationListError] = useState<string | undefined>(undefined);
+  const [invitationListError, setInvitationListError] = useState<RequestError | undefined>(undefined);
   const [resendingId, setResendingId] = useState<string | undefined>(undefined);
 
   // ---- Member governance ----
@@ -150,7 +150,7 @@ export function HouseholdSettings({
 
     const accessToken = deps.getAccessToken();
     if (accessToken === null) {
-      setRenameError(GENERIC_ERROR);
+      setRenameError('common:genericError');
       setRenameSubmitting(false);
       return;
     }
@@ -167,7 +167,7 @@ export function HouseholdSettings({
       // Replace header/form values only from the authoritative response.
       setViewState({ kind: 'ready', data: result });
       setRenameValue(result.name);
-      setRenameSuccess(RENAME_SUCCESS);
+      setRenameSuccess('settings.renamed');
       onRenamed?.(result.name);
     } catch (error: unknown) {
       if (!mountedRef.current) return;
@@ -175,7 +175,7 @@ export function HouseholdSettings({
       if (error instanceof ApiClientError) {
         if (error.status === 403) {
           // Still a member but not the current owner.
-          setRenameError(PERMISSION_DENIED);
+          setRenameError('settings.renamePermission');
         } else if (error.status === 404) {
           // Membership may have been lost — signal the parent.
           if (onRenameAccessChanged !== undefined) {
@@ -183,15 +183,15 @@ export function HouseholdSettings({
             setRenameSubmitting(false);
             return;
           }
-          setRenameError(PERMISSION_DENIED);
+          setRenameError('settings.renamePermission');
         } else if (error.status === 401) {
-          setRenameError(GENERIC_ERROR);
+          setRenameError('common:genericError');
         } else {
           // Retain input on recoverable failure.
-          setRenameError(GENERIC_ERROR);
+          setRenameError('common:genericError');
         }
       } else {
-        setRenameError(GENERIC_ERROR);
+        setRenameError('common:genericError');
       }
     }
 
@@ -208,13 +208,13 @@ export function HouseholdSettings({
 
     const accessToken = deps.getAccessToken();
     if (accessToken === null) {
-      setInviteError(GENERIC_ERROR);
+      setInviteError('common:genericError');
       setInviteSubmitting(false);
       return;
     }
 
     try {
-      const result = await deps.householdApi.sendHouseholdInvitation(
+      await deps.householdApi.sendHouseholdInvitation(
         accessToken,
         householdId,
         { username: trimmed },
@@ -223,12 +223,12 @@ export function HouseholdSettings({
       if (!mountedRef.current) return;
 
       setInviteUsername('');
-      setInviteSuccess(result.message);
+      setInviteSuccess('settings.inviteSent');
       try {
         const list = await deps.householdApi.listInvitations(accessToken, householdId);
         if (mountedRef.current) setInvitationList(list.invitations);
       } catch {
-        if (mountedRef.current) setInvitationListError(GENERIC_ERROR);
+        if (mountedRef.current) setInvitationListError('common:genericError');
       }
     } catch (error: unknown) {
       if (!mountedRef.current) return;
@@ -237,25 +237,25 @@ export function HouseholdSettings({
         const payload = error.body;
         const serverError = typeof payload === 'object' && payload !== null && 'error' in payload ? payload.error : undefined;
         if (typeof serverError === 'object' && serverError !== null && 'code' in serverError && serverError.code === 'INVITATION_USER_NOT_FOUND') {
-          setInviteError('未找到这个用户名，请让家人先注册账户。');
+          setInviteError('settings.userNotFound');
         } else if (error.status === 409) {
-          setInviteError(INVITE_ALREADY_MEMBER);
+          setInviteError('settings.alreadyMember');
         } else if (error.status === 403) {
-          setInviteError(PERMISSION_DENIED);
+          setInviteError('settings.renamePermission');
         } else if (error.status === 404) {
           if (onInviteAccessChanged !== undefined) {
             onInviteAccessChanged(householdName);
             setInviteSubmitting(false);
             return;
           }
-          setInviteError(GENERIC_ERROR);
+          setInviteError('common:genericError');
         } else if (error.status === 401) {
-          setInviteError(GENERIC_ERROR);
+          setInviteError('common:genericError');
         } else {
-          setInviteError(GENERIC_ERROR);
+          setInviteError('common:genericError');
         }
       } else {
-        setInviteError(GENERIC_ERROR);
+        setInviteError('common:genericError');
       }
     }
 
@@ -276,7 +276,7 @@ export function HouseholdSettings({
         const accessToken = deps.getAccessToken();
         if (accessToken === null) {
           if (mountedRef.current) {
-            setViewState({ kind: 'error', message: GENERIC_ERROR });
+            setViewState({ kind: 'error', message: 'common:genericError' });
           }
           return;
         }
@@ -293,7 +293,7 @@ export function HouseholdSettings({
           if (household.members.length === 0 || household.ownerMembershipId === null) {
             setViewState({
               kind: 'inconsistent',
-              message: '暂时无法显示成员。请刷新；如果问题持续，请稍后再试。',
+              message: 'settings.inconsistentMembers',
             });
             return;
           }
@@ -302,7 +302,7 @@ export function HouseholdSettings({
         } catch (error: unknown) {
           if (!mountedRef.current) return;
           if (error instanceof Error && error.name === 'AbortError') return;
-          setViewState({ kind: 'error', message: GENERIC_ERROR });
+          setViewState({ kind: 'error', message: 'common:genericError' });
         }
       };
 
@@ -335,7 +335,7 @@ export function HouseholdSettings({
         setInvitationList(result.invitations);
       } catch {
         if (!mountedRef.current) return;
-        setInvitationListError(GENERIC_ERROR);
+        setInvitationListError('common:genericError');
       }
 
       setInvitationListLoading(false);
@@ -353,11 +353,11 @@ export function HouseholdSettings({
     setInvitationListError(undefined);
 
     try {
-      const resent = await deps.householdApi.resendInvitation(accessToken, householdId, invitationId);
+      await deps.householdApi.resendInvitation(accessToken, householdId, invitationId);
 
       if (!mountedRef.current) return;
       setActiveForm('invite');
-      setInviteSuccess(resent.message);
+      setInviteSuccess('settings.inviteResent');
 
       // Refetch the invitation list to get updated states.
       try {
@@ -369,7 +369,7 @@ export function HouseholdSettings({
       }
     } catch {
       if (!mountedRef.current) return;
-      setInvitationListError(GENERIC_ERROR);
+      setInvitationListError('common:genericError');
     }
 
     setResendingId(undefined);
@@ -384,7 +384,7 @@ export function HouseholdSettings({
   const confirmRevoke = async () => {
     if (revokeId === null || revokePending.current) return;
     const accessToken = deps.getAccessToken();
-    if (!accessToken) { setRevokeError(GENERIC_ERROR); return; }
+    if (!accessToken) { setRevokeError('common:genericError'); return; }
     revokePending.current = true;
     setRevokeBusy(true);
     setRevokeError(undefined);
@@ -396,7 +396,7 @@ export function HouseholdSettings({
       revokeTrigger.current = inviteTrigger.current;
       setRevokeId(null);
     } catch {
-      if (mountedRef.current) setRevokeError('撤销失败，家庭邀请状态未改变。请重试。');
+      if (mountedRef.current) setRevokeError('governance.revokeError');
     } finally {
       revokePending.current = false;
       if (mountedRef.current) setRevokeBusy(false);
@@ -405,27 +405,27 @@ export function HouseholdSettings({
 
   if (viewState.kind === 'loading') {
     return (
-      frame('正在加载成员', <Stack gap={6}>
+      frame(t('settings.loadingMembers'), <Stack gap={6}>
         {intro(householdName)}
-        <LoadingState label="正在加载成员" />
+        <LoadingState label={t('settings.loadingMembers')} />
       </Stack>)
     );
   }
 
   if (viewState.kind === 'error') {
     return (
-      frame('成员加载失败', <Stack gap={6}>
+      frame(t('settings.loadMembersFailed'), <Stack gap={6}>
         {intro(householdName)}
-        <LoadError message={viewState.message} onRetry={() => { setViewState({ kind: 'loading' }); setLoadAttempt(value => value + 1); }} retryAccessibilityLabel="重试加载成员" />
+        <LoadError message={t(viewState.message)} onRetry={() => { setViewState({ kind: 'loading' }); setLoadAttempt(value => value + 1); }} retryAccessibilityLabel={t('settings.retryMembers')} />
       </Stack>)
     );
   }
 
   if (viewState.kind === 'inconsistent') {
     return (
-      frame('成员数据异常', <Stack gap={6}>
+      frame(t('settings.invalidMembers'), <Stack gap={6}>
         {intro(householdName)}
-        <LoadError message={viewState.message} onRetry={() => { setViewState({ kind: 'loading' }); setLoadAttempt(value => value + 1); }} retryAccessibilityLabel="重试加载成员" />
+        <LoadError message={t(viewState.message)} onRetry={() => { setViewState({ kind: 'loading' }); setLoadAttempt(value => value + 1); }} retryAccessibilityLabel={t('settings.retryMembers')} />
       </Stack>)
     );
   }
@@ -444,49 +444,49 @@ export function HouseholdSettings({
   const canTransferBeforeLeaving = actorIsOwner && otherMembers.length > 0 && governance.transfer !== undefined;
 
   const editButton = actorIsOwner ? (
-    <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel="编辑家庭名称" onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
-      <Text variant="label" color="link">编辑</Text>
+    <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel={t('settings.editName')} onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
+      <Text variant="label" color="link">{t('common:edit')}</Text>
     </Pressable>
   ) : null;
 
   // One invite action in both layouts: the overview panel on wide screens, beside the 成员 title otherwise.
-  const inviteButton = <Button ref={inviteTrigger} label="邀请家人" tone={inviteInOverview ? 'primary' : 'secondary'} size={inviteInOverview ? 'regular' : 'compact'} {...(desktop ? { icon: (color: string) => <UserPlus size={theme.controlSizes.icon - 4} color={color} strokeWidth={theme.focus.width} /> } : {})} onPress={() => setActiveForm('invite')} />;
+  const inviteButton = <Button ref={inviteTrigger} label={t('settings.invite')} tone={inviteInOverview ? 'primary' : 'secondary'} size={inviteInOverview ? 'regular' : 'compact'} {...(desktop ? { icon: (color: string) => <UserPlus size={theme.controlSizes.icon - 4} color={color} strokeWidth={theme.focus.width} /> } : {})} onPress={() => setActiveForm('invite')} />;
   // The desktop overview card: one fact per 40px row, the name with its 编辑 pill.
-  const overviewRow = (label: string, value: ReactNode, trailing?: ReactNode) => <Inline key={label} gap={3} style={{ minHeight: theme.layout.desktopRowHeight, borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>
-    <Text variant="meta" color="inkFaint" style={{ width: theme.layout.fieldLabelColumn }}>{label}</Text>
-    <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flex: 1, fontWeight: label === '家庭名称' ? '600' : '400' }}>{value}</Text>
+  const overviewRow = (key: 'name' | 'settings.yourRole' | 'settings.members' | 'invitationStatus.pending', value: ReactNode, trailing?: ReactNode) => <Inline key={key} gap={3} style={{ minHeight: theme.layout.desktopRowHeight, borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>
+    <Text variant="meta" color="inkFaint" style={{ width: theme.layout.fieldLabelColumn }}>{t(key)}</Text>
+    <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flex: 1, fontWeight: key === 'name' ? '600' : '400' }}>{value}</Text>
     {trailing}
   </Inline>;
   const leaveEntry = !actorIsOwner || canTransferBeforeLeaving ? (
-    <Pressable ref={leaveTrigger} accessibilityRole="button" accessibilityLabel="离开家庭" onPress={() => {
+    <Pressable ref={leaveTrigger} accessibilityRole="button" accessibilityLabel={t('governance.leave')} onPress={() => {
       if (actorIsOwner) { setSuccessorId(null); setLeaveOpen(true); }
       else { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/leave?householdName=${encodeURIComponent(authoritativeName)}`); }
     }} style={({ pressed }) => desktop
       ? { minHeight: theme.layout.desktopControl, flexDirection: 'row', gap: theme.spacing[1] + 2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing[3] + 2, borderRadius: theme.borderRadii.full, borderWidth: theme.borderWidths.default, borderColor: theme.colors.destructive, backgroundColor: pressed ? theme.colors.destructiveSoft : 'transparent' }
       : { minHeight: theme.controlSizes.touchTarget, flexDirection: 'row', gap: theme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.lg, backgroundColor: pressed ? theme.colors.destructiveSoft : 'transparent' }}>
       <LogOut size={desktop ? theme.controlSizes.icon - 5 : theme.controlSizes.icon} color={theme.colors.destructive} strokeWidth={theme.controlSizes.iconStroke} />
-      <Text variant="label" color="destructive">离开家庭</Text>
+      <Text variant="label" color="destructive">{t('governance.leave')}</Text>
     </Pressable>
   ) : null;
 
-  return frame(`${authoritativeName}的成员`, (<>
+  return frame(t('settings.membersOf', { name: authoritativeName }), (<>
       <Stack gap={6}>
-        {desktop ? <PageIntro title="家庭设置" subtitle={authoritativeName} action={showInvite && canManage ? inviteButton : null} /> : intro(authoritativeName)}
+        {desktop ? <PageIntro title={t('navigation:pages.settings')} subtitle={authoritativeName} action={showInvite && canManage ? inviteButton : null} /> : intro(authoritativeName)}
 
         <View style={{ flexDirection: desktop ? 'row-reverse' : wide ? 'row' : 'column', gap: wide ? theme.spacing[6] : theme.spacing[4], alignItems: wide ? 'flex-start' : 'stretch' }}>
         <Stack gap={4} style={{ width: desktop ? theme.layout.assistantInspectorWidth : wide ? theme.layout.settingsNavWidth : '100%' }}>
         {/* Rename form — only shown on the settings route */}
         {showRename ? (
-          <SettingsSection title="基本信息" icon={<House size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
+          <SettingsSection title={t('settings.overview')} icon={<House size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
             {desktop ? <View style={{ marginTop: theme.spacing[1] }}>
-              {overviewRow('家庭名称', authoritativeName, actorIsOwner ? <Button ref={editTrigger} label="编辑" accessibilityLabel="编辑家庭名称" tone="secondary" size="compact" style={{ minHeight: theme.spacing[6] + 2, paddingHorizontal: theme.spacing[3] }} onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} /> : null)}
-              {overviewRow('你的角色', actorIsOwner ? '所有者' : actorRole === 'ADMIN' ? '管理员' : '成员')}
-              {overviewRow('成员', `${data.members.length} 位`)}
-              {showInvite && canManage ? overviewRow('待接受', invitationListLoading ? '—' : `${pendingInvitationCount} 个邀请`) : null}
+              {overviewRow('name', authoritativeName, actorIsOwner ? <Button ref={editTrigger} label={t('common:edit')} accessibilityLabel={t('settings.editName')} tone="secondary" size="compact" style={{ minHeight: theme.spacing[6] + 2, paddingHorizontal: theme.spacing[3] }} onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} /> : null)}
+              {overviewRow('settings.yourRole', t(actorIsOwner ? 'role.OWNER' : actorRole === 'ADMIN' ? 'role.ADMIN' : 'role.MEMBER'))}
+              {overviewRow('settings.members', t('settings.people', { count: data.members.length }))}
+              {showInvite && canManage ? overviewRow('invitationStatus.pending', invitationListLoading ? '—' : t('settings.invitationCount', { count: pendingInvitationCount })) : null}
             </View> : wide ? (
               <Stack gap={4}>
                 <Stack gap={1}>
-                  <Text variant="label">家庭名称</Text>
+                  <Text variant="label">{t('name')}</Text>
                   <Inline gap={2}>
                     <Text variant="section" style={{ flex: 1 }} numberOfLines={2}>{authoritativeName}</Text>
                     {editButton}
@@ -494,13 +494,13 @@ export function HouseholdSettings({
                 </Stack>
                 <Stack gap={0} style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[2] }}>
                   <Inline gap={2} style={{ justifyContent: 'space-between', minHeight: theme.controlSizes.touchTarget }}>
-                    <Text variant="bodySm" color="inkMuted">成员</Text>
-                    <Text variant="label">{data.members.length} 位</Text>
+                    <Text variant="bodySm" color="inkMuted">{t('settings.members')}</Text>
+                    <Text variant="label">{t('settings.people', { count: data.members.length })}</Text>
                   </Inline>
                   {showInvite && canManage ? (
                     <Inline gap={2} style={{ justifyContent: 'space-between', minHeight: theme.controlSizes.touchTarget }}>
-                      <Text variant="bodySm" color="inkMuted">待接受邀请</Text>
-                      <Text variant="label">{invitationListLoading ? '—' : `${pendingInvitationCount} 个`}</Text>
+                      <Text variant="bodySm" color="inkMuted">{t('settings.pendingInvitations')}</Text>
+                      <Text variant="label">{invitationListLoading ? '—' : t('settings.items', { count: pendingInvitationCount })}</Text>
                     </Inline>
                   ) : null}
                 </Stack>
@@ -508,22 +508,22 @@ export function HouseholdSettings({
               </Stack>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], minHeight: theme.controlSizes.touchTarget }}>
-                <Text variant="label">家庭名称</Text>
+                <Text variant="label">{t('name')}</Text>
                 <Text style={{ flex: 1 }} numberOfLines={1}>{authoritativeName}</Text>
                 {editButton}
               </View>
             )}
           </SettingsSection>
         ) : null}
-        {desktop && leaveEntry ? <SettingsSection title="离开家庭" icon={null}>
-          <Text variant="meta">{actorIsOwner ? '你是所有者，离开前需要把所有权转移给另一位家人。离开后不再能看到这个家庭的内容。' : '离开后不再能看到这个家庭的日程、任务和笔记，需要重新被邀请才能回来。'}</Text>
+        {desktop && leaveEntry ? <SettingsSection title={t('governance.leave')} icon={null}>
+          <Text variant="meta">{actorIsOwner ? t('settings.ownerLeaveDetail') : t('settings.memberLeaveDetail')}</Text>
           <View style={{ alignSelf: 'flex-start' }}>{leaveEntry}</View>
         </SettingsSection> : wide ? leaveEntry : null}
         </Stack>
         <Stack gap={4} style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', minWidth: 0 }}>
-        <SettingsSection plain title="成员" count={data.members.length} detail={`${data.members.length} 位成员`} icon={<Users size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}
+        <SettingsSection plain title={t('settings.members')} count={data.members.length} detail={t('memberCount', { count: data.members.length })} icon={<Users size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}
           action={showInvite && canManage && !inviteInOverview ? inviteButton : undefined}>
-        {desktop ? <Inline gap={3} style={{ borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator, paddingBottom: theme.spacing[2], paddingHorizontal: theme.spacing[1] }}><Text variant="caption" color="inkFaint" style={{ flex: 1, fontWeight: '400' }}>姓名</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.memberUsernameColumn, fontWeight: '400' }}>用户名</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.memberRoleColumn, fontWeight: '400' }}>角色</Text><View style={{ width: theme.layout.desktopControl }} /></Inline> : null}
+        {desktop ? <Inline gap={3} style={{ borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator, paddingBottom: theme.spacing[2], paddingHorizontal: theme.spacing[1] }}><Text variant="caption" color="inkFaint" style={{ flex: 1, fontWeight: '400' }}>{t('settings.memberDisplayName')}</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.memberUsernameColumn, fontWeight: '400' }}>{t('profile:username')}</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.memberRoleColumn, fontWeight: '400' }}>{t('settings.memberRole')}</Text><View style={{ width: theme.layout.desktopControl }} /></Inline> : null}
         <SettingsRows>
           {data.members.map((member) => {
             const targetIsOwner = member.membershipId === data.ownerMembershipId;
@@ -555,16 +555,16 @@ export function HouseholdSettings({
 
         {/* Invitation list — visible to owner/admin when showInvite is enabled */}
         {showInvite && canManage ? (
-          <SettingsSection plain title="邀请" {...(invitationListLoading ? {} : { count: invitationList.length })} icon={<Mail size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
+          <SettingsSection plain title={t('settings.invitations')} {...(invitationListLoading ? {} : { count: invitationList.length })} icon={<Mail size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
 
             {invitationListError !== undefined ? (
-              <LoadError message={`邀请列表没有加载成功。${invitationListError}`} onRetry={() => setInvitationAttempt(value => value + 1)} retryAccessibilityLabel="重试加载邀请" />
+              <LoadError message={t('settings.invitationListFailed', { detail: t(invitationListError) })} onRetry={() => setInvitationAttempt(value => value + 1)} retryAccessibilityLabel={t('settings.retryInvitations')} />
             ) : null}
 
             {invitationListLoading ? (
-              <LoadingState label="正在加载邀请" />
+              <LoadingState label={t('settings.loadingInvitations')} />
             ) : invitationList.length === 0 ? (
-              <EmptyState message="还没有待处理的邀请。" />
+              <EmptyState message={t('settings.noInvitations')} />
             ) : (
               <SettingsRows>
                 {invitationList.map((inv) => (
@@ -587,10 +587,10 @@ export function HouseholdSettings({
     </Stack>
 
       {leaveOpen && canTransferBeforeLeaving ? (
-        <AppDialog title="离开家庭" busy={false} onClose={() => setLeaveOpen(false)} trigger={leaveTrigger}>
+        <AppDialog title={t('governance.leave')} busy={false} onClose={() => setLeaveOpen(false)} trigger={leaveTrigger}>
           <Stack gap={4}>
-            <Text>你是家庭所有者，需要先转移所有权。转移完成后，你仍是家庭成员，可以再选择离开。请选择新的所有者：</Text>
-            <View accessibilityRole="radiogroup" accessibilityLabel="新的所有者" style={{ gap: theme.spacing[2] }}>
+            <Text>{t('settings.chooseOwner')}</Text>
+            <View accessibilityRole="radiogroup" accessibilityLabel={t('settings.newOwner')} style={{ gap: theme.spacing[2] }}>
               {otherMembers.map((member) => {
                 const selected = successorId === member.membershipId;
                 return (
@@ -607,13 +607,13 @@ export function HouseholdSettings({
                       <Text numberOfLines={1}>{member.displayName}</Text>
                       <Text variant="caption" numberOfLines={1}>{member.username}</Text>
                     </Stack>
-                    {selected ? <Text variant="label" color="ink">已选择</Text> : null}
+                    {selected ? <Text variant="label" color="ink">{t('settings.selected')}</Text> : null}
                   </Pressable>
                 );
               })}
             </View>
             <ConfirmActions
-              confirmLabel="下一步"
+              confirmLabel={t('settings.next')}
               confirmDisabled={successorId === null}
               onCancel={() => setLeaveOpen(false)}
               onConfirm={() => {
@@ -627,20 +627,20 @@ export function HouseholdSettings({
         </AppDialog>
       ) : null}
       {revokeId !== null ? (
-        <AppDialog title="撤销邀请？" busy={revokeBusy} onClose={() => setRevokeId(null)} trigger={revokeTrigger}>
+        <AppDialog title={t('governance.revokeTitle')} busy={revokeBusy} onClose={() => setRevokeId(null)} trigger={revokeTrigger}>
           <Stack gap={4}>
-            {revokeError ? <Banner title="撤销失败">{revokeError}</Banner> : null}
-            <Text>撤销后，对方将无法接受这份邀请。</Text>
-            <ConfirmActions cancelLabel="保留邀请" confirmLabel="撤销邀请" destructive busy={revokeBusy} onCancel={() => setRevokeId(null)} onConfirm={() => { void confirmRevoke(); }} />
+            {revokeError ? <Banner title={t('governance.revokeFailed')}>{t(revokeError)}</Banner> : null}
+            <Text>{t('governance.revokeDetail')}</Text>
+            <ConfirmActions cancelLabel={t('governance.keepInvitation')} confirmLabel={t('governance.revokeAction')} destructive busy={revokeBusy} onCancel={() => setRevokeId(null)} onConfirm={() => { void confirmRevoke(); }} />
           </Stack>
         </AppDialog>
       ) : null}
       {activeForm === 'rename' && showRename ? (
-        <AppDialog title="编辑家庭名称" busy={renameSubmitting} onClose={() => setActiveForm(null)} trigger={editTrigger}>
+        <AppDialog title={t('settings.editName')} busy={renameSubmitting} onClose={() => setActiveForm(null)} trigger={editTrigger}>
           <Stack gap={4}>
 
             {renameError !== undefined ? (
-              <Banner title="重命名失败">{renameError}</Banner>
+              <Banner title={t('settings.renameFailed')}>{t(renameError)}</Banner>
             ) : null}
 
             {renameSuccess !== undefined ? (
@@ -649,13 +649,13 @@ export function HouseholdSettings({
                 accessibilityRole={'status' as never}
                 gap={1}
               >
-                <Text>{renameSuccess}</Text>
+                <Text>{t(renameSuccess)}</Text>
               </Stack>
             ) : null}
 
             <Stack gap={2}>
               <TextField
-                label="家庭名称"
+                label={t('name')}
                 autoFocus={focusFieldOnOpen}
                 returnKeyType="done"
                 onSubmitEditing={() => { if (!renameSubmitting) void handleRename(); }}
@@ -672,7 +672,7 @@ export function HouseholdSettings({
                   renameValue.trim().normalize('NFC') === '' ||
                   [...renameValue.trim().normalize('NFC')].length > 40
                 }
-                label="保存"
+                label={t('common:save')}
                 loading={renameSubmitting}
                 onPress={() => { void handleRename(); }}
               />
@@ -682,11 +682,11 @@ export function HouseholdSettings({
         </AppDialog>
       ) : null}
       {activeForm === 'invite' && showInvite && (actorRole === 'OWNER' || actorRole === 'ADMIN') ? (
-        <AppDialog title="邀请家人" busy={inviteSubmitting || resendingId !== undefined} onClose={() => setActiveForm(null)} trigger={inviteTrigger}>
+        <AppDialog title={t('settings.invite')} busy={inviteSubmitting || resendingId !== undefined} onClose={() => setActiveForm(null)} trigger={inviteTrigger}>
           <Stack gap={4}>
 
             {inviteError !== undefined ? (
-              <Banner title="邀请失败">{inviteError}</Banner>
+              <Banner title={t('settings.inviteFailed')}>{t(inviteError)}</Banner>
             ) : null}
 
             {inviteSuccess !== undefined ? (
@@ -695,13 +695,13 @@ export function HouseholdSettings({
                 accessibilityRole={'status' as never}
                 gap={1}
               >
-                <Text>{inviteSuccess}</Text>
+                <Text>{t(inviteSuccess)}</Text>
               </Stack>
             ) : null}
 
             <Stack gap={2}>
               <TextField
-                label="用户名"
+                label={t('profile:username')}
                 autoComplete="off"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -716,7 +716,7 @@ export function HouseholdSettings({
                 }}
               />
               <Text variant="bodySm">
-                输入家人已注册的用户名，对方可在收件箱中接受邀请。
+                {t('settings.inviteDetail')}
               </Text>
               <Button
                 disabled={
@@ -724,7 +724,7 @@ export function HouseholdSettings({
                   inviteUsername.trim().normalize('NFC') === '' ||
                   [...inviteUsername.trim().normalize('NFC')].length > 64
                 }
-                label="发送邀请"
+                label={t('settings.sendInvite')}
                 loading={inviteSubmitting}
                 onPress={() => { void handleInvite(); }}
               />

@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { ApiClientError } from '@muchakucha/api-client';
 import { hasRecurrenceFieldErrors } from '../recurrence/recurrence-options';
 import { useRef, useState } from 'react';
@@ -10,9 +11,10 @@ export function useCreateWithLabels<T>({ key, create, tag, onComplete }: {
   tag(id: string, labelIds: string[]): Promise<unknown>;
   onComplete(): void;
 }) {
+  const { t } = useTranslation('households');
   const [created, setCreated] = useWorkspaceState<{ id: string; labelIds: string[] } | null>(key, null);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'createNetworkError' | 'createValidationError' | 'createPermissionError' | 'createRetryError' | 'createLabelsError' | null>(null);
   const inFlight = useRef(false);
   const run = async (data?: T, labelIds: string[] = []) => {
     if (inFlight.current) return;
@@ -34,15 +36,15 @@ export function useCreateWithLabels<T>({ key, create, tag, onComplete }: {
       // show which field, instead of a generic network message.
       if (record === null && hasRecurrenceFieldErrors(failure)) throw failure;
       // A server answer is not a network problem; only a request that never got one is.
-      const createFailure = !(failure instanceof ApiClientError) ? '创建失败，请检查网络后重试。'
-        : failure.status === 400 ? '创建失败，请检查填写的内容后重试。'
-          : failure.status === 403 ? '你没有权限在这个家庭创建内容。'
-            : '创建失败，请稍后重试。';
-      setError(record === null ? createFailure : '内容已创建，但标签未保存。重试只会保存标签，不会重复创建。');
+      const createFailure = !(failure instanceof ApiClientError) ? 'createNetworkError'
+        : failure.status === 400 ? 'createValidationError'
+          : failure.status === 403 ? 'createPermissionError'
+            : 'createRetryError';
+      setError(record === null ? createFailure : 'createLabelsError');
     } finally {
       inFlight.current = false;
       setPending(false);
     }
   };
-  return { created, pending, error, submit: (data: T, labels: string[]) => run(data, labels), retry: () => run() };
+  return { created, pending, error: error === null ? null : t(error), submit: (data: T, labels: string[]) => run(data, labels), retry: () => run() };
 }
