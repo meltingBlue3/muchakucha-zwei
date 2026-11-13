@@ -30,6 +30,7 @@ Open the file, route, endpoint, or error the request names, plus its direct depe
 | Starting a server, database, or mail capture; port selection; anything that writes to a database | [docs/agent/environment.md](docs/agent/environment.md) |
 | Ownership or entry point of a module is unclear | [docs/agent/context.md](docs/agent/context.md) |
 | Deploying, the production server, TLS certificate, or reverse proxy | [docs/deployment.md](docs/deployment.md) |
+| Committing, pushing, creating a branch, or opening a pull request | [docs/agent/git.md](docs/agent/git.md) |
 
 A request spanning several rows reads only those rows. Links inside a playbook follow the same rule: take one when its own trigger matches.
 
@@ -39,6 +40,7 @@ A request spanning several rows reads only those rows. Links inside a playbook f
 - Preserve unrelated working-tree changes. Review only the files this task touched.
 - Commands and versions live in `package.json` and [docs/development.md](docs/development.md). Read them there instead of trusting a remembered command.
 - Report the result, the checks actually run, and anything left unverified. State a skipped step rather than implying it.
+- The human decides when work is committed, pushed, or opened as a pull request. When a piece of work is finished and checked, ask which of these to do, naming the open branch it belongs on if there is one.
 
 ## Standing safety
 
