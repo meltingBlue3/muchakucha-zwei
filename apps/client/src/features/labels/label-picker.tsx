@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
@@ -15,6 +16,7 @@ interface LabelPickerProps {
 }
 
 export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPickerProps) {
+  const { t } = useTranslation(['labels', 'common']);
   const activeTheme = useTheme<Theme>();
   const dense = useDesktopDensity();
   const [allLabels, setAllLabels] = useState<LabelResponseDto[]>([]);
@@ -57,8 +59,8 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPi
   if (loading) {
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2], paddingVertical: activeTheme.spacing[2] }}>
-        <Spinner label="正在加载标签" />
-        <Text variant="caption" color="inkMuted">加载标签中…</Text>
+        <Spinner label={t('loading')} />
+        <Text variant="caption" color="inkMuted">{t('picker.loading')}</Text>
       </View>
     );
   }
@@ -66,14 +68,14 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPi
   if (failed) {
     return (
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[2] }}>
-        <Text variant="caption" color="destructive" accessibilityRole="alert" style={{ flexShrink: 1 }}>标签没有加载成功。</Text>
+        <Text variant="caption" color="destructive" accessibilityRole="alert" style={{ flexShrink: 1 }}>{t('picker.error')}</Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="重试加载标签"
+          accessibilityLabel={t('picker.retry')}
           onPress={() => setAttempt(value => value + 1)}
           style={({ pressed }) => ({ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}
         >
-          <Text variant="label" color="link">重试</Text>
+          <Text variant="label" color="link">{t('common:retry')}</Text>
         </Pressable>
       </View>
     );
@@ -82,7 +84,7 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPi
   if (allLabels.length === 0) {
     return (
       <Text variant="caption" color="inkMuted">
-        还没有标签。可以在「家庭 → 标签管理」中创建。
+        {t('picker.empty')}
       </Text>
     );
   }
@@ -97,7 +99,7 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPi
             onPress={() => handleToggle(label)}
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
-            accessibilityLabel={`${isSelected ? '取消选择' : '选择'}标签 ${label.name}`}
+            accessibilityLabel={t(isSelected ? 'picker.unselect' : 'picker.select', { name: label.name })}
             // A fine pointer needs no 44px target, so desktop chips sit in tight rows.
             style={({ pressed }) => ({ minHeight: dense ? undefined : activeTheme.controlSizes.touchTarget, justifyContent: 'center', borderRadius: activeTheme.borderRadii.full, opacity: pressed ? 0.7 : 1 })}
           >
