@@ -67,7 +67,7 @@ Updates omit unchanged fields, so clearing an optional value requires sending it
 
 ## Local reminders
 
-[reminder-sync.ts](../../apps/client/src/features/reminders/reminder-sync.ts) reconciles the server plan with device registrations. Startup, foreground return, household changes, and relevant successful writes request a sync.
+[reminder-sync.ts](../../apps/client/src/features/reminders/reminder-sync.ts) reconciles the server plan with device registrations. Startup, foreground return, changes to the interface language or households, and relevant successful writes request a sync.
 
 - Reconciliation is idempotent and serialized, with one follow-up run for changes received during a run. Offline failure preserves existing registrations. Only reminder-owned identifiers may be cancelled; content and delivery changes must replace obsolete registrations.
 - Sign-out and revoked/replayed sessions clear scheduled notifications, alarms, snoozes, and active ringing; ordinary expiry preserves them. Stable server keys identify recurring occurrences before and after materialization.

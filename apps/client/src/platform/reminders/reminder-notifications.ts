@@ -5,6 +5,8 @@ export { REMINDER_ID_PREFIX, type NotificationPermission, type ReminderNotificat
 /** Web and other platforms without local notifications schedule nothing. */
 export const remindersSupported = false;
 
+export async function refreshReminderChannels(): Promise<void> {}
+
 export async function notificationPermission(): Promise<NotificationPermission> { return 'unsupported'; }
 
 export async function requestNotificationPermission(): Promise<NotificationPermission> { return 'unsupported'; }

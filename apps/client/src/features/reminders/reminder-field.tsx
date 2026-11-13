@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import AlarmClock from 'lucide-react-native/icons/alarm-clock';
 import Bell from 'lucide-react-native/icons/bell';
 import type { ReminderChoiceDto } from '@muchakucha/api-client';
@@ -41,25 +42,26 @@ export function ReminderField({ kind, own, dateOnly, recurring, value, disabled 
   onChange(choice: ReminderChoiceDto): void;
 }) {
   const { settings } = useReminderSettings();
+  const { t } = useTranslation('reminders');
   const [hint, setHint] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const closeGuide = useCallback(() => setGuideOpen(false), []);
   const guide = useMemo(() => guideOpen ? {
-    title: '后台提醒',
+    title: t('background.title'),
     content: <BackgroundReminderGuide onClose={closeGuide} />,
     onClose: closeGuide,
-  } : null, [closeGuide, guideOpen]);
+  } : null, [closeGuide, guideOpen, t]);
   const inWindow = useWindowStep(guide);
   const context = { kind, own, dateOnly, defaults: settings };
   const choice = fitChoice(value, dateOnly);
   // Without a reminder there is nothing to ring; while the defaults load, there may be one.
   const reminds = choice.mode === 'before' || (choice.mode === 'default' && (settings === null || defaultMinutes(kind, own, dateOnly, settings) !== null));
-  const personal = recurring ? '只改你自己的提醒，家人不受影响。对这个重复安排的每一次都生效。' : '只改你自己的提醒，家人不受影响。';
+  const personal = recurring ? t('personalRecurring') : t('personal');
   return (
     <>
       <ChoiceField
-        name="提醒我"
-        title="提醒我"
+        name={t('me')}
+        title={t('me')}
         icon={rowIcon(Bell)}
         summary={reminderSummary(choice, context)}
         muted={choice.mode === 'default'}
@@ -83,8 +85,8 @@ export function ReminderField({ kind, own, dateOnly, recurring, value, disabled 
       {!inWindow ? guide?.content : null}
       {reminds ? (
         <ChoiceField
-          name="闹铃"
-          title="闹铃"
+          name={t('alarm')}
+          title={t('alarm')}
           icon={rowIcon(AlarmClock)}
           summary={alarmSummary(choice, settings)}
           muted={alarmValue(choice) === 'default'}
@@ -94,7 +96,7 @@ export function ReminderField({ kind, own, dateOnly, recurring, value, disabled 
           onChange={([next]) => { if (next !== undefined) onChange(choiceFromValue(choiceValue(choice), next)); }}
         >
           <View style={{ paddingHorizontal: theme.spacing[2] }}>
-            <Text variant="bodySm">{alarmsSupported ? personal : `${personal}闹铃只在 Android 手机上响，这台设备上仍是普通提醒。`}</Text>
+            <Text variant="bodySm">{alarmsSupported ? personal : personal + t('alarmFallback')}</Text>
           </View>
         </ChoiceField>
       ) : null}

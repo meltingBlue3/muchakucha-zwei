@@ -103,6 +103,26 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
+test('Japanese reminder settings save a localized lead time', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 320, height: 900 } });
+  try {
+    const page = await context.newPage();
+    const writes = await setup(page);
+    await page.goto(`${base}/tasks`);
+    await page.getByRole('button', { name: 'マイページ', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'リマインダー', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'リマインダー', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '予定、開始15分前', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '予定', exact: true });
+    await dialog.getByRole('radio', { name: '開始30分前', exact: true }).click();
+    await expect(page.getByRole('button', { name: '予定、開始30分前', exact: true })).toBeFocused();
+    expect(writes.settings).toEqual([expect.objectContaining({ eventMinutesBefore: 30 })]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  } finally {
+    await context.close();
+  }
+});
+
 test('a task shows when its reminder comes, and changing only the reminder saves no edit', async ({ page }, testInfo) => {
   const writes = await setup(page);
   await page.goto(`${base}/tasks/${taskId}`);

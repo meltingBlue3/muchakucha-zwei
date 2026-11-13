@@ -1,3 +1,4 @@
+import { useTranslation } from '../../src/i18n';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState, type RefObject } from 'react';
 import { Pressable, View } from 'react-native';
@@ -10,7 +11,7 @@ import { AccountScreen } from '../../src/features/households/household-screen';
 import { BackgroundReminderSettingsRow } from '../../src/features/reminders/background-reminder-guide';
 import { EnableNotificationsButton, useAlarmLockScreen, useNotificationPermission } from '../../src/features/reminders/notification-permission';
 import { useReminderSettings } from '../../src/features/reminders/reminder-settings';
-import { ALARM_DETAIL, minutesLabel, TIMED_REMINDER_MINUTES, type ReminderKind } from '../../src/features/reminders/reminder-rules';
+import { minutesLabel, TIMED_REMINDER_MINUTES, type ReminderKind } from '../../src/features/reminders/reminder-rules';
 import { alarmsSupported } from '../../src/platform/reminders/reminder-alarm';
 import { backgroundReminderGuide } from '../../src/platform/reminders/background-reminder-guide';
 import { remindersSupported } from '../../src/platform/reminders/reminder-notifications';
@@ -29,17 +30,14 @@ const deviceRow = { flexDirection: 'row', alignItems: 'center', gap: theme.spaci
 
 const sectionIcon = (Icon: typeof Bell) => <Icon size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />;
 
-function defaultLabel(minutes: number | null, kind: ReminderKind): string {
-  return minutes === null ? '不提醒' : minutesLabel(minutes, kind, false, '09:00');
-}
-
 /** A setting as a row: its name, the current value and an arrow; pressing it opens the choices. */
 function SettingRow({ label, value, trigger, disabled, onPress }: { label: string; value: string; trigger: RefObject<View | null>; disabled: boolean; onPress(): void }) {
+  const { t } = useTranslation('reminders');
   return (
     <Pressable
       ref={trigger}
       accessibilityRole="button"
-      accessibilityLabel={`${label}，${value}`}
+      accessibilityLabel={t('settings.row', { label, value })}
       aria-haspopup="dialog"
       disabled={disabled}
       onPress={onPress}
@@ -58,11 +56,13 @@ function SettingRow({ label, value, trigger, disabled, onPress }: { label: strin
  * remind them. Every change saves at once.
  */
 export default function RemindersRoute() {
+  const { t } = useTranslation(['reminders', 'profile', 'navigation']);
   const { settings, status, reload, save } = useReminderSettings();
   const { permission, error: permissionError, enable } = useNotificationPermission();
   const { canCover, error: lockScreenError, openSettings } = useAlarmLockScreen();
+  const defaultLabel = (minutes: number | null, kind: ReminderKind) => minutes === null ? t('off') : minutesLabel(minutes, kind, false, '09:00');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'settings.saveError' | null>(null);
   const [choosing, setChoosing] = useState<Choosing | null>(null);
   const taskTrigger = useRef<View>(null);
   const eventTrigger = useRef<View>(null);
@@ -87,14 +87,14 @@ export default function RemindersRoute() {
       });
       setChoosing(null);
     } catch {
-      setError('没有保存，请检查网络后重试。');
+      setError('settings.saveError');
     } finally {
       setSaving(false);
     }
   };
 
   const minuteOptions = (kind: ReminderKind, current: number | null) => (
-    <View accessibilityRole="radiogroup" accessibilityLabel={kind === 'task' ? '分给我的任务' : '日程'}>
+    <View accessibilityRole="radiogroup" accessibilityLabel={kind === 'task' ? t('settings.task') : t('settings.event')}>
       {[null, ...TIMED_REMINDER_MINUTES].map(minutes => (
         <OptionRow
           key={String(minutes)}
@@ -108,35 +108,35 @@ export default function RemindersRoute() {
   );
 
   return (
-    <AccountScreen accessibilityLabel="提醒" refreshing={status === 'loading' && settings !== null} onRefresh={reload}>
+    <AccountScreen accessibilityLabel={t('profile:links.reminders.label')} refreshing={status === 'loading' && settings !== null} onRefresh={reload}>
       <Stack gap={6}>
-        <PageIntro title="提醒" />
-        {error !== null ? <Banner>{error}</Banner> : null}
+        <PageIntro title={t('profile:links.reminders.label')} />
+        {error !== null ? <Banner>{t(error)}</Banner> : null}
         {permissionError !== null ? <Banner>{permissionError}</Banner> : null}
         {lockScreenError !== null ? <Banner>{lockScreenError}</Banner> : null}
 
         {remindersSupported && permission !== null ? (
-          <SettingsSection title="本机通知" icon={sectionIcon(Smartphone)}>
+          <SettingsSection title={t('settings.device')} icon={sectionIcon(Smartphone)}>
             <SettingsRows>
               <View style={deviceRow}>
                 <View style={{ flex: 1 }}>
-                  <Text>通知</Text>
-                  <Text variant="meta">{permission === 'granted' ? '这台手机已允许显示提醒。' : '通知未开启，提醒不会出现。'}</Text>
+                  <Text>{t('settings.notifications')}</Text>
+                  <Text variant="meta">{permission === 'granted' ? t('settings.granted') : t('settings.notGranted')}</Text>
                 </View>
-                {permission === 'granted' ? <Text variant="bodySm">已开启</Text> : <EnableNotificationsButton permission={permission} onPress={() => void enable()} />}
+                {permission === 'granted' ? <Text variant="bodySm">{t('settings.enabled')}</Text> : <EnableNotificationsButton permission={permission} onPress={() => void enable()} />}
               </View>
               {backgroundReminderGuide !== null ? <BackgroundReminderSettingsRow /> : null}
               {alarmsSupported ? (
                 <View style={deviceRow}>
                   <View style={{ flex: 1 }}>
-                    <Text>锁屏时弹出闹铃</Text>
+                    <Text>{t('settings.lockScreen')}</Text>
                     <Text variant="meta">
                       {canCover === false
-                        ? '系统未允许，锁屏时闹铃只响铃、不弹出画面。'
-                        : '如果锁屏时闹铃只响、不弹出画面，在设置里允许「锁屏显示」和「后台弹出界面」，并把「省电策略」设为「无限制」。'}
+                        ? t('settings.lockScreenBlocked')
+                        : t('settings.lockScreenGuide')}
                     </Text>
                   </View>
-                  <Button size="compact" tone="secondary" label="去设置" accessibilityLabel="打开系统设置，允许闹铃在锁屏时弹出" onPress={() => void openSettings()} />
+                  <Button size="compact" tone="secondary" label={t('settings.goToSettings')} accessibilityLabel={t('settings.openLockScreen')} onPress={() => void openSettings()} />
                 </View>
               ) : null}
             </SettingsRows>
@@ -145,29 +145,29 @@ export default function RemindersRoute() {
 
         {settings === null ? (
           status === 'failed'
-            ? <LoadError message="无法加载提醒设置，请重试。" onRetry={reload} />
-            : <LoadingState label="正在加载提醒设置" />
+            ? <LoadError message={t('settings.loadError')} onRetry={reload} />
+            : <LoadingState label={t('settings.loading')} />
         ) : (
           <>
-            {status === 'failed' ? <LoadError message="无法更新提醒设置，下面是上次加载的内容。" onRetry={reload} /> : null}
-            <SettingsSection title="默认提醒" icon={sectionIcon(Bell)} detail="可以在任务或日程里单独设置，只影响你自己。">
+            {status === 'failed' ? <LoadError message={t('settings.refreshError')} onRetry={reload} /> : null}
+            <SettingsSection title={t('defaultReminder')} icon={sectionIcon(Bell)} detail={t('settings.defaultsHelp')}>
               <SettingsRows>
-                <SettingRow label="分给我的任务" value={defaultLabel(settings.taskMinutesBefore, 'task')} trigger={taskTrigger} disabled={saving} onPress={() => setChoosing('task')} />
-                <SettingRow label="日程" value={defaultLabel(settings.eventMinutesBefore, 'event')} trigger={eventTrigger} disabled={saving} onPress={() => setChoosing('event')} />
-                <SettingRow label="只有日期时" value={`当天 ${settings.dateOnlyTime}`} trigger={timeTrigger} disabled={saving} onPress={() => setChoosing('time')} />
-                <SwitchRow label="用闹铃提醒" value={settings.alarm} disabled={saving} onChange={(on) => void apply({ alarm: on })}>
-                  <Text variant="meta">{alarmsSupported ? `到时间${ALARM_DETAIL}。` : `到时间${ALARM_DETAIL}。只在 Android 手机上响。`}</Text>
+                <SettingRow label={t('settings.task')} value={defaultLabel(settings.taskMinutesBefore, 'task')} trigger={taskTrigger} disabled={saving} onPress={() => setChoosing('task')} />
+                <SettingRow label={t('settings.event')} value={defaultLabel(settings.eventMinutesBefore, 'event')} trigger={eventTrigger} disabled={saving} onPress={() => setChoosing('event')} />
+                <SettingRow label={t('settings.time')} value={t('sameDayTime', { time: settings.dateOnlyTime })} trigger={timeTrigger} disabled={saving} onPress={() => setChoosing('time')} />
+                <SwitchRow label={t('settings.useAlarm')} value={settings.alarm} disabled={saving} onChange={(on) => void apply({ alarm: on })}>
+                  <Text variant="meta">{t(alarmsSupported ? 'settings.alarmHelp' : 'settings.alarmHelpWeb')}</Text>
                 </SwitchRow>
               </SettingsRows>
             </SettingsSection>
 
-            <SettingsSection title="家庭" icon={sectionIcon(House)} detail="关闭后，这个家庭的任务和日程都不再提醒你。">
+            <SettingsSection title={t('navigation:family')} icon={sectionIcon(House)} detail={t('settings.householdHelp')}>
               <SettingsRows>
                 {settings.households.map(household => (
                   <SwitchRow
                     key={household.id}
                     label={household.name}
-                    name={`接收${household.name}的提醒`}
+                    name={t('settings.householdSwitch', { name: household.name })}
                     value={!household.muted}
                     disabled={saving}
                     onChange={(on) => void apply({
@@ -184,15 +184,15 @@ export default function RemindersRoute() {
 
         <Text variant="caption">
           {remindersSupported
-            ? '提醒由这台手机安排。家人刚分给你的任务，要等你打开 App 后才会排上提醒。'
-            : '网页不会弹出提醒，这里的设置在手机 App 上生效。'}
+            ? t('settings.nativeInfo')
+            : t('settings.webInfo')}
         </Text>
       </Stack>
 
       {choosing !== null && settings !== null ? (
         <AppDialog
           anchored
-          title={choosing === 'task' ? '分给我的任务' : choosing === 'event' ? '日程' : '只有日期时'}
+          title={choosing === 'task' ? t('settings.task') : choosing === 'event' ? t('settings.event') : t('settings.time')}
           busy={saving}
           onClose={() => setChoosing(null)}
           trigger={triggers[choosing]}
@@ -201,10 +201,10 @@ export default function RemindersRoute() {
           {choosing === 'event' ? minuteOptions('event', settings.eventMinutesBefore) : null}
           {choosing === 'time' ? (
             <Stack gap={2}>
-              <Text variant="bodySm">没写时间的任务和全天日程，在这个时间提醒。</Text>
-              <View accessibilityRole="radiogroup" accessibilityLabel="只有日期时的提醒时间">
+              <Text variant="bodySm">{t('settings.dateOnlyHelp')}</Text>
+              <View accessibilityRole="radiogroup" accessibilityLabel={t('settings.dateOnlyGroup')}>
                 {(DATE_ONLY_TIMES.includes(settings.dateOnlyTime) ? DATE_ONLY_TIMES : [...DATE_ONLY_TIMES, settings.dateOnlyTime].sort()).map(time => (
-                  <OptionRow key={time} label={`当天 ${time}`} checked={time === settings.dateOnlyTime} disabled={saving} onPress={() => void apply({ dateOnlyTime: time })} />
+                  <OptionRow key={time} label={t('sameDayTime', { time })} checked={time === settings.dateOnlyTime} disabled={saving} onPress={() => void apply({ dateOnlyTime: time })} />
                 ))}
               </View>
             </Stack>

@@ -1,6 +1,11 @@
 import type { UpcomingReminderDto } from '@muchakucha/api-client';
 import * as Notifications from '../../../platform/reminders/local-notifications';
-import { syncReminders } from '../reminder-sync';
+import { act, render, waitFor } from '@testing-library/react-native';
+import { createElement } from 'react';
+import { setLanguageChoice } from '../../../i18n';
+import { ReminderSync, syncReminders } from '../reminder-sync';
+
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 
 const mockListUpcomingReminders = jest.fn();
 let mockToken: string | null = 'access-token';
@@ -86,4 +91,29 @@ test('a request during a run is served by one more run, not a parallel one', asy
   await Promise.all([first, second, third]);
   expect(mockListUpcomingReminders).toHaveBeenCalledTimes(2);
   expect((await scheduled()).map(item => item.title)).toEqual(['取快递']);
+});
+
+
+test('changing the interface language replaces scheduled reminders with translated bodies', async () => {
+  const at = new Date('2030-06-15T18:00:00').toISOString();
+  const reminder = upcoming('task:a', '交水费', at);
+  mockListUpcomingReminders.mockResolvedValue({ reminders: [reminder] });
+  setLanguageChoice('zh');
+  const view = await render(createElement(ReminderSync));
+  try {
+    await syncReminders();
+    const [before] = await Notifications.getAllScheduledNotificationsAsync();
+    expect(before?.content.body).toBe('今天 18:00 到期');
+
+    await act(async () => { setLanguageChoice('ja'); });
+    await waitFor(async () => {
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      expect(scheduled).toHaveLength(1);
+      expect(scheduled[0]).toMatchObject({ content: { title: '交水费', body: '今日 18:00 が期限' } });
+      expect(scheduled[0]?.identifier).not.toBe(before?.identifier);
+    });
+  } finally {
+    await view.unmount();
+    setLanguageChoice('system');
+  }
 });

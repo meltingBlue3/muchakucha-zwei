@@ -1,3 +1,4 @@
+import { i18n } from '../../i18n';
 import type { UpcomingReminderDto } from '@muchakucha/api-client';
 import { REMINDER_ID_PREFIX, type ReminderNotification } from '../../platform/reminders/reminder-types';
 import { formatDate, toDateValue, toTimeValue } from '../../ui/date-values';
@@ -9,8 +10,8 @@ function startOfDay(date: Date): number {
 /** 今天 / 明天, counted from the moment the notification appears, else the date. */
 function dayWord(at: Date, fireAt: Date): string {
   const days = Math.round((startOfDay(at) - startOfDay(fireAt)) / 86_400_000);
-  if (days === 0) return '今天';
-  if (days === 1) return '明天';
+  if (days === 0) return i18n.t('events:today');
+  if (days === 1) return i18n.t('reminders:notification.tomorrow');
   return formatDate(at, {}, fireAt);
 }
 
@@ -29,9 +30,8 @@ export function reminderNotification(reminder: UpcomingReminderDto, { showHouseh
   const at = new Date(reminder.at);
   const fireAt = new Date(reminder.fireAt);
   const day = dayWord(at, fireAt);
-  const when = reminder.kind === 'task'
-    ? reminder.dateOnly ? `${day}到期` : `${day} ${toTimeValue(at)} 到期`
-    : reminder.dateOnly ? `${day}全天` : `${day} ${toTimeValue(at)} 开始`;
+  const timing = reminder.dateOnly ? 'Date' : 'Time';
+  const when = i18n.t(`reminders:notification.${reminder.kind}${timing}`, { day, time: toTimeValue(at) });
   const body = [when, reminder.kind === 'event' ? reminder.location : null, showHousehold ? reminder.householdName : null]
     .filter((part): part is string => typeof part === 'string' && part !== '')
     .join(' · ');

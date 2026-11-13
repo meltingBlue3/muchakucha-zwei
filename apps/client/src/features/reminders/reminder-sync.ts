@@ -1,3 +1,4 @@
+import { i18n } from '../../i18n';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
@@ -18,6 +19,8 @@ async function syncOnce(): Promise<void> {
   if (token === null) return;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const { reminders } = await sessionApiClient.listUpcomingReminders(token, timeZone);
+  // A failed channel rename should not prevent alarms from being reconciled.
+  await device.refreshReminderChannels().catch(() => undefined);
   const wanted = reminders.map(reminder => reminderNotification(reminder, { showHousehold }));
   const { cancel, schedule } = reminderChanges(await device.scheduledReminderIds(), wanted);
   for (const id of cancel) await device.cancelReminder(id);
@@ -72,8 +75,10 @@ export function ReminderSync(): null {
   useEffect(() => {
     if (!device.remindersSupported) return undefined;
     const stopChanges = onRemindersMayHaveChanged(() => requestReminderSync());
+    const syncLanguage = () => requestReminderSync(0);
+    i18n.on('languageChanged', syncLanguage);
     const appState = AppState.addEventListener('change', state => { if (state === 'active') requestReminderSync(); });
-    return () => { stopChanges(); appState.remove(); };
+    return () => { stopChanges(); i18n.off('languageChanged', syncLanguage); appState.remove(); };
   }, []);
 
   useEffect(() => {

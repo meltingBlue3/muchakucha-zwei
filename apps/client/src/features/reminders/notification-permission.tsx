@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { alarmCanCoverLockScreen, alarmsSupported, openAlarmSettings } from '../../platform/reminders/reminder-alarm';
@@ -8,8 +9,9 @@ import { requestReminderSync } from './reminder-sync';
 
 /** This phone's notification permission, checked again whenever the app returns from the system settings. */
 export function useNotificationPermission(): { permission: NotificationPermission | null; error: string | null; enable(): Promise<void> } {
+  const { t } = useTranslation('reminders');
   const [permission, setPermission] = useState<NotificationPermission | null>(device.remindersSupported ? null : 'unsupported');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'permission.settingsError' | 'permission.enableError' | 'permission.alarmSettingsError' | null>(null);
 
   const refresh = useCallback(async () => {
     try { setPermission(await device.notificationPermission()); } catch { setPermission('undetermined'); }
@@ -34,12 +36,12 @@ export function useNotificationPermission(): { permission: NotificationPermissio
       if (next === 'granted') requestReminderSync(0);
     } catch {
       setError(permission === 'blocked'
-        ? '无法打开系统设置，请在手机设置中开启通知。'
-        : '无法开启通知，请更新安装包后重试。');
+        ? 'permission.settingsError'
+        : 'permission.enableError');
     }
   }, [permission]);
 
-  return { permission, error, enable };
+  return { permission, error: error === null ? null : t(error), enable };
 }
 
 /**
@@ -48,8 +50,9 @@ export function useNotificationPermission(): { permission: NotificationPermissio
  * keep their own switches for it that no app can read.
  */
 export function useAlarmLockScreen(): { canCover: boolean | null; error: string | null; openSettings(): Promise<void> } {
+  const { t } = useTranslation('reminders');
   const [canCover, setCanCover] = useState(alarmCanCoverLockScreen);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'permission.settingsError' | 'permission.enableError' | 'permission.alarmSettingsError' | null>(null);
 
   useEffect(() => {
     if (!alarmsSupported) return undefined;
@@ -59,27 +62,29 @@ export function useAlarmLockScreen(): { canCover: boolean | null; error: string 
 
   const openSettings = useCallback(async () => {
     setError(null);
-    try { await openAlarmSettings(); } catch { setError('无法打开系统设置，请在手机设置里找到这个 App 的权限。'); }
+    try { await openAlarmSettings(); } catch { setError('permission.alarmSettingsError'); }
   }, []);
 
-  return { canCover, error, openSettings };
+  return { canCover, error: error === null ? null : t(error), openSettings };
 }
 
 /** The action that turns notifications on: ask, or send the person to the settings once the system stops asking. */
 export function EnableNotificationsButton({ permission, onPress }: { permission: NotificationPermission; onPress(): void }) {
+  const { t } = useTranslation('reminders');
   return (
-    <Button size="compact" tone="secondary" onPress={onPress} label={permission === 'blocked' ? '打开设置' : '开启'} accessibilityLabel={permission === 'blocked' ? '打开系统设置以开启通知' : '开启通知'} />
+    <Button size="compact" tone="secondary" onPress={onPress} label={permission === 'blocked' ? t('permission.openSettings') : t('permission.enable')} accessibilityLabel={permission === 'blocked' ? t('permission.openNotificationSettings') : t('permission.enableNotifications')} />
   );
 }
 
 /** Shown in the 提醒我 step on a phone that would not show the reminder. */
 export function NotificationPermissionNotice() {
+  const { t } = useTranslation('reminders');
   const { permission, error, enable } = useNotificationPermission();
   if (permission === null || permission === 'granted' || permission === 'unsupported') return null;
   return (
     <Stack gap={3}>
       <Inline gap={3} style={{ alignItems: 'center' }}>
-        <Text variant="bodySm" style={{ flex: 1 }}>这台手机的通知未开启，提醒不会出现。</Text>
+        <Text variant="bodySm" style={{ flex: 1 }}>{t('permission.notice')}</Text>
         <EnableNotificationsButton permission={permission} onPress={() => void enable()} />
       </Inline>
       {error !== null ? <Banner>{error}</Banner> : null}
