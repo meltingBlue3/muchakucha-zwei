@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { View } from 'react-native';
 import Check from 'lucide-react-native/icons/check';
 import { useTheme } from '@shopify/restyle';
@@ -24,13 +25,14 @@ interface LabelChipProps {
  * Rows show at most `max` labels and a count of the rest.
  */
 export function LabelTags({ labels, max = 1 }: { labels: LabelResponseDto[]; max?: number }) {
+  const { t } = useTranslation('labels');
   const activeTheme = useTheme<Theme>();
   if (labels.length === 0) return null;
   const dot = activeTheme.spacing[2] - activeTheme.spacing[1] / 2;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2], flexShrink: 1 }}>
       {labels.slice(0, max).map(label => (
-        <View key={label.id} accessible accessibilityRole="image" accessibilityLabel={`标签：${label.name}`} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], flexShrink: 1 }}>
+        <View key={label.id} accessible accessibilityRole="image" accessibilityLabel={t('item', { name: label.name })} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], flexShrink: 1 }}>
           <View style={{ width: dot, height: dot, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} />
           <Text variant="meta" numberOfLines={1} style={{ flexShrink: 1 }}>{label.name}</Text>
         </View>
@@ -46,6 +48,7 @@ export function LabelTags({ labels, max = 1 }: { labels: LabelResponseDto[]; max
  * would otherwise be unreadable as text.
  */
 export function LabelChip({ label, small = false, selected, dense = false }: LabelChipProps) {
+  const { t } = useTranslation('labels');
   const unselected = selected === false;
   const activeTheme = useTheme<Theme>();
   const dot = small ? activeTheme.spacing[2] : activeTheme.spacing[2] + activeTheme.spacing[1] / 2;
@@ -53,7 +56,7 @@ export function LabelChip({ label, small = false, selected, dense = false }: Lab
     const denseDot = activeTheme.spacing[1] + 2;
     return (
       <View
-        accessibilityLabel={`标签：${label.name}`}
+        accessibilityLabel={t('item', { name: label.name })}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -75,7 +78,7 @@ export function LabelChip({ label, small = false, selected, dense = false }: Lab
 
   return (
     <View
-      accessibilityLabel={`标签：${label.name}`}
+      accessibilityLabel={t('item', { name: label.name })}
       style={{
         flexDirection: 'row',
         alignItems: 'center',

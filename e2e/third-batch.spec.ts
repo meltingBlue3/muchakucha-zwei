@@ -110,6 +110,31 @@ test('direct note edits restore drafts and closing returns to detail without sta
   await expect(page).toHaveURL(`${base}/notes`);
 });
 
+test('Japanese label management and picker use localized controls', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 320, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await setup(page);
+    await page.goto(`${base}/labels`);
+    await page.getByRole('button', { name: 'ラベルを作成', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'ラベルを作成', exact: true });
+    await dialog.getByRole('button', { name: '作成', exact: true }).click();
+    await expect(dialog.getByText('ラベル名を入力してください。')).toBeVisible();
+    await dialog.getByRole('textbox', { name: 'ラベル名', exact: true }).fill('旅行');
+    await expect(dialog.getByRole('radiogroup', { name: 'ラベルの色', exact: true })).toBeVisible();
+    const panel = dialog.getByTestId('app-dialog-panel');
+    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await dialog.getByRole('button', { name: '作成', exact: true }).click();
+    await expect(page.getByLabel('ラベル：旅行', { exact: true })).toBeVisible();
+
+    await page.goto(`${base}/tasks/new`);
+    await page.getByRole('button', { name: 'ラベル「旅行」を選択', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'ラベル「旅行」の選択を解除', exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
 test('label save and delete failures retain the form and offer retry', async ({ page }) => {
   const state = await setup(page);
   await page.goto(`${base}/labels`);
