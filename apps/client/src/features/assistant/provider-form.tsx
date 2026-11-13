@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useRef, useState } from 'react';
 import { TextInput, Pressable, View } from 'react-native';
 import type { AssistantProtocol, AssistantProviderResponseDto } from '@muchakucha/api-client';
@@ -5,7 +6,7 @@ import CircleAlert from 'lucide-react-native/icons/circle-alert';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
 import { Button, FormActions, Inline, PasswordField, Stack, Text, TextField } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
-import { assistantError, transcriptionError } from './assistant-runtime';
+import { assistantErrorKey, transcriptionErrorKey, type AssistantErrorKey } from './assistant-runtime';
 
 export interface AssistantProviderInput {
   name: string;
@@ -29,7 +30,9 @@ export function AssistantChoice<T extends string>({ label, options, value, onCha
   </View></Stack>;
 }
 
-type CheckResult = { key: string; status: 'checking' | 'ok' | 'warning' | 'failed'; message: string };
+type CheckResult = { key: string } & (
+  { status: 'checking' } | { status: 'ok' | 'warning' | 'failed'; message: AssistantErrorKey | 'form.asrOk' | 'form.toolsOk' | 'form.toolsMissing' }
+);
 
 // Voice transcription currently means Alibaba Cloud Bailian's Qwen-ASR through its OpenAI-compatible address.
 const QWEN_ASR_MODEL = 'qwen3-asr-flash';
@@ -43,6 +46,7 @@ export function AssistantProviderForm({ initial, busy, onSubmit, onCancel, onChe
   initial?: AssistantProviderResponseDto; busy: boolean; onSubmit: (input: AssistantProviderInput) => Promise<void>; onCancel: () => void;
   onCheck?: (input: AssistantProviderInput) => Promise<{ toolCalling: boolean; transcription?: boolean }>;
 }) {
+  const { t } = useTranslation(['assistant', 'common']);
   const [name, setName] = useState(initial?.name ?? '');
   const [protocol, setProtocol] = useState<AssistantProtocol>(initial?.protocol ?? 'openai-compatible');
   const transcription = protocol === 'qwen-asr';
@@ -88,16 +92,16 @@ export function AssistantProviderForm({ initial, busy, onSubmit, onCancel, onChe
     setCheckAttempts(value => value + 1);
     if (!connectionReady()) return;
     const key = checkKey;
-    setCheck({ key, status: 'checking', message: '' });
+    setCheck({ key, status: 'checking' });
     try {
       const result = await onCheck(input());
       setCheck(result.transcription
-        ? { key, status: 'ok', message: '连接正常，可以把语音转为文字。' }
+        ? { key, status: 'ok', message: 'form.asrOk' }
         : result.toolCalling
-        ? { key, status: 'ok', message: '连接正常，模型可以调用工具并读取结果。' }
-        : { key, status: 'warning', message: '已连接，但模型没有调用工具。助手要靠工具调用查询家庭数据，请换用支持工具调用的模型。' });
+        ? { key, status: 'ok', message: 'form.toolsOk' }
+        : { key, status: 'warning', message: 'form.toolsMissing' });
     } catch (error) {
-      setCheck({ key, status: 'failed', message: (transcription ? transcriptionError : assistantError)(error, '连接测试未能完成，请检查网络后重试。') });
+      setCheck({ key, status: 'failed', message: (transcription ? transcriptionErrorKey : assistantErrorKey)(error, 'errors.connectionCheck') });
     }
   };
   /** Follows the new protocol's address and model only while the fields still hold a default. */
@@ -108,32 +112,32 @@ export function AssistantProviderForm({ initial, busy, onSubmit, onCancel, onChe
   };
   return <Stack gap={4}>
     {/* The use is fixed once created: conversations are bound to a chat configuration. */}
-    {initial ? <Text variant="bodySm" color="inkMuted">用途：{transcription ? '语音转写' : '对话'}</Text>
-      : <AssistantChoice label="用途" options={[{ value: 'chat', label: '对话' }, { value: 'transcription', label: '语音转写' }]} value={transcription ? 'transcription' : 'chat'} disabled={busy}
+    {initial ? <Text variant="bodySm" color="inkMuted">{t('form.currentPurpose', { purpose: t(transcription ? 'models.transcription' : 'models.chat') })}</Text>
+      : <AssistantChoice label={t('form.purpose')} options={[{ value: 'chat', label: t('models.chat') }, { value: 'transcription', label: t('models.transcription') }]} value={transcription ? 'transcription' : 'chat'} disabled={busy}
         onChange={value => { if ((value === 'transcription') !== transcription) chooseProtocol(value === 'transcription' ? 'qwen-asr' : 'openai-compatible'); }} />}
-    {transcription ? <Text variant="bodySm" color="inkMuted">把助手输入框里的语音转为文字。目前支持阿里云百炼的 Qwen-ASR 语音识别。</Text> : null}
-    <TextField ref={nameRef} label="配置名称" value={name} onChangeText={setName} maxLength={80} disabled={busy} submitAttempt={attempts} {...(attempts && !name.trim() ? { error: '请输入配置名称。' } : {})} placeholder={transcription ? '例如：语音转写' : '例如：家庭助手'} />
-    {transcription ? null : <AssistantChoice label="模型协议" options={[{ value: 'openai-compatible', label: 'OpenAI 兼容' }, { value: 'anthropic', label: 'Anthropic' }]} value={protocol} disabled={busy} onChange={chooseProtocol} />}
-    <TextField ref={urlRef} label="服务地址" value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" maxLength={500} disabled={busy} submitAttempt={connectionAttempts}
-      hint={transcription ? `填写百炼的 OpenAI 兼容地址，例如 ${defaultUrls['qwen-asr']}。` : `填写完整 API 基础地址，例如 ${defaultUrls[protocol]}。`} {...(connectionAttempts && !validUrl ? { error: '请输入 HTTP 或 HTTPS 地址，且地址中不能含有用户名、密码、查询参数或片段。' } : {})} />
-    <Text variant="caption">支持公网 HTTP 和 HTTPS 地址。HTTP 会以明文传输密钥和请求内容。</Text>
-    <TextField ref={modelRef} label="模型名称" value={model} onChangeText={setModel} autoCapitalize="none" autoCorrect={false} maxLength={120} disabled={busy} submitAttempt={connectionAttempts} hint={transcription ? `例如 ${QWEN_ASR_MODEL}。` : '填写提供商支持工具调用的模型标识。'} {...(connectionAttempts && !model.trim() ? { error: '请输入模型名称。' } : {})} />
-    <PasswordField ref={keyRef} label="API 密钥" value={apiKey} onChangeText={setApiKey} autoCapitalize="none" autoCorrect={false} autoComplete="off" maxLength={4096} disabled={busy} submitAttempt={connectionAttempts}
-      hint={initial ? '已保存的密钥不会显示。留空保留原密钥，填写后替换。' : '密钥由服务器加密保存，不保存到本机草稿。'} {...(connectionAttempts && !initial && !apiKey.trim() ? { error: '请输入 API 密钥。' } : {})} />
+    {transcription ? <Text variant="bodySm" color="inkMuted">{t('form.asrDescription')}</Text> : null}
+    <TextField ref={nameRef} label={t('form.name')} value={name} onChangeText={setName} maxLength={80} disabled={busy} submitAttempt={attempts} {...(attempts && !name.trim() ? { error: t('form.nameRequired') } : {})} placeholder={transcription ? t('form.asrName') : t('form.chatName')} />
+    {transcription ? null : <AssistantChoice label={t('form.protocol')} options={[{ value: 'openai-compatible', label: t('form.openAiCompatible') }, { value: 'anthropic', label: 'Anthropic' }]} value={protocol} disabled={busy} onChange={chooseProtocol} />}
+    <TextField ref={urlRef} label={t('form.url')} value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" maxLength={500} disabled={busy} submitAttempt={connectionAttempts}
+      hint={transcription ? t('form.asrUrlHint', { url: defaultUrls['qwen-asr'] }) : t('form.urlHint', { url: defaultUrls[protocol] })} {...(connectionAttempts && !validUrl ? { error: t('form.urlInvalid') } : {})} />
+    <Text variant="caption">{t('form.httpInfo')}</Text>
+    <TextField ref={modelRef} label={t('form.modelName')} value={model} onChangeText={setModel} autoCapitalize="none" autoCorrect={false} maxLength={120} disabled={busy} submitAttempt={connectionAttempts} hint={transcription ? t('form.asrModelHint', { model: QWEN_ASR_MODEL }) : t('form.chatModelHint')} {...(connectionAttempts && !model.trim() ? { error: t('form.modelRequired') } : {})} />
+    <PasswordField ref={keyRef} label={t('form.apiKey')} value={apiKey} onChangeText={setApiKey} autoCapitalize="none" autoCorrect={false} autoComplete="off" maxLength={4096} disabled={busy} submitAttempt={connectionAttempts}
+      hint={initial ? t('form.savedKey') : t('form.keyInfo')} {...(connectionAttempts && !initial && !apiKey.trim() ? { error: t('form.keyRequired') } : {})} />
     {onCheck ? <Stack gap={2}>
-      <Button label="测试连接" tone="secondary" size="compact" loading={shownCheck?.status === 'checking'} disabled={busy} onPress={() => { void runCheck(); }} style={{ alignSelf: 'flex-start' }} />
+      <Button label={t('form.check')} tone="secondary" size="compact" loading={shownCheck?.status === 'checking'} disabled={busy} onPress={() => { void runCheck(); }} style={{ alignSelf: 'flex-start' }} />
       {shownCheck && shownCheck.status !== 'checking' ? <Inline accessibilityLiveRegion="polite" gap={2} style={{ alignItems: 'flex-start' }}>
         {shownCheck.status === 'ok'
           ? <CircleCheck color={theme.colors.success} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
           : <CircleAlert color={theme.colors.destructive} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />}
-        <Text variant="bodySm" color={shownCheck.status === 'ok' ? 'ink' : 'destructive'} style={{ flex: 1 }}>{shownCheck.message}</Text>
-      </Inline> : <Text variant="caption">{transcription ? '用上面的地址、模型和密钥转写一秒静音，不发送任何录音或家庭数据。' : '用上面的地址、模型和密钥发送一次测试请求，不读取家庭数据。'}</Text>}
+        <Text variant="bodySm" color={shownCheck.status === 'ok' ? 'ink' : 'destructive'} style={{ flex: 1 }}>{t(shownCheck.message)}</Text>
+      </Inline> : <Text variant="caption">{transcription ? t('form.asrCheckInfo') : t('form.chatCheckInfo')}</Text>}
     </Stack> : null}
-    <AssistantChoice label="谁可以使用" options={[{ value: 'private', label: '仅自己' }, { value: 'household', label: '家庭可用' }]} value={visibility} onChange={setVisibility} disabled={busy} />
+    <AssistantChoice label={t('form.visibility')} options={[{ value: 'private', label: t('form.private') }, { value: 'household', label: t('form.household') }]} value={visibility} onChange={setVisibility} disabled={busy} />
     <Text variant="bodySm" color="inkMuted">{transcription
-      ? visibility === 'household' ? '本家庭成员都能用此配置把语音转为文字，费用由此密钥承担。只有你能修改配置和密钥；家人的录音会经过你填写的服务地址。你可以在模型配置里看到每位家人本月的使用次数。' : '此配置仅供你在当前家庭中使用。'
-      : visibility === 'household' ? '本家庭成员可使用此配置调用模型，费用由此密钥承担。只有你能修改配置和密钥；家人在应用里看不到彼此的对话，但这些对话都会经过你填写的服务地址。你可以在模型配置里看到每位家人本月的使用次数和用量。' : '此配置仅供你在当前家庭中使用；其他成员看不到你的配置和对话。'}</Text>
-    <Text variant="bodySm" color="inkMuted">{transcription ? '使用语音输入时，录音会发送到所选服务地址转为文字；本应用不保存录音，转写结果由你检查后再发送。' : '使用助手时，对话和为回答问题查询到的家庭数据将发送到所选服务地址。'}</Text>
-    <FormActions submitting={busy} submitLabel={initial ? '保存' : '创建'} onCancel={onCancel} onSubmit={() => { void submit(); }} />
+      ? visibility === 'household' ? t('form.asrSharedInfo') : t('form.asrPrivateInfo')
+      : visibility === 'household' ? t('form.chatSharedInfo') : t('form.chatPrivateInfo')}</Text>
+    <Text variant="bodySm" color="inkMuted">{transcription ? t('form.asrPrivacy') : t('form.chatPrivacy')}</Text>
+    <FormActions submitting={busy} submitLabel={initial ? t('common:save') : t('form.create')} onCancel={onCancel} onSubmit={() => { void submit(); }} />
   </Stack>;
 }

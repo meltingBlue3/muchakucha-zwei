@@ -1,15 +1,19 @@
+import { currentLanguage, useTranslation } from '../../i18n';
+import type { Catalog } from '../../i18n/locales/zh';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Keyboard, Linking } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useVoiceRecorder } from '../../platform/voice/voice-recorder';
 import { sessionApiClient } from '../auth/session-runtime';
-import { assistantToken, transcriptionError } from './assistant-runtime';
+import { assistantToken, transcriptionErrorKey, type AssistantErrorKey } from './assistant-runtime';
 
 const MAX_MESSAGE_LENGTH = 8_000;
 export const MAX_RECORDING_SECONDS = 60;
 /** Shorter than this is a slip of the finger, not speech. */
 const MIN_RECORDING_MS = 400;
 const TRANSCRIPTION_TIMEOUT_MS = 30_000;
+
+type VoiceNotice = AssistantErrorKey | `voice.${keyof Catalog['assistant']['voice']}`;
 
 type Phase = 'idle' | 'starting' | 'recording' | 'transcribing';
 /** One press of the microphone. Callbacks from an attempt that is no longer current change nothing. */
@@ -27,16 +31,17 @@ export function mergeVoiceText(draft: string, text: string): string {
 export function useAssistantVoiceInput({ householdId, providerId, value, onChangeText, blocked }: {
   householdId: string; providerId: string | null; value: string; onChangeText(value: string): void; blocked: boolean;
 }) {
+  const { t } = useTranslation('assistant');
   const recorder = useVoiceRecorder();
   const [phase, setPhase] = useState<Phase>('idle');
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<VoiceNotice | null>(null);
   const [settings, setSettings] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const latest = useRef({ value, onChangeText });
   latest.current = { value, onChangeText };
   const attempt = useRef<Attempt | null>(null);
 
-  const settle = useCallback((current: Attempt, message: string | null) => {
+  const settle = useCallback((current: Attempt, message: VoiceNotice | null) => {
     if (attempt.current !== current) return;
     attempt.current = null;
     clearInterval(current.timer);
@@ -62,25 +67,25 @@ export function useAssistantVoiceInput({ householdId, providerId, value, onChang
     setPhase('transcribing');
     const recording = await recorder.finish().catch(() => null);
     if (attempt.current !== current) return;
-    if (!recording || recording.durationMs < MIN_RECORDING_MS) { settle(current, '没有录到声音，请再试一次。'); return; }
+    if (!recording || recording.durationMs < MIN_RECORDING_MS) { settle(current, 'voice.noSound'); return; }
     const request = new AbortController();
     current.request = request;
     const timeout = setTimeout(() => request.abort(), TRANSCRIPTION_TIMEOUT_MS);
     try {
       const { text } = await sessionApiClient.transcribeAssistantAudio(await assistantToken(), householdId,
-        { providerId, mimeType: recording.mimeType, audio: recording.data }, request.signal);
+        { providerId, mimeType: recording.mimeType, audio: recording.data }, request.signal, currentLanguage());
       if (attempt.current !== current) return;
       const merged = mergeVoiceText(latest.current.value, text);
-      if (!text.trim()) settle(current, '没有听清，请再试一次。');
+      if (!text.trim()) settle(current, 'voice.notUnderstood');
       // Never cut a recognized sentence short to fit; the user decides what to shorten.
-      else if (merged.length > MAX_MESSAGE_LENGTH) settle(current, '加上识别出的文字会超过 8,000 字，请先删减草稿再试。');
+      else if (merged.length > MAX_MESSAGE_LENGTH) settle(current, 'voice.tooLong');
       else {
         settle(current, null);
         latest.current.onChangeText(merged);
       }
     } catch (error) {
       if (attempt.current !== current) return;
-      settle(current, request.signal.aborted ? '语音转写超时，请重试或继续打字。' : transcriptionError(error, '语音转写未能完成，请重试或继续打字。'));
+      settle(current, request.signal.aborted ? 'voice.timedOut' : transcriptionErrorKey(error, 'voice.failed'));
     } finally { clearTimeout(timeout); }
   }, [householdId, providerId, recorder, settle]);
 
@@ -98,15 +103,15 @@ export function useAssistantVoiceInput({ householdId, providerId, value, onChang
       if (attempt.current !== current) return;
       if (!permission.granted) {
         setSettings(recorder.canOpenSettings && !permission.canAskAgain);
-        settle(current, !recorder.canOpenSettings ? '浏览器没有允许使用麦克风，请在网站设置中允许后重试。'
-          : permission.canAskAgain ? '需要允许使用麦克风，才能语音输入。' : '麦克风权限已关闭，请在系统设置中允许后重试。');
+        settle(current, !recorder.canOpenSettings ? 'voice.browserDenied'
+          : permission.canAskAgain ? 'voice.permissionNeeded' : 'voice.systemDenied');
         return;
       }
       await recorder.start();
       // Cancelled while the microphone was opening: close it again.
       if (attempt.current !== current) { void recorder.discard().catch(() => undefined); return; }
     } catch {
-      settle(current, '无法打开麦克风，请检查是否被其他应用占用，或继续打字。');
+      settle(current, 'voice.cannotOpen');
       return;
     }
     const startedAt = Date.now();
@@ -134,14 +139,14 @@ export function useAssistantVoiceInput({ householdId, providerId, value, onChang
   }, [finish]);
 
   return {
-    available: Boolean(recorder && providerId), phase, engaged: phase !== 'idle', notice, settings, elapsed,
+    available: Boolean(recorder && providerId), phase, engaged: phase !== 'idle', notice: notice === null ? null : t(notice), settings, elapsed,
     level: () => recorder?.level() ?? null,
     start() { void start(); },
     finish() { void finish(); },
     cancel,
     async openSettings() {
       try { await Linking.openSettings(); }
-      catch { setNotice('无法打开系统设置，请手动在设置中允许麦克风。'); }
+      catch { setNotice('voice.settingsFailed'); }
     },
   };
 }

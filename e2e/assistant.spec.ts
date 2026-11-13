@@ -16,7 +16,7 @@ interface Provider {
   visibility: 'private' | 'household'; ownedByMe: boolean; hasCredential: boolean; updatedAt: string;
 }
 interface Conversation {
-  id: string; title: string; updatedAt: string; providerId: string; version: number; state: 'idle' | 'running';
+  id: string; title: string | null; updatedAt: string; providerId: string; version: number; state: 'idle' | 'running';
   messages: Array<{ role: 'user' | 'assistant' | 'tool'; content: string }>;
   pendingActions: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
 }
@@ -111,7 +111,7 @@ async function mockAssistant(page: Page, options: { empty?: boolean; voice?: boo
       const selected = family.conversations.find(item => item.id === parts[6]);
       if (parts.length === 6 && method === 'GET') body = { conversations: family.conversations.map(({ id: key, title, updatedAt }) => ({ id: key, title, updatedAt })) };
       else if (parts.length === 6 && method === 'POST') {
-        const created: Conversation = { id: id(), title: '新对话', providerId: String(input.providerId), version: 0, updatedAt: version, state: 'idle', messages: [], pendingActions: [] };
+        const created: Conversation = { id: id(), title: null, providerId: String(input.providerId), version: 0, updatedAt: version, state: 'idle', messages: [], pendingActions: [] };
         family.conversations.push(created);
         body = created;
         status = 201;
@@ -534,6 +534,32 @@ test('assistant proposals show readable targets and only explicit confirmation c
   expect(state.businessWrites).toBe(1);
   expect(state.families.get(householdId)!.notes).toMatchObject([{ id: noteId, body: '野餐垫、水和水果。' }]);
   expect(state.decisions.map(item => item.approve)).toEqual([false, true, false]);
+});
+
+test.describe('Japanese interface', () => {
+  test.use({ locale: 'ja-JP', viewport: { width: 320, height: 900 } });
+
+  test('sends the interface language and translates proposal controls while preserving content', async ({ page }) => {
+    const state = await mockAssistant(page);
+    await page.goto(`${base}/assistant/conversations/${conversationId}`);
+    await expect(page.getByRole('main', { name: 'アシスタントとの会話', exact: true })).toBeVisible();
+    await expect(page.getByText('根据家庭旅行清单，记得带野餐垫和水。', { exact: true })).toBeVisible();
+    await page.getByLabel('アシスタントへのメッセージ', { exact: true }).fill('新增一个准备周末野餐的任务');
+    const sent = page.waitForRequest(request => request.url().endsWith('/messages') && request.method() === 'POST');
+    await page.getByRole('button', { name: '送信', exact: true }).click();
+    expect((await sent).headers()['accept-language']).toBe('ja');
+    await page.getByRole('button', { name: '確認待ちの操作を見る', exact: true }).click();
+    const preview = page.getByRole('dialog', { name: '操作のプレビュー', exact: true });
+    await expect(preview.getByRole('heading', { name: '確認してください：タスクを作成', exact: true })).toBeVisible();
+    await expect(preview.getByText('准备周末野餐', { exact: true })).toBeVisible();
+    await checkLayout(page, preview);
+
+    const decision = page.waitForRequest(request => request.url().endsWith('/decision') && request.method() === 'POST');
+    await preview.getByRole('button', { name: '実行を確定', exact: true }).click();
+    expect((await decision).headers()['accept-language']).toBe('ja');
+    await expect(page.getByText('タスクを作成（成功）：准备周末野餐。', { exact: true })).toBeVisible();
+    expect(state.businessWrites).toBe(1);
+  });
 });
 
 test('assistant loading and provider failures recover persisted work without sending a duplicate request', async ({ page }) => {

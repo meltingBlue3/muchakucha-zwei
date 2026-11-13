@@ -1,3 +1,4 @@
+import { currentLanguage, useTranslation } from '../../i18n';
 import { useCallback } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { sessionApiClient } from '../auth/session-runtime';
@@ -10,6 +11,7 @@ import { useAssistantOperation, useAssistantQuery } from './assistant-runtime';
 function DeleteAssistantItem({ householdId, writable, kind }: AssistantHouseholdProps & { kind: 'provider' | 'conversation' }) {
   const { providerId, conversationId } = useLocalSearchParams<{ providerId?: string; conversationId?: string }>();
   const router = useRouter();
+  const { t } = useTranslation('assistant');
   const operation = useAssistantOperation();
   const targetId = (kind === 'provider' ? providerId : conversationId) ?? '';
   const destination = kind === 'provider' ? `${assistantPath(householdId)}/providers` as const : assistantPath(householdId);
@@ -20,7 +22,7 @@ function DeleteAssistantItem({ householdId, writable, kind }: AssistantHousehold
       const item = providers.providers.find(provider => provider.id === targetId);
       return item ? { title: item.name, allowed: item.ownedByMe, shared: item.visibility === 'household', running: false } : null;
     }
-    const conversation = await sessionApiClient.getAssistantConversation(token, householdId, targetId);
+    const conversation = await sessionApiClient.getAssistantConversation(token, householdId, targetId, undefined, currentLanguage());
     return { title: conversation.title, allowed: true, shared: false, running: conversation.state === 'running' };
   }, [kind, householdId, targetId]);
   const query = useAssistantQuery(load);
@@ -31,20 +33,20 @@ function DeleteAssistantItem({ householdId, writable, kind }: AssistantHousehold
       : sessionApiClient.deleteAssistantConversation(token, householdId, targetId));
     if (result) router.replace(destination);
   };
-  const title = kind === 'provider' ? '删除模型配置' : '删除对话';
-  return <RouteWindow title={title} size="standard" busy={operation.busy} resource="settings" onClose={close} fallback={<AppShell title="助手"><Text>管理当前家庭的助手内容</Text></AppShell>}>
+  const title = kind === 'provider' ? t('delete.deleteModel') : t('delete.deleteConversation');
+  return <RouteWindow title={title} size="standard" busy={operation.busy} resource="settings" onClose={close} fallback={<AppShell title={t('assistant')}><Text>{t('delete.manage')}</Text></AppShell>}>
     <Stack gap={4}>
       {operation.error ? <Banner>{operation.error}</Banner> : null}
       {query.error ? <LoadError message={query.error} retrying={query.loading} disabled={operation.busy} onRetry={() => { void query.reload(); }} /> : null}
-      {query.loading && !query.data ? <LoadingState label="正在加载删除内容" /> : null}
+      {query.loading && !query.data ? <LoadingState label={t('delete.loading')} /> : null}
       {query.data ? <>
-        <Text>确定删除「{query.data.title}」？</Text>
-        <Text variant="bodySm">{kind === 'provider' ? `${query.data.shared ? '所有家人将无法继续使用此配置。' : ''}密钥会一并删除；原有对话可继续查看，但无法再调用此模型。` : '这段对话将永久删除，已经完成的日程、任务和笔记操作不会撤销。'}</Text>
-        {!query.data.allowed ? <Banner>只有配置创建者可以删除。</Banner> : null}
-        {query.data.running ? <Banner>助手仍在处理，请稍后刷新再删除。</Banner> : null}
-        {!writable ? <Banner>请恢复连接后再删除。</Banner> : null}
-        <ConfirmActions cancelLabel="保留" confirmLabel="删除" destructive busy={operation.busy} confirmDisabled={!writable || !query.data.allowed || query.data.running || query.loading} onCancel={close} onConfirm={() => { void remove(); }} />
-      </> : !query.loading && !query.error ? <Text>这项内容已删除或不再可用。</Text> : null}
+        <Text>{t('delete.confirm', { title: query.data.title ?? t('workspace.newConversation') })}</Text>
+        <Text variant="bodySm">{kind === 'provider' ? `${query.data.shared ? t('delete.shared') : ''}${t('delete.modelWarning')}` : t('delete.conversationWarning')}</Text>
+        {!query.data.allowed ? <Banner>{t('delete.creatorOnly')}</Banner> : null}
+        {query.data.running ? <Banner>{t('delete.running')}</Banner> : null}
+        {!writable ? <Banner>{t('delete.offline')}</Banner> : null}
+        <ConfirmActions cancelLabel={t('delete.keep')} confirmLabel={t('delete.confirmDelete')} destructive busy={operation.busy} confirmDisabled={!writable || !query.data.allowed || query.data.running || query.loading} onCancel={close} onConfirm={() => { void remove(); }} />
+      </> : !query.loading && !query.error ? <Text>{t('delete.unavailable')}</Text> : null}
     </Stack>
   </RouteWindow>;
 }

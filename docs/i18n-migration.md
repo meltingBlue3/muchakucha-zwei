@@ -32,22 +32,20 @@ grep -c "47.117.148.16" <输出目录>/_expo/static/js/web/entry-*.js   # 必须
 
 ## 还没迁移的页面
 
-共享组件、登录注册、家庭与账户、任务、日历与今日、笔记、重复安排、标签、提醒已迁移。其余批次可按表里的顺序推进。
+共享组件、登录注册、家庭与账户、任务、日历与今日、笔记、重复安排、标签、提醒、助手已迁移。其余批次可按表里的顺序推进。
 
 | 批次 | 位置 | 文件 | 行 | 备注 |
 | --- | --- | --- | --- | --- |
 | 生日 | `src/features/birthdays`、`households/[id]/birthdays/new.tsx`、`src/features/lunar/lunar-calendar.ts` | 6 | 约 61 | 先等「待决定」里的前两项 |
-| 助手 | `src/features/assistant` | 15 | 241 | 最大的一块；连同下面第 1 项一起做 |
 | 其他 | `src/features/search/command-palette.tsx`（24 行）、`households/[id]/more.tsx` 的描述（6 行） | 2 | 30 | |
 
 `apps/api` 里家庭、任务、日程、重复规则的中文错误提示不用翻译：客户端从不显示 API 的 `message`，各功能自己把错误码对应到文案。
 
 ## 迁移之外的任务
 
-1. **助手的回答语言。** 客户端请求带 `Accept-Language`，API 读它，并在提示词里要求按用户的语言回答、默认用界面语言；提示词本身保持中文。生成的客户端没有放请求头的位置，要改生成器 `apps/api/src/openapi/generate-openapi.ts` 后重新生成，并跑 `pnpm openapi:check`。API 的助手模块还有 59 行中文，其中工具返回给模型的文字是否随语言变，随这项一起定。真实模型的表现只能人工验证。
-2. **Android 闹铃模块。** `apps/client/modules/reminder-alarm` 的 5 个 Kotlin 文件里有 8 行中文，改成 Android 字符串资源并加日文。需要新安装包。
-3. **麦克风权限说明。** `apps/client/app.json` 里 `expo-audio` 的 `microphonePermission` 是中文，由系统弹窗显示，需要按语言配置。需要新安装包。
-4. **和历的计算包。** 新建 `packages/wareki`：年号表（明治到令和），以及按规则推算的日本祝日（固定日、快乐星期一、振替休日、国民の休日，春分和秋分按日本时间取日）。沿用 [packages/lunar](../packages/lunar/src/index.ts) 的约定：单个 TypeScript 文件，只用可擦除的语法，带测试。太阳黄经的算法可以参考 lunar 包里的 VSOP87 级数。这一项不依赖界面设计，可以先做；界面部分见下面。
+1. **Android 闹铃模块。** `apps/client/modules/reminder-alarm` 的 5 个 Kotlin 文件里有 8 行中文，改成 Android 字符串资源并加日文。需要新安装包。
+2. **麦克风权限说明。** `apps/client/app.json` 里 `expo-audio` 的 `microphonePermission` 是中文，由系统弹窗显示，需要按语言配置。需要新安装包。
+3. **和历的计算包。** 新建 `packages/wareki`：年号表（明治到令和），以及按规则推算的日本祝日（固定日、快乐星期一、振替休日、国民の休日，春分和秋分按日本时间取日）。沿用 [packages/lunar](../packages/lunar/src/index.ts) 的约定：单个 TypeScript 文件，只用可擦除的语法，带测试。太阳黄经的算法可以参考 lunar 包里的 VSOP87 级数。这一项不依赖界面设计，可以先做；界面部分见下面。
 
 ## 待决定，定下来之前不要动
 

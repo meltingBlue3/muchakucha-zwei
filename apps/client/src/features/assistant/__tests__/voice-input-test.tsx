@@ -68,7 +68,7 @@ test('records, transcribes with the household configuration and appends the text
   await act(() => jest.advanceTimersByTime(3_000));
   expect(view.getByText('0:03')).toBeTruthy();
   await fireEvent.press(view.getByRole('button', { name: '完成录音' }));
-  expect(transcribe()).toHaveBeenCalledWith('token', 'home', { providerId: 'asr', mimeType: 'audio/mp4', audio: 'bTRhLWF1ZGlv' }, expect.any(AbortSignal));
+  expect(transcribe()).toHaveBeenCalledWith('token', 'home', { providerId: 'asr', mimeType: 'audio/mp4', audio: 'bTRhLWF1ZGlv' }, expect.any(AbortSignal), 'zh');
   expect(draft(view)).toHaveProp('value', '请帮我安排\n明天下午3点接孩子。');
   expect(draft(view)).toHaveProp('editable', true);
   expect(send).not.toHaveBeenCalled();

@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useCallback } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { sessionApiClient } from '../auth/session-runtime';
@@ -11,6 +12,7 @@ import { assistantToken, useAssistantOperation, useAssistantQuery } from './assi
 function ProviderEditor({ householdId, householdName, writable }: AssistantHouseholdProps) {
   const { providerId } = useLocalSearchParams<{ providerId?: string }>();
   const router = useRouter();
+  const { t } = useTranslation('assistant');
   const operation = useAssistantOperation();
   const load = useCallback((token: string) => sessionApiClient.listAssistantProviders(token, householdId), [householdId]);
   const query = useAssistantQuery(load);
@@ -28,15 +30,15 @@ function ProviderEditor({ householdId, householdName, writable }: AssistantHouse
     protocol: input.protocol, baseUrl: input.baseUrl, model: input.model,
     ...(input.apiKey ? { apiKey: input.apiKey } : provider ? { providerId: provider.id } : {}),
   });
-  return <RouteWindow title={providerId ? '编辑模型配置' : '添加模型配置'} busy={operation.busy} resource="settings" onClose={close} fallback={<AppShell title="助手模型配置"><Text>管理当前家庭的模型配置</Text></AppShell>}>
+  return <RouteWindow title={providerId ? t('models.edit') : t('models.add')} busy={operation.busy} resource="settings" onClose={close} fallback={<AppShell title={t('models.screen')}><Text>{t('models.editorFallback')}</Text></AppShell>}>
     <Stack gap={4}>
       <HouseholdContextNote householdName={householdName} />
       {operation.error ? <Banner>{operation.error}</Banner> : null}
-      {!writable ? <Banner>当前离线，请恢复连接后编辑模型配置。</Banner> : null}
+      {!writable ? <Banner>{t('models.offline')}</Banner> : null}
       {query.error ? <LoadError message={query.error} retrying={query.loading} disabled={operation.busy} onRetry={() => { void query.reload(); }} /> : null}
-      {query.loading && !query.data ? <LoadingState label="正在加载模型配置" /> : null}
-      {query.data && providerId && !provider ? <Text>这项配置已删除或不再共享。</Text> : null}
-      {provider && !provider.ownedByMe ? <Text>只有配置创建者可以编辑。你可以创建自己的配置。</Text> : null}
+      {query.loading && !query.data ? <LoadingState label={t('models.loading')} /> : null}
+      {query.data && providerId && !provider ? <Text>{t('models.unavailable')}</Text> : null}
+      {provider && !provider.ownedByMe ? <Text>{t('models.creatorOnly')}</Text> : null}
       {writable && query.data && (!providerId || provider?.ownedByMe) ? <AssistantProviderForm key={provider?.updatedAt ?? 'new'} {...(provider ? { initial: provider } : {})} busy={operation.busy} onCancel={close} onSubmit={save} onCheck={check} /> : null}
     </Stack>
   </RouteWindow>;

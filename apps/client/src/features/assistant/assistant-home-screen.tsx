@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useCallback, useState } from 'react';
 import { ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -15,6 +16,7 @@ import { useAssistantVoiceInput } from './use-assistant-voice-input';
 
 function AssistantHome({ householdId, householdName, writable }: AssistantHouseholdProps) {
   const router = useRouter();
+  const { t } = useTranslation('assistant');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const load = useCallback(async (token: string) => {
@@ -41,25 +43,25 @@ function AssistantHome({ householdId, householdName, writable }: AssistantHouseh
     setMessage('');
     router.push(`${assistantPath(householdId)}/conversations/${encodeURIComponent(result.value.id)}`);
   };
-  return <AssistantWorkspace householdId={householdId} householdName={householdName} title="家庭助手" conversations={query.data?.conversations ?? []} busy={operation.busy} onRefresh={() => { void query.reload(); }}>
+  return <AssistantWorkspace householdId={householdId} householdName={householdName} title={t('home.familyAssistant')} conversations={query.data?.conversations ?? []} busy={operation.busy} onRefresh={() => { void query.reload(); }}>
     {/* The same left edge as the title row above. */}
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: theme.spacing[5], paddingVertical: theme.spacing[6], gap: theme.spacing[5], maxWidth: theme.layout.assistantReadingWidth, width: '100%', alignSelf: 'center' }}>
-      {!writable ? <Banner>当前离线，恢复连接后即可继续使用助手。</Banner> : null}
+      {!writable ? <Banner>{t('home.offline')}</Banner> : null}
       {operation.error ? <Banner>{operation.error}</Banner> : null}
       {query.error ? <LoadError message={query.error} onRetry={() => { void query.reload(); }} retrying={query.loading} disabled={operation.busy} /> : null}
-      {query.loading && !query.data ? <LoadingState label="正在加载助手" /> : null}
+      {query.loading && !query.data ? <LoadingState label={t('home.loading')} /> : null}
       <Stack gap={5}>
         <Sparkles size={theme.spacing[8]} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} />
-        <Heading variant="display" level={2}>把琐事交给我，{'\n'}把时间留给家人。</Heading>
-        <Text color="inkMuted">查安排、记任务、整理笔记。{'\n'}说说你想做什么，我们一起安排好。</Text>
+        <Heading variant="display" level={2}>{t('home.intro')}</Heading>
+        <Text color="inkMuted">{t('home.description')}</Text>
         {query.data ? selected ? <Stack gap={3}>
-          <AssistantComposer label="开始新对话" value={message} onChangeText={setMessage} onSend={() => { void start(); }} busy={operation.busy}
+          <AssistantComposer label={t('home.start')} value={message} onChangeText={setMessage} onSend={() => { void start(); }} busy={operation.busy}
             blocked={blocked} voice={voice}
             modelControl={<AssistantModelPicker householdId={householdId} providers={providers} selectedId={selected.id} busy={operation.busy} onSelect={setSelectedId} />} />
           <PromptSuggestions disabled={operation.busy || !writable || voice.engaged} onPick={setMessage} />
         </Stack> : <Stack gap={3}>
-          <Text variant="bodySm">先添加自己的模型，或请家人共享一个配置。</Text>
-          <Button label="添加模型配置" disabled={!writable} onPress={() => router.push(`${assistantPath(householdId)}/providers/new`)} style={{ alignSelf: 'flex-start' }} />
+          <Text variant="bodySm">{t('home.needModel')}</Text>
+          <Button label={t('home.addModel')} disabled={!writable} onPress={() => router.push(`${assistantPath(householdId)}/providers/new`)} style={{ alignSelf: 'flex-start' }} />
         </Stack> : null}
       </Stack>
     </ScrollView>

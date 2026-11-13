@@ -2587,6 +2587,23 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "accept-language",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Interface language (zh or ja).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -2725,6 +2742,23 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "accept-language",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Interface language (zh or ja).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2808,6 +2842,23 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "name": "accept-language",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Interface language (zh or ja).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -2862,6 +2913,23 @@
             "in": "path",
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "accept-language",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Interface language (zh or ja).",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           }
@@ -5133,7 +5201,8 @@
             "type": "string"
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "updatedAt": {
             "type": "string"
@@ -5217,7 +5286,8 @@
             "type": "string"
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "updatedAt": {
             "type": "string"

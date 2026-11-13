@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
 import { Platform, TextInput, View } from 'react-native';
 import ArrowUp from 'lucide-react-native/icons/arrow-up';
@@ -36,19 +37,20 @@ function elapsedLabel(seconds: number): string {
 
 /** Replaces the model and send row while the microphone is in use: cancel, what is happening, finish. */
 function VoiceBar({ voice, finishRef }: { voice: AssistantVoiceInput; finishRef: React.Ref<View> }) {
+  const { t } = useTranslation('assistant');
   const recording = voice.phase === 'recording';
   return <Inline gap={2} style={{ alignItems: 'center' }}>
-    <IconButton label="取消语音输入" appearance="plain" icon={<X size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={voice.cancel} />
+    <IconButton label={t('composer.cancelVoice')} appearance="plain" icon={<X size={theme.controlSizes.icon} color={theme.colors.inkMuted} />} onPress={voice.cancel} />
     <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
-      {voice.phase === 'transcribing' ? <Spinner label="正在转写" /> : null}
+      {voice.phase === 'transcribing' ? <Spinner label={t('composer.transcribingLabel')} /> : null}
       {/* Vermilion marks "now": the microphone is open. */}
       {recording ? <View importantForAccessibility="no-hide-descendants" aria-hidden style={{ width: theme.spacing[2], height: theme.spacing[2], borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.accent }} /> : null}
       <Text variant="bodySm" color={recording ? 'ink' : 'inkMuted'} accessibilityLiveRegion="polite" aria-live="polite">
-        {voice.phase === 'starting' ? '正在打开麦克风…' : voice.phase === 'transcribing' ? '正在转写…' : '正在录音'}
+        {voice.phase === 'starting' ? t('composer.openingMicrophone') : voice.phase === 'transcribing' ? t('composer.transcribing') : t('composer.recording')}
       </Text>
       {recording ? <><VoiceMeter level={voice.level} /><Text variant="time" color="inkMuted">{elapsedLabel(voice.elapsed)}</Text></> : null}
     </View>
-    <IconButton ref={finishRef} label="完成录音" disabled={!recording} accessibilityState={{ disabled: !recording }}
+    <IconButton ref={finishRef} label={t('composer.finish')} disabled={!recording} accessibilityState={{ disabled: !recording }}
       icon={<Check size={theme.controlSizes.icon} color={recording ? theme.colors.surface : theme.colors.inkMuted} />} onPress={voice.finish}
       style={{ backgroundColor: recording ? theme.colors.primary : theme.colors.surfaceMuted, borderRadius: theme.borderRadii.lg }} />
   </Inline>;
@@ -60,7 +62,8 @@ export const AssistantComposer = forwardRef<TextInput, {
   /** Names the field by what sending does; the home and a conversation can both be mounted. */
   label?: string;
   voice?: AssistantVoiceInput;
-}>(({ value, onChangeText, onSend, blocked, busy, modelControl, voice, label = '发送给助手' }, ref) => {
+}>(({ value, onChangeText, onSend, blocked, busy, modelControl, voice, label }, ref) => {
+  const { t } = useTranslation('assistant');
   const [focused, setFocused] = useState(false);
   const input = useRef<TextInput>(null);
   const finish = useRef<View>(null);
@@ -77,18 +80,18 @@ export const AssistantComposer = forwardRef<TextInput, {
     previous.current = phase;
   }, [phase]);
   return <Stack gap={1} style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, borderWidth: theme.borderWidths.default, borderColor: focused ? theme.colors.focusRing : theme.colors.separator, padding: theme.spacing[3] }}>
-    <TextInput ref={input} accessibilityLabel={label} multiline value={value} onChangeText={onChangeText} maxLength={8000} editable={!blocked && !engaged}
-      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder="想问什么，或想做点什么？" placeholderTextColor={theme.colors.inkMuted}
+    <TextInput ref={input} accessibilityLabel={label ?? t('composer.message')} multiline value={value} onChangeText={onChangeText} maxLength={8000} editable={!blocked && !engaged}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={t('composer.placeholder')} placeholderTextColor={theme.colors.inkMuted}
       style={{ ...theme.typography.body, fontFamily: theme.fontFamilies.regular, color: theme.colors.ink, minHeight: theme.controlSizes.touchTarget, maxHeight: theme.controlSizes.field * 3, padding: theme.spacing[1], textAlignVertical: 'top', outlineStyle: 'solid', outlineWidth: 0 }} />
     {voice?.notice ? <Inline gap={2} style={{ alignItems: 'center', flexWrap: 'wrap', paddingHorizontal: theme.spacing[1] }}>
       <Text variant="bodySm" color="inkMuted" accessibilityLiveRegion="polite" aria-live="polite" style={{ flex: 1, minWidth: 0 }}>{voice.notice}</Text>
-      {voice.settings ? <Button label="打开设置" size="compact" tone="secondary" onPress={() => { void voice.openSettings(); }} /> : null}
+      {voice.settings ? <Button label={t('composer.openSettings')} size="compact" tone="secondary" onPress={() => { void voice.openSettings(); }} /> : null}
     </Inline> : null}
     {voice && engaged ? <VoiceBar voice={voice} finishRef={finish} /> : <Inline style={{ justifyContent: 'space-between' }}>
-      <View style={{ flex: 1, minWidth: 0 }}>{modelControl ?? <Text variant="caption">内容修改前，由你确认</Text>}</View>
-      {voice?.available ? <IconButton label="语音输入" appearance="plain" disabled={blocked} accessibilityState={{ disabled: blocked }}
+      <View style={{ flex: 1, minWidth: 0 }}>{modelControl ?? <Text variant="caption">{t('composer.confirmBeforeChanges')}</Text>}</View>
+      {voice?.available ? <IconButton label={t('composer.voice')} appearance="plain" disabled={blocked} accessibilityState={{ disabled: blocked }}
         icon={<Mic size={theme.controlSizes.icon} color={blocked ? theme.colors.inkMuted : theme.colors.ink} />} onPress={voice.start} /> : null}
-      <IconButton label="发送" disabled={unavailable} accessibilityState={{ disabled: unavailable, busy }}
+      <IconButton label={t('composer.send')} disabled={unavailable} accessibilityState={{ disabled: unavailable, busy }}
         icon={<ArrowUp size={theme.controlSizes.icon} color={unavailable ? theme.colors.inkMuted : theme.colors.surface} />} onPress={onSend}
         style={{ backgroundColor: unavailable ? theme.colors.surfaceMuted : theme.colors.primary, borderRadius: theme.borderRadii.lg }} />
     </Inline>}
@@ -97,11 +100,10 @@ export const AssistantComposer = forwardRef<TextInput, {
 
 AssistantComposer.displayName = 'AssistantComposer';
 
-const suggestions = ['这周有哪些安排，需要提前准备什么？', '帮我整理最近的家庭笔记'];
-
 /** Starter questions as small chips that wrap, so they fill one or two lines instead of a stack of full buttons. */
 export function PromptSuggestions({ disabled, onPick }: { disabled: boolean; onPick(prompt: string): void }) {
+  const { t } = useTranslation('assistant');
   return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[3] }}>
-    {suggestions.map(prompt => <Button key={prompt} label={prompt} tone="secondary" size="compact" disabled={disabled} onPress={() => onPick(prompt)} />)}
+    {(['weekPrompt', 'notesPrompt'] as const).map(key => <Button key={key} label={t(`composer.${key}`)} tone="secondary" size="compact" disabled={disabled} onPress={() => onPick(t(`composer.${key}`))} />)}
   </View>;
 }

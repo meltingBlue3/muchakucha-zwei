@@ -1,35 +1,9 @@
+import { useTranslation } from '../../i18n';
+import { zh, type Catalog } from '../../i18n/locales/zh';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiClientError, type AssistantProviderResponseDto } from '@muchakucha/api-client';
 import { sessionTransport } from '../auth/session-runtime';
-
-const errorMessages: Record<string, string> = {
-  ASSISTANT_NOT_CONFIGURED: '助手尚未启用，请联系服务管理员配置凭证加密密钥。',
-  ASSISTANT_CREDENTIAL_UNAVAILABLE: '无法读取这项配置的 API 密钥。请配置创建者重新填写密钥。',
-  ASSISTANT_PROVIDER_CHANGED: '这段对话的模型配置已变更。请返回查看最新配置，并创建新的对话。',
-  ASSISTANT_BUSY: '助手仍在处理，请刷新对话查看结果。',
-  ASSISTANT_CONFIRMATION_REQUIRED: '请先确认或取消待执行的操作。',
-  ASSISTANT_CONVERSATION_FULL: '这段对话已经太长，请创建新的对话继续。',
-  ASSISTANT_CONVERSATION_LIMIT_REACHED: '已有 100 段对话，请先删除不再需要的对话。',
-  ASSISTANT_PROVIDER_LIMIT_REACHED: '你在这个家庭已有 20 项模型配置，请先删除不用的配置。',
-  ASSISTANT_ENDPOINT_INVALID: '请输入公网 HTTP 或 HTTPS 地址，且地址中不能含有用户名、密码、查询参数或片段。',
-  ASSISTANT_PROVIDER_AUTH_FAILED: '模型服务拒绝了 API 密钥，请检查或更新密钥。',
-  ASSISTANT_PROVIDER_QUOTA_EXCEEDED: '模型服务账户额度不足，请检查余额或套餐。',
-  ASSISTANT_PROVIDER_RATE_LIMITED: '模型服务请求过于频繁，请稍后重试。',
-  ASSISTANT_PROVIDER_ENDPOINT_NOT_FOUND: '模型服务找不到这个地址或模型，请检查服务地址（API 基础目录）和模型名称。',
-  ASSISTANT_PROVIDER_CONTEXT_TOO_LONG: '内容超出了模型能处理的长度。',
-  ASSISTANT_PROVIDER_TOOLS_UNSUPPORTED: '这个模型不支持工具调用，请换用支持工具调用的模型。',
-  ASSISTANT_PROVIDER_REJECTED: '模型服务拒绝了请求，请确认模型名称正确且支持工具调用。',
-  ASSISTANT_PROVIDER_FOLLOW_UP_REJECTED: '模型调用了工具，但模型服务拒绝了带回工具结果的后续请求。这个模型的多轮工具调用方式可能与助手不兼容，请换用同一服务的其他模型。',
-  ASSISTANT_PROVIDER_REASONING_REQUIRED: '这个模型要求带回它之前的思考内容，助手没能满足。请换用同一服务的非思考模型。',
-  ASSISTANT_PROVIDER_UNAVAILABLE: '模型服务暂时不可用，请稍后重试。',
-  ASSISTANT_PROVIDER_TIMEOUT: '模型服务响应超时，请稍后重试。',
-  ASSISTANT_PROVIDER_FAILED: '无法连接模型服务，请确认服务地址能从服务器访问。',
-  ASSISTANT_PROVIDER_RESPONSE_INVALID: '模型返回了无法识别的结果，这个服务可能与所选协议不完全兼容。',
-  ASSISTANT_PROVIDER_OUTPUT_TRUNCATED: '模型输出达到长度上限，没能完成。',
-  ASSISTANT_PROVIDER_REFUSED: '模型拒绝处理这个请求。',
-  ASSISTANT_PROVIDER_PURPOSE_MISMATCH: '这项配置的用途不符：语音转写配置只能用于语音输入，对话请选择对话模型。',
-};
 
 /** A configuration's protocol fixes its use: conversations run on chat models, voice input on a transcription service. */
 export function isTranscriptionProvider(provider: Pick<AssistantProviderResponseDto, 'protocol'>): boolean {
@@ -46,38 +20,40 @@ export function transcriptionProvider(providers: AssistantProviderResponseDto[])
   return usable.find(provider => provider.ownedByMe) ?? usable[0] ?? null;
 }
 
-export function assistantError(error: unknown, fallback = '这次操作未能完成，请检查网络后重试。'): string {
+export type AssistantErrorKey =
+  | `errors.${keyof Catalog['assistant']['errors']}`
+  | `errorCodes.${keyof Catalog['assistant']['errorCodes']}`
+  | `transcriptionCodes.${keyof Catalog['assistant']['transcriptionCodes']}`;
+
+class AssistantSessionExpired extends Error {}
+
+export function assistantErrorKey<Fallback extends string>(error: unknown, fallback: Fallback): AssistantErrorKey | Fallback {
+  if (error instanceof AssistantSessionExpired) return 'errors.expired';
   if (error instanceof ApiClientError) {
-    const body = error.body as { error?: { code?: string } } | null;
-    const code = body?.error?.code;
-    if (code !== undefined && Object.hasOwn(errorMessages, code)) return errorMessages[code]!;
-    if (error.status === 401) return '登录已过期，请重新登录。';
-    if (error.status === 403) return '你已无权使用这项配置或家庭内容，请刷新后重试。';
-    if (error.status === 404) return '这项内容已删除或不再共享，请返回后刷新。';
-    if (error.status === 409) return '内容已有变化，请刷新后查看最新结果，再继续操作。';
-    if (error.status === 429) return '请求过于频繁，请稍后重试。';
-    if (error.status === 502 || error.status === 503 || error.status === 504) return '模型服务暂时不可用，请检查模型配置和凭证，稍后重试。';
-    if (error.status === 400) return '请检查填写的内容、模型地址和模型名称后重试。';
+    const code = (error.body as { error?: { code?: string } } | null)?.error?.code;
+    if (code !== undefined && Object.hasOwn(zh.assistant.errorCodes, code)) return `errorCodes.${code as keyof Catalog['assistant']['errorCodes']}`;
+    if (error.status === 401) return 'errors.expired';
+    if (error.status === 403) return 'errors.forbidden';
+    if (error.status === 404) return 'errors.notFound';
+    if (error.status === 409) return 'errors.conflict';
+    if (error.status === 429) return 'errors.rateLimited';
+    if (error.status === 502 || error.status === 503 || error.status === 504) return 'errors.providerError';
+    if (error.status === 400) return 'errors.invalid';
   }
-  return error instanceof Error && error.message === '登录已过期，请重新登录。' ? error.message : fallback;
+  return fallback;
 }
 
-const transcriptionMessages: Record<string, string> = {
-  ASSISTANT_PROVIDER_REJECTED: '语音转写服务拒绝了这次请求，请确认模型名称（例如 qwen3-asr-flash）正确，或稍后重录。',
-  ASSISTANT_PROVIDER_RESPONSE_INVALID: '语音转写服务返回了无法识别的结果，请确认服务地址是百炼的 OpenAI 兼容地址。',
-  ASSISTANT_PROVIDER_ENDPOINT_NOT_FOUND: '语音转写服务找不到这个地址或模型，请检查服务地址和模型名称。',
-  ASSISTANT_PROVIDER_TIMEOUT: '语音转写服务响应超时，请稍后重试。',
-};
-
 /** Chat wording speaks of tool calls; a transcription failure is about the recording and the service. */
-export function transcriptionError(error: unknown, fallback: string): string {
+export function transcriptionErrorKey<Fallback extends string>(error: unknown, fallback: Fallback): AssistantErrorKey | Fallback {
   const code = error instanceof ApiClientError ? (error.body as { error?: { code?: string } } | null)?.error?.code : undefined;
-  return code !== undefined && Object.hasOwn(transcriptionMessages, code) ? transcriptionMessages[code]! : assistantError(error, fallback);
+  return code !== undefined && Object.hasOwn(zh.assistant.transcriptionCodes, code)
+    ? `transcriptionCodes.${code as keyof Catalog['assistant']['transcriptionCodes']}`
+    : assistantErrorKey(error, fallback);
 }
 
 export async function assistantToken(): Promise<string> {
   const token = await sessionTransport.getAccessToken();
-  if (token === null) throw new Error('登录已过期，请重新登录。');
+  if (token === null) throw new AssistantSessionExpired();
   return token;
 }
 
@@ -85,7 +61,8 @@ export async function assistantToken(): Promise<string> {
 export function useAssistantQuery<T>(fetcher: (token: string) => Promise<T>) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation('assistant');
+  const [error, setError] = useState<AssistantErrorKey | null>(null);
   const generation = useRef(0);
   const active = useRef(false);
   /** Resolves with the loaded value, or undefined when the load failed or was superseded. */
@@ -102,7 +79,7 @@ export function useAssistantQuery<T>(fetcher: (token: string) => Promise<T>) {
       setData(result);
       return result;
     } catch (failure) {
-      if (request === generation.current) setError(assistantError(failure, '暂时无法加载助手内容，请检查网络后重试。'));
+      if (request === generation.current) setError(assistantErrorKey(failure, 'errors.load'));
       return undefined;
     } finally {
       if (request === generation.current) setLoading(false);
@@ -113,12 +90,13 @@ export function useAssistantQuery<T>(fetcher: (token: string) => Promise<T>) {
     void reload();
     return () => { active.current = false; generation.current += 1; };
   }, [reload]));
-  return { data, setData, loading, error, reload };
+  return { data, setData, loading, error: error === null ? null : t(error), reload };
 }
 
 export function useAssistantOperation() {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation('assistant');
+  const [error, setError] = useState<AssistantErrorKey | null>(null);
   const running = useRef(false);
   const alive = useRef(true);
   const focused = useRef(false);
@@ -141,12 +119,12 @@ export function useAssistantOperation() {
       const value = await operation(token);
       return alive.current && focused.current ? { value } : undefined;
     } catch (failure) {
-      if (alive.current) setError(assistantError(failure));
+      if (alive.current) setError(assistantErrorKey(failure, 'errors.generic'));
       return undefined;
     } finally {
       running.current = false;
       if (alive.current) setBusy(false);
     }
   };
-  return { busy, error, run };
+  return { busy, error: error === null ? null : t(error), run };
 }

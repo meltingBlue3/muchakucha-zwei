@@ -50,11 +50,11 @@ async function insertActor(username: string): Promise<ActorFixture> {
   return { userId, accessToken: await jwt.signAsync({ sub: userId, sid: sessionId }) };
 }
 
-async function request(actor: ActorFixture, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, payload?: unknown): Promise<ApiResponse> {
+async function request(actor: ActorFixture, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, payload?: unknown, language?: string): Promise<ApiResponse> {
   return app.getHttpAdapter().getInstance().inject({
     method,
     url: `/api/v1${path}`,
-    headers: { authorization: `Bearer ${actor.accessToken}`, ...(payload === undefined ? {} : { 'content-type': 'application/json' }) },
+    headers: { authorization: `Bearer ${actor.accessToken}`, ...(language === undefined ? {} : { 'accept-language': language }), ...(payload === undefined ? {} : { 'content-type': 'application/json' }) },
     ...(payload === undefined ? {} : { payload: JSON.stringify(payload) }),
   });
 }
@@ -71,8 +71,8 @@ async function addMember(householdId: string, actor: ActorFixture): Promise<void
   });
 }
 
-function assistant(actor: ActorFixture, householdId: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, payload?: unknown) {
-  return request(actor, method, `/households/${householdId}/assistant${path}`, payload);
+function assistant(actor: ActorFixture, householdId: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, payload?: unknown, language?: string) {
+  return request(actor, method, `/households/${householdId}/assistant${path}`, payload, language);
 }
 
 async function createProvider(actor: ActorFixture, householdId: string, visibility: 'private' | 'household' = 'private', baseUrl = 'https://api.example.com/v1'): Promise<AssistantProviderResponseDto> {
@@ -89,16 +89,16 @@ async function createConversation(actor: ActorFixture, householdId: string, prov
   return response.json() as AssistantConversationResponseDto;
 }
 
-function send(actor: ActorFixture, householdId: string, conversation: AssistantConversationResponseDto, message = '请帮我处理家庭事项') {
+function send(actor: ActorFixture, householdId: string, conversation: AssistantConversationResponseDto, message = '请帮我处理家庭事项', language?: string) {
   return assistant(actor, householdId, 'POST', `/conversations/${conversation.id}/messages`, {
     message, timeZone: 'Asia/Shanghai', expectedVersion: conversation.version,
-  });
+  }, language);
 }
 
 /** Approves every pending action, or declines them all. */
-function decide(actor: ActorFixture, householdId: string, conversation: AssistantConversationResponseDto, approve = true) {
+function decide(actor: ActorFixture, householdId: string, conversation: AssistantConversationResponseDto, approve = true, language?: string) {
   const approvedIds = approve ? conversation.pendingActions.map(action => action.id) : [];
-  return assistant(actor, householdId, 'POST', `/conversations/${conversation.id}/decision`, { approvedIds, expectedVersion: conversation.version });
+  return assistant(actor, householdId, 'POST', `/conversations/${conversation.id}/decision`, { approvedIds, expectedVersion: conversation.version }, language);
 }
 
 function tool(name: string, args: Record<string, unknown>): AssistantCompletion {
@@ -159,6 +159,34 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect((await send(owner, householdId, conversation)).statusCode).toBe(200);
     expect(complete.mock.calls[0]?.[0]).toMatchObject({ baseUrl, apiKey: providerSecret });
     expect(JSON.stringify(complete.mock.calls[0]?.slice(1))).not.toContain(providerSecret);
+  });
+
+  test('the interface language is the reply fallback on send and confirmation', async () => {
+    const provider = await createProvider(owner, householdId);
+    const conversation = await createConversation(owner, householdId, provider.id);
+    expect(conversation.title).toBeNull();
+    const emptyHistory = await assistant(owner, householdId, 'GET', '/conversations');
+    expect(emptyHistory.json().conversations).toMatchObject([{ id: conversation.id, title: null }]);
+    complete.mockResolvedValueOnce(tool('create_note', { title: '旅行の準備', body: '持ち物を確認する' }));
+    const proposal = await send(owner, householdId, conversation, '旅行の準備を記録して', 'ja-JP');
+    expect(proposal.statusCode).toBe(200);
+    expect(proposal.json().title).toBe('旅行の準備を記録して');
+    expect(complete.mock.calls[0]?.[1]).toContain('忽略附加的发送时间、历史对话及工具结果的语言。无法判断时用日语回答。');
+
+    complete.mockResolvedValueOnce({ content: '', toolCalls: [] });
+    const approved = await decide(owner, householdId, proposal.json(), true, 'ja');
+    expect(approved.statusCode).toBe(200);
+    expect(complete.mock.calls[1]?.[1]).toContain('无法判断时用日语回答。');
+    expect(approved.json().messages.at(-1)?.content).toBe('モデルから回答がありませんでした。質問に情報を追加してお試しください。');
+    expect((await notes(owner, householdId)).notes[0]?.title).toBe('旅行の準備');
+
+    const continued = await send(owner, householdId, approved.json(), 'Thanks', 'fr');
+    expect(continued.statusCode).toBe(200);
+    expect(complete.mock.calls[2]?.[1]).toContain('无法判断时用简体中文回答。');
+
+    const ambiguous = await send(owner, householdId, continued.json(), '❓', 'ja');
+    expect(ambiguous.statusCode).toBe(200);
+    expect(complete.mock.calls[3]?.[1]).toContain('用户最新消息没有可用于判断语言的文字。请用日语回答。');
   });
 
   test('a connection check runs one harmless tool round trip and never sends household data', async () => {

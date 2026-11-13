@@ -1,3 +1,4 @@
+import { currentLanguage, i18n, useTranslation } from '../../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import ListChecks from 'lucide-react-native/icons/list-checks';
@@ -21,6 +22,7 @@ const PROGRESS_POLL_MS = 2_000;
 
 function Conversation({ householdId, householdName, writable, conversationId }: AssistantHouseholdProps & { conversationId: string }) {
   const router = useRouter();
+  const { t } = useTranslation('assistant');
   const desktop = useDesktop();
   const inspector = useWindowDimensions().width >= theme.layout.assistantInspectorBreakpoint || desktop;
   const trigger = useRef<View>(null);
@@ -30,7 +32,7 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
   const [outgoing, setOutgoing] = useState<{ text: string; baseline: number } | null>(null);
   const load = useCallback(async (token: string) => {
     const [conversation, providers, history] = await Promise.all([
-      sessionApiClient.getAssistantConversation(token, householdId, conversationId),
+      sessionApiClient.getAssistantConversation(token, householdId, conversationId, undefined, currentLanguage()),
       sessionApiClient.listAssistantProviders(token, householdId),
       sessionApiClient.listAssistantConversations(token, householdId),
     ]);
@@ -49,7 +51,7 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
-        const latest = await sessionApiClient.getAssistantConversation(await assistantToken(), householdId, conversationId);
+        const latest = await sessionApiClient.getAssistantConversation(await assistantToken(), householdId, conversationId, undefined, currentLanguage());
         // A slow poll must not replace a newer copy, such as the final result of the request itself.
         if (!stopped) setData(current => current && Date.parse(latest.updatedAt) >= Date.parse(current.conversation.updatedAt) ? { ...current, conversation: latest } : current);
       } catch {
@@ -67,7 +69,7 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
     setOutgoing({ text: message, baseline });
     const result = await operation.run(token => sessionApiClient.sendAssistantMessage(token, householdId, conversationId, {
       message, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', expectedVersion: conversation.version,
-    }));
+    }, undefined, currentLanguage()));
     setOutgoing(null);
     if (result) {
       setData(current => current ? { ...current, conversation: result.value } : current);
@@ -90,7 +92,7 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
   /** Runs the approved proposals; every other pending one is declined. */
   const decide = async (approvedIds: string[]): Promise<boolean> => {
     if (!conversation || !writable || conversation.state === 'running') return false;
-    const result = await operation.run(token => sessionApiClient.decideAssistantAction(token, householdId, conversationId, { approvedIds, expectedVersion: conversation.version }));
+    const result = await operation.run(token => sessionApiClient.decideAssistantAction(token, householdId, conversationId, { approvedIds, expectedVersion: conversation.version }, undefined, currentLanguage()));
     if (result) {
       query.setData(current => current ? { ...current, conversation: result.value } : current);
       setPreviewOpen(false);
@@ -106,27 +108,27 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
   };
   const feedback = <Stack gap={3}>
       {query.error ? <LoadError message={query.error} retrying={query.loading} disabled={operation.busy} onRetry={() => { void query.reload(); }} /> : null}
-      {operation.error ? <Banner>{operation.error} 已尝试同步对话，请查看最新结果。</Banner> : null}
-      {!writable ? <Banner>当前离线，请恢复连接后继续对话。</Banner> : null}
-      {query.loading && !query.data ? <LoadingState label="正在加载对话" /> : null}
+      {operation.error ? <Banner>{t('conversation.syncError', { error: operation.error })}</Banner> : null}
+      {!writable ? <Banner>{t('conversation.offline')}</Banner> : null}
+      {query.loading && !query.data ? <LoadingState label={t('conversation.loading')} /> : null}
       {conversation ? <>
-        {!provider ? <Banner>这段对话的模型配置已删除或不再共享。历史内容仍可查看，请返回助手首页选择可用模型开始对话。</Banner> : null}
-        {conversation.state === 'running' ? <Button label="刷新处理结果" tone="secondary" size="compact" loading={query.loading} disabled={operation.busy} onPress={() => { void query.reload(); }} style={{ alignSelf: 'flex-start' }} /> : null}
+        {!provider ? <Banner>{t('conversation.noProvider')}</Banner> : null}
+        {conversation.state === 'running' ? <Button label={t('conversation.refresh')} tone="secondary" size="compact" loading={query.loading} disabled={operation.busy} onPress={() => { void query.reload(); }} style={{ alignSelf: 'flex-start' }} /> : null}
       </> : null}
     </Stack>;
   const pending = conversation?.pendingActions ?? [];
   const lone = pending.length === 1 ? pending[0] : undefined;
   const preview = pending.length && conversation ? <AssistantActionsPreview key={`${conversation.id}:${conversation.version}`} householdId={householdId} actions={pending} busy={operation.busy || !writable || conversation.state === 'running'} disabled={!provider || !writable || query.loading || query.error !== null}
-    onDecide={approvedIds => { void decide(approvedIds); }} onAdjust={() => { void decide([]).then(success => { if (success) setDraft(current => ({ value: '请调整刚才的建议：', revision: (current?.revision ?? 0) + 1 })); }); }} /> : null;
-  const previewLink = pending.length ? <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="查看待确认操作" accessibilityState={{ disabled: operation.busy }} disabled={operation.busy}
+    onDecide={approvedIds => { void decide(approvedIds); }} onAdjust={() => { void decide([]).then(success => { if (success) setDraft(current => ({ value: i18n.t('assistant:conversation.adjust'), revision: (current?.revision ?? 0) + 1 })); }); }} /> : null;
+  const previewLink = pending.length ? <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel={t('conversation.openPreview')} accessibilityState={{ disabled: operation.busy }} disabled={operation.busy}
     onPress={() => setPreviewOpen(true)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], padding: theme.spacing[4], backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.surface, borderRadius: theme.borderRadii.lg, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator })}>
-    <ListChecks color={theme.colors.inkMuted} size={theme.controlSizes.icon} /><Stack gap={1} style={{ flex: 1 }}><Text variant="label">{lone ? typeof lone.arguments.title === 'string' ? lone.arguments.title : '有一项操作需要你确认' : `有 ${pending.length} 项操作需要你确认`}</Text><Text variant="caption">查看内容 · 确认后才会执行</Text></Stack><ChevronRight color={theme.colors.inkMuted} size={theme.controlSizes.icon} />
+    <ListChecks color={theme.colors.inkMuted} size={theme.controlSizes.icon} /><Stack gap={1} style={{ flex: 1 }}><Text variant="label">{lone ? typeof lone.arguments.title === 'string' ? lone.arguments.title : t('conversation.onePending') : t('conversation.manyPending', { count: pending.length })}</Text><Text variant="caption">{t('conversation.previewHint')}</Text></Stack><ChevronRight color={theme.colors.inkMuted} size={theme.controlSizes.icon} />
   </Pressable> : null;
-  return <AssistantWorkspace householdId={householdId} householdName={householdName} title={conversation?.title ?? '家庭助手'} conversationId={conversationId} conversations={history}
+  return <AssistantWorkspace householdId={householdId} householdName={householdName} title={conversation ? conversation.title ?? t('workspace.newConversation') : t('home.familyAssistant')} conversationId={conversationId} conversations={history}
     busy={operation.busy} onRefresh={() => { if (!operation.busy) void query.reload(); }}
     inspector={inspector && preview ? <View testID="assistant-inspector" style={{ width: theme.layout.assistantInspectorWidth, borderLeftWidth: theme.borderWidths.default, borderLeftColor: theme.colors.separator, backgroundColor: theme.colors.surface }}>
         {desktop ? <View testID="desktop-column-header" style={{ height: theme.layout.pageHeaderHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingHorizontal: theme.spacing[5], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
-          <Heading variant="label" level={2}>待确认</Heading>
+          <Heading variant="label" level={2}>{t('conversation.pending')}</Heading>
           <View style={{ minWidth: theme.spacing[4] + 2, height: theme.spacing[4] + 2, paddingHorizontal: theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.ink, alignItems: 'center', justifyContent: 'center' }}><Text variant="caption" color="surface" style={{ fontFamily: theme.fontFamilies.numericStrong, lineHeight: theme.spacing[4] + 2 }}>{pending.length}</Text></View>
         </View> : null}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing[4] }}>{preview}</ScrollView>
@@ -140,7 +142,7 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
         voiceInput={{ householdId, providerId: transcriptionProvider(query.data?.providers ?? [])?.id ?? null }}
         modelControl={<AssistantModelPicker householdId={householdId} providers={chatProviders(query.data?.providers ?? [])} selectedId={conversation.providerId} busy={operation.busy || !writable || pending.length > 0 || conversation.state === 'running'} newConversation onSelect={id => { void start(id); }} />} /> : <ScrollView contentContainerStyle={{ padding: theme.spacing[5] }}>{feedback}</ScrollView>}
     </View>
-    {!inspector && previewOpen && preview ? <AppDialog title="操作预览" size="sheet" trigger={trigger} busy={operation.busy} onClose={() => setPreviewOpen(false)}>{operation.error ? <Banner>{operation.error} 已尝试同步对话，请查看最新结果。</Banner> : null}{preview}</AppDialog> : null}
+    {!inspector && previewOpen && preview ? <AppDialog title={t('conversation.preview')} size="sheet" trigger={trigger} busy={operation.busy} onClose={() => setPreviewOpen(false)}>{operation.error ? <Banner>{t('conversation.syncError', { error: operation.error })}</Banner> : null}{preview}</AppDialog> : null}
   </AssistantWorkspace>;
 }
 
