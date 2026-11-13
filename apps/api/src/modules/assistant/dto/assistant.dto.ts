@@ -108,7 +108,7 @@ export class AssistantPendingActionDto {
 
 export class AssistantConversationSummaryDto {
   @ApiProperty() id!: string;
-  @ApiProperty() title!: string;
+  @ApiProperty({ type: String, nullable: true }) title!: string | null;
   @ApiProperty() updatedAt!: string;
 }
 

@@ -867,8 +867,8 @@ export class ApiClient {
     return this.authenticated<void>('DELETE', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/providers/${encodeURIComponent(providerId)}`, accessToken, undefined, signal);
   }
 
-  async transcribeAssistantAudio(accessToken: string, householdId: string, body: TranscribeAssistantAudioDto, signal?: AbortSignal): Promise<AssistantTranscriptionResponseDto> {
-    return this.authenticated<AssistantTranscriptionResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/transcriptions`, accessToken, body, signal);
+  async transcribeAssistantAudio(accessToken: string, householdId: string, body: TranscribeAssistantAudioDto, signal?: AbortSignal, language?: 'zh' | 'ja'): Promise<AssistantTranscriptionResponseDto> {
+    return this.authenticated<AssistantTranscriptionResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/transcriptions`, accessToken, body, signal, language);
   }
 
   async listAssistantConversations(accessToken: string, householdId: string, signal?: AbortSignal): Promise<AssistantConversationListResponseDto> {
@@ -879,20 +879,20 @@ export class ApiClient {
     return this.authenticated<AssistantConversationResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations`, accessToken, body, signal);
   }
 
-  async getAssistantConversation(accessToken: string, householdId: string, conversationId: string, signal?: AbortSignal): Promise<AssistantConversationResponseDto> {
-    return this.authenticated<AssistantConversationResponseDto>('GET', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}`, accessToken, undefined, signal);
+  async getAssistantConversation(accessToken: string, householdId: string, conversationId: string, signal?: AbortSignal, language?: 'zh' | 'ja'): Promise<AssistantConversationResponseDto> {
+    return this.authenticated<AssistantConversationResponseDto>('GET', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}`, accessToken, undefined, signal, language);
   }
 
   async deleteAssistantConversation(accessToken: string, householdId: string, conversationId: string, signal?: AbortSignal): Promise<void> {
     return this.authenticated<void>('DELETE', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}`, accessToken, undefined, signal);
   }
 
-  async sendAssistantMessage(accessToken: string, householdId: string, conversationId: string, body: SendAssistantMessageDto, signal?: AbortSignal): Promise<AssistantConversationResponseDto> {
-    return this.authenticated<AssistantConversationResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}/messages`, accessToken, body, signal);
+  async sendAssistantMessage(accessToken: string, householdId: string, conversationId: string, body: SendAssistantMessageDto, signal?: AbortSignal, language?: 'zh' | 'ja'): Promise<AssistantConversationResponseDto> {
+    return this.authenticated<AssistantConversationResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}/messages`, accessToken, body, signal, language);
   }
 
-  async decideAssistantAction(accessToken: string, householdId: string, conversationId: string, body: DecideAssistantActionDto, signal?: AbortSignal): Promise<AssistantConversationResponseDto> {
-    return this.authenticated<AssistantConversationResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}/decision`, accessToken, body, signal);
+  async decideAssistantAction(accessToken: string, householdId: string, conversationId: string, body: DecideAssistantActionDto, signal?: AbortSignal, language?: 'zh' | 'ja'): Promise<AssistantConversationResponseDto> {
+    return this.authenticated<AssistantConversationResponseDto>('POST', `/api/v1/households/${encodeURIComponent(householdId)}/assistant/conversations/${encodeURIComponent(conversationId)}/decision`, accessToken, body, signal, language);
   }
 
   private async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -916,6 +916,7 @@ export class ApiClient {
     accessToken: string,
     body?: unknown,
     signal?: AbortSignal,
+    language?: 'zh' | 'ja',
   ): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
@@ -923,6 +924,7 @@ export class ApiClient {
       headers: {
         authorization: `Bearer ${accessToken}`,
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...(language === undefined ? {} : { 'accept-language': language }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       ...(signal === undefined ? {} : { signal }),

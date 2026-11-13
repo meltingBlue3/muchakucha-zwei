@@ -22,6 +22,12 @@ describe('Qwen-ASR transcription', () => {
     });
   });
 
+  test('recognizes Japanese with inverse text normalization disabled', async () => {
+    const transport = vi.fn<AssistantTransport>().mockResolvedValue(qwenResponse('明日の午後3時に迎えに行く。'));
+    await expect(new AssistantTranscriber(transport).transcribe(config, audio, 'ja')).resolves.toMatchObject({ text: '明日の午後3時に迎えに行く。' });
+    expect(transport.mock.calls[0]?.[2]).toMatchObject({ asr_options: { language: 'ja', enable_itn: false } });
+  });
+
   test('reads content as a string or as text parts, and silence as empty text', async () => {
     const transport = vi.fn<AssistantTransport>()
       .mockResolvedValueOnce(qwenResponse([{ text: '周六' }, { text: '9:30' }], null, null))

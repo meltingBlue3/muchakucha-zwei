@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import type { AssistantConversationResponseDto } from '@muchakucha/api-client';
@@ -15,21 +16,22 @@ import { useAssistantVoiceInput } from './use-assistant-voice-input';
 import { MarkdownBody } from '../notes/markdown-body';
 import { useDesktop } from '../../ui/use-desktop';
 
-const sectionNames = { events: '日程', tasks: '任务', notes: '笔记' } as const;
+const sectionResources = { events: 'event', tasks: 'task', notes: 'note' } as const;
 
 function QueryRecord({ record, onOpenSource }: { record: AssistantConversationRecord; onOpenSource?: ((link: NonNullable<AssistantSource['link']>) => void) | undefined }) {
   const [open, setOpen] = useState(false);
+  const { t } = useTranslation('assistant');
   const trigger = useRef<View>(null);
   return <>
-    <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel={`查看查询依据：${record.content}`} onPress={() => setOpen(true)} style={({ pressed }) => ({ flexDirection: 'row', gap: theme.spacing[2], alignItems: 'center', minHeight: theme.controlSizes.touchTarget, paddingVertical: theme.spacing[2], borderRadius: theme.borderRadii.sm, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
+    <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel={t('panel.evidenceLink', { content: record.content })} onPress={() => setOpen(true)} style={({ pressed }) => ({ flexDirection: 'row', gap: theme.spacing[2], alignItems: 'center', minHeight: theme.controlSizes.touchTarget, paddingVertical: theme.spacing[2], borderRadius: theme.borderRadii.sm, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
       <Layers size={theme.controlSizes.icon} color={theme.colors.inkMuted} /><Text variant="caption" color={record.failed ? 'destructive' : 'inkMuted'} style={{ flex: 1 }}>{record.content}</Text><ChevronRight size={theme.controlSizes.icon} color={theme.colors.inkMuted} />
     </Pressable>
-    {open ? <AppDialog title="查询依据" size="sheet" busy={false} trigger={trigger} onClose={() => setOpen(false)}><Stack gap={4}>
-      <Text variant="bodySm">以下是本次查询时的内容，可能与当前最新数据不同。</Text>
+    {open ? <AppDialog title={t('panel.evidence')} size="sheet" busy={false} trigger={trigger} onClose={() => setOpen(false)}><Stack gap={4}>
+      <Text variant="bodySm">{t('panel.snapshot')}</Text>
       <Text>{record.content}</Text>
       {record.sources?.map((source, index) => <Stack key={index} gap={2} style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4] }}>
         <Inline gap={3} style={{ alignItems: 'flex-start' }}><Heading variant="section" level={2} style={{ flex: 1 }}>{source.title}</Heading>
-          {source.link && onOpenSource ? <Button label="打开" accessibilityLabel={`打开${sectionNames[source.link.section]}：${source.title}`} tone="secondary" size="compact"
+          {source.link && onOpenSource ? <Button label={t('panel.open')} accessibilityLabel={t('panel.openRecord', { resource: t(`resources.${sectionResources[source.link.section]}`), title: source.title })} tone="secondary" size="compact"
             onPress={() => { const link = source.link!; setOpen(false); onOpenSource(link); }} /> : null}</Inline>
         {source.excerpt ? <Text selectable>{source.excerpt}</Text> : null}</Stack>)}
     </Stack></AppDialog> : null}
@@ -49,6 +51,7 @@ export function AssistantConversationPanel({ conversation, busy, disabled, onSen
   voiceInput?: { householdId: string; providerId: string | null };
 }) {
   const [message, setMessage] = useState('');
+  const { t } = useTranslation('assistant');
   const scroll = useRef<ScrollView>(null);
   const input = useRef<TextInput>(null);
   const followEnd = useRef(true);
@@ -66,7 +69,7 @@ export function AssistantConversationPanel({ conversation, busy, disabled, onSen
       if (!(await onSend(text))) setMessage(current => current || text);
     } finally { sending.current = false; }
   };
-  const records = useMemo(() => assistantConversationRecords(conversation.messages), [conversation.messages]);
+  const records = useMemo(() => assistantConversationRecords(conversation.messages, t), [conversation.messages, t]);
   const desktop = useDesktop();
   const bubble = desktop ? { ...userBubble, paddingVertical: theme.spacing[2] + 2, paddingHorizontal: theme.spacing[4] } : userBubble;
   const userText = desktop ? theme.typography.chatBody : undefined;
@@ -76,22 +79,22 @@ export function AssistantConversationPanel({ conversation, busy, disabled, onSen
       onContentSizeChange={() => { if (followEnd.current) scroll.current?.scrollToEnd({ animated: false }); }}
       contentContainerStyle={{ flexGrow: 1, padding: theme.spacing[5], gap: theme.spacing[5], width: '100%', maxWidth: theme.layout.assistantReadingWidth, alignSelf: 'center' }}>
       {records.length === 0 && !outgoing ? <Stack gap={4} style={{ flex: 1, justifyContent: 'center', paddingVertical: theme.spacing[8] }}>
-        <Sparkles size={theme.spacing[8]} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} /><Heading variant="heading" level={2}>今天，想一起安排什么？</Heading><Text color="inkMuted">从一个问题开始，或让我帮你记下要做的事。</Text>
+        <Sparkles size={theme.spacing[8]} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} /><Heading variant="heading" level={2}>{t('panel.welcome')}</Heading><Text color="inkMuted">{t('panel.welcomeDetail')}</Text>
         <PromptSuggestions disabled={blocked || voice.engaged} onPick={prompt => { setMessage(prompt); input.current?.focus(); }} />
       </Stack> : records.map((item, index) => item.kind === 'query' ? <QueryRecord key={index} record={item} onOpenSource={onOpenSource} /> : <Stack key={index} gap={desktop ? 1 : 2} style={item.kind === 'user'
         ? bubble
         : item.kind === 'operation' ? { padding: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: item.failed ? theme.colors.destructiveSoft : theme.colors.successSoft }
         : { paddingVertical: theme.spacing[1] }}>
-        {item.kind !== 'user' ? <Inline gap={2}>{item.kind === 'assistant' ? <Sparkles size={theme.controlSizes.icon} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} /> : <CircleCheck size={theme.controlSizes.icon} color={item.failed ? theme.colors.destructive : theme.colors.success} />}<Text variant="caption" color={item.kind === 'assistant' ? 'ink' : 'inkMuted'}>{item.kind === 'operation' ? '执行记录' : '助手'}</Text></Inline> : null}
-        {item.kind === 'assistant' ? <MarkdownBody chat source={item.content} tableLabel="助手表格，可横向滚动" headingOffset={1} /> : <Text selectable variant={item.kind === 'operation' ? 'bodySm' : 'body'} color={item.failed ? 'destructive' : 'ink'} style={item.kind === 'user' ? userText : undefined}>{item.content}</Text>}
+        {item.kind !== 'user' ? <Inline gap={2}>{item.kind === 'assistant' ? <Sparkles size={theme.controlSizes.icon} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} /> : <CircleCheck size={theme.controlSizes.icon} color={item.failed ? theme.colors.destructive : theme.colors.success} />}<Text variant="caption" color={item.kind === 'assistant' ? 'ink' : 'inkMuted'}>{item.kind === 'operation' ? t('panel.execution') : t('assistant')}</Text></Inline> : null}
+        {item.kind === 'assistant' ? <MarkdownBody chat source={item.content} tableLabel={t('panel.table')} headingOffset={1} /> : <Text selectable variant={item.kind === 'operation' ? 'bodySm' : 'body'} color={item.failed ? 'destructive' : 'ink'} style={item.kind === 'user' ? userText : undefined}>{item.content}</Text>}
       </Stack>)}
       {outgoing ? <Stack gap={2} style={bubble}><Text selectable style={userText}>{outgoing}</Text></Stack> : null}
       {pendingPreview}
-      {busy || conversation.state === 'running' ? <LoadingState label="助手正在处理" /> : null}
+      {busy || conversation.state === 'running' ? <LoadingState label={t('panel.working')} /> : null}
     </ScrollView>
     <Stack gap={2} style={{ paddingHorizontal: theme.spacing[4], paddingTop: theme.spacing[2], paddingBottom: theme.spacing[3], width: '100%', maxWidth: theme.layout.assistantReadingWidth, alignSelf: 'center' }}>
       {feedback}
-      {conversation.pendingActions.length ? <Text variant="caption">请先查看并确认操作，或取消后继续对话。</Text> : null}
+      {conversation.pendingActions.length ? <Text variant="caption">{t('panel.pending')}</Text> : null}
       <AssistantComposer ref={input} value={message} onChangeText={setMessage} onSend={() => { void send(); }} blocked={blocked} busy={busy} voice={voice} modelControl={modelControl} />
     </Stack>
   </View>;

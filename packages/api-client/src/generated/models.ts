@@ -544,7 +544,7 @@ export interface SendAssistantMessageDto { message: string; timeZone: string; ex
 export interface DecideAssistantActionDto { approvedIds: string[]; expectedVersion: number }
 export interface AssistantVisibleMessageDto { role: 'user' | 'assistant' | 'tool'; content: string }
 export interface AssistantPendingActionDto { id: string; name: string; arguments: Record<string, unknown> }
-export interface AssistantConversationSummaryDto { id: string; title: string; updatedAt: string }
+export interface AssistantConversationSummaryDto { id: string; title: string | null; updatedAt: string }
 export interface AssistantConversationListResponseDto { conversations: AssistantConversationSummaryDto[] }
 export interface AssistantConversationResponseDto extends AssistantConversationSummaryDto {
   providerId: string | null;

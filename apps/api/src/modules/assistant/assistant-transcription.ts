@@ -1,3 +1,4 @@
+import type { AssistantLanguage } from './assistant-language.js';
 import { BadRequestException, HttpException, Inject, Injectable, Optional } from '@nestjs/common';
 import { ASSISTANT_TRANSPORT, validConfig } from './assistant-provider.js';
 import {
@@ -62,7 +63,7 @@ export function silentWav(): AssistantAudio {
 export class AssistantTranscriber {
   constructor(@Optional() @Inject(ASSISTANT_TRANSPORT) private readonly transport: AssistantTransport = postAssistantJson) {}
 
-  async transcribe(config: AssistantProviderConfig, audio: AssistantAudio): Promise<AssistantTranscription> {
+  async transcribe(config: AssistantProviderConfig, audio: AssistantAudio, language: AssistantLanguage = 'zh'): Promise<AssistantTranscription> {
     const url = validateAssistantBaseUrl(config.baseUrl);
     if (!isTranscriptionProtocol(config.protocol) || !validConfig(config)) {
       throw new BadRequestException({ code: 'ASSISTANT_PROVIDER_CONFIG_INVALID', message: 'The transcription configuration is invalid.' });
@@ -72,8 +73,8 @@ export class AssistantTranscriber {
       const value = await this.transport(url, { authorization: `Bearer ${config.apiKey}` }, {
         model: config.model, stream: false,
         messages: [{ role: 'user', content: [{ type: 'input_audio', input_audio: { data: `data:${audio.mimeType};base64,${audio.data}` } }] }],
-        // Mandarin by default; inverse text normalization writes times and dates as digits ("3点" rather than "三点").
-        asr_options: { language: 'zh', enable_itn: true },
+        // Inverse text normalization is supported for Chinese, but not Japanese.
+        asr_options: { language, enable_itn: language === 'zh' },
       });
       return parseQwenResponse(value);
     } catch (error) {

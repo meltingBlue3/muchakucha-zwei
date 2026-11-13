@@ -39,10 +39,10 @@ async function insertActor(username: string): Promise<ActorFixture> {
   return { userId, accessToken: await jwt.signAsync({ sub: userId, sid: sessionId }) };
 }
 
-function request(actor: ActorFixture, method: 'GET' | 'POST' | 'PUT', path: string, payload?: unknown) {
+function request(actor: ActorFixture, method: 'GET' | 'POST' | 'PUT', path: string, payload?: unknown, language?: string) {
   return app.getHttpAdapter().getInstance().inject({
     method, url: `/api/v1${path}`,
-    headers: { authorization: `Bearer ${actor.accessToken}`, ...(payload === undefined ? {} : { 'content-type': 'application/json' }) },
+    headers: { authorization: `Bearer ${actor.accessToken}`, ...(language === undefined ? {} : { 'accept-language': language }), ...(payload === undefined ? {} : { 'content-type': 'application/json' }) },
     ...(payload === undefined ? {} : { payload: JSON.stringify(payload) }),
   });
 }
@@ -91,12 +91,14 @@ describe('voice transcription configurations', () => {
   test('a member transcribes through a shared configuration; the owner sees the count and nothing is stored', async () => {
     const provider = await createProvider(owner, householdId, 'qwen-asr', 'household');
     expect(provider).toMatchObject({ protocol: 'qwen-asr', hasCredential: true });
-    const response = await request(member, 'POST', `/households/${householdId}/assistant/transcriptions`, { providerId: provider.id, mimeType: 'audio/mp4', audio: recording });
+    transcribe.mockResolvedValueOnce({ text: '明日の午後3時に迎えに行く。', usage: { inputTokens: 75, outputTokens: 9 } });
+    const response = await request(member, 'POST', `/households/${householdId}/assistant/transcriptions`, { providerId: provider.id, mimeType: 'audio/mp4', audio: recording }, 'ja');
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ text: '明天下午3点接孩子。' });
+    expect(response.json()).toEqual({ text: '明日の午後3時に迎えに行く。' });
     expect(transcribe).toHaveBeenCalledWith(
       { protocol: 'qwen-asr', baseUrl: 'https://dashscope.example.com/compatible-mode/v1', model: 'qwen3-asr-flash', apiKey: asrSecret },
       { data: recording, mimeType: 'audio/mp4' },
+      'ja',
     );
     const list = (await request(owner, 'GET', `/households/${householdId}/assistant/providers`)).json() as { providers: AssistantProviderResponseDto[] };
     expect(list.providers[0]?.usage).toMatchObject({ requests: 1, inputTokens: 75, members: [expect.objectContaining({ userId: member.userId, requests: 1 })] });
