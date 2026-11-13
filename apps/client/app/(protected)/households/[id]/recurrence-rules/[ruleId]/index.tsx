@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../../src/i18n';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
@@ -22,15 +23,8 @@ import type { Theme } from '../../../../../../src/ui/theme';
 import { useDesktop } from '../../../../../../src/ui/use-desktop';
 import { useMinuteClock } from '../../../../../../src/ui/use-minute-clock';
 
-const LOAD_ERROR = '无法加载这条重复安排，请检查网络连接后重试。';
 // One copy for every 404 cause (T-07-46): it says only what is true from the
 // user's side, that they cannot see the rule.
-const NOT_FOUND_ERROR = '这条重复安排不存在，或者你已经看不到它了。';
-const END_ACTION = '结束此重复';
-const END_CONFIRM_PROMPT = '确定结束？明天起不再重复，今天和之前的安排都保留。';
-const END_ERROR = '没有结束成功。这个重复安排没有发生任何改变，请重试。';
-const END_FORBIDDEN = '只有创建者、管理员或所有者可以结束这条重复规则。';
-const ENDED_NOTE = '这个重复已经结束了。';
 
 function resolveDeviceTimeZone(): string {
   try {
@@ -43,8 +37,8 @@ function resolveDeviceTimeZone(): string {
 const pad = (value: number) => String(value).padStart(2, '0');
 
 /** 16:30–17:30 for a timed event, 20:00 for a task, 全天 for an all-day event; null when a task has no time. */
-function timeOf(rule: RecurrenceRuleListItemDto): string | null {
-  if (!rule.startTimeLocal) return rule.kind === 'event' ? '全天' : null;
+function timeOf(rule: RecurrenceRuleListItemDto, allDay: string): string | null {
+  if (!rule.startTimeLocal) return rule.kind === 'event' ? allDay : null;
   const start = rule.startTimeLocal.slice(0, 5);
   if (rule.kind !== 'event' || !rule.durationMinutes) return start;
   const [hours = 0, minutes = 0] = start.split(':').map(Number);
@@ -58,6 +52,7 @@ function timeOf(rule: RecurrenceRuleListItemDto): string | null {
  * foot and asks first, in the same window. An ended rule offers neither.
  */
 export default function RecurrenceRuleDetailRoute() {
+  const { t } = useTranslation(['recurrence', 'auth', 'households', 'events']);
   const desktop = useDesktop();
   const { id, ruleId } = useLocalSearchParams<{ id: string; ruleId: string }>();
   const router = useRouter();
@@ -76,10 +71,10 @@ export default function RecurrenceRuleDetailRoute() {
   const [rule, setRule] = useState<RecurrenceRuleListItemDto | null>(null);
   const loadedOnce = useRef(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'rule.loadError' | 'rule.notFound' | null>(null);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [ending, setEnding] = useState(false);
-  const [endError, setEndError] = useState<string | null>(null);
+  const [endError, setEndError] = useState<'rule.endError' | 'rule.endForbidden' | null>(null);
 
   const householdId = id ?? currentHouseholdId;
   const deviceTimeZone = resolveDeviceTimeZone();
@@ -91,13 +86,13 @@ export default function RecurrenceRuleDetailRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期，请重新登录。');
+        setError('auth:errors.sessionExpired');
         return;
       }
       setRule(await sessionApiClient.getRecurrenceRule(token, householdId, ruleId));
       loadedOnce.current = true;
     } catch (caught: unknown) {
-      setError(caught instanceof ApiClientError && caught.status === 404 ? NOT_FOUND_ERROR : LOAD_ERROR);
+      setError(caught instanceof ApiClientError && caught.status === 404 ? 'rule.notFound' : 'rule.loadError');
     } finally {
       setLoading(false);
     }
@@ -120,7 +115,7 @@ export default function RecurrenceRuleDetailRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setEndError(END_ERROR);
+        setEndError('rule.endError');
         return;
       }
       await sessionApiClient.endRecurrenceRule(token, householdId, ruleId);
@@ -130,7 +125,7 @@ export default function RecurrenceRuleDetailRoute() {
       exitAllowed.current = true;
       dismiss();
     } catch (caught: unknown) {
-      setEndError(caught instanceof ApiClientError && caught.status === 403 ? END_FORBIDDEN : END_ERROR);
+      setEndError(caught instanceof ApiClientError && caught.status === 403 ? 'rule.endForbidden' : 'rule.endError');
     } finally {
       setEnding(false);
     }
@@ -138,7 +133,7 @@ export default function RecurrenceRuleDetailRoute() {
 
   if (viewState === 'accessChanged') {
     return (
-      <AppShell accessibilityLabel="家庭访问权已变化">
+      <AppShell accessibilityLabel={t('households:accessChanged')}>
         <AccessChangedPanel
           hasOtherHouseholds={households.length > 0}
           {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
@@ -151,9 +146,9 @@ export default function RecurrenceRuleDetailRoute() {
 
   if (householdId === undefined || householdId === '') {
     return (
-      <AppShell accessibilityLabel="页面未找到">
+      <AppShell accessibilityLabel={t('households:pageMissing')}>
         <Stack gap={4}>
-          <Text>这个页面暂时无法访问。</Text>
+          <Text>{t('households:pageUnavailable')}</Text>
         </Stack>
       </AppShell>
     );
@@ -171,12 +166,12 @@ export default function RecurrenceRuleDetailRoute() {
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={END_ACTION}
+        accessibilityLabel={t('rule.endAction')}
         disabled={ending}
         onPress={() => { setEndError(null); setEndConfirmOpen(true); }}
         style={({ pressed }) => ({ minHeight: desktop ? activeTheme.layout.desktopControl : activeTheme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: activeTheme.spacing[2], marginLeft: -activeTheme.spacing[2], borderRadius: activeTheme.borderRadii.md, backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.transparent })}
       >
-        <Text variant="label" color="destructive">{END_ACTION}</Text>
+        <Text variant="label" color="destructive">{t('rule.endAction')}</Text>
       </Pressable>
     </View>
   ) : undefined;
@@ -185,22 +180,22 @@ export default function RecurrenceRuleDetailRoute() {
     <RouteWindow
       resource="recurrence-rules"
       size={size}
-      title={endConfirmOpen ? '结束重复安排' : '重复安排详情'}
+      title={endConfirmOpen ? t('rule.endTitle') : t('rule.detail')}
       busy={ending}
       onClose={close}
       onBackStep={endConfirmOpen ? close : undefined}
       exitAllowed={exitAllowed}
       fallback={<RecurrenceListScreen />}
       {...(footer ? { footer } : {})}
-      {...(writable && !endConfirmOpen ? { headerActions: <DetailEditButton accessibilityLabel="编辑重复安排" disabled={ending} onPress={handleEdit} /> } : {})}
+      {...(writable && !endConfirmOpen ? { headerActions: <DetailEditButton accessibilityLabel={t('rule.edit')} disabled={ending} onPress={handleEdit} /> } : {})}
     >
       {endConfirmOpen ? <Stack gap={3}>
-        <Text>{END_CONFIRM_PROMPT}</Text>
-        {endError ? <Banner>{endError}</Banner> : null}
-        <ConfirmActions confirmLabel="确认结束" destructive busy={ending} onCancel={close} onConfirm={() => { void handleConfirmEnd(); }} />
+        <Text>{t('rule.endPrompt')}</Text>
+        {endError ? <Banner>{t(endError)}</Banner> : null}
+        <ConfirmActions confirmLabel={t('rule.confirmEnd')} destructive busy={ending} onCancel={close} onConfirm={() => { void handleConfirmEnd(); }} />
       </Stack> : <Stack gap={desktop ? 4 : 5}>
-        {loading ? <LoadingState label="正在加载重复安排" /> : null}
-        {error !== null ? <LoadError message={error} onRetry={() => void fetchRule()} /> : null}
+        {loading ? <LoadingState label={t('rule.loading')} /> : null}
+        {error !== null ? <LoadError message={t(error)} onRetry={() => void fetchRule()} /> : null}
         {rule !== null && formatted !== null ? <>
           <Stack gap={2}>
             {rule.kind !== null ? <View style={{ alignSelf: 'flex-start' }}><RecurrenceKindBadge kind={rule.kind} /></View> : null}
@@ -208,7 +203,7 @@ export default function RecurrenceRuleDetailRoute() {
             <Heading level={2} style={desktop ? activeTheme.typography.paneTitle : undefined}>{rule.title}</Heading>
           </Stack>
           <RuleFields rule={rule} summary={formatted.summary} notes={[formatted.clampNote, formatted.timeZoneNote]} ended={ended} todayIso={todayIso} />
-          {ended ? <Text color="inkMuted">{ENDED_NOTE}</Text> : <Upcoming rule={rule} todayIso={todayIso} />}
+          {ended ? <Text color="inkMuted">{t('rule.endedNote')}</Text> : <Upcoming rule={rule} todayIso={todayIso} />}
         </> : null}
       </Stack>}
     </RouteWindow>
@@ -216,31 +211,33 @@ export default function RecurrenceRuleDetailRoute() {
 }
 
 function RuleFields({ rule, summary, notes, ended, todayIso }: { rule: RecurrenceRuleListItemDto; summary: string; notes: Array<string | null>; ended: boolean; todayIso: string }) {
+  const { t } = useTranslation(['recurrence', 'auth', 'households', 'events']);
   const activeTheme = useTheme<Theme>();
   const desktop = useDesktop();
-  const time = timeOf(rule);
+  const time = timeOf(rule, t('events:allDay'));
   const next = rule.nextOccurrenceDate;
   const age = next && rule.occasion === 'birthday' ? ageOn(rule, next) : null;
-  const nextValue = ended || !next ? '已结束' : (
+  const nextValue = ended || !next ? t('rule.ended') : (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[2] }}>
       {/* The same size as the plain values beside it: smaller in the wide pane only. */}
-      <Text variant={desktop ? 'bodySm' : 'body'} color="ink">{`${formatDate(parseDateValue(next), { weekday: true })}${age === null ? '' : ` · ${age} 岁`}`}</Text>
-      {next === todayIso ? <Chip tone="accent">今天</Chip> : null}
+      <Text variant={desktop ? 'bodySm' : 'body'} color="ink">{`${formatDate(parseDateValue(next), { weekday: true })}${age === null ? '' : ` · ${t('rule.age', { age })}`}`}</Text>
+      {next === todayIso ? <Chip tone="accent">{t('events:today')}</Chip> : null}
     </View>
   );
   return (
     <DetailPanel>
-      <DetailField label="重复规则" value={summary} notes={notes} />
-      {time ? <DetailField label="时间" value={time} /> : null}
-      <DetailField label="开始" value={formatDate(parseDateValue(rule.startsOn))} />
-      <DetailField label="下一次" value={nextValue} />
-      {rule.occasion === 'birthday' && rule.birthYear !== null ? <DetailField label="出生年份" value={`${rule.birthYear} 年`} /> : null}
+      <DetailField label={t('rule.label')} value={summary} notes={notes} />
+      {time ? <DetailField label={t('rule.time')} value={time} /> : null}
+      <DetailField label={t('rule.start')} value={formatDate(parseDateValue(rule.startsOn))} />
+      <DetailField label={t('rule.next')} value={nextValue} />
+      {rule.occasion === 'birthday' && rule.birthYear !== null ? <DetailField label={t('rule.birthYear')} value={t('rule.year', { year: rule.birthYear })} /> : null}
     </DetailPanel>
   );
 }
 
 /** The next few dates under the current rule, so a change can be checked before it is made. */
 function Upcoming({ rule, todayIso }: { rule: RecurrenceRuleListItemDto; todayIso: string }) {
+  const { t } = useTranslation(['recurrence', 'auth', 'households', 'events']);
   const activeTheme = useTheme<Theme>();
   const desktop = useDesktop();
   const dates = recurrencePreview(rule);
@@ -248,14 +245,14 @@ function Upcoming({ rule, todayIso }: { rule: RecurrenceRuleListItemDto; todayIs
   const time = rule.startTimeLocal ? ` ${rule.startTimeLocal.slice(0, 5)}` : '';
   return (
     <Stack gap={2} style={desktop ? { borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[4] } : undefined}>
-      <Text variant={desktop ? 'meta' : 'label'} color={desktop ? 'inkFaint' : 'inkMuted'}>{`接下来 ${dates.length} 次`}</Text>
+      <Text variant={desktop ? 'meta' : 'label'} color={desktop ? 'inkFaint' : 'inkMuted'}>{t('rule.upcoming', { count: dates.length })}</Text>
       {dates.map(date => (
         <View key={date} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}>
           <Text variant="time" color="ink">{`${formatDate(parseDateValue(date), { weekday: true })}${time}`}</Text>
-          {date === todayIso ? <Chip tone="accent">今天</Chip> : null}
+          {date === todayIso ? <Chip tone="accent">{t('events:today')}</Chip> : null}
         </View>
       ))}
-      <Text variant="caption" color="inkFaint" style={{ fontWeight: '400' }}>{`按当前规则推算 · ${rule.timezone}`}</Text>
+      <Text variant="caption" color="inkFaint" style={{ fontWeight: '400' }}>{t('rule.forecast', { timeZone: rule.timezone })}</Text>
     </Stack>
   );
 }

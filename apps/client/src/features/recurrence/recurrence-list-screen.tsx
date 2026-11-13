@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useResourceNavigation } from '../../ui/use-resource-navigation';
 import { useOpenWindowItem } from '../../ui/route-window';
@@ -17,10 +18,6 @@ import { HouseholdScreen } from '../households/household-screen';
 import { ListGroup } from '../../ui/list-group';
 import { EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 
-const LOAD_ERROR = '无法加载重复安排，请检查网络连接后重试。';
-// Straight quotes match the published sibling copy in `recurring-filter.ts`.
-const EMPTY_COPY = '还没有重复安排。创建任务或日程时打开「重复」，它就会出现在这里。';
-
 function resolveDeviceTimeZone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -30,6 +27,7 @@ function resolveDeviceTimeZone(): string {
 }
 
 export default function RecurrenceRulesIndexRoute() {
+  const { t } = useTranslation(['recurrence', 'auth', 'navigation']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const openResource = useResourceNavigation();
   const openRuleId = useOpenWindowItem('ruleId');
@@ -46,7 +44,7 @@ export default function RecurrenceRulesIndexRoute() {
   const loadedHousehold = useRef<string | null>(null);
   const requestGeneration = useRef(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'list.loadError' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const householdId = id ?? currentHouseholdId;
@@ -64,7 +62,7 @@ export default function RecurrenceRulesIndexRoute() {
       const token = await sessionTransport.getAccessToken();
       if (request !== requestGeneration.current) return;
       if (token === null) {
-        setError('登录已过期，请重新登录。');
+        setError('auth:errors.sessionExpired');
         return;
       }
       const result = await sessionApiClient.listRecurrenceRules(token, householdId);
@@ -75,7 +73,7 @@ export default function RecurrenceRulesIndexRoute() {
       // The stale list is deliberately left in place next to the error block:
       // losing what the user could already read is a worse failure mode than
       // showing it beside a retry.
-      if (request === requestGeneration.current) setError(LOAD_ERROR);
+      if (request === requestGeneration.current) setError('list.loadError');
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
@@ -108,23 +106,23 @@ export default function RecurrenceRulesIndexRoute() {
   }, [householdId, openResource]);
 
   return (
-    <HouseholdScreen active="recurrence-rules" subpage accessibilityLabel="重复安排" width="reading" refreshing={refreshing} onRefresh={handleRefresh}>
+    <HouseholdScreen active="recurrence-rules" subpage accessibilityLabel={t('navigation:pages.recurrence-rules')} width="reading" refreshing={refreshing} onRefresh={handleRefresh}>
       <Stack gap={desktop ? 0 : 5}>
-        <PageIntro title="重复安排" subtitle={desktop && !loading ? `${rules.length} 项 · 按下次发生时间排列` : '会自动重复的日程和任务，按下次发生的时间排列。'} controls={desktop ? <FilterOptions label="重复安排类型" hideLabel value={kind} options={[{ value: 'all', label: '全部', name: '全部重复安排' }, { value: 'event', label: '日程', name: '重复日程' }, { value: 'task', label: '任务', name: '重复任务' }]} onChange={setKind} /> : undefined} />
+        <PageIntro title={t('navigation:pages.recurrence-rules')} subtitle={desktop && !loading ? t('list.summary', { count: rules.length }) : t('list.intro')} controls={desktop ? <FilterOptions label={t('list.filter')} hideLabel value={kind} options={[{ value: 'all', label: t('filter.all'), name: t('list.all') }, { value: 'event', label: t('kind.event'), name: t('list.event') }, { value: 'task', label: t('kind.task'), name: t('list.task') }]} onChange={setKind} /> : undefined} />
 
-        {loading && <LoadingState label="正在加载重复安排" />}
+        {loading && <LoadingState label={t('rule.loading')} />}
 
-        {error !== null && <LoadError message={error} onRetry={() => void fetchRules()} />}
+        {error !== null && <LoadError message={t(error)} onRetry={() => void fetchRules()} />}
 
         {!loading && error === null && rules.length === 0 && (
-          <EmptyState message={EMPTY_COPY} />
+          <EmptyState message={t('list.empty')} />
         )}
 
         {/* Rendered in the order the server returned: unresolved rules first
             by next occurrence, ended rules after by title. Re-ordering here
             would put a second, drifting copy of that contract on the client. */}
         <ListGroup flush>
-          {desktop ? <View style={{ flexDirection: 'row', alignItems: 'center', height: theme.layout.desktopControl + theme.spacing[1], paddingHorizontal: theme.spacing[6], gap: theme.spacing[4] }}><Text variant="caption" color="inkFaint" style={{ width: theme.layout.recurrenceKindColumn, fontWeight: '400' }}>类型</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.recurrenceTitleColumn, fontWeight: '400' }}>名称</Text><Text variant="caption" color="inkFaint" style={{ flex: 1, fontWeight: '400' }}>规则</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.recurrenceNextColumn, textAlign: 'right', fontWeight: '400' }}>下一次</Text></View> : null}
+          {desktop ? <View style={{ flexDirection: 'row', alignItems: 'center', height: theme.layout.desktopControl + theme.spacing[1], paddingHorizontal: theme.spacing[6], gap: theme.spacing[4] }}><Text variant="caption" color="inkFaint" style={{ width: theme.layout.recurrenceKindColumn, fontWeight: '400' }}>{t('list.kind')}</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.recurrenceTitleColumn, fontWeight: '400' }}>{t('list.name')}</Text><Text variant="caption" color="inkFaint" style={{ flex: 1, fontWeight: '400' }}>{t('list.rule')}</Text><Text variant="caption" color="inkFaint" style={{ width: theme.layout.recurrenceNextColumn, textAlign: 'right', fontWeight: '400' }}>{t('rule.next')}</Text></View> : null}
           {rules.filter(rule => !desktop || kind === 'all' || rule.kind === kind).map((rule) => (
             <RecurrenceRuleRow
               key={rule.id}

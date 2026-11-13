@@ -1,4 +1,4 @@
-import { useTranslation } from '../../i18n';
+import { i18n, useTranslation } from '../../i18n';
 import type { RecurrenceRuleListItemDto } from '@muchakucha/api-client';
 import { useTheme } from '@shopify/restyle';
 import { Pressable, View } from 'react-native';
@@ -13,10 +13,6 @@ import { formatDate, parseDateValue, toDateValue } from '../../ui/date-values';
 import { insetFocusRing } from '../../platform/focus-ring/focus-ring';
 import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
-
-const NEVER_ENDS_SUFFIX = '，永不结束';
-const ENDED_LINE = '这个重复已经结束';
-const NEXT_PREFIX = '下一次 ';
 
 /**
  * The split anchor used by the rule detail screen: "tomorrow" in the RULE's
@@ -54,7 +50,9 @@ export interface FormattedRuleRow {
 function accessibilityLabelFor(kindLabel: string | null, title: string, summary: string): string {
   // 07-UI-SPEC.md line 612: `{任务或事件}周期规则：{标题}，{频率摘要}`. With no
   // derivable kind the type word is simply omitted; nothing else changes.
-  return `${kindLabel ?? ''}重复安排：${title}，${summary}`;
+  return kindLabel === null
+    ? i18n.t('recurrence:row.nameUnknown', { title, summary })
+    : i18n.t('recurrence:row.name', { kind: kindLabel, title, summary });
 }
 
 /**
@@ -82,7 +80,7 @@ export function formatRuleRow(
       summary: '',
       clampNote: null,
       timeZoneNote: null,
-      nextLine: ENDED_LINE,
+      nextLine: i18n.t('recurrence:row.ended'),
       ended: true,
       kindLabel,
       accessibilityLabel: accessibilityLabelFor(kindLabel, rule.title, ''),
@@ -95,7 +93,7 @@ export function formatRuleRow(
   // already spelled out inside the summary itself.
   const summary =
     normalized.endsOn === undefined && normalized.count === undefined
-      ? `${formatted.summary}${NEVER_ENDS_SUFFIX}`
+      ? i18n.t('recurrence:row.noEnd', { summary: formatted.summary })
       : formatted.summary;
   // `nextOccurrenceDate` alone under-detects "ended": `nextOccurrenceFor`
   // walks from TODAY (inclusive), and ending a rule deliberately preserves
@@ -115,7 +113,7 @@ export function formatRuleRow(
     summary,
     clampNote: formatted.clampNote,
     timeZoneNote: formatted.timeZoneNote,
-    nextLine: ended ? ENDED_LINE : `${NEXT_PREFIX}${rule.nextOccurrenceDate ?? ''}`,
+    nextLine: ended ? i18n.t('recurrence:row.ended') : i18n.t('recurrence:row.next', { date: rule.nextOccurrenceDate ?? '' }),
     ended,
     kindLabel,
     accessibilityLabel: accessibilityLabelFor(kindLabel, rule.title, summary),
@@ -131,14 +129,14 @@ interface RecurrenceRuleRowProps {
 
 export function RecurrenceRuleRow({ rule, deviceTimeZone, onPress, selected = false }: RecurrenceRuleRowProps) {
   const activeTheme = useTheme<Theme>();
-  useTranslation('recurrence');
+  const { t } = useTranslation(['recurrence', 'events']);
   const desktop = useDesktop();
   const formatted = formatRuleRow(rule, deviceTimeZone);
   if (desktop) {
     const next = rule.nextOccurrenceDate;
     const isToday = next !== null && next !== undefined && next === toDateValue(new Date());
     const time = rule.startTimeLocal ? rule.startTimeLocal.slice(0, 5) : '';
-    const nextText = formatted.ended ? '已结束' : next ? isToday ? `今天${time ? ` ${time}` : ''}` : formatDate(parseDateValue(next)) : '';
+    const nextText = formatted.ended ? t('rule.ended') : next ? isToday ? `${t('events:today')}${time ? ` ${time}` : ''}` : formatDate(parseDateValue(next)) : '';
     const KindIcon = rule.kind === 'event' ? CalendarDays : CircleCheck;
     return <Pressable {...insetFocusRing} accessibilityRole="button" accessibilityLabel={formatted.accessibilityLabel} {...(selected ? { 'aria-current': true } : {})} onPress={onPress} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[4], minHeight: activeTheme.layout.desktopRowHeight + activeTheme.spacing[2], paddingHorizontal: activeTheme.spacing[6], backgroundColor: selected ? activeTheme.colors.canvas : pressed || hovered ? activeTheme.colors.surfaceSubtle : activeTheme.colors.surface })}>
       {selected ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: activeTheme.borderWidths.focus, backgroundColor: activeTheme.colors.ink }} /> : null}
