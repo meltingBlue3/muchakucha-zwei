@@ -34,7 +34,7 @@ The interface is written in Chinese and Japanese, and each device chooses its ow
 - Dates people read go through `date-values.ts`; do not assemble 「月」「日」「周」 by hand.
 - A language's own name (中文, 日本語) is not translated. Everything else a person reads or hears is, accessibility names included.
 - The choice is read synchronously before the first render, from `platform/preferences/language`, and defaults to the system's preferred language through `expo-localization`. A system language the interface is not written in falls back to Chinese, which is why Jest and Playwright, both in English, still read Chinese.
-- Pages are migrated one at a time; the [roadmap](../roadmap.md#待办) lists what is left. Text the app writes into the database, such as a default title, stays in its writer's language: prefer storing a kind and naming it when shown.
+- Pages are migrated one at a time; [i18n-migration.md](../i18n-migration.md) lists what is left, batch by batch. Text the app writes into the database, such as a default title, stays in its writer's language: prefer storing a kind and naming it when shown.
 
 ## Session and household
 
