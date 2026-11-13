@@ -1392,4 +1392,42 @@ export const ja: Catalog = {
       ASSISTANT_PROVIDER_TIMEOUT: '文字起こしサービスから時間内に応答がありませんでした。しばらくしてからお試しください。',
     },
   },
+  search: {
+    entry: '検索',
+    input: 'ページ、タスク、予定、ノートを検索',
+    results: '検索結果',
+    pages: 'ページ',
+    events: '予定',
+    untitledNote: '無題のノート',
+    option: '{{group}}：{{title}}',
+    optionDetail: '{{group}}：{{title}}、{{detail}}',
+    loading: '検索中',
+    loadingContent: 'タスク、予定、ノートを読み込み中…',
+    loadFailed: 'タスク、予定、ノートを読み込めませんでした。ページのみ検索できます。',
+    empty: '「{{query}}」は見つかりませんでした',
+    chooseShortcut: '↑↓ 選択',
+    openShortcut: 'Enter 開く',
+    closeShortcut: 'Esc 閉じる',
+  },
+  householdMore: {
+    main: '家族スペース',
+    pages: {
+      settings: {
+        name: '家族の設定を開く',
+        description: 'メンバー、招待、家族名',
+      },
+      labels: {
+        name: 'ラベルを管理',
+        description: '予定とタスクを分類',
+      },
+      'recurrence-rules': {
+        name: '繰り返しを管理',
+        description: '繰り返す予定やタスクを管理',
+      },
+      birthdays: {
+        name: '家族の誕生日を見る',
+        description: '新暦と旧暦の誕生日を、次に来る順に表示',
+      },
+    },
+  },
 };

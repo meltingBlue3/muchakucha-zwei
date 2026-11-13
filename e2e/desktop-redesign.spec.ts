@@ -263,6 +263,36 @@ test('the sidebar counts the day, collapses to a rail and searches the household
   await expect(page).toHaveURL(`${base}/labels`);
 });
 
+test.describe('Japanese household search', () => {
+  test.use({ locale: 'ja-JP' });
+
+  test('finds localized pages and household content and opens the More page links', async ({ page }) => {
+    await setup(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${base}/tasks`);
+    const entry = page.getByTestId('global-sidebar').getByRole('button', { name: '検索', exact: true });
+    const palette = page.getByRole('dialog', { name: '検索', exact: true });
+    const input = palette.getByRole('combobox', { name: 'ページ、タスク、予定、ノートを検索', exact: true });
+    await entry.click();
+    await expect(input).toBeFocused();
+    await expect(palette.getByRole('listbox', { name: '検索結果' }).getByRole('option', { name: 'ページ：プロフィール', exact: true })).toBeVisible();
+    await input.fill('見つからない検索語');
+    await expect(palette.getByRole('alert')).toHaveText('「見つからない検索語」は見つかりませんでした');
+    await input.fill('家长会');
+    await expect(palette.getByRole('option', { name: /^予定：朵朵家长会、/ })).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(`${base}/events/event-2`);
+    await expect(page.getByRole('region', { name: '予定の詳細', exact: true })).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${base}/more`);
+    const more = page.getByRole('main', { name: '家族スペース', exact: true });
+    await expect(more.getByText('予定とタスクを分類', { exact: true })).toBeVisible();
+    await more.getByRole('button', { name: 'ラベルを管理', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/labels`);
+  });
+});
+
 test('a desktop pane form names its shortcut, and Ctrl+Enter submits it', async ({ page }) => {
   await setup(page);
   await page.setViewportSize({ width: 1440, height: 900 });
