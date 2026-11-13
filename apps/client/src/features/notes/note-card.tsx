@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { View } from 'react-native';
 import { CardActionsMenu } from '../../ui/card-actions-menu';
 import { markdownExcerpt } from './markdown';
@@ -19,17 +20,18 @@ interface NoteCardProps {
 
 /** One note as a list row: title, then when it changed and how it begins. */
 export function NoteCard({ note, onPress, onEdit, onDelete, selected = false }: NoteCardProps) {
+  const { t } = useTranslation('notes');
   const excerpt = markdownExcerpt(note.body ?? '');
   const desktop = useDesktop();
 
   return (
     <ListRow
-      accessibilityLabel={`笔记：${note.title}`}
+      accessibilityLabel={t('card', { title: note.title })}
       onPress={() => onPress(note)}
       selected={selected}
-      trailing={<CardActionsMenu subject={`笔记：${note.title}`} actions={[
-        ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: `编辑笔记：${note.title}`, onPress: onEdit }] : []),
-        ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除笔记：${note.title}`, onPress: onDelete }] : []),
+      trailing={<CardActionsMenu subject={t('card', { title: note.title })} actions={[
+        ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: t('editCard', { title: note.title }), onPress: onEdit }] : []),
+        ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: t('deleteCard', { title: note.title }), onPress: onDelete }] : []),
       ]} />}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}><Text variant={desktop ? 'bodySm' : 'body'} color="ink" numberOfLines={1} style={{ flex: 1 }}>{note.title}</Text>{desktop ? <Text variant="time">{formatDate(new Date(note.updatedAt))}</Text> : null}</View>

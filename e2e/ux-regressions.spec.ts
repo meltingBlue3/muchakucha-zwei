@@ -458,6 +458,42 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
+test('Japanese note editor localizes validation, table insertion and preview', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 320, height: 900 } });
+  try {
+    const page = await context.newPage();
+    const requests = await setup(page);
+    await page.goto(`/households/${a}/notes/new`);
+    const editor = page.getByRole('dialog', { name: 'ノートを作成', exact: true });
+    await editor.getByRole('button', { name: '作成', exact: true }).click();
+    await expect(editor.getByText('ノートのタイトルを入力してください。')).toBeVisible();
+    await editor.getByRole('textbox', { name: 'ノートのタイトル', exact: true }).fill('旅行の計画');
+
+    const toolbar = editor.getByRole('toolbar', { name: 'ノートの書式' });
+    await toolbar.getByRole('button', { name: '表', exact: true }).click();
+    const table = page.getByRole('dialog', { name: '表を挿入', exact: true });
+    await table.getByRole('button', { name: '表を挿入', exact: true }).click();
+
+    const input = editor.getByRole('textbox', { name: 'ノートの本文', exact: true });
+    await expect(input).toHaveValue(/^\| 列1 \| 列2 \|/);
+    await expect(input).toBeFocused();
+    expect(await input.evaluate(el => {
+      const { value, selectionStart, selectionEnd } = el as HTMLTextAreaElement;
+      return value.slice(selectionStart ?? 0, selectionEnd ?? 0);
+    })).toBe('列1');
+
+    await editor.getByRole('button', { name: 'プレビュー', exact: true }).click();
+    await expect(editor.getByLabel('ノートの表。横にスクロールできます')).toBeVisible();
+    const panel = editor.getByTestId('app-dialog-panel');
+    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await editor.getByRole('button', { name: '作成', exact: true }).click();
+    await expect(page.getByRole('main', { name: '家族のノート', exact: true })).toBeVisible();
+    expect(requests.find(request => request.method === 'POST' && request.path.endsWith('/notes'))?.data).toContain('列1');
+  } finally {
+    await context.close();
+  }
+});
+
 test('note format windows close back to editing without losing the selection or draft', async ({ page }) => {
   await setup(page);
   const note = { id: taskId, householdId: a, title: '日语学习', body: '词语练习', createdBy: 'user', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' };

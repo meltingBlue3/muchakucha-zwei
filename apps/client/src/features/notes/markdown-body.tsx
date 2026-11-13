@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Linking, ScrollView, View, Text as NativeText, type TextStyle } from 'react-native';
 import { useTheme } from '@shopify/restyle';
@@ -7,11 +8,12 @@ import type { Theme } from '../../ui/theme';
 import { parseMarkdown, safeLink, type MarkdownNode } from './markdown';
 import { useDesktop } from '../../ui/use-desktop';
 
-export function MarkdownBody({ source, tableLabel = '笔记表格，可横向滚动', headingOffset = 0, chat = false }: {
+export function MarkdownBody({ source, tableLabel, headingOffset = 0, chat = false }: {
   source: string; tableLabel?: string; headingOffset?: number;
   /** An assistant reply: on desktop its paragraphs use the conversation's smaller type instead of a note's reading type. */
   chat?: boolean;
 }) {
+  const { t } = useTranslation('notes');
   const theme = useTheme<Theme>();
   const desktop = useDesktop();
   const bodyStyle = desktop ? chat ? theme.typography.chatBody : theme.typography.readingBody : undefined;
@@ -49,7 +51,7 @@ export function MarkdownBody({ source, tableLabel = '笔记表格，可横向滚
       const typography = level === 1 ? theme.typography.heading : level === 2 ? theme.typography.section : level === 3 ? theme.typography.body : level === 4 ? theme.typography.label : theme.typography.bodySm;
       return <Text key={index} selectable accessibilityRole="header" aria-level={Math.min(6, level + headingOffset)} style={{ ...typography, fontWeight: level >= 5 ? '600' : '700', marginTop: theme.spacing[level <= 2 ? 4 : 2], ...(level === 6 ? { color: theme.colors.inkMuted } : {}) }}>{inline(children[0]?.token.children ?? [])}</Text>;
     }
-    if (token.type === 'table_open') return <ScrollView key={index} tabIndex={0} horizontal accessibilityLabel={tableLabel} style={{ maxWidth: '100%' }}><View role="table">{render(children)}</View></ScrollView>;
+    if (token.type === 'table_open') return <ScrollView key={index} tabIndex={0} horizontal accessibilityLabel={tableLabel ?? t('format.tableName')} style={{ maxWidth: '100%' }}><View role="table">{render(children)}</View></ScrollView>;
     if (token.type === 'tr_open') return <View key={index} role="row" style={{ flexDirection: 'row' }}>{render(children)}</View>;
     if (token.type === 'th_open' || token.type === 'td_open') {
       const align = token.attrGet('style')?.split(':')[1];
@@ -60,5 +62,5 @@ export function MarkdownBody({ source, tableLabel = '笔记表格，可横向滚
     if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') return <Stack key={index} gap={desktop ? 0 : 2}>{children.map((child, i) => <View key={i} style={{ flexDirection: 'row', gap: theme.spacing[2] }}><Text style={bodyStyle}>{token.type === 'bullet_list_open' ? '•' : `${Number(token.attrGet('start') ?? 1) + i}.`}</Text><View style={{ flex: 1 }}>{render(child.children)}</View></View>)}</Stack>;
     return <View key={index} style={token.type === 'blockquote_open' ? { borderLeftWidth: theme.borderWidths.focus, borderLeftColor: theme.colors.outline, paddingLeft: theme.spacing[3] } : undefined}>{children.length ? render(children) : <Text selectable>{token.content}</Text>}</View>;
   });
-  return <Stack gap={3} testID="markdown-body">{source.trim() ? render(nodes) : <Text color="inkMuted">这篇笔记还没有内容。</Text>}{linkError ? <Text accessibilityRole="alert" color="destructive">无法打开链接，请检查网址后重试。</Text> : null}</Stack>;
+  return <Stack gap={3} testID="markdown-body">{source.trim() ? render(nodes) : <Text color="inkMuted">{t('format.emptyBody')}</Text>}{linkError ? <Text accessibilityRole="alert" color="destructive">{t('format.openLinkError')}</Text> : null}</Stack>;
 }

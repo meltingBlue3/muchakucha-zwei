@@ -32,11 +32,10 @@ grep -c "47.117.148.16" <输出目录>/_expo/static/js/web/entry-*.js   # 必须
 
 ## 还没迁移的页面
 
-共享组件、登录注册、家庭与账户、任务、日历与今日已迁移。其余批次可按表里的顺序推进。
+共享组件、登录注册、家庭与账户、任务、日历与今日、笔记已迁移。其余批次可按表里的顺序推进。
 
 | 批次 | 位置 | 文件 | 行 | 备注 |
 | --- | --- | --- | --- | --- |
-| 笔记 | `src/features/notes`、`households/[id]/notes/*` | 9 | 约 62 | |
 | 重复安排 | `src/features/recurrence`、`households/[id]/recurrence-rules/*` | 10 | 约 140 | 规则摘要、范围确认、重复筛选及服务端字段校验提示已迁移 |
 | 生日 | `src/features/birthdays`、`households/[id]/birthdays/new.tsx`、`src/features/lunar/lunar-calendar.ts` | 6 | 约 61 | 先等「待决定」里的前两项 |
 | 标签 | `src/features/labels`、`households/[id]/labels/index.tsx` | 3 | 37 | |

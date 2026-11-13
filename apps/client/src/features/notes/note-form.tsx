@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { MarkdownEditor } from './markdown-editor';
 import { noteEditorViewport } from './note-editor-chrome';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
@@ -33,6 +34,7 @@ interface NoteFormProps {
 }
 
 export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, isSubmitting }: NoteFormProps) {
+  const { t } = useTranslation(['notes', 'tasks']);
   const activeTheme = useTheme<Theme>();
   // Beside the notes list a note is written in reading type; in a side pane it matches the task and event forms.
   const reading = useContext(ReadingPane);
@@ -47,7 +49,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
     }
     return { ...EMPTY_NOTE };
   });
-  const [titleError, setTitleError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<'titleRequired' | null>(null);
   const titleInput = useRef<TextInput>(null);
   const titleErrorId = `note-title-error-${useId()}`;
 
@@ -60,7 +62,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
 
   const handleSubmit = useCallback(async () => {
     if (form.title.trim().length === 0) {
-      setTitleError('请输入笔记标题。');
+      setTitleError('titleRequired');
       titleInput.current?.focus();
       return;
     }
@@ -85,17 +87,17 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
           editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}
-          placeholder="添加标题"
+          placeholder={t('tasks:addTitle')}
           placeholderTextColor={activeTheme.colors.inkMuted}
           style={[desktop && !reading ? inputs.title : titleInputStyle, desktop && reading ? activeTheme.typography.readingTitle : undefined, { flex: 0, paddingHorizontal: activeTheme.spacing[2] }]}
           maxLength={200}
-          accessibilityLabel="笔记标题"
+          accessibilityLabel={t('titleField')}
           aria-invalid={titleError !== null}
-          {...(titleError === null ? {} : { 'aria-describedby': titleErrorId, accessibilityHint: titleError })}
+          {...(titleError === null ? {} : { 'aria-describedby': titleErrorId, accessibilityHint: t(titleError) })}
         />
         {titleError !== null ? (
           <View style={{ paddingHorizontal: activeTheme.spacing[2] }}>
-            <FormMessage id={titleErrorId}>{titleError}</FormMessage>
+            <FormMessage id={titleErrorId}>{t(titleError)}</FormMessage>
           </View>
         ) : null}
       </View>

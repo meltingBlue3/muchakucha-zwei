@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useContentChanges } from '../content/content-changes';
 import { useResourceNavigation } from '../../ui/use-resource-navigation';
 import { useDesktop } from '../../ui/use-desktop';
@@ -26,6 +27,7 @@ import { searchNotesByTitle } from '../notes/note-search';
 import { Button, EmptyState, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 
 export default function NotesListRoute() {
+  const { t } = useTranslation(['notes', 'auth', 'navigation']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const desktop = useDesktop();
@@ -38,14 +40,14 @@ export default function NotesListRoute() {
   const [notes, setNotes] = useState<NoteResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'refreshError' | 'listError' | null>(null);
   const [query, setQuery] = useWorkspaceState(`view:${id}:notes:query`, '');
   const loadedHousehold = useRef<string | null>(null);
   const requestGeneration = useRef(0);
 
   const householdId = id ?? currentHouseholdId;
   const visibleNotes = searchNotesByTitle(notes, query);
-  const groups = desktop ? [{ title: '最近 7 天', items: visibleNotes.filter(note => Date.now() - new Date(note.updatedAt).getTime() <= 7 * 86400000) }, { title: '更早', items: visibleNotes.filter(note => Date.now() - new Date(note.updatedAt).getTime() > 7 * 86400000) }] : [{ title: '', items: visibleNotes }];
+  const groups = desktop ? [{ key: 'recent' as const, items: visibleNotes.filter(note => Date.now() - new Date(note.updatedAt).getTime() <= 7 * 86400000) }, { key: 'older' as const, items: visibleNotes.filter(note => Date.now() - new Date(note.updatedAt).getTime() > 7 * 86400000) }] : [{ key: 'all' as const, items: visibleNotes }];
 
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === null || householdId === '') return;
@@ -56,7 +58,7 @@ export default function NotesListRoute() {
       const token = await sessionTransport.getAccessToken();
       if (request !== requestGeneration.current) return;
       if (token === null) {
-        setError('登录已过期，请重新登录。');
+        setError('auth:errors.sessionExpired');
         return;
       }
       const result = await sessionApiClient.listNotes(token, householdId);
@@ -64,7 +66,7 @@ export default function NotesListRoute() {
       setNotes(result.notes);
       loadedHousehold.current = householdId;
     } catch {
-      if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? '刷新失败，仍显示上次的笔记。请检查网络后重试。' : '无法加载笔记，请检查网络连接后重试。');
+      if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? 'refreshError' : 'listError');
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
@@ -106,39 +108,39 @@ export default function NotesListRoute() {
   return (
     <HouseholdScreen
       active="notes"
-      accessibilityLabel="家庭笔记"
+      accessibilityLabel={t('main')}
       refreshing={refreshing}
       onRefresh={handleRefresh}
       width="reading"
-      floatingAction={<FloatingCreateButton label="创建笔记" onPress={handleCreateNote} />}
+      floatingAction={<FloatingCreateButton label={t('create')} onPress={handleCreateNote} />}
       aside={desktop && !openNoteId && notes[0] ? <View style={{ flex: 1, minHeight: 0 }}>
         <View style={{ height: theme.layout.paneHeaderHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingLeft: theme.spacing[6], paddingRight: theme.spacing[3], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
-          <Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, fontFamily: theme.fontFamilies.numeric }}>{`更新于 ${formatDateTime(new Date(notes[0].updatedAt))}`}</Text>
-          <DetailEditButton accessibilityLabel="编辑最近的笔记" worded onPress={() => openResource(`/households/${encodeURIComponent(householdId!)}/notes/${encodeURIComponent(notes[0]!.id)}/edit`)} />
+          <Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, fontFamily: theme.fontFamilies.numeric }}>{t('updated', { date: formatDateTime(new Date(notes[0].updatedAt)) })}</Text>
+          <DetailEditButton accessibilityLabel={t('editLatest')} worded onPress={() => openResource(`/households/${encodeURIComponent(householdId!)}/notes/${encodeURIComponent(notes[0]!.id)}/edit`)} />
         </View>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: theme.spacing[5], paddingHorizontal: theme.spacing[6], width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[6] * 2, alignSelf: 'center', gap: theme.spacing[4] }}><Heading level={2} style={theme.typography.readingTitle}>{notes[0].title}</Heading><MarkdownBody source={notes[0].body ?? ''} /></ScrollView>
       </View> : null}
     >
       <Stack gap={5}>
-        <PageIntro title="笔记" {...(notes.length > 0 ? { subtitle: `${notes.length} 篇 · 最近更新的在前` } : {})} action={desktop ? <SearchField label="搜索笔记" placeholder="按标题搜索" value={query} onChangeText={setQuery} /> : null} />
+        <PageIntro title={t('navigation:pages.notes')} {...(notes.length > 0 ? { subtitle: t('summary', { count: notes.length }) } : {})} action={desktop ? <SearchField label={t('search')} placeholder={t('searchByTitle')} value={query} onChangeText={setQuery} /> : null} />
 
         {!desktop && (notes.length > 0 || query !== '') && (
-          <SearchField label="搜索笔记" placeholder="按标题搜索" value={query} onChangeText={setQuery} />
+          <SearchField label={t('search')} placeholder={t('searchByTitle')} value={query} onChangeText={setQuery} />
         )}
 
-        {loading && <LoadingState label="正在加载笔记" />}
+        {loading && <LoadingState label={t('loading')} />}
 
-        {error !== null && <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载笔记" />}
+        {error !== null && <LoadError message={t(error)} onRetry={() => void fetchData()} retryAccessibilityLabel={t('retryLoad')} />}
 
         {!loading && error === null && notes.length === 0 && (
-          <EmptyState title="还没有笔记" message="适合记采购清单、旅行计划、家电说明这类要一起查的事。" />
+          <EmptyState title={t('emptyTitle')} message={t('emptyMessage')} />
         )}
 
         {!loading && error === null && notes.length > 0 && visibleNotes.length === 0 && (
-          <EmptyState message={`没有标题匹配「${query.trim()}」的笔记。`} action={<Button label="清除搜索" tone="secondary" onPress={() => setQuery('')} />} />
+          <EmptyState message={t('emptySearch', { query: query.trim() })} action={<Button label={t('clearSearch')} tone="secondary" onPress={() => setQuery('')} />} />
         )}
 
-        {groups.filter(group => group.items.length).map(group => <Stack key={group.title} gap={desktop ? 0 : 2}>{group.title ? <GroupLabel flush>{group.title}</GroupLabel> : null}<ListGroup flush>
+        {groups.filter(group => group.items.length).map(group => <Stack key={group.key} gap={desktop ? 0 : 2}>{group.key !== 'all' ? <GroupLabel flush>{t(group.key)}</GroupLabel> : null}<ListGroup flush>
           {group.items.map((note) => (
             <NoteCard key={note.id} note={note} selected={note.id === openNoteId || (desktop && !openNoteId && note.id === notes[0]?.id)} onPress={handleNotePress} onEdit={editNote(note)} onDelete={deleteNote(note)} />
           ))}
