@@ -1,3 +1,4 @@
+import { i18n } from '../../i18n';
 import type { ReminderChoiceDto, ReminderSettingsDto } from '@muchakucha/api-client';
 import { formatDateTime, toDateValue, toTimeValue } from '../../ui/date-values';
 
@@ -17,9 +18,9 @@ export type ReminderOptionValue = 'default' | 'off' | `${number}`;
 export type AlarmOptionValue = 'default' | 'on' | 'off';
 
 function span(minutes: number): string {
-  if (minutes % 1440 === 0) return `${minutes / 1440} 天`;
-  if (minutes % 60 === 0) return `${minutes / 60} 小时`;
-  return `${minutes} 分钟`;
+  if (minutes % 1440 === 0) return i18n.t('reminders:days', { count: minutes / 1440 });
+  if (minutes % 60 === 0) return i18n.t('reminders:hours', { count: minutes / 60 });
+  return i18n.t('reminders:minutes', { count: minutes });
 }
 
 /**
@@ -33,12 +34,12 @@ export function minutesLabel(minutes: number, kind: ReminderKind, dateOnly: bool
     const days = Math.floor(total / 1440);
     const clock = total - days * 1440;
     const time = `${String(Math.floor(clock / 60)).padStart(2, '0')}:${String(clock % 60).padStart(2, '0')}`;
-    if (days === 0) return `当天 ${time}`;
-    if (days === -1) return `前一天 ${time}`;
-    return `提前 ${-days} 天 ${time}`;
+    if (days === 0) return i18n.t('reminders:sameDayTime', { time });
+    if (days === -1) return i18n.t('reminders:priorDayTime', { time });
+    return i18n.t('reminders:daysBeforeTime', { count: -days, time });
   }
-  if (kind === 'event') return minutes === 0 ? '开始时' : `开始前 ${span(minutes)}`;
-  return minutes === 0 ? '准时' : `提前 ${span(minutes)}`;
+  if (kind === 'event') return minutes === 0 ? i18n.t('reminders:eventStart') : i18n.t('reminders:eventBefore', { duration: span(minutes) });
+  return minutes === 0 ? i18n.t('reminders:taskDue') : i18n.t('reminders:before', { duration: span(minutes) });
 }
 
 export function choiceValue(choice: ReminderChoiceDto): ReminderOptionValue {
@@ -100,30 +101,30 @@ interface ReminderContext {
 }
 
 function remindPhrase(minutes: number, context: ReminderContext, dateOnlyTime: string): string {
-  if (!context.dateOnly && minutes === 0 && context.kind === 'task') return '准时提醒';
+  if (!context.dateOnly && minutes === 0 && context.kind === 'task') return i18n.t('reminders:onTimeReminder');
   // A clock time stands apart from the word after it: "当天 09:00 提醒".
-  return `${minutesLabel(minutes, context.kind, context.dateOnly, dateOnlyTime)}${context.dateOnly ? ' ' : ''}提醒`;
+  return i18n.t(context.dateOnly ? 'reminders:dateReminder' : 'reminders:timedReminder', { when: minutesLabel(minutes, context.kind, context.dateOnly, dateOnlyTime) });
 }
 
 /** The form row's summary, readable without a field name: "准时提醒（默认）", "提前 30 分钟提醒", "不提醒". */
 export function reminderSummary(choice: ReminderChoiceDto, context: ReminderContext): string {
   const time = context.defaults?.dateOnlyTime ?? '09:00';
-  if (choice.mode === 'off') return '不提醒';
+  if (choice.mode === 'off') return i18n.t('reminders:off');
   if (choice.mode === 'before') return remindPhrase(choice.minutesBefore ?? 0, context, time);
-  if (context.defaults === null) return '默认提醒';
+  if (context.defaults === null) return i18n.t('reminders:defaultReminder');
   const minutes = defaultMinutes(context.kind, context.own, context.dateOnly, context.defaults);
-  return minutes === null ? '不提醒（默认）' : `${remindPhrase(minutes, context, time)}（默认）`;
+  return minutes === null ? i18n.t('reminders:withDefault', { value: i18n.t('reminders:off') }) : i18n.t('reminders:withDefault', { value: remindPhrase(minutes, context, time) });
 }
 
 /** The options of the 提醒我 step: default, off, then the times that fit the item. */
 export function reminderOptions(context: ReminderContext): Array<{ value: ReminderOptionValue; label: string }> {
   const time = context.defaults?.dateOnlyTime ?? '09:00';
   const fallback = context.defaults === null ? null : defaultMinutes(context.kind, context.own, context.dateOnly, context.defaults);
-  const defaultLabel = context.defaults === null ? '默认' : `默认（${fallback === null ? '不提醒' : minutesLabel(fallback, context.kind, context.dateOnly, time)}）`;
+  const defaultLabel = context.defaults === null ? i18n.t('reminders:default') : i18n.t('reminders:defaultWith', { value: fallback === null ? i18n.t('reminders:off') : minutesLabel(fallback, context.kind, context.dateOnly, time) });
   const minutes = context.dateOnly ? DATE_ONLY_REMINDER_MINUTES : TIMED_REMINDER_MINUTES;
   return [
     { value: 'default', label: defaultLabel },
-    { value: 'off', label: '不提醒' },
+    { value: 'off', label: i18n.t('reminders:off') },
     ...minutes.map(value => ({ value: `${value}` as ReminderOptionValue, label: minutesLabel(value, context.kind, context.dateOnly, time) })),
   ];
 }
@@ -133,24 +134,21 @@ export function effectiveAlarm(choice: ReminderChoiceDto, defaults: Pick<Reminde
 }
 
 function alarmLabel(rings: boolean): string {
-  return rings ? '闹铃提醒' : '普通提醒';
+  return rings ? i18n.t('reminders:alarmOn') : i18n.t('reminders:alarmOff');
 }
 
 /** The 闹铃 row's summary, readable without a field name: "闹铃提醒（默认）", "普通提醒". */
 export function alarmSummary(choice: ReminderChoiceDto, defaults: Pick<ReminderDefaults, 'alarm'> | null): string {
   if (choice.alarm !== null && choice.alarm !== undefined) return alarmLabel(choice.alarm);
-  return defaults === null ? '默认提醒方式' : `${alarmLabel(defaults.alarm)}（默认）`;
+  return defaults === null ? i18n.t('reminders:defaultDelivery') : i18n.t('reminders:withDefault', { value: alarmLabel(defaults.alarm) });
 }
-
-export const ALARM_DETAIL = '像闹钟一样一直响，直到按「知道了」';
-export const NOTIFICATION_DETAIL = '弹出通知，响一声';
 
 /** The options of the 闹铃 step: default, then ringing or only notifying. */
 export function alarmOptions(defaults: Pick<ReminderDefaults, 'alarm'> | null): Array<{ value: AlarmOptionValue; label: string; detail?: string }> {
   return [
-    { value: 'default', label: defaults === null ? '默认' : `默认（${alarmLabel(defaults.alarm)}）` },
-    { value: 'on', label: alarmLabel(true), detail: ALARM_DETAIL },
-    { value: 'off', label: alarmLabel(false), detail: NOTIFICATION_DETAIL },
+    { value: 'default', label: defaults === null ? i18n.t('reminders:default') : i18n.t('reminders:defaultWith', { value: alarmLabel(defaults.alarm) }) },
+    { value: 'on', label: alarmLabel(true), detail: i18n.t('reminders:alarmDetail') },
+    { value: 'off', label: alarmLabel(false), detail: i18n.t('reminders:notificationDetail') },
   ];
 }
 
@@ -164,11 +162,12 @@ export function reminderMoment(anchor: Date, minutes: number, dateOnly: boolean,
 export function reminderDetail(anchor: Date, choice: ReminderChoiceDto, context: ReminderContext): string {
   if (context.defaults === null) return reminderSummary(choice, context);
   const minutes = effectiveMinutes(choice, context.kind, context.own, context.dateOnly, context.defaults);
-  if (minutes === null) return choice.mode === 'default' ? '不提醒（默认）' : '不提醒';
+  if (minutes === null) return choice.mode === 'default' ? i18n.t('reminders:withDefault', { value: i18n.t('reminders:off') }) : i18n.t('reminders:off');
   const moment = reminderMoment(anchor, minutes, context.dateOnly, context.defaults.dateOnlyTime);
   const when = toDateValue(moment) === toDateValue(anchor) ? toTimeValue(moment) : formatDateTime(moment);
   const rule = context.dateOnly
-    ? minutes === 0 ? '当天' : minutes === 1440 ? '前一天' : `提前 ${span(minutes)}`
+    ? minutes === 0 ? i18n.t('reminders:sameDay') : minutes === 1440 ? i18n.t('reminders:priorDay') : i18n.t('reminders:before', { duration: span(minutes) })
     : minutesLabel(minutes, context.kind, false, context.defaults.dateOnlyTime);
-  return `${when}（${rule}）${effectiveAlarm(choice, context.defaults) ? ' · 闹铃' : ''}`;
+  const detail = i18n.t('reminders:detailTime', { when, rule });
+  return effectiveAlarm(choice, context.defaults) ? i18n.t('reminders:detailAlarm', { detail }) : detail;
 }

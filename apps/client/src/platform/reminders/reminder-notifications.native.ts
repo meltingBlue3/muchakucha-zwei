@@ -1,3 +1,4 @@
+import { currentLanguage, i18n, type Language } from '../../i18n';
 import * as Notifications from './local-notifications';
 import { Linking, Platform } from 'react-native';
 import * as alarms from './reminder-alarm';
@@ -7,8 +8,8 @@ export { REMINDER_ID_PREFIX, type NotificationPermission, type ReminderNotificat
 
 // Two channels, so either kind can be silenced in the system settings.
 const CHANNELS = {
-  task: { id: 'task-reminders', name: '任务提醒' },
-  event: { id: 'event-reminders', name: '日程提醒' },
+  task: 'task-reminders',
+  event: 'event-reminders',
 } as const;
 
 // A reminder that comes due while the app is open is still shown.
@@ -16,14 +17,21 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
 });
 
-let channels: Promise<void> | null = null;
-function ensureChannels(): Promise<void> {
+let channels: { language: Language; ready: Promise<void> } | null = null;
+export function refreshReminderChannels(): Promise<void> {
   if (Platform.OS !== 'android') return Promise.resolve();
-  channels ??= Promise.all(Object.values(CHANNELS).map(channel => Notifications.setNotificationChannelAsync(channel.id, {
-    name: channel.name,
+  const language = currentLanguage();
+  if (channels?.language === language) return channels.ready;
+  const update = () => Promise.all((['task', 'event'] as const).map(kind => Notifications.setNotificationChannelAsync(CHANNELS[kind], {
+    name: i18n.t(`reminders:channel.${kind}`, { lng: language }),
     importance: Notifications.AndroidImportance.HIGH,
-  }))).then(() => undefined, (error: unknown) => { channels = null; throw error; });
-  return channels;
+  })));
+  const ready = (channels?.ready.catch(() => undefined) ?? Promise.resolve()).then(update).then(() => undefined, (error: unknown) => {
+    if (channels?.ready === ready) channels = null;
+    throw error;
+  });
+  channels = { language, ready };
+  return ready;
 }
 
 function permissionOf(status: Notifications.NotificationPermissionsStatus): NotificationPermission {
@@ -40,7 +48,7 @@ export async function notificationPermission(): Promise<NotificationPermission> 
 
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   // Android 13 shows its permission prompt only once the app has a channel.
-  await ensureChannels();
+  await refreshReminderChannels();
   return permissionOf(await Notifications.requestPermissionsAsync());
 }
 
@@ -64,11 +72,11 @@ export async function scheduleReminder(notification: ReminderNotification): Prom
     await alarms.scheduleAlarm(notification);
     return;
   }
-  await ensureChannels();
+  await refreshReminderChannels();
   await Notifications.scheduleNotificationAsync({
     identifier: notification.id,
     content: { title: notification.title, body: notification.body, data: { url: notification.url } },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: notification.fireAt, channelId: CHANNELS[notification.kind].id },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: notification.fireAt, channelId: CHANNELS[notification.kind] },
   });
 }
 
