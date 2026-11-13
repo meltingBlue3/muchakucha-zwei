@@ -67,6 +67,24 @@ test('no-household onboarding offers both routes and profile access', async ({ p
   await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
 });
 
+test('Japanese sign-up validates in Japanese and keeps the invitation destination', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 320, height: 844 } });
+  try {
+    const page = await context.newPage();
+    await mockApi(page, false);
+    await page.goto('/login?intended=%2Finbox');
+    await expect(page.getByRole('heading', { name: 'おかえりなさい' })).toBeVisible();
+    await page.getByRole('link', { name: 'アカウントを作成', exact: true }).click();
+    await expect(page).toHaveURL(/register.*intended/);
+    await page.getByRole('button', { name: 'アカウントを作成', exact: true }).click();
+    await expect(page.getByText('ユーザー名は3文字以上で入力してください。')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'ユーザー名', exact: true })).toBeFocused();
+    await checkLayout(page);
+  } finally {
+    await context.close();
+  }
+});
+
 test('the interface language is chosen per device and survives a reload', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, true);

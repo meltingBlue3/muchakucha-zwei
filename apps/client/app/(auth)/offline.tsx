@@ -1,14 +1,16 @@
 import { router } from 'expo-router';
 
+import { useTranslation } from '../../src/i18n';
 import { AuthShell, Button, StatusPanel } from '../../src/ui/primitives';
 
 export default function OfflineRoute() {
+  const { t } = useTranslation('auth');
   return (
     <AuthShell>
       <StatusPanel
-        action={<Button label="重试连接" onPress={() => router.replace('/' as never)} />}
-        body="你的登录状态仍保留。连接网络后重试即可。"
-        heading="暂时无法连接"
+        action={<Button label={t('offline.retry')} onPress={() => router.replace('/' as never)} />}
+        body={t('offline.detail')}
+        heading={t('offline.title')}
         kind="offline"
       />
     </AuthShell>

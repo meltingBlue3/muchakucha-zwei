@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useTranslation } from '../../i18n';
 import type { SessionStateStore } from './session-state';
 import type { RestoreOutcome, SessionTransport } from '../../platform/session/session-transport';
 import { AuthShell, Button, Spinner, Stack, StatusPanel } from '../../ui/primitives';
@@ -81,6 +82,7 @@ export const SessionBootstrap = ({
   sessionStateStore,
   sessionTransport,
 }: SessionBootstrapProps) => {
+  const { t } = useTranslation('auth');
   const initialState = sessionStateStore.get();
   const shouldRestore = useRef(restorationRequired && initialState.kind === 'booting');
   const [viewState, setViewState] = useState<ViewState>(() =>
@@ -141,9 +143,9 @@ export const SessionBootstrap = ({
     return (
       <AuthShell>
         <StatusPanel
-          action={<Button label="重试连接" onPress={() => void restore()} />}
-          body="你的登录状态仍保留。连接网络后重试即可。"
-          heading="暂时无法连接"
+          action={<Button label={t('offline.retry')} onPress={() => void restore()} />}
+          body={t('offline.detail')}
+          heading={t('offline.title')}
           kind="offline"
         />
       </AuthShell>
@@ -153,8 +155,8 @@ export const SessionBootstrap = ({
   if (viewState === 'booting') {
     return (
       <AuthShell>
-        <Stack accessibilityLabel="正在恢复登录状态" gap={6}>
-          <Spinner label="正在恢复登录状态" />
+        <Stack accessibilityLabel={t('restoring')} gap={6}>
+          <Spinner label={t('restoring')} />
         </Stack>
       </AuthShell>
     );
@@ -164,8 +166,8 @@ export const SessionBootstrap = ({
   if (viewState === 'resolved' && !householdReady) {
     return (
       <AuthShell>
-        <Stack accessibilityLabel="正在加载" gap={6}>
-          <Spinner label="正在加载" />
+        <Stack accessibilityLabel={t('loading')} gap={6}>
+          <Spinner label={t('loading')} />
         </Stack>
       </AuthShell>
     );

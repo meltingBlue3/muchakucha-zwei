@@ -3,6 +3,8 @@ import { Controller, useForm } from 'react-hook-form';
 import { Platform } from 'react-native';
 import { z } from 'zod';
 
+import { useTranslation } from '../../i18n';
+import { authErrorKey, type AuthErrorKey } from './auth-error-key';
 import type { SessionStateStore } from './session-state';
 import type { SessionTransport } from '../../platform/session/session-transport';
 import {
@@ -17,17 +19,17 @@ import {
 
 const registrationFields = z.object({
   username: z.string().trim().transform((value) => value.normalize('NFC'))
-    .refine((value) => [...value].length >= 3, '用户名至少需要 3 个字符。')
-    .refine((value) => [...value].length <= 32, '用户名不能超过 32 个字符。')
-    .refine((value) => /^[\p{L}\p{N}._-]+$/u.test(value), '用户名只能包含字母、数字、点、下划线和短横线。'),
+    .refine((value) => [...value].length >= 3, 'errors.usernameTooShort')
+    .refine((value) => [...value].length <= 32, 'errors.usernameTooLong')
+    .refine((value) => /^[\p{L}\p{N}._-]+$/u.test(value), 'errors.usernameCharacters'),
   password: z.string()
-    .refine((value) => [...value].length >= 8, '密码至少需要 8 个字符。')
-    .refine((value) => [...value].length <= 128, '密码不能超过 128 个字符。'),
-  confirmPassword: z.string().min(1, '请再次输入密码。'),
+    .refine((value) => [...value].length >= 8, 'errors.passwordTooShort')
+    .refine((value) => [...value].length <= 128, 'errors.passwordTooLong'),
+  confirmPassword: z.string().min(1, 'errors.confirmPasswordRequired'),
 });
 const registrationSchema = registrationFields.refine(
   (values) => values.password === values.confirmPassword,
-  { message: '两次输入的密码不一致。', path: ['confirmPassword'] },
+  { message: 'errors.passwordMismatch', path: ['confirmPassword'] },
 );
 
 type RegistrationValues = z.infer<typeof registrationSchema>;
@@ -41,10 +43,10 @@ export interface RegisterFormProps {
   sessionTransport: Pick<SessionTransport, 'acceptIssuedSession'>;
 }
 
-const fieldMessages: Record<keyof RegistrationValues, string> = {
-  username: '请检查用户名后重试。',
-  password: '请检查密码后重试。',
-  confirmPassword: '两次输入的密码不一致。',
+const fieldErrorKeys: Record<keyof RegistrationValues, AuthErrorKey> = {
+  username: 'errors.checkUsername',
+  password: 'errors.checkPassword',
+  confirmPassword: 'errors.passwordMismatch',
 };
 
 const isRegistrationField = (value: unknown): value is keyof RegistrationValues =>
@@ -88,6 +90,7 @@ export const RegisterForm = ({
   sessionStateStore,
   sessionTransport,
 }: RegisterFormProps) => {
+  const { t } = useTranslation(['auth', 'common']);
   const {
     clearErrors,
     control,
@@ -101,6 +104,7 @@ export const RegisterForm = ({
     defaultValues: { username: '', password: '', confirmPassword: '' },
   });
   const formError = errors.root?.server?.message;
+  const errorText = (key: string) => t(authErrorKey(key));
 
   const validateField = (field: keyof RegistrationValues) => {
     const result = registrationSchema.safeParse(getValues());
@@ -144,22 +148,22 @@ export const RegisterForm = ({
       onAuthenticated();
     } catch (error) {
       if (typeof error === 'object' && error !== null && 'status' in error && error.status === 409) {
-        setError('username', { message: '这个用户名已被使用，请换一个。' }, { shouldFocus: true });
+        setError('username', { message: 'errors.usernameTaken' }, { shouldFocus: true });
         return;
       }
       const fields = getServerFields(error);
       if (fields.length > 0) {
-        for (const field of fields) setError(field, { message: fieldMessages[field] });
+        for (const field of fields) setError(field, { message: fieldErrorKeys[field] });
       } else {
-        setError('root.server', { message: '这次没有完成。请检查网络后重试。' });
+        setError('root.server', { message: 'common:genericError' });
       }
     }
   });
 
   return (
     <Stack gap={5}>
-      <AuthTitle title="创建你的账户">先创建账户，再创建或加入家人的家庭。</AuthTitle>
-      {formError ? <Banner title="暂时无法创建账户">{formError}</Banner> : null}
+      <AuthTitle title={t('register.title')}>{t('register.intro')}</AuthTitle>
+      {formError ? <Banner title={t('register.failed')}>{errorText(formError)}</Banner> : null}
       <Controller
         control={control}
         name="username"
@@ -170,9 +174,9 @@ export const RegisterForm = ({
             autoCapitalize="none"
             autoComplete="username"
             autoCorrect={false}
-            {...(errors.username?.message === undefined ? {} : { error: errors.username.message })}
-            label="用户名"
-            hint="3–32 个字符，可使用字母、数字、点、下划线和短横线，不区分大小写。"
+            {...(errors.username?.message === undefined ? {} : { error: errorText(errors.username.message) })}
+            label={t('username')}
+            hint={t('register.usernameHint')}
             returnKeyType="next"
             submitBehavior="submit"
             onSubmitEditing={() => setFocus('password')}
@@ -193,9 +197,9 @@ export const RegisterForm = ({
             disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="new-password"
-            {...(errors.password?.message === undefined ? {} : { error: errors.password.message })}
-            label="密码"
-            hint="8–128 个字符，建议使用不容易猜到的组合。"
+            {...(errors.password?.message === undefined ? {} : { error: errorText(errors.password.message) })}
+            label={t('password')}
+            hint={t('register.passwordHint')}
             returnKeyType="next"
             submitBehavior="submit"
             onSubmitEditing={() => setFocus('confirmPassword')}
@@ -224,8 +228,8 @@ export const RegisterForm = ({
             disabled={isSubmitting}
             autoCapitalize="none"
             autoComplete="new-password"
-            {...(errors.confirmPassword?.message === undefined ? {} : { error: errors.confirmPassword.message })}
-            label="确认密码"
+            {...(errors.confirmPassword?.message === undefined ? {} : { error: errorText(errors.confirmPassword.message) })}
+            label={t('register.confirmPassword')}
             onBlur={() => { onBlur(); validateOnBlur('confirmPassword'); }}
             onChangeText={(text) => { onChange(text); revalidateOnChange('confirmPassword'); }}
             returnKeyType="go"
@@ -238,14 +242,14 @@ export const RegisterForm = ({
       />
       <Button
         disabled={isSubmitting}
-        label="创建账户"
+        label={t('register.action')}
         loading={isSubmitting}
         onPress={() => {
           void submitRegistration();
           focusFirstInvalidWebField();
         }}
       />
-      <AuthSwitch prompt="已有账户？" label="登录" onPress={onLogin} />
+      <AuthSwitch prompt={t('register.loginPrompt')} label={t('login.action')} onPress={onLogin} />
     </Stack>
   );
 };
