@@ -280,14 +280,19 @@ test('a desktop pane form names its shortcut, and Ctrl+Enter submits it', async 
   expect(created[0]).toMatchObject({ title: '准备郊游野餐用品' });
 });
 
-test('a rule opens for reading, and its editor gives way to another rule without asking until something changes', async ({ page }) => {
-  await setup(page);
+async function setupRecurrenceRules(page: Page) {
   const rule = (id: string, title: string) => ({ id, kind: 'task', title, freq: 'daily', interval: 1, byWeekday: [], startsOn: '2026-11-01', endsOn: null, count: null, timezone: 'Asia/Shanghai', startTimeLocal: null, durationMinutes: null, lunar: null, occasion: null, birthYear: null, nextOccurrenceDate: '2026-11-10', updatedAt: version });
   const rules = [rule('77777777-7777-4777-8777-000000000001', '倒垃圾'), rule('77777777-7777-4777-8777-000000000002', '浇花')];
   await page.route(url => url.pathname.startsWith('/api/v1/') && url.pathname.includes('/recurrence-rules'), route => {
     const path = new URL(route.request().url()).pathname;
     return route.fulfill({ json: path.endsWith('/recurrence-rules') ? { rules, total: rules.length } : rules.find(item => path.endsWith(item.id)) });
   });
+  return rules;
+}
+
+test('a rule opens for reading, and its editor gives way to another rule without asking until something changes', async ({ page }) => {
+  await setup(page);
+  await setupRecurrenceRules(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/recurrence-rules`);
   const first = page.getByRole('button', { name: /^任务重复安排：倒垃圾，/ });
@@ -311,6 +316,31 @@ test('a rule opens for reading, and its editor gives way to another rule without
   await expect(question).toBeVisible();
   await question.getByRole('button', { name: '保留草稿并切换', exact: true }).click();
   await expect(detail.getByRole('heading', { name: '倒垃圾', exact: true })).toBeVisible();
+});
+
+test('editing a directly opened rule keeps its list visible and usable', async ({ page }) => {
+  await setup(page);
+  const [rule] = await setupRecurrenceRules(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const detailPath = `${base}/recurrence-rules/${rule.id}`;
+  await page.goto(detailPath);
+
+  const detail = page.getByRole('region', { name: '重复安排详情', exact: true });
+  const list = page.getByRole('main', { name: '重复安排', exact: true });
+  const row = list.getByRole('button', { name: /^任务重复安排：倒垃圾，/ });
+  await expect(row).toBeVisible();
+  await detail.getByRole('button', { name: '编辑重复安排', exact: true }).click();
+
+  const editor = page.getByRole('region', { name: '编辑重复安排', exact: true });
+  await expect(page).toHaveURL(`${detailPath}/edit`);
+  await expect(editor).toBeVisible();
+  await expect(row).toBeVisible();
+  await list.getByRole('radio', { name: '重复日程', exact: true }).click();
+  await expect(row).toHaveCount(0);
+  await editor.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(page).toHaveURL(detailPath);
+  await expect(detail).toBeVisible();
+  await expect(list.getByRole('radio', { name: '重复日程', exact: true })).toBeChecked();
 });
 
 test('the wide sign-in screen sets the product beside a floating form', async ({ page }) => {

@@ -1,4 +1,5 @@
 import { MarkdownEditor } from './markdown-editor';
+import { noteEditorViewport } from './note-editor-chrome';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
@@ -74,7 +75,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
   }, [form, initial, onSubmit]);
 
   return (
-    <Stack gap={0}>
+    <Stack gap={0} style={noteEditorViewport}>
       {draftKey ? <DraftNotice /> : null}
       {/* The compose layout of events and tasks: a large borderless title, then the content. Notes have no icon rows, so both start at the same edge. */}
       <View>
@@ -86,7 +87,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
           onChangeText={(v) => updateField('title', v)}
           placeholder="添加标题"
           placeholderTextColor={activeTheme.colors.inkMuted}
-          style={[desktop && !reading ? inputs.title : titleInputStyle, { paddingHorizontal: activeTheme.spacing[2] }, desktop && reading ? activeTheme.typography.readingTitle : undefined]}
+          style={[desktop && !reading ? inputs.title : titleInputStyle, desktop && reading ? activeTheme.typography.readingTitle : undefined, { flex: 0, paddingHorizontal: activeTheme.spacing[2] }]}
           maxLength={200}
           accessibilityLabel="笔记标题"
           aria-invalid={titleError !== null}
@@ -99,7 +100,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
         ) : null}
       </View>
 
-      <FormSection>
+      <FormSection style={noteEditorViewport}>
         <MarkdownEditor value={form.body} onChange={updateBody} disabled={isSubmitting} />
       </FormSection>
 

@@ -7,6 +7,7 @@ import { useCallback, useRef, useState } from 'react';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { NoteForm } from '../../../../../src/features/notes/note-form';
+import { noteEditorViewport } from '../../../../../src/features/notes/note-editor-chrome';
 import { NoteWindow, useNoteWindowClose } from '../../../../../src/features/notes/note-window';
 import { Banner, Stack } from '../../../../../src/ui/primitives';
 import type { CreateNoteDto } from '@muchakucha/api-client';
@@ -48,7 +49,7 @@ export default function CreateNoteRoute() {
 
   return (
     <NoteWindow draftPrefix={draftPrefix} title="创建笔记" busy={isSubmitting} exitAllowed={exitAllowed}>
-      <Stack gap={4}>
+      <Stack gap={4} style={noteEditorViewport}>
         <HouseholdContextNote householdName={householdName} />
         {error !== null ? <Banner>{error}</Banner> : null}
         <NoteForm

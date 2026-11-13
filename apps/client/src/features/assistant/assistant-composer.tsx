@@ -79,7 +79,7 @@ export const AssistantComposer = forwardRef<TextInput, {
   return <Stack gap={1} style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, borderWidth: theme.borderWidths.default, borderColor: focused ? theme.colors.focusRing : theme.colors.separator, padding: theme.spacing[3] }}>
     <TextInput ref={input} accessibilityLabel={label} multiline value={value} onChangeText={onChangeText} maxLength={8000} editable={!blocked && !engaged}
       onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder="想问什么，或想做点什么？" placeholderTextColor={theme.colors.inkMuted}
-      style={{ ...theme.typography.body, fontFamily: theme.fontFamilies.regular, color: theme.colors.ink, minHeight: theme.controlSizes.touchTarget, maxHeight: theme.controlSizes.field * 3, padding: theme.spacing[1], textAlignVertical: 'top', outlineWidth: 0 }} />
+      style={{ ...theme.typography.body, fontFamily: theme.fontFamilies.regular, color: theme.colors.ink, minHeight: theme.controlSizes.touchTarget, maxHeight: theme.controlSizes.field * 3, padding: theme.spacing[1], textAlignVertical: 'top', outlineStyle: 'solid', outlineWidth: 0 }} />
     {voice?.notice ? <Inline gap={2} style={{ alignItems: 'center', flexWrap: 'wrap', paddingHorizontal: theme.spacing[1] }}>
       <Text variant="bodySm" color="inkMuted" accessibilityLiveRegion="polite" aria-live="polite" style={{ flex: 1, minWidth: 0 }}>{voice.notice}</Text>
       {voice.settings ? <Button label="打开设置" size="compact" tone="secondary" onPress={() => { void voice.openSettings(); }} /> : null}

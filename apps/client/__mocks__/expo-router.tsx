@@ -51,6 +51,10 @@ export function useFocusEffect(): void {
 
 export function useIsFocused() { return true; }
 
+export function useRoute() {
+  return { key: 'test-route' };
+}
+
 export function useNavigation() {
   return {
     getState: () => ({ routes: [], index: 0 }),

@@ -43,7 +43,7 @@ function AssistantHome({ householdId, householdName, writable }: AssistantHouseh
   };
   return <AssistantWorkspace householdId={householdId} householdName={householdName} title="家庭助手" conversations={query.data?.conversations ?? []} busy={operation.busy} onRefresh={() => { void query.reload(); }}>
     {/* The same left edge as the title row above. */}
-    <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: theme.spacing[5], paddingVertical: theme.spacing[6], gap: theme.spacing[5], maxWidth: theme.layout.assistantReadingWidth, width: '100%', alignSelf: 'center' }}>
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: theme.spacing[5], paddingVertical: theme.spacing[6], gap: theme.spacing[5], maxWidth: theme.layout.assistantReadingWidth, width: '100%', alignSelf: 'center' }}>
       {!writable ? <Banner>当前离线，恢复连接后即可继续使用助手。</Banner> : null}
       {operation.error ? <Banner>{operation.error}</Banner> : null}
       {query.error ? <LoadError message={query.error} onRetry={() => { void query.reload(); }} retrying={query.loading} disabled={operation.busy} /> : null}

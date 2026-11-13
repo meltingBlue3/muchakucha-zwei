@@ -1,11 +1,15 @@
 import AlarmClock from 'lucide-react-native/icons/alarm-clock';
 import Bell from 'lucide-react-native/icons/bell';
 import type { ReminderChoiceDto } from '@muchakucha/api-client';
+import { useCallback, useMemo, useState } from 'react';
 import { View } from 'react-native';
+import { claimBackgroundReminderHint } from '../../platform/reminders/background-reminder-guide';
 import { alarmsSupported } from '../../platform/reminders/reminder-alarm';
 import { ChoiceField, rowIcon } from '../../ui/compose-rows';
 import { Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
+import { useWindowStep } from '../../ui/window-step';
+import { BackgroundReminderGuide, BackgroundReminderHint } from './background-reminder-guide';
 import { NotificationPermissionNotice } from './notification-permission';
 import {
   alarmOptions,
@@ -37,6 +41,15 @@ export function ReminderField({ kind, own, dateOnly, recurring, value, disabled 
   onChange(choice: ReminderChoiceDto): void;
 }) {
   const { settings } = useReminderSettings();
+  const [hint, setHint] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const closeGuide = useCallback(() => setGuideOpen(false), []);
+  const guide = useMemo(() => guideOpen ? {
+    title: '后台提醒',
+    content: <BackgroundReminderGuide onClose={closeGuide} />,
+    onClose: closeGuide,
+  } : null, [closeGuide, guideOpen]);
+  const inWindow = useWindowStep(guide);
   const context = { kind, own, dateOnly, defaults: settings };
   const choice = fitChoice(value, dateOnly);
   // Without a reminder there is nothing to ring; while the defaults load, there may be one.
@@ -53,13 +66,21 @@ export function ReminderField({ kind, own, dateOnly, recurring, value, disabled 
         options={reminderOptions(context)}
         value={[choiceValue(choice)]}
         disabled={disabled}
-        onChange={([next]) => { if (next !== undefined) onChange(choiceFromValue(next, alarmValue(choice))); }}
+        onChange={([next]) => {
+          if (next === undefined) return;
+          const updated = choiceFromValue(next, alarmValue(choice));
+          onChange(updated);
+          const active = updated.mode === 'before' || (updated.mode === 'default' && settings !== null && defaultMinutes(kind, own, dateOnly, settings) !== null);
+          if (active && claimBackgroundReminderHint()) setHint(true);
+        }}
       >
         <View style={{ paddingHorizontal: theme.spacing[2], gap: theme.spacing[3] }}>
           <Text variant="bodySm">{personal}</Text>
           <NotificationPermissionNotice />
         </View>
       </ChoiceField>
+      {hint && reminds ? <BackgroundReminderHint onOpen={() => { setHint(false); setGuideOpen(true); }} onDismiss={() => setHint(false)} /> : null}
+      {!inWindow ? guide?.content : null}
       {reminds ? (
         <ChoiceField
           name="闹铃"
