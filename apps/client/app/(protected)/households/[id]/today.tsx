@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../src/i18n';
 import { useContentChanges } from '../../../../src/features/content/content-changes';
 import { useResourceNavigation } from '../../../../src/ui/use-resource-navigation';
 import { todayNotePaneWidth, useDesktop } from '../../../../src/ui/use-desktop';
@@ -34,6 +35,7 @@ function todayIso(): string {
 }
 
 export default function TodayRoute() {
+  const { t } = useTranslation(['today', 'tasks', 'events', 'households', 'auth', 'navigation']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const desktop = useDesktop();
@@ -59,7 +61,7 @@ export default function TodayRoute() {
   const [loading, setLoading] = useState(true);
   const loadedDay = useRef<string | null>(null);
   const requestGeneration = useRef(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'loadError' | 'refreshError' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [, setCalendarDate] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, todayIso());
   const [showUpcoming, setShowUpcoming] = useWorkspaceState(`view:${id}:today:upcoming`, false);
@@ -94,7 +96,7 @@ export default function TodayRoute() {
       const token = await sessionTransport.getAccessToken();
       if (request !== requestGeneration.current) return;
       if (token === null) {
-        setError('登录已过期，请重新登录。');
+        setError('auth:errors.sessionExpired');
         return;
       }
 
@@ -118,8 +120,8 @@ export default function TodayRoute() {
       setTasks(tasksResult.tasks);
     } catch {
       if (request === requestGeneration.current) setError(loadedDay.current === dayKey
-        ? '刷新失败，仍显示上次的安排。请检查网络后重试。'
-        : '无法加载今日数据，请检查网络连接后重试。');
+        ? 'refreshError'
+        : 'loadError');
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
@@ -190,7 +192,7 @@ export default function TodayRoute() {
     <TaskCard
       key={task.id}
       task={task}
-      assignees={(task.assigneeIds ?? []).map((uid) => ({ id: uid, name: memberNameMap.get(uid) ?? '未知成员' }))}
+      assignees={(task.assigneeIds ?? []).map((uid) => ({ id: uid, name: memberNameMap.get(uid) ?? t('tasks:unknownMember') }))}
       onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
       {...(options.time === undefined ? {} : { time: options.time })}
       showDue={options.showDue ?? true}
@@ -213,29 +215,29 @@ export default function TodayRoute() {
       {/* On a wide screen the sidebar names the page 今日, so the header carries the date in its summary. */}
       {desktop ? `${formatDate(now.date)} ${formatWeekday(now.date)}` : formatWeekday(now.date)}
       {lunarToday ? ` · ${lunarToday}` : ''}
-      {ready ? ` · ${todayEvents.length} 个日程 · ${todayTasks.length} 件待办` : ''}
-      {ready && overdueTasks.length > 0 ? <Text variant="bodySm" color="accent">{` · ${overdueTasks.length} 件逾期`}</Text> : null}
+      {ready ? ` · ${t('events:count', { count: todayEvents.length })} · ${t('taskCount', { count: todayTasks.length })}` : ''}
+      {ready && overdueTasks.length > 0 ? <Text variant="bodySm" color="accent">{` · ${t('households:overdueCount', { count: overdueTasks.length })}`}</Text> : null}
     </Text>
   );
 
   const overdueGroup = overdueTasks.length > 0 ? (
     <View>
-      <GroupLabel tone="accent">{`逾期任务（${overdueTasks.length}）`}</GroupLabel>
+      <GroupLabel tone="accent">{t('overdueGroup', { count: overdueTasks.length })}</GroupLabel>
       <ListGroup>{previewTasks(overdueTasks, allOverdue).map(task => taskRow(task))}</ListGroup>
-      {overdueTasks.length > 3 ? <MoreButton label={allOverdue ? '收起逾期任务' : `查看全部逾期任务（${overdueTasks.length}）`} expanded={allOverdue} onPress={() => setAllOverdue(value => !value)} /> : null}
+      {overdueTasks.length > 3 ? <MoreButton label={allOverdue ? t('collapseOverdue') : t('expandOverdue', { count: overdueTasks.length })} expanded={allOverdue} onPress={() => setAllOverdue(value => !value)} /> : null}
     </View>
   ) : null;
 
   const allDayGroup = day.allDay.length > 0 ? (
     <View>
-      <GroupLabel>{`全天（${day.allDay.length}）`}</GroupLabel>
+      <GroupLabel>{t('allDayGroup', { count: day.allDay.length })}</GroupLabel>
       <ListGroup>{day.allDay.map(entry => entry.kind === 'event' ? eventRow(entry.event, false) : taskRow(entry.task, { showDue: false }))}</ListGroup>
     </View>
   ) : null;
 
   const timelineGroup = day.timeline.length > 0 ? (
     <View>
-      <GroupLabel>{`时间线（${day.timeline.length}）`}</GroupLabel>
+      <GroupLabel>{t('timelineGroup', { count: day.timeline.length })}</GroupLabel>
       <ListGroup>
         {day.timeline.flatMap((entry, index) => [
           ...(index === nowIndex ? [<NowMarker key="now" time={toTimeValue(now.date)} />] : []),
@@ -249,26 +251,26 @@ export default function TodayRoute() {
   const unscheduledGroup = unscheduledTasks.length > 0 ? (
     <View>
       {/* A bounded preview keeps unscheduled work reachable without burying the day. */}
-      <GroupLabel>{`待安排（${unscheduledTasks.length}）`}</GroupLabel>
+      <GroupLabel>{t('tasks:groups.undated', { count: unscheduledTasks.length })}</GroupLabel>
       <ListGroup>{previewTasks(unscheduledTasks, allUnscheduled).map(task => taskRow(task))}</ListGroup>
-      {unscheduledTasks.length > 3 ? <MoreButton label={allUnscheduled ? '收起待安排' : `查看全部待安排（${unscheduledTasks.length}）`} expanded={allUnscheduled} onPress={() => setAllUnscheduled(value => !value)} /> : null}
+      {unscheduledTasks.length > 3 ? <MoreButton label={allUnscheduled ? t('collapseUnscheduled') : t('expandUnscheduled', { count: unscheduledTasks.length })} expanded={allUnscheduled} onPress={() => setAllUnscheduled(value => !value)} /> : null}
     </View>
   ) : null;
 
   // Hidden when nothing is coming up: a toggle that reveals zero items is noise.
   const upcomingGroup = upcomingCount > 0 ? (
     <Stack gap={4}>
-      <MoreButton label={showUpcoming ? '收起后续安排' : `查看后续安排（${upcomingCount}）`} expanded={showUpcoming} onPress={() => setShowUpcoming(value => !value)} />
+      <MoreButton label={showUpcoming ? t('collapseUpcoming') : t('expandUpcoming', { count: upcomingCount })} expanded={showUpcoming} onPress={() => setShowUpcoming(value => !value)} />
       {showUpcoming ? <>
         <View>
-          <GroupLabel>{`临近截止日期（${approachingTasks.length}）`}</GroupLabel>
+          <GroupLabel>{t('approaching', { count: approachingTasks.length })}</GroupLabel>
           {approachingTasks.length === 0
-            ? <Text variant="bodySm" style={{ paddingHorizontal: theme.spacing[1] }}>未来 7 天内没有到期的任务。</Text>
+            ? <Text variant="bodySm" style={{ paddingHorizontal: theme.spacing[1] }}>{t('noApproaching')}</Text>
             : <ListGroup>{approachingTasks.map(task => taskRow(task))}</ListGroup>}
         </View>
         {otherUpcomingTasks.length > 0 ? (
           <View>
-            <GroupLabel>{`稍后待办（${otherUpcomingTasks.length}）`}</GroupLabel>
+            <GroupLabel>{t('otherUpcoming', { count: otherUpcomingTasks.length })}</GroupLabel>
             <ListGroup>{otherUpcomingTasks.map(task => taskRow(task))}</ListGroup>
           </View>
         ) : null}
@@ -279,7 +281,7 @@ export default function TodayRoute() {
   const primary = (
     <Stack gap={6}>
       {overdueGroup}
-      {nothingToday ? <EmptyState title="今天很清闲" message="今天没有日程，也没有到期的待办。" /> : null}
+      {nothingToday ? <EmptyState title={t('emptyTitle')} message={t('emptyMessage')} /> : null}
       {allDayGroup}
       {timelineGroup}
     </Stack>
@@ -289,24 +291,24 @@ export default function TodayRoute() {
   return (
     <HouseholdScreen
       active="today"
-      accessibilityLabel="今日视图"
+      accessibilityLabel={t('main')}
       layout={desktop ? 'workspace' : 'document'}
       paneWidth={desktop && detail === 'notes' ? todayNotePaneWidth(width, rail) : undefined}
       notice={completion.undoNotice}
       refreshing={refreshing}
       onRefresh={handleRefresh}
       floatingAction={<FloatingCreateButton actions={[
-        { kind: 'events', label: '创建日程', onPress: create('events') },
-        { kind: 'tasks', label: '创建任务', onPress: create('tasks') },
-        { kind: 'notes', label: '创建笔记', onPress: create('notes') },
-        { kind: 'birthdays', label: '添加生日', onPress: create('birthdays') },
+        { kind: 'events', label: t('events:create'), onPress: create('events') },
+        { kind: 'tasks', label: t('tasks:create'), onPress: create('tasks') },
+        { kind: 'notes', label: t('createNote'), onPress: create('notes') },
+        { kind: 'birthdays', label: t('createBirthday'), onPress: create('birthdays') },
       ]} />}
     >
       <Stack gap={desktop ? 0 : 6} style={desktop ? { flex: 1, minHeight: 0 } : undefined}>
-        <PageIntro title={desktop ? '今日' : formatDate(now.date)} subtitle={summary} />
+        <PageIntro title={desktop ? t('navigation:pages.today') : formatDate(now.date)} subtitle={summary} />
 
-        {loading ? <LoadingState label="正在加载今日安排" /> : null}
-        {error !== null ? <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载今日数据" /> : null}
+        {loading ? <LoadingState label={t('loading')} /> : null}
+        {error !== null ? <LoadError message={t(error)} onRetry={() => void fetchData()} retryAccessibilityLabel={t('retryLoad')} /> : null}
 
         {ready && viewState !== 'resolving' ? (
           desktop ? <DesktopToday detail={detail} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenTasks={() => router.push(`/households/${encodeURIComponent(householdId!)}/tasks`)} onCreateTask={create('tasks')} /> : wide && secondary

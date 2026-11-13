@@ -1,4 +1,4 @@
-import { i18n, useTranslation } from '../../../../../../src/i18n';
+import { useTranslation } from '../../../../../../src/i18n';
 import { notifyContentChanged } from '../../../../../../src/features/content/content-changes';
 import { hasRecurrenceFieldErrors } from '../../../../../../src/features/recurrence/recurrence-options';
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
@@ -27,9 +27,6 @@ import { Banner, LoadError, LoadingState, Stack } from '../../../../../../src/ui
 type PendingSeriesAction =
   { kind: 'save'; data: CreateEventDto; mode: SeriesScopeMode };
 
-const SERIES_FAILURE = '没有完成。这个重复安排没有发生任何改变，请重试。';
-const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后可以看到最新的安排。';
-
 /**
  * Projects the form payload onto the series-update contract by naming every
  * forwarded field. The two types are structurally assignable today, so passing
@@ -54,7 +51,7 @@ function eventSeriesUpdate(data: CreateEventDto, labelIds: string[]): Omit<Updat
 }
 
 export default function EditEventRoute() {
-  useTranslation('recurrence');
+  const { t } = useTranslation(['events', 'common', 'tasks', 'auth', 'reminders']);
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
   const { households } = useHouseholdContext();
   const householdName = households.find(household => household.id === id)?.name ?? '';
@@ -66,11 +63,11 @@ export default function EditEventRoute() {
   const [event, setEvent] = useState<EventResponseDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'detailLoadError' | 'tasks:saveRetry' | 'reminders:saveFailed' | null>(null);
   const [selectedLabelIds, setSelectedLabelIds] = useWorkspaceState<string[]>(draftPrefix + 'labels', []);
   const [pendingSeriesAction, setPendingSeriesAction] = useState<PendingSeriesAction | null>(null);
   const [seriesSubmitting, setSeriesSubmitting] = useState<SeriesScope | null>(null);
-  const [seriesError, setSeriesError] = useState<string | null>(null);
+  const [seriesError, setSeriesError] = useState<'auth:errors.sessionExpired' | 'tasks:seriesMissing' | 'tasks:seriesFailure' | null>(null);
 
 
   const conflict = useEditConflict(draftPrefix, event, async () => {
@@ -85,7 +82,7 @@ export default function EditEventRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期，请重新登录。');
+        setError('auth:errors.sessionExpired');
         return;
       }
       const result = await sessionApiClient.getEvent(token, id, eventId);
@@ -93,7 +90,7 @@ export default function EditEventRoute() {
       setEvent(result);
       workspace.seed(draftPrefix + 'labels', (result.labels ?? []).map((l) => l.id));
     } catch {
-      if (showLoading) setError('无法加载日程，请重试或确认它是否已被删除。');
+      if (showLoading) setError('detailLoadError');
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -110,7 +107,7 @@ export default function EditEventRoute() {
       setError(null);
       const reminderError = await saveOwnReminder('event', id, eventId, myReminder, event?.myReminder);
       if (reminderError !== null) {
-        setError(i18n.t(reminderError));
+        setError(reminderError);
         setIsSubmitting(false);
         return;
       }
@@ -136,7 +133,7 @@ export default function EditEventRoute() {
       try {
         const token = await sessionTransport.getAccessToken();
         if (token === null) {
-          setError('登录已过期，请重新登录。');
+          setError('auth:errors.sessionExpired');
           return;
         }
         await sessionApiClient.updateEvent(token, id!, eventId!, { ...data, ...conflict.precondition, labelIds: selectedLabelIds });
@@ -147,7 +144,7 @@ export default function EditEventRoute() {
       } catch (err: unknown) {
         // Repeat-rule field errors belong to the form, next to the repeat settings.
         if (hasRecurrenceFieldErrors(err)) throw err;
-        if (!conflict.handle(err)) setError('保存失败，请重试。');
+        if (!conflict.handle(err)) setError('tasks:saveRetry');
       } finally {
         setIsSubmitting(false);
       }
@@ -162,7 +159,7 @@ export default function EditEventRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setSeriesError('登录已过期，请重新登录。');
+        setSeriesError('auth:errors.sessionExpired');
         return;
       }
 
@@ -194,8 +191,8 @@ export default function EditEventRoute() {
       }
       setSeriesError(
         caught instanceof ApiClientError && caught.status === 404
-          ? SERIES_MISSING
-          : SERIES_FAILURE,
+          ? 'tasks:seriesMissing'
+          : 'tasks:seriesFailure',
       );
       await fetchEvent(false);
     } finally {
@@ -209,15 +206,15 @@ export default function EditEventRoute() {
   };
 
   return (
-    <EventWindow draftPrefix={draftPrefix} size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : '编辑日程'} busy={isSubmitting || seriesSubmitting !== null} onClose={handleCancel} onBackStep={pendingSeriesAction ? handleCancel : undefined} exitAllowed={exitAllowed}>
-      {pendingSeriesAction ? <SeriesScopeContent mode={pendingSeriesAction.mode} error={seriesError} submitting={seriesSubmitting} onClose={handleCancel} onSelect={scope => void handleSeriesSelect(scope)} />
-        : loading ? <LoadingState label="正在加载日程" /> : event === null ? <Stack gap={3}>
-          <LoadError message={error ?? '日程未找到或已被删除。'} onRetry={() => void fetchEvent()} />
+    <EventWindow draftPrefix={draftPrefix} size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : t('edit')} busy={isSubmitting || seriesSubmitting !== null} onClose={handleCancel} onBackStep={pendingSeriesAction ? handleCancel : undefined} exitAllowed={exitAllowed}>
+      {pendingSeriesAction ? <SeriesScopeContent mode={pendingSeriesAction.mode} error={seriesError === null ? null : t(seriesError)} submitting={seriesSubmitting} onClose={handleCancel} onSelect={scope => void handleSeriesSelect(scope)} />
+        : loading ? <LoadingState label={t('loading')} /> : event === null ? <Stack gap={3}>
+          <LoadError message={t(error ?? 'notFound')} onRetry={() => void fetchEvent()} />
         </Stack> : <Stack gap={4}>
           <HouseholdContextNote householdName={householdName} />
-          {error ? <Banner>{error}</Banner> : null}
+          {error ? <Banner>{t(error)}</Banner> : null}
           {conflict.panel}
-          <EventForm draftKey={draftPrefix + 'form'} initial={event} onSubmit={handleSubmit} onCancel={handleCancel} submitLabel="保存" isSubmitting={isSubmitting} householdId={id} selectedLabelIds={selectedLabelIds} onLabelChange={setSelectedLabelIds} />
+          <EventForm draftKey={draftPrefix + 'form'} initial={event} onSubmit={handleSubmit} onCancel={handleCancel} submitLabel={t('common:save')} isSubmitting={isSubmitting} householdId={id} selectedLabelIds={selectedLabelIds} onLabelChange={setSelectedLabelIds} />
         </Stack>}
     </EventWindow>
   );

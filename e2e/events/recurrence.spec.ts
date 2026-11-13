@@ -171,6 +171,7 @@ test.describe('recurring event and task journeys', () => {
   });
 
   test('creates a weekly event in the Web form and presents every generated occurrence', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     const account = await prepareAccount('create');
     const householdId = await createHousehold(account.accessToken, '重复事件之家');
     const title = `每周家庭会-${Date.now()}`;
@@ -220,6 +221,7 @@ test.describe('recurring event and task journeys', () => {
     const occurrences = (await listEvents(account.accessToken, householdId, monthStart, monthEnd))
       .filter((event) => event.title === title);
     expect(occurrences).toHaveLength(4);
+    await page.getByRole('button', { name: '展开月历', exact: true }).click();
     for (const occurrence of occurrences) {
       const day = Number(String(occurrence.occurrenceDate).slice(-2));
       await page.getByLabel(new RegExp(`^\\d{4}年\\d{1,2}月${day}日(?:，今天)?，\\d+个日程$`)).click();
@@ -237,6 +239,7 @@ test.describe('recurring event and task journeys', () => {
   });
 
   test('splits an event only after scope selection and cancels one task occurrence', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     const account = await prepareAccount('scope');
     const householdId = await createHousehold(account.accessToken, '范围选择之家');
     const now = new Date();
@@ -272,6 +275,7 @@ test.describe('recurring event and task journeys', () => {
 
     await loginFixture(page, account.username);
     await page.getByRole('tab', { name: '日历', exact: true }).click();
+    await page.getByRole('button', { name: '展开月历', exact: true }).click();
     await page.getByLabel(new RegExp(`^${dayLabel(String(selected.occurrenceDate))}(?:，今天)?，\\d+个日程$`)).click();
     await page.getByLabel(`日程：${eventTitle}，重复`).click();
     await page.getByLabel('编辑日程').click();
@@ -365,8 +369,6 @@ test.describe('recurring event and task journeys', () => {
     const taskToCancel = taskOccurrences.find((task) => task.occurrenceDate === today)!;
     expect(taskToCancel).toBeDefined();
 
-    // 全天 / 时间线 groups and the card menu are the phone's Today; the wide Today has columns instead.
-    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/households/${taskHouseholdId}`);
     await page.getByRole('tab', { name: '今日', exact: true }).click();
     await expect(page.getByRole('main', { name: '今日视图' })).toBeVisible();

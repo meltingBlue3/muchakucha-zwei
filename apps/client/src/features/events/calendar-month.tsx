@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
@@ -7,9 +8,9 @@ import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
-import { formatDayLabel, parseDateValue } from '../../ui/date-values';
+import { formatDayLabel } from '../../ui/date-values';
 import { lunarLabelOn } from '../lunar/lunar-calendar';
-import { getCalendarMonth, getDayNames, formatMonthLabel, toDateIso, type CalendarDay } from './calendar-utils';
+import { calendarDayName, getCalendarMonth, getDayNames, formatMonthLabel, toDateIso, type CalendarDay } from './calendar-utils';
 
 /** What a detailed month cell shows for one event. */
 export interface CalendarCellEvent {
@@ -65,6 +66,7 @@ export function CalendarMonth({
   eventColorsByDate,
   lunar = false,
 }: CalendarMonthProps) {
+  const { t } = useTranslation('events');
   const activeTheme = useTheme<Theme>();
   const dayNames = getDayNames();
   const calendar = useMemo(() => getCalendarMonth(year, month, todayIso), [year, month, todayIso]);
@@ -142,9 +144,9 @@ export function CalendarMonth({
   return (
     <View style={{ backgroundColor: activeTheme.colors.surface, borderRadius: activeTheme.borderRadii.lg, paddingHorizontal: activeTheme.spacing[2], paddingTop: activeTheme.spacing[1], paddingBottom: onToggleMode ? 0 : activeTheme.spacing[2] }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        {week && onPrevWeek ? arrow('上一周', ChevronLeft, onPrevWeek) : arrow('上一个月', ChevronLeft, onPrevMonth)}
+        {week && onPrevWeek ? arrow(t('previousWeek'), ChevronLeft, onPrevWeek) : arrow(t('previousMonth'), ChevronLeft, onPrevMonth)}
         <Text variant="section" accessibilityRole="header" aria-level={2}>{formatMonthLabel(year, month)}</Text>
-        {week && onNextWeek ? arrow('下一周', ChevronRight, onNextWeek) : arrow('下一个月', ChevronRight, onNextMonth)}
+        {week && onNextWeek ? arrow(t('nextWeek'), ChevronRight, onNextWeek) : arrow(t('nextMonth'), ChevronRight, onNextMonth)}
       </View>
 
       <View style={{ flexDirection: 'row', marginBottom: activeTheme.spacing[1] }}>
@@ -168,7 +170,7 @@ export function CalendarMonth({
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
                 aria-pressed={selected}
-                accessibilityLabel={`${formatDayLabel(parseDateValue(day.iso))}${day.isToday ? '，今天' : ''}${eventCount > 0 ? `，${eventCount}个日程` : ''}`}
+                accessibilityLabel={calendarDayName(formatDayLabel(day.date), day.isToday, eventCount)}
                 style={({ pressed }) => detailed
                   ? { flex: 1, minWidth: 0, minHeight: activeTheme.spacing[16] + activeTheme.spacing[6], padding: activeTheme.spacing[1], gap: activeTheme.spacing[1] / 2, backgroundColor: pressed ? activeTheme.colors.surfaceSubtle : activeTheme.colors.transparent }
                   : { flex: 1, minHeight: activeTheme.controlSizes.touchTarget + activeTheme.spacing[2] + (lunar ? activeTheme.typography.lunarDay.lineHeight : 0), alignItems: 'center', paddingVertical: activeTheme.spacing[1] }}
@@ -181,7 +183,7 @@ export function CalendarMonth({
                       <Text variant="caption" color={day.isCurrentMonth ? 'ink' : 'inkFaint'} numberOfLines={1} style={{ flex: 1, fontWeight: '400' }}>{event.title}</Text>
                     </View>
                   ))}
-                  {titles.length > TITLES_PER_DAY ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: activeTheme.spacing[1] }}>{`还有 ${titles.length - TITLES_PER_DAY} 项`}</Text> : null}
+                  {titles.length > TITLES_PER_DAY ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: activeTheme.spacing[1] }}>{t('more', { count: titles.length - TITLES_PER_DAY })}</Text> : null}
                 </> : <>
                   {dayMark(day, selected, pressed)}
                   {lunarText(day)}
@@ -196,7 +198,7 @@ export function CalendarMonth({
       {onToggleMode ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={week ? '展开月历' : '收起月历'}
+          accessibilityLabel={week ? t('expandMonth') : t('collapseMonth')}
           aria-expanded={!week}
           onPress={onToggleMode}
           style={({ pressed }) => ({ minHeight: activeTheme.controlSizes.touchTarget - activeTheme.spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: activeTheme.borderRadii.md, backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.transparent })}

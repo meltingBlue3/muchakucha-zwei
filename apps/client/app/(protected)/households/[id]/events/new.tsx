@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../src/i18n';
 import { notifyContentChanged } from '../../../../../src/features/content/content-changes';
 import { useRef } from 'react';
 import { EventWindow, useEventWindowClose } from '../../../../../src/features/events/event-window';
@@ -15,6 +16,7 @@ import { Banner, LoadError, Stack } from '../../../../../src/ui/primitives';
 import type { CreateEventDto } from '@muchakucha/api-client';
 
 export default function CreateEventRoute() {
+  const { t } = useTranslation(['events', 'tasks', 'shared']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const { households } = useHouseholdContext();
   const householdName = households.find(household => household.id === id)?.name ?? '';
@@ -47,17 +49,17 @@ export default function CreateEventRoute() {
   const handleSubmit = (data: CreateEventDto) => submit(data, selectedLabelIds);
 
   return (
-    <EventWindow draftPrefix={draftPrefix} title="创建日程" busy={isSubmitting} exitAllowed={exitAllowed}>
+    <EventWindow draftPrefix={draftPrefix} title={t('create')} busy={isSubmitting} exitAllowed={exitAllowed}>
 
         <Stack gap={4}>
           <HouseholdContextNote householdName={householdName} />
           {error !== null && created === null ? <Banner>{error}</Banner> : null}
-          {created !== null ? <Stack gap={4}><DraftNotice /><LoadError title="日程已创建" message={error ?? '内容已创建，标签尚未保存。'} retryLabel="重试保存标签" retrying={isSubmitting} onRetry={() => void retry()} /></Stack> : <EventForm
+          {created !== null ? <Stack gap={4}><DraftNotice /><LoadError title={t('created')} message={error ?? t('tasks:labelsUnsaved')} retryLabel={t('tasks:retryLabels')} retrying={isSubmitting} onRetry={() => void retry()} /></Stack> : <EventForm
             draftKey={draftPrefix + 'form'}
             defaultDate={selectedDate ?? toDateIso(new Date())}
             onSubmit={handleSubmit}
             onCancel={close}
-            submitLabel="创建"
+            submitLabel={t('shared:create')}
             isSubmitting={isSubmitting}
             householdId={id}
             selectedLabelIds={selectedLabelIds}

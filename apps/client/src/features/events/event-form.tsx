@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
@@ -108,6 +109,7 @@ function eventInputFrom(initial: EventResponseDto): EventInput {
 }
 
 export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: EventFormProps) {
+  const { t } = useTranslation(['events', 'tasks']);
   const activeTheme = useTheme<Theme>();
   const inputs = useComposeInputStyles();
   const dense = useDesktopDensity();
@@ -130,10 +132,10 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
   // An existing series keeps its own anchor when just this occurrence moves.
   // New repeats still follow the event's first date.
   const recurrenceStart = initial?.recurrence?.startsOn ?? form.startDate;
-  const [error, setError] = useState<string | null>(null);
-  const [titleError, setTitleError] = useState<string | null>(null);
+  const [error, setError] = useState<'tasks:saveNetwork' | null>(null);
+  const [titleError, setTitleError] = useState<'titleRequired' | null>(null);
   // Start and end checks, shown under the end row.
-  const [timeError, setTimeError] = useState<string | null>(null);
+  const [timeError, setTimeError] = useState<'invalidTime' | 'endBeforeStart' | 'recurringTooLong' | null>(null);
   const titleInput = useRef<TextInput>(null);
   const titleErrorId = `event-title-error-${useId()}`;
   const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, RecurrenceErrorKey>>({});
@@ -156,7 +158,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
 
   const handleSubmit = useCallback(async () => {
     if (form.title.trim().length === 0) {
-      setTitleError('请输入日程标题。');
+      setTitleError('titleRequired');
       titleInput.current?.focus();
       return;
     }
@@ -177,11 +179,11 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
         : `${form.endDate}T${form.endTime}:00`,
     );
     if (!Number.isFinite(startDateTime.getTime()) || !Number.isFinite(endDateTime.getTime())) {
-      setTimeError('请填写有效的开始和结束日期、时间。');
+      setTimeError('invalidTime');
       return;
     }
     if (endDateTime <= startDateTime) {
-      setTimeError('结束时间必须晚于开始时间。');
+      setTimeError('endBeforeStart');
       return;
     }
     // Mirrors the server's recurring_duration_too_long check (a recurring
@@ -190,7 +192,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
     // non-recurring event has no such cap — only the recurring branch
     // derives a per-occurrence duration from this span.
     if (form.recurrence !== null && endDateTime.getTime() - startDateTime.getTime() > 24 * 60 * 60 * 1000) {
-      setTimeError('重复日程的单次时长不能超过 24 小时。');
+      setTimeError('recurringTooLong');
       return;
     }
 
@@ -222,7 +224,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
       if (Object.keys(fieldErrors).length > 0) {
         setRecurrenceErrors(fieldErrors);
       } else {
-        setError('保存失败，请检查网络后重试。');
+        setError('tasks:saveNetwork');
       }
     }
   }, [alarm, baseline, form, initial, onSubmit, recurrenceStart, reminder]);
@@ -237,23 +239,23 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
           editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}
-          placeholder="添加标题"
+          placeholder={t('tasks:addTitle')}
           placeholderTextColor={activeTheme.colors.inkMuted}
           style={inputs.title}
           maxLength={200}
-          accessibilityLabel="日程标题"
+          accessibilityLabel={t('titleField')}
           aria-invalid={titleError !== null}
-          {...(titleError === null ? {} : { 'aria-describedby': titleErrorId, accessibilityHint: titleError })}
+          {...(titleError === null ? {} : { 'aria-describedby': titleErrorId, accessibilityHint: t(titleError) })}
         />
       </FormRow>
-      {titleError !== null ? <RowMessage id={titleErrorId}>{titleError}</RowMessage> : null}
+      {titleError !== null ? <RowMessage id={titleErrorId}>{t(titleError)}</RowMessage> : null}
 
       <FormSection>
         <FormRow icon={rowIcon(Clock)}>
-          <Text variant={dense ? 'bodySm' : 'body'} style={{ flex: 1 }}>全天</Text>
+          <Text variant={dense ? 'bodySm' : 'body'} style={{ flex: 1 }}>{t('allDay')}</Text>
           <Switch
             disabled={isSubmitting}
-            accessibilityLabel="全天日程"
+            accessibilityLabel={t('allDayField')}
             value={form.allDay}
             onValueChange={(v) => updateField('allDay', v)}
             // Like a system switch: a neutral track when off, the accent when on, and a white thumb.
@@ -263,20 +265,20 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
           />
         </FormRow>
         <FormRow>
-          <DateField appearance="plain" disabled={isSubmitting} value={form.startDate} onChange={(v) => moveStart({ startDate: v })} mode="date" placeholder="选择开始日期" accessibilityLabel="开始日期" />
+          <DateField appearance="plain" disabled={isSubmitting} value={form.startDate} onChange={(v) => moveStart({ startDate: v })} mode="date" placeholder={t('selectStartDate')} accessibilityLabel={t('startDate')} />
           {!form.allDay && (
-            <DateField appearance="plain" align="end" disabled={isSubmitting} value={form.startTime} onChange={(v) => moveStart({ startTime: v })} mode="time" placeholder="开始时间" accessibilityLabel="开始时间" />
+            <DateField appearance="plain" align="end" disabled={isSubmitting} value={form.startTime} onChange={(v) => moveStart({ startTime: v })} mode="time" placeholder={t('startTime')} accessibilityLabel={t('startTime')} />
           )}
         </FormRow>
         <FormRow>
-          <DateField appearance="plain" disabled={isSubmitting} value={form.endDate} onChange={(v) => updateField('endDate', v)} mode="date" placeholder="选择结束日期" accessibilityLabel="结束日期" />
+          <DateField appearance="plain" disabled={isSubmitting} value={form.endDate} onChange={(v) => updateField('endDate', v)} mode="date" placeholder={t('selectEndDate')} accessibilityLabel={t('endDate')} />
           {!form.allDay && (
-            <DateField appearance="plain" align="end" disabled={isSubmitting} value={form.endTime} onChange={(v) => updateField('endTime', v)} mode="time" placeholder="结束时间" accessibilityLabel="结束时间" />
+            <DateField appearance="plain" align="end" disabled={isSubmitting} value={form.endTime} onChange={(v) => updateField('endTime', v)} mode="time" placeholder={t('endTime')} accessibilityLabel={t('endTime')} />
           )}
         </FormRow>
-        {timeError !== null ? <RowMessage>{timeError}</RowMessage> : null}
+        {timeError !== null ? <RowMessage>{t(timeError)}</RowMessage> : null}
         <RecurrenceField
-          name="日程重复设置"
+          name={t('recurrenceSetting')}
           icon={rowIcon(Repeat)}
           disabled={isSubmitting}
           disableTurnOff={isExistingRecurring}
@@ -302,11 +304,11 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
             editable={!isSubmitting}
             value={form.location}
             onChangeText={(v) => updateField('location', v)}
-            placeholder="添加地点"
+            placeholder={t('addLocation')}
             placeholderTextColor={activeTheme.colors.inkMuted}
             style={inputs.row}
             maxLength={255}
-            accessibilityLabel="地点"
+            accessibilityLabel={t('location')}
           />
         </FormRow>
       </FormSection>
@@ -317,12 +319,12 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
             editable={!isSubmitting}
             value={form.description}
             onChangeText={(v) => updateField('description', v)}
-            placeholder="添加说明"
+            placeholder={t('tasks:addDescription')}
             placeholderTextColor={activeTheme.colors.inkMuted}
             style={[inputs.row, { minHeight: activeTheme.spacing[16] + activeTheme.spacing[4], textAlignVertical: 'top' }]}
             multiline
             numberOfLines={4}
-            accessibilityLabel="日程描述"
+            accessibilityLabel={t('descriptionField')}
           />
         </FormRow>
       </FormSection>
@@ -344,7 +346,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
       {/* Error */}
       {error !== null && (
         <Text variant="bodySm" color="destructive" accessibilityRole="alert" style={{ marginTop: activeTheme.spacing[4] }}>
-          {error}
+          {t(error)}
         </Text>
       )}
 

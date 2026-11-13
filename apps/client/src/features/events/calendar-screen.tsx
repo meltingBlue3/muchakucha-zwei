@@ -33,7 +33,7 @@ import { CalendarMonth, type CalendarCellEvent } from './calendar-month';
 import { lunarDescriptionOn, useLunarCalendar } from '../lunar/lunar-calendar';
 import { HouseholdScreen } from '../households/household-screen';
 import { EventCard } from './event-card';
-import { toDateIso, toDateRangeIso } from './calendar-utils';
+import { formatMonthLabel, toDateIso, toDateRangeIso } from './calendar-utils';
 import {
   applyRecurringFilter,
   recurringEmptyEvents,
@@ -48,7 +48,7 @@ import type { Theme } from '../../ui/theme';
 const byStart = (a: EventResponseDto, b: EventResponseDto) => Number(b.allDay) - Number(a.allDay) || a.startTime.localeCompare(b.startTime);
 
 export default function CalendarScreen() {
-  const { t } = useTranslation('recurrence');
+  const { t } = useTranslation(['events', 'recurrence', 'tasks', 'navigation']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const desktop = useDesktop();
@@ -75,7 +75,7 @@ export default function CalendarScreen() {
   const [selectedDateIso, setSelectedDateIso] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, toDateIso(today));
   const [events, setEvents] = useState<EventResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'refreshError' | 'loadError' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [labelFilter, setLabelFilter] = useWorkspaceState<string>(`view:${id}:events:labelFilter`, 'all');
   const [recurringFilter, setRecurringFilter] = useWorkspaceState<RecurringFilterKey>(`view:${id}:events:recurringFilter`, 'all');
@@ -100,8 +100,8 @@ export default function CalendarScreen() {
       setEvents(result.events);
     } catch {
       if (request === requestGeneration.current) setError(loadedMonth.current === monthKey
-        ? '刷新失败，仍显示上次的日程。请检查网络后重试。'
-        : '无法加载日程，请检查网络连接后重试。');
+        ? 'refreshError'
+        : 'loadError');
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
@@ -183,10 +183,10 @@ export default function CalendarScreen() {
     handleSelectDate(toDateIso(next));
   };
   const lunarLabel = lunar && selectedDateIso ? lunarDescriptionOn(selectedDateIso) : null;
-  const dateLabel = selectedDateIso ? formatDate(new Date(`${selectedDateIso}T12:00:00`), { weekday: true }) : '当天日程';
+  const dateLabel = selectedDateIso ? formatDate(new Date(`${selectedDateIso}T12:00:00`), { weekday: true }) : t('selectedDay');
   const activeFilterCount = [recurringFilter !== 'all', labelFilter !== 'all'].filter(Boolean).length;
   const clearFilters = () => { setLabelFilter('all'); setRecurringFilter('all'); };
-  const filterSummary = [recurringFilter === 'recurring' ? '仅重复' : '', labelFilter !== 'all' ? availableLabels.find(label => label.id === labelFilter)?.name ?? '已选标签' : ''].filter(Boolean).join(' · ');
+  const filterSummary = [recurringFilter === 'recurring' ? t('tasks:recurringOnly') : '', labelFilter !== 'all' ? availableLabels.find(label => label.id === labelFilter)?.name ?? t('tasks:selectedLabel') : ''].filter(Boolean).join(' · ');
 
   const handleEventPress = useCallback(
     (event: EventResponseDto) => {
@@ -216,30 +216,30 @@ export default function CalendarScreen() {
   return (
     <HouseholdScreen
       active="events"
-      accessibilityLabel="家庭日历"
+      accessibilityLabel={t('calendar')}
       layout={desktop ? 'workspace' : 'document'}
       refreshing={refreshing}
       onRefresh={handleRefresh}
-      floatingAction={<FloatingCreateButton label="创建日程" onPress={handleCreateEvent} />}
+      floatingAction={<FloatingCreateButton label={t('create')} onPress={handleCreateEvent} />}
     >
       <Stack gap={desktop ? 0 : 5} style={desktop ? { flex: 1, minHeight: 0 } : undefined}>
         <PageIntro
-          title="日历"
+          title={t('navigation:pages.events')}
           // On a wide screen the month being shown reads right after the page title, with its arrows and 今天; filters stay with the actions.
           {...(desktop ? { subtitle: <Inline gap={3}>
-            <Inline gap={1}><IconButton label="上一个月" appearance="plain" icon={<ChevronLeft size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />} onPress={() => changeMonth(-1)} /><Text variant="section" color="ink">{year}年{month + 1}月</Text><IconButton label="下一个月" appearance="plain" icon={<ChevronRight size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />} onPress={() => changeMonth(1)} /></Inline>
-            <Button label="今天" accessibilityLabel="回到今天" tone="secondary" size="compact" onPress={() => handleSelectDate(toDateIso(new Date()))} />
+            <Inline gap={1}><IconButton label={t('previousMonth')} appearance="plain" icon={<ChevronLeft size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />} onPress={() => changeMonth(-1)} /><Text variant="section" color="ink">{formatMonthLabel(year, month)}</Text><IconButton label={t('nextMonth')} appearance="plain" icon={<ChevronRight size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />} onPress={() => changeMonth(1)} /></Inline>
+            <Button label={t('today')} accessibilityLabel={t('goToToday')} tone="secondary" size="compact" onPress={() => handleSelectDate(toDateIso(new Date()))} />
             {filterSummary ? <Text variant="meta" numberOfLines={1}>{filterSummary}</Text> : null}
           </Inline> } : filterSummary ? { subtitle: filterSummary } : {})}
           action={<>
-            {!desktop && !selectedIsToday ? <Button label="今天" accessibilityLabel="回到今天" tone="secondary" size="compact" onPress={() => handleSelectDate(toDateIso(new Date()))} /> : null}
-            <FilterButton ref={filterTrigger} label="筛选日程" count={activeFilterCount} onPress={() => setFiltersOpen(true)} />
+            {!desktop && !selectedIsToday ? <Button label={t('today')} accessibilityLabel={t('goToToday')} tone="secondary" size="compact" onPress={() => handleSelectDate(toDateIso(new Date()))} /> : null}
+            <FilterButton ref={filterTrigger} label={t('filter')} count={activeFilterCount} onPress={() => setFiltersOpen(true)} />
           </>}
         />
-        {filtersOpen ? <AppDialog title="筛选日程" busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
+        {filtersOpen ? <AppDialog title={t('filter')} busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
           <Stack gap={5}>
-            <FilterOptions label={t('repeat')} options={RECURRING_FILTERS.map(value => ({ value, label: t(`filter.${value}`), name: recurringFilterAccessibilityLabel(value) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
-            {availableLabels.length ? <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(label => ({ value: label.id, label: label.name, name: `筛选标签：${label.name}` }))]} value={labelFilter} onChange={setLabelFilter} /> : null}
+            <FilterOptions label={t('recurrence:repeat')} options={RECURRING_FILTERS.map(value => ({ value, label: t(`recurrence:filter.${value}`), name: recurringFilterAccessibilityLabel(value) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
+            {availableLabels.length ? <FilterOptions label={t('labels')} options={[{ value: 'all', label: t('tasks:allLabels'), name: t('tasks:allLabels') }, ...availableLabels.map(label => ({ value: label.id, label: label.name, name: t('tasks:labelOption', { label: label.name }) }))]} value={labelFilter} onChange={setLabelFilter} /> : null}
           </Stack>
         </AppDialog> : null}
         <View style={{ flexDirection: wide ? 'row' : 'column', gap: desktop ? 0 : activeTheme.spacing[6], alignItems: desktop ? 'stretch' : wide ? 'flex-start' : 'stretch', ...(desktop ? { flex: 1, minHeight: 0 } : {}) }}>
@@ -263,21 +263,21 @@ export default function CalendarScreen() {
           </View>
           {desktop ? <View testID="calendar-agenda-pane" style={{ width: activeTheme.layout.calendarAgendaWidth, minHeight: 0, borderLeftWidth: activeTheme.borderWidths.default, borderLeftColor: activeTheme.colors.separator, ...(paneOpen ? { display: 'none' } : {}) }}>
             <DesktopDayPane lunar={lunar} dateIso={selectedDateIso ?? todayIso} todayIso={todayIso} events={selectedDateEvents} openEventId={openEventId ?? null} nowMinutes={clock.minutes} onOpen={handleEventPress} onCreate={handleCreateEvent} onEdit={editEvent} onDelete={deleteEvent}>
-              {loading ? <LoadingState label="正在加载日程" /> : null}
-              {error ? <LoadError message={error} onRetry={() => void fetchEvents()} retryAccessibilityLabel="重试加载日程" /> : null}
+              {loading ? <LoadingState label={t('loading')} /> : null}
+              {error ? <LoadError message={t(error)} onRetry={() => void fetchEvents()} retryAccessibilityLabel={t('retryLoad')} /> : null}
               {!loading && !error && selectedDateEvents.length === 0 ? <EmptyState
-                message={recurringFilter === 'recurring' ? recurringEmptyEvents() : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}
-                {...(filterSummary ? { action: <Button label="调整筛选" tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
+                message={recurringFilter === 'recurring' ? recurringEmptyEvents() : labelFilter !== 'all' ? t('emptyFiltered') : t('emptyDay')}
+                {...(filterSummary ? { action: <Button label={t('tasks:adjustFilter')} tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
               /> : null}
             </DesktopDayPane>
           </View> :           <View testID="calendar-agenda-pane" style={{ flex: wide ? 1 : undefined, minWidth: 0 }}>
-            <GroupLabel>{`${dateLabel}${selectedIsToday ? ' · 今天' : ''}${lunarLabel ? ` · ${lunarLabel}` : ''}`}</GroupLabel>
+            <GroupLabel>{[dateLabel, selectedIsToday ? t('today') : null, lunarLabel].filter(Boolean).join(' · ')}</GroupLabel>
             <Stack gap={3}>
-              {loading ? <LoadingState label="正在加载日程" /> : null}
-              {error ? <LoadError message={error} onRetry={() => void fetchEvents()} retryAccessibilityLabel="重试加载日程" /> : null}
+              {loading ? <LoadingState label={t('loading')} /> : null}
+              {error ? <LoadError message={t(error)} onRetry={() => void fetchEvents()} retryAccessibilityLabel={t('retryLoad')} /> : null}
               {!loading && !error && selectedDateEvents.length === 0 ? <EmptyState
-                message={recurringFilter === 'recurring' ? recurringEmptyEvents() : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}
-                {...(filterSummary ? { action: <Button label="调整筛选" tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
+                message={recurringFilter === 'recurring' ? recurringEmptyEvents() : labelFilter !== 'all' ? t('emptyFiltered') : t('emptyDay')}
+                {...(filterSummary ? { action: <Button label={t('tasks:adjustFilter')} tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
               /> : null}
               <ListGroup>
                 {selectedDateEvents.map(event => <EventCard key={event.id} event={event} withinDay timeColumn selected={event.id === openEventId} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />)}

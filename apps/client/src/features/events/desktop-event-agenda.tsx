@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import type { EventResponseDto } from '@muchakucha/api-client';
@@ -12,6 +13,7 @@ import { eventLastDate } from './desktop-month';
 import { toDateIso } from './calendar-utils';
 
 export function DesktopEventAgenda({ event }: { event: EventResponseDto }) {
+  const { t } = useTranslation('events');
   const [selectedDate] = useWorkspaceState<string | null>(`view:${event.householdId}:events:selectedDateIso`, null);
   const firstDate = toDateIso(new Date(event.startTime));
   const date = selectedDate && selectedDate >= firstDate && selectedDate <= eventLastDate(event) ? selectedDate : firstDate;
@@ -32,7 +34,7 @@ export function DesktopEventAgenda({ event }: { event: EventResponseDto }) {
   const isToday = date === toDateIso(new Date());
   const now = new Date();
   return <View style={{ marginHorizontal: -theme.spacing[3], marginBottom: theme.spacing[5], paddingBottom: theme.spacing[4], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator, gap: theme.spacing[3] }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingHorizontal: theme.spacing[2] }}><Text variant="label">{`${formatDate(new Date(`${date}T12:00:00`))} ${formatWeekday(new Date(`${date}T12:00:00`))}`}</Text>{isToday ? <Chip tone="accent">今天</Chip> : null}<Text variant="meta">{`${items.length} 个日程`}</Text></View>
-    <DayAgendaList namePrefix="当日日程" dateIso={date} events={items} openEventId={event.id} nowMinutes={isToday ? now.getHours() * 60 + now.getMinutes() : null} onOpen={item => { if (item.id !== event.id) open(`/households/${encodeURIComponent(event.householdId)}/events/${encodeURIComponent(item.id)}`); }} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingHorizontal: theme.spacing[2] }}><Text variant="label">{`${formatDate(new Date(`${date}T12:00:00`))} ${formatWeekday(new Date(`${date}T12:00:00`))}`}</Text>{isToday ? <Chip tone="accent">{t('today')}</Chip> : null}<Text variant="meta">{t('count', { count: items.length })}</Text></View>
+    <DayAgendaList nameKey="dayAgenda" dateIso={date} events={items} openEventId={event.id} nowMinutes={isToday ? now.getHours() * 60 + now.getMinutes() : null} onOpen={item => { if (item.id !== event.id) open(`/households/${encodeURIComponent(event.householdId)}/events/${encodeURIComponent(item.id)}`); }} />
   </View>;
 }
