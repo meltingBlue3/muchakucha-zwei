@@ -14,6 +14,7 @@ import { getRouteTrigger } from '../platform/overlays/route-trigger';
 import { useDesktop } from './use-desktop';
 import { useWorkspaceStore } from './workspace-state';
 import { UnsavedSwitchDialog } from './unsaved-switch-dialog';
+import { useTranslation } from '../i18n';
 
 export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'birthdays' | 'households' | 'settings') {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -91,6 +92,7 @@ export interface RouteWindowProps {
 }
 
 export function RouteWindow({ title, busy = false, children, footer, headerActions, headerNote, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor', draftPrefix, fillContent = false }: RouteWindowProps) {
+  const { t } = useTranslation('common');
   const focused = useIsFocused();
   const docked = (size === 'editor' || draftPrefix !== undefined) && DOCKED_RESOURCES.has(resource);
   const pane = useDesktop() && docked;
@@ -167,7 +169,7 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>
-            <ConfirmActions cancelLabel="继续编辑" confirmLabel={confirmation.confirmLabel} destructive={confirmation.destructive ?? false} busy={busy} onCancel={() => setConfirmation(null)} onConfirm={() => { const request = confirmation; confirmationRef.current = null; setConfirmation(null); request.onConfirm(); }} />
+            <ConfirmActions cancelLabel={t('continueEditing')} confirmLabel={confirmation.confirmLabel} destructive={confirmation.destructive ?? false} busy={busy} onCancel={() => setConfirmation(null)} onConfirm={() => { const request = confirmation; confirmationRef.current = null; setConfirmation(null); request.onConfirm(); }} />
           </Stack> : <>
             {/* Keep the editor mounted while a step owns focus. */}
             <View style={step ? { display: 'none' } : fillContent ? { flex: 1 } : undefined} aria-hidden={Boolean(step)} importantForAccessibility={step ? 'no-hide-descendants' : 'auto'}>

@@ -59,11 +59,14 @@ import { PageHeaderContext, type PageHeader } from './page-intro';
 import { ActionNotice, useActionNoticeDismissal, type ActionNoticeProps } from './action-notice';
 import { formatDateTime } from './date-values';
 import { CardActionsMenu, type CardAction } from './card-actions-menu';
+import { useTranslation } from '../i18n';
 
 // ---- AppShell ----
 
 interface AppShellProps {
   detailOpen?: boolean;
+  /** Use the desktop notes layout with the list beside its reading pane. */
+  notesLayout?: boolean;
   /** The width a pane beside the page takes, when it is not the usual detail width. */
   paneWidth?: number | undefined;
   aside?: React.ReactNode;
@@ -111,9 +114,11 @@ export const AppShell = ({
   width: contentWidth = 'wide',
   aside,
   detailOpen = false,
+  notesLayout = false,
   paneWidth,
   pageHeader: showPageHeader = true,
 }: AppShellProps) => {
+  const { t } = useTranslation('shared');
   const router = useRouter();
   const blurTarget = useRef<View>(null);
   const noticeDismissal = useActionNoticeDismissal(notice);
@@ -123,8 +128,7 @@ export const AppShell = ({
   const pathname = usePathname();
   const [pageHeader, setPageHeader] = useState<PageHeader | null>(null);
   const resourceWindow = /\/(tasks|events|notes|recurrence-rules|birthdays)\/[^/]+(?:\/edit)?$/.test(pathname);
-  const notes = accessibilityLabel === '家庭笔记';
-  const reserved = desktop && (resourceWindow || detailOpen) && !notes ? paneWidth ?? desktopDetailWidth(width) : 0;
+  const reserved = desktop && (resourceWindow || detailOpen) && !notesLayout ? paneWidth ?? desktopDetailWidth(width) : 0;
   const desktopActions = Platform.OS === 'web' && width >= theme.layout.navigationBreakpoint;
   const wideNavigation = width >= theme.layout.navigationBreakpoint && footer !== undefined;
 
@@ -153,7 +157,7 @@ export const AppShell = ({
       {wideNavigation ? footer : null}
       <View testID={desktop ? 'desktop-workspace' : undefined} style={{ flex: 1, minWidth: 0, ...(desktop ? { backgroundColor: theme.colors.surface, margin: theme.layout.workspaceInset, marginLeft: wideNavigation ? 0 : theme.layout.workspaceInset, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, borderRadius: theme.layout.workspaceRadius, overflow: 'hidden' } : {}) }}>
       {desktop && showPageHeader ? <View testID="desktop-page-header" style={{ height: theme.layout.pageHeaderHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], paddingHorizontal: theme.spacing[6], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
-        {showBack && !wideNavigation ? <IconButton label="返回" appearance="plain" icon={<ArrowLeft size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={handleBack} /> : null}
+        {showBack && !wideNavigation ? <IconButton label={t('back')} appearance="plain" icon={<ArrowLeft size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={handleBack} /> : null}
         <Heading variant="section" level={1} numberOfLines={1}>{pageHeader?.title ?? accessibilityLabel ?? title ?? ''}</Heading>
         {pageHeader?.subtitle ? <View style={{ flexShrink: 1 }}>{typeof pageHeader.subtitle === 'string' ? <Text variant="meta" numberOfLines={1}>{pageHeader.subtitle}</Text> : pageHeader.subtitle}</View> : null}
         {pageHeader?.controls ? <View style={{ marginLeft: theme.spacing[2] }}>{pageHeader.controls}</View> : null}
@@ -178,7 +182,7 @@ export const AppShell = ({
           {headerContent === undefined || showBack ? <View style={{ width: showProfile && headerContent === undefined ? theme.controlSizes.touchTarget * 2 : theme.controlSizes.touchTarget, alignItems: 'flex-start' }}>
             {showBack ? (
               <Pressable
-                accessibilityLabel="返回"
+                accessibilityLabel={t('back')}
                 accessibilityRole="button"
                 onPress={handleBack}
                 style={{
@@ -214,7 +218,7 @@ export const AppShell = ({
       ) : null}
       {/* Its parent starts below the status bar, which the keyboard view cannot see. */}
       <PageHeaderContext.Provider value={setPageHeader}>
-      <KeyboardArea style={{ flex: 1, minHeight: 0, ...(desktop ? { marginRight: reserved, ...layoutTransition('margin-right'), ...(notes ? { width: theme.layout.notesListWidth, flex: undefined, flexGrow: 1, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator } : {}) } : {}) }} windowOffset={insets.top}>
+      <KeyboardArea style={{ flex: 1, minHeight: 0, ...(desktop ? { marginRight: reserved, ...layoutTransition('margin-right'), ...(notesLayout ? { width: theme.layout.notesListWidth, flex: undefined, flexGrow: 1, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator } : {}) } : {}) }} windowOffset={insets.top}>
         {layout === 'workspace' ? children : <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
@@ -260,10 +264,11 @@ export const AppShell = ({
  * is the number waiting, drawn as a small ink badge on the tray.
  */
 export const InboxButton = ({ count = 0 }: { count?: number }) => {
+  const { t } = useTranslation(['households', 'profile']);
   const router = useRouter();
   const desktop = useDesktop();
   return <View>
-    <IconButton appearance="plain" label={count ? `收件箱，${count} 项待处理` : '收件箱'} icon={<Inbox color={theme.colors.inkMuted} size={desktop ? theme.controlSizes.icon - 2 : theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} />
+    <IconButton appearance="plain" label={count ? t('inboxPending', { count }) : t('profile:links.inbox.label')} icon={<Inbox color={theme.colors.inkMuted} size={desktop ? theme.controlSizes.icon - 2 : theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />} onPress={() => router.push('/inbox')} />
     {count ? <View pointerEvents="none" style={{ position: 'absolute', top: theme.spacing[1] / 2, right: 0, minWidth: theme.spacing[4] - 1, height: theme.spacing[4] - 1, paddingHorizontal: theme.spacing[1] - 1, borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.ink, alignItems: 'center', justifyContent: 'center' }}><Text variant="caption" color="surface" style={{ fontSize: theme.typography.tag.fontSize - 1.5, lineHeight: theme.spacing[4] - 1, fontFamily: theme.fontFamilies.numericStrong }}>{count > 99 ? '99+' : count}</Text></View> : null}
   </View>;
 };
@@ -280,12 +285,13 @@ interface HouseholdHeaderProps {
 
 /** The current household's name with a chevron; it opens the household menu. */
 export const HouseholdHeader = ({ householdName, onOpenSwitcher, placement = 'bar', trigger }: HouseholdHeaderProps) => {
+  const { t } = useTranslation('households');
   const desktop = useDesktop();
   const { rail } = useSidebarRail();
   return (
   <Pressable
     ref={trigger}
-    accessibilityLabel={`当前家庭：${householdName}，切换家庭`}
+    accessibilityLabel={t('current', { householdName })}
     accessibilityRole="button"
     onPress={onOpenSwitcher}
     style={({ pressed }) => ({
@@ -322,12 +328,15 @@ interface HouseholdContextNoteProps {
   householdName: string;
 }
 
-export const HouseholdContextNote = ({ householdName }: HouseholdContextNoteProps) => (
-  <Inline gap={1}>
-    <Building2 color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
-    <Text variant="bodySm">保存到：{householdName}</Text>
-  </Inline>
-);
+export const HouseholdContextNote = ({ householdName }: HouseholdContextNoteProps) => {
+  const { t } = useTranslation('households');
+  return (
+    <Inline gap={1}>
+      <Building2 color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+      <Text variant="bodySm">{t('saveTo', { householdName })}</Text>
+    </Inline>
+  );
+};
 
 // ---- HouseholdCard ----
 
@@ -339,8 +348,9 @@ interface HouseholdCardProps {
 }
 
 export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryAction }: HouseholdCardProps) => {
-  const roleText = household.role === 'OWNER' ? '所有者' : household.role === 'ADMIN' ? '管理员' : '成员';
-  const memberLabel = `${household.memberCount} 位成员`;
+  const { t } = useTranslation('households');
+  const roleText = t(`role.${household.role}`);
+  const memberLabel = t('memberCount', { count: household.memberCount });
 
   return (
     <View style={{
@@ -363,7 +373,7 @@ export const HouseholdCard = ({ household, isCurrent = false, onSelect, primaryA
               numberOfLines={1}
               variant="body"
               style={{ fontWeight: '600' as const }}
-              accessibilityLabel={`家庭：${household.name}`}
+              accessibilityLabel={t('householdName', { name: household.name })}
             >
               {household.name}
             </Text>
@@ -409,6 +419,7 @@ interface HouseholdSwitcherProps {
  */
 export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
   ({ households, currentHouseholdId, onSelect, onCreateNew, visible, onClose, links = [], trigger }, ref) => {
+    const { t } = useTranslation(['households', 'common']);
     const headingRef = useRef<View>(null);
     const desktop = useDesktop();
     // The panel is pinned flush to the physical bottom edge (see the height:'75%'
@@ -469,9 +480,9 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
             paddingBottom: theme.spacing[1],
           }}
         >
-          <Heading ref={headingRef} variant="section" level={1}>切换家庭</Heading>
+          <Heading ref={headingRef} variant="section" level={1}>{t('switch')}</Heading>
           <Pressable
-            accessibilityLabel="关闭切换家庭"
+            accessibilityLabel={t('common:close', { title: t('switch') })}
             accessibilityRole="button"
             onPress={onClose}
             style={({ pressed }) => ({
@@ -489,9 +500,10 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: theme.spacing[3] + insets.bottom }}>
           {households.map((household) => {
             const current = household.id === currentHouseholdId;
+            const role = t(`role.${household.role}`);
             return (
               <Pressable
-                accessibilityLabel={`${household.name}，${ROLE_LABELS[household.role] ?? household.role}`}
+                accessibilityLabel={t('householdAndRole', { name: household.name, role })}
                 accessibilityRole="button"
                 accessibilityState={{ selected: current }}
                 key={household.id}
@@ -506,7 +518,7 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
                     {household.name}
                   </Text>
                   <Text variant="meta">
-                    {ROLE_LABELS[household.role] ?? household.role} · {household.memberCount} 位成员
+                    {role} · {t('memberCount', { count: household.memberCount })}
                   </Text>
                 </View>
                 {current ? (
@@ -515,11 +527,11 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
               </Pressable>
             );
           })}
-          <Pressable accessibilityRole="button" accessibilityLabel="创建家庭" onPress={() => { rememberRouteTrigger(); onCreateNew(); }} style={rowStyle}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('create')} onPress={() => { rememberRouteTrigger(); onCreateNew(); }} style={rowStyle}>
             <View style={iconSlot}>
               <HousePlus color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
             </View>
-            <Text variant="body" color="inkMuted">创建家庭</Text>
+            <Text variant="body" color="inkMuted">{t('create')}</Text>
           </Pressable>
           {links.length > 0 ? (
             <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, marginTop: theme.spacing[2], paddingTop: theme.spacing[2] }}>
@@ -538,13 +550,14 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
       </View>
     );
 
-    if (desktop && trigger) return <AnchoredPopover title="切换家庭" trigger={trigger} onClose={onClose}>{content}</AnchoredPopover>;
+    if (desktop && trigger) return <AnchoredPopover title={t('switch')} trigger={trigger} onClose={onClose}>{content}</AnchoredPopover>;
     if (Platform.OS === 'web') {
       return (
         <Modal
           animationType="fade"
           onRequestClose={onClose}
           transparent
+          aria-label={t('switch')}
           visible={visible}
         >
           <View style={{ alignItems: 'center', flex: 1, justifyContent: 'center', padding: theme.spacing[6] }}>
@@ -587,52 +600,50 @@ export const AccessChangedPanel = ({
   hasOtherHouseholds,
   onChooseOther,
   onCreateNew,
-}: AccessChangedPanelProps) => (
-  <View
-    accessibilityLiveRegion="assertive"
-    accessibilityRole="alert"
-    style={{
-      backgroundColor: theme.colors.destructiveSoft,
-      borderRadius: theme.borderRadii.lg,
-      padding: theme.spacing[6],
-    }}
-  >
-    <Stack gap={4}>
-      <TriangleAlert color={theme.colors.destructive} size={theme.spacing[6]} strokeWidth={theme.controlSizes.iconStroke} />
-      <Heading>家庭访问权已变化</Heading>
-      <Text>
-        {householdName !== undefined
-          ? `你已不能继续访问「${householdName}」。请选择其他家庭继续。`
-          : '你的家庭访问权已发生变化。请选择其他家庭继续。'}
-      </Text>
-      {hasOtherHouseholds ? (
-        <Button label="选择其他家庭" onPress={onChooseOther} />
-      ) : (
-        <Button label="设置家庭" onPress={onCreateNew} />
-      )}
-    </Stack>
-  </View>
-);
+}: AccessChangedPanelProps) => {
+  const { t } = useTranslation('households');
+  return (
+    <View
+      accessibilityLiveRegion="assertive"
+      accessibilityRole="alert"
+      style={{
+        backgroundColor: theme.colors.destructiveSoft,
+        borderRadius: theme.borderRadii.lg,
+        padding: theme.spacing[6],
+      }}
+    >
+      <Stack gap={4}>
+        <TriangleAlert color={theme.colors.destructive} size={theme.spacing[6]} strokeWidth={theme.controlSizes.iconStroke} />
+        <Heading>{t('accessChanged')}</Heading>
+        <Text>
+          {householdName !== undefined
+            ? t('accessLost', { householdName })
+            : t('accessChangedDetail')}
+        </Text>
+        {hasOtherHouseholds ? (
+          <Button label={t('chooseOther')} onPress={onChooseOther} />
+        ) : (
+          <Button label={t('setupAction')} onPress={onCreateNew} />
+        )}
+      </Stack>
+    </View>
+  );
+};
 
 // ---- RoleBadge ----
-
-const ROLE_LABELS: Record<string, string> = Object.freeze({
-  OWNER: '所有者',
-  ADMIN: '管理员',
-  MEMBER: '成员',
-});
 
 interface RoleBadgeProps {
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
 }
 
 export const RoleBadge = ({ role }: RoleBadgeProps) => {
-  const label = ROLE_LABELS[role] ?? role;
+  const { t } = useTranslation('households');
+  const label = t(`role.${role}`);
   const RoleIcon = role === 'OWNER' ? Crown : role === 'ADMIN' ? Shield : undefined;
 
   return (
     <View
-      accessibilityLabel={`角色：${label}`}
+      accessibilityLabel={t('roleName', { role: label })}
       style={{
         alignItems: 'center',
         backgroundColor: theme.colors.surfaceMuted,
@@ -679,16 +690,20 @@ export const MemberRow = ({
   canTransferTo = false,
   onTransfer,
 }: MemberRowProps) => {
+  const { t } = useTranslation(['households', 'profile']);
   const desktop = useDesktop();
-  const roleLabel = ROLE_LABELS[member.role] ?? member.role;
+  const roleLabel = t(`role.${member.role}`);
+  const name = member.displayName;
+  const memberLabel = t(member.isCurrentUser ? 'currentMemberAndRole' : 'memberAndRole', { name, role: roleLabel });
+  const subject = t('memberName', { name });
   const actions: CardAction[] = [];
   if (roleAction !== undefined && onRoleAction) {
     const promote = roleAction === 'promote';
-    actions.push({ label: promote ? '提升为管理员' : '降级为成员', icon: promote ? CircleArrowUp : CircleArrowDown, accessibilityLabel: `${promote ? '提升' : '降级'} ${member.displayName}`, onPress: onRoleAction });
+    actions.push({ label: t(promote ? 'promote' : 'demote'), icon: promote ? CircleArrowUp : CircleArrowDown, accessibilityLabel: t(promote ? 'promoteName' : 'demoteName', { name }), onPress: onRoleAction });
   }
-  if (canTransferTo && onTransfer) actions.push({ label: '转移所有权', icon: Crown, accessibilityLabel: `转移所有权给 ${member.displayName}`, onPress: onTransfer });
-  if (canRemoveMember && onRemove) actions.push({ label: '移除', icon: UserMinus, destructive: true, accessibilityLabel: `移除 ${member.displayName}`, onPress: onRemove });
-  if (desktop) return <View accessibilityLabel={`${member.displayName}，${roleLabel}${member.isCurrentUser ? '，本人' : ''}`} style={{ minHeight: theme.layout.desktopRowHeight + theme.spacing[2], flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}><View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}><MemberAvatar id={member.userId} name={member.displayName} /><Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1 }}>{member.displayName}</Text>{member.isCurrentUser ? <Chip>我</Chip> : null}</View><Text variant="meta" numberOfLines={1} style={{ width: theme.layout.memberUsernameColumn, fontFamily: theme.fontFamilies.numeric }}>{member.username}</Text><View style={{ width: theme.layout.memberRoleColumn, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] }}>{member.role === 'OWNER' ? <Crown size={theme.controlSizes.icon - 6} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /> : member.role === 'ADMIN' ? <Shield size={theme.controlSizes.icon - 6} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /> : <View style={{ width: theme.controlSizes.icon - 6 }} />}<Text variant="meta" color="ink">{roleLabel}</Text></View>{/* The menu keeps its slot when it is empty, so every row's columns line up with the header. */}<View style={{ width: theme.layout.desktopControl, alignItems: 'center' }}><CardActionsMenu subject={`成员：${member.displayName}`} actions={actions} /></View></View>;
+  if (canTransferTo && onTransfer) actions.push({ label: t('transfer'), icon: Crown, accessibilityLabel: t('transferTo', { name }), onPress: onTransfer });
+  if (canRemoveMember && onRemove) actions.push({ label: t('remove'), icon: UserMinus, destructive: true, accessibilityLabel: t('removeMember', { name }), onPress: onRemove });
+  if (desktop) return <View accessibilityLabel={memberLabel} style={{ minHeight: theme.layout.desktopRowHeight + theme.spacing[2], flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}><View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}><MemberAvatar id={member.userId} name={member.displayName} /><Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1 }}>{member.displayName}</Text>{member.isCurrentUser ? <Chip>{t('profile:form.me')}</Chip> : null}</View><Text variant="meta" numberOfLines={1} style={{ width: theme.layout.memberUsernameColumn, fontFamily: theme.fontFamilies.numeric }}>{member.username}</Text><View style={{ width: theme.layout.memberRoleColumn, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] }}>{member.role === 'OWNER' ? <Crown size={theme.controlSizes.icon - 6} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /> : member.role === 'ADMIN' ? <Shield size={theme.controlSizes.icon - 6} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /> : <View style={{ width: theme.controlSizes.icon - 6 }} />}<Text variant="meta" color="ink">{roleLabel}</Text></View>{/* The menu keeps its slot when it is empty, so every row's columns line up with the header. */}<View style={{ width: theme.layout.desktopControl, alignItems: 'center' }}><CardActionsMenu subject={subject} actions={actions} /></View></View>;
 
   return (
     <View
@@ -701,7 +716,7 @@ export const MemberRow = ({
       }}
     >
       <View
-        accessibilityLabel={`${member.displayName}，${roleLabel}${member.isCurrentUser ? '，本人' : ''}`}
+        accessibilityLabel={memberLabel}
         style={{ alignItems: 'center', flex: 1, flexDirection: 'row', gap: theme.spacing[3], minWidth: 0 }}
       >
         <MemberAvatar id={member.userId} name={member.displayName} size="lg" />
@@ -721,7 +736,7 @@ export const MemberRow = ({
                 style={{ fontWeight: '600' as const }}
                 variant="bodySm"
               >
-                我
+                {t('profile:form.me')}
               </Text>
             ) : null}
           </Inline>
@@ -739,20 +754,12 @@ export const MemberRow = ({
         </Stack>
       </View>
 
-      <CardActionsMenu subject={`成员：${member.displayName}`} actions={actions} />
+      <CardActionsMenu subject={subject} actions={actions} />
     </View>
   );
 };
 
 // ---- InvitationRow ----
-
-const INVITATION_STATUS_LABELS: Record<string, string> = Object.freeze({
-  pending: '待接受',
-  expired: '已过期',
-  accepted: '已接受',
-  revoked: '已撤销',
-  declined: '已拒绝',
-});
 
 export interface InvitationRowProps {
   invitation: {
@@ -779,32 +786,33 @@ export const InvitationRow = ({
   onRevoke,
   resendBusy = false,
 }: InvitationRowProps) => {
+  const { t } = useTranslation('households');
   const recipient = invitation.username;
-  const statusLabel = INVITATION_STATUS_LABELS[invitation.status] ?? invitation.status;
+  const statusLabel = t(`invitationStatus.${invitation.status}`);
   const isPending = invitation.status === 'pending';
   const isExpired = invitation.status === 'expired';
   const actions: CardAction[] = [];
-  if ((isPending || isExpired) && canManage && onResend) actions.push({ label: '重新发送', icon: RefreshCw, accessibilityLabel: `重新发送邀请给 ${recipient}`, onPress: () => onResend(invitation.id) });
-  if (isPending && canManage && onRevoke) actions.push({ label: '撤销', icon: Ban, destructive: true, accessibilityLabel: `撤销邀请 ${recipient}`, onPress: trigger => onRevoke(invitation.id, trigger) });
+  if ((isPending || isExpired) && canManage && onResend) actions.push({ label: t('resend'), icon: RefreshCw, accessibilityLabel: t('resendTo', { recipient }), onPress: () => onResend(invitation.id) });
+  if (isPending && canManage && onRevoke) actions.push({ label: t('revoke'), icon: Ban, destructive: true, accessibilityLabel: t('revokeInvitation', { recipient }), onPress: trigger => onRevoke(invitation.id, trigger) });
 
   const expiresDate = new Date(invitation.expiresAt);
   const expiryText = formatDateTime(expiresDate);
   const desktop = useDesktop();
   if (desktop) return (
-    <View accessibilityLabel={`邀请：${recipient}，${statusLabel}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.layout.desktopRowHeight + theme.spacing[4], paddingHorizontal: theme.spacing[1] }}>
+    <View accessibilityLabel={t('invitationWithStatus', { recipient, statusLabel })} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.layout.desktopRowHeight + theme.spacing[4], paddingHorizontal: theme.spacing[1] }}>
       <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3] }}>
-        <View accessibilityLabel={`${recipient}的邀请`} accessibilityRole="image" style={{ width: theme.controlSizes.avatar + 4, height: theme.controlSizes.avatar + 4, borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}><Mail color={theme.colors.inkMuted} size={theme.controlSizes.icon - 5} strokeWidth={theme.controlSizes.iconStroke} /></View>
+        <View accessibilityLabel={t('invitationFor', { recipient })} accessibilityRole="image" style={{ width: theme.controlSizes.avatar + 4, height: theme.controlSizes.avatar + 4, borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}><Mail color={theme.colors.inkMuted} size={theme.controlSizes.icon - 5} strokeWidth={theme.controlSizes.iconStroke} /></View>
         <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1 }}>{recipient}</Text>
       </View>
-      <Text variant="meta" numberOfLines={1} style={{ width: theme.layout.memberUsernameColumn, fontFamily: theme.fontFamilies.numeric }}>{`${expiryText} 失效`}</Text>
-      <View accessibilityLabel={`状态：${statusLabel}`} style={{ width: theme.layout.memberRoleColumn, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] }}><Clock color={theme.colors.inkMuted} size={theme.controlSizes.icon - 6} strokeWidth={theme.controlSizes.iconStroke} /><Text variant="meta" color="ink">{statusLabel}</Text></View>
-      <View style={{ width: theme.layout.desktopControl, alignItems: 'center' }}>{resendBusy ? <Spinner label="重新发送中" /> : <CardActionsMenu subject={`邀请：${recipient}`} actions={actions} />}</View>
+      <Text variant="meta" numberOfLines={1} style={{ width: theme.layout.memberUsernameColumn, fontFamily: theme.fontFamilies.numeric }}>{t('expires', { expiryText })}</Text>
+      <View accessibilityLabel={t('status', { statusLabel })} style={{ width: theme.layout.memberRoleColumn, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] }}><Clock color={theme.colors.inkMuted} size={theme.controlSizes.icon - 6} strokeWidth={theme.controlSizes.iconStroke} /><Text variant="meta" color="ink">{statusLabel}</Text></View>
+      <View style={{ width: theme.layout.desktopControl, alignItems: 'center' }}>{resendBusy ? <Spinner label={t('resending')} /> : <CardActionsMenu subject={t('invitation', { recipient })} actions={actions} />}</View>
     </View>
   );
 
   return (
     <View
-      accessibilityLabel={`邀请：${recipient}，${statusLabel}`}
+      accessibilityLabel={t('invitationWithStatus', { recipient, statusLabel })}
       style={{
         alignItems: 'center',
         flexDirection: 'row',
@@ -815,7 +823,7 @@ export const InvitationRow = ({
     >
       {/* Recipient icon */}
       <View
-        accessibilityLabel={`${recipient}的邀请`}
+        accessibilityLabel={t('invitationFor', { recipient })}
         accessibilityRole="image"
         style={{
           alignItems: 'center',
@@ -839,7 +847,7 @@ export const InvitationRow = ({
         </Text>
         <Inline gap={2} style={{ flexWrap: 'wrap' }}>
           <View
-            accessibilityLabel={`状态：${statusLabel}`}
+            accessibilityLabel={t('status', { statusLabel })}
             style={{
               alignItems: 'center',
               backgroundColor: theme.colors.surfaceMuted,
@@ -854,17 +862,17 @@ export const InvitationRow = ({
             <Text variant="bodySm">{statusLabel}</Text>
           </View>
           <Text variant="caption">
-            失效：{expiryText}
+            {t('expiry', { expiryText })}
           </Text>
         </Inline>
       </Stack>
 
       {resendBusy ? (
         <View style={{ alignItems: 'center', justifyContent: 'center', minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget }}>
-          <Spinner label="重新发送中" />
+          <Spinner label={t('resending')} />
         </View>
       ) : (
-        <CardActionsMenu subject={`邀请：${recipient}`} actions={actions} />
+        <CardActionsMenu subject={t('invitation', { recipient })} actions={actions} />
       )}
     </View>
   );
@@ -877,6 +885,7 @@ interface SwitchErrorBannerProps {
   onRetry: () => void;
 }
 
-export const SwitchErrorBanner = ({ householdName, onRetry }: SwitchErrorBannerProps) => (
-  <LoadError message={`暂时无法切换家庭。当前仍在「${householdName}」。`} onRetry={onRetry} />
-);
+export const SwitchErrorBanner = ({ householdName, onRetry }: SwitchErrorBannerProps) => {
+  const { t } = useTranslation('households');
+  return <LoadError message={t('switchFailed', { householdName })} onRetry={onRetry} />;
+};

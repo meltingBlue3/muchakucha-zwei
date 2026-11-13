@@ -4,6 +4,7 @@ import Pencil from 'lucide-react-native/icons/pencil';
 import { Button, IconButton, Stack, Text } from './primitives';
 import { theme } from './theme';
 import { useDesktop } from './use-desktop';
+import { useTranslation } from '../i18n';
 
 /**
  * 编辑 in the header of an item's detail. The wide pane shows a pencil beside
@@ -11,10 +12,11 @@ import { useDesktop } from './use-desktop';
  * reading area (a note); a phone window keeps the worded button.
  */
 export function DetailEditButton({ accessibilityLabel, onPress, disabled = false, worded = false }: { accessibilityLabel: string; onPress(): void; disabled?: boolean; worded?: boolean }) {
+  const { t } = useTranslation('common');
   const desktop = useDesktop();
   const pencil = (color: string) => <Pencil size={theme.controlSizes.icon - 5} color={color} strokeWidth={theme.controlSizes.iconStroke} />;
   if (desktop && !worded) return <IconButton appearance="plain" label={accessibilityLabel} disabled={disabled} icon={pencil(theme.colors.inkMuted)} onPress={onPress} />;
-  return <Button label="编辑" accessibilityLabel={accessibilityLabel} tone="secondary" size="compact" disabled={disabled} {...(desktop ? { icon: pencil } : {})} onPress={onPress} />;
+  return <Button label={t('edit')} accessibilityLabel={accessibilityLabel} tone="secondary" size="compact" disabled={disabled} {...(desktop ? { icon: pencil } : {})} onPress={onPress} />;
 }
 
 /** The grouped key facts of an item in its detail window. */

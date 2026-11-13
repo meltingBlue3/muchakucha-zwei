@@ -7,25 +7,28 @@ import CalendarDays from 'lucide-react-native/icons/calendar';
 import Pencil from 'lucide-react-native/icons/pencil';
 import { Button, Inline, Stack, Text, TextField } from './primitives';
 import { theme } from './theme';
-import { daysSinceMonday, formatDayLabel, normalizeDateInput, normalizeTimeInput, parseDateValue, toDateValue, weekHeader } from './date-values';
+import { daysSinceMonday, formatYearMonth, formatDayLabel, normalizeDateInput, normalizeTimeInput, parseDateValue, toDateValue, weekHeader } from './date-values';
+import { useTranslation } from '../i18n';
 
 /** Right-aligned 取消 / 确定, like a Material dialog. */
-export function PickerActions({ onCancel, onConfirm, confirmLabel = '确定', confirmDisabled = false }: {
+export function PickerActions({ onCancel, onConfirm, confirmLabel, confirmDisabled = false }: {
   onCancel(): void;
   onConfirm(): void;
   confirmLabel?: string;
   confirmDisabled?: boolean;
 }) {
+  const { t } = useTranslation('common');
   return (
     <Inline gap={2} style={{ justifyContent: 'flex-end', marginTop: theme.spacing[2] }}>
-      <Button label="取消" tone="secondary" onPress={onCancel} />
-      <Button label={confirmLabel} disabled={confirmDisabled} onPress={onConfirm} />
+      <Button label={t('cancel')} tone="secondary" onPress={onCancel} />
+      <Button label={confirmLabel ?? t('confirm')} disabled={confirmDisabled} onPress={onConfirm} />
     </Inline>
   );
 }
 
 /** A Monday-first month grid. `value` is "YYYY-MM-DD". */
 export function CalendarGrid({ value, onSelect, compact = false, markedDates = [] }: { value: string; onSelect(value: string): void; compact?: boolean; markedDates?: string[] }) {
+  const { t } = useTranslation('picker');
   const dense = useDesktopDensity();
   const target = compact || dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget;
   const selected = parseDateValue(value);
@@ -50,7 +53,7 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
     return Array.from({ length: cells.length / 7 }, (_, row) => cells.slice(row * 7, row * 7 + 7));
   }, [month, outside]);
   const shift = (delta: number) => setMonth(current => new Date(current.getFullYear(), current.getMonth() + delta, 1));
-  const monthLabel = `${month.getFullYear()}年${month.getMonth() + 1}月`;
+  const monthLabel = formatYearMonth(month);
   const navButton = (label: string, delta: number, icon: React.ReactNode) => (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => shift(delta)} style={({ pressed }) => ({ width: target, height: target, borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
       {icon}
@@ -60,8 +63,8 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
     <Stack gap={1}>
       <Inline>
         <Text variant="label" accessibilityLiveRegion="polite" style={{ flex: 1 }}>{monthLabel}</Text>
-        {navButton('上个月', -1, <ChevronLeft size={theme.controlSizes.icon} color={theme.colors.ink} />)}
-        {navButton('下个月', 1, <ChevronRight size={theme.controlSizes.icon} color={theme.colors.ink} />)}
+        {navButton(t('previousMonth'), -1, <ChevronLeft size={theme.controlSizes.icon} color={theme.colors.ink} />)}
+        {navButton(t('nextMonth'), 1, <ChevronRight size={theme.controlSizes.icon} color={theme.colors.ink} />)}
       </Inline>
       <View style={{ flexDirection: 'row' }} importantForAccessibility="no-hide-descendants" aria-hidden>
         {weekHeader().map(day => <Text key={day} variant="caption" style={{ flex: 1, textAlign: 'center' }}>{day}</Text>)}
@@ -78,7 +81,7 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
               <View key={column} style={{ flex: 1, alignItems: 'center' }}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`${formatDayLabel(day)}${isToday ? '，今天' : ''}`}
+                  accessibilityLabel={isToday ? t('today', { date: formatDayLabel(day) }) : formatDayLabel(day)}
                   accessibilityState={{ selected: isSelected }}
                   aria-pressed={isSelected}
                   onPress={() => onSelect(dayValue)}
@@ -104,6 +107,7 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
 
 /** Material-style date dialog content: headline, calendar or keyboard entry, and actions. */
 export function DatePickerPanel({ value, onConfirm, onCancel }: { value: string; onConfirm(value: string): void; onCancel(): void }) {
+  const { t } = useTranslation('picker');
   const [draft, setDraft] = useState(() => toDateValue(parseDateValue(value)));
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState(draft);
@@ -113,10 +117,10 @@ export function DatePickerPanel({ value, onConfirm, onCancel }: { value: string;
   return (
     <Stack gap={3}>
       <Inline>
-        <Text variant="heading" style={{ flex: 1 }}>{current ? formatDayLabel(parseDateValue(current)) : '日期无效'}</Text>
+        <Text variant="heading" style={{ flex: 1 }}>{current ? formatDayLabel(parseDateValue(current)) : t('invalidDate')}</Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={typing ? '切换到日历' : '切换到键盘输入'}
+          accessibilityLabel={t(typing ? 'showCalendar' : 'showKeyboard')}
           onPress={() => {
             if (typing && typed) setDraft(typed);
             if (!typing) setText(draft);
@@ -129,13 +133,13 @@ export function DatePickerPanel({ value, onConfirm, onCancel }: { value: string;
       </Inline>
       {typing ? (
         <TextField
-          label="输入日期"
-          hint="例如 2026-09-28"
+          label={t('dateInput')}
+          hint={t('dateHint')}
           value={text}
           onChangeText={setText}
           onSubmitEditing={confirm}
           autoFocus
-          {...(text !== '' && !typed ? { error: '请输入有效的日期，例如 2026-09-28。' } : {})}
+          {...(text !== '' && !typed ? { error: t('dateError') } : {})}
         />
       ) : (
         <CalendarGrid value={draft} onSelect={setDraft} />
@@ -152,6 +156,7 @@ const TIME_SLOTS = Array.from({ length: 96 }, (_, index) => `${String(Math.floor
  * entry plus quarter-hour choices; choosing a slot applies it immediately.
  */
 export function TimePickerPanel({ value, onConfirm, onCancel }: { value: string; onConfirm(value: string): void; onCancel(): void }) {
+  const { t } = useTranslation('picker');
   const [text, setText] = useState(value);
   const typed = normalizeTimeInput(text);
   const list = useRef<ScrollView>(null);
@@ -164,18 +169,18 @@ export function TimePickerPanel({ value, onConfirm, onCancel }: { value: string;
   return (
     <Stack gap={3}>
       <TextField
-        label="输入时间"
-        hint="24 小时制，例如 14:30"
+        label={t('timeInput')}
+        hint={t('timeHint')}
         value={text}
         onChangeText={setText}
         onSubmitEditing={() => { if (typed) onConfirm(typed); }}
-        {...(text !== '' && !typed ? { error: '请输入有效的时间，例如 14:30。' } : {})}
+        {...(text !== '' && !typed ? { error: t('timeError') } : {})}
       />
       {/* Only the list scrolls (five rows at most), so the entry above and the actions below stay in view. */}
       <ScrollView
         ref={list}
         accessibilityRole="list"
-        accessibilityLabel="可选时间"
+        accessibilityLabel={t('timeSlots')}
         nestedScrollEnabled
         onLayout={() => list.current?.scrollTo({ y: Math.max(0, (nearest - 2) * rowHeight), animated: false })}
         style={{ maxHeight: rowHeight * 5, borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}
@@ -186,7 +191,7 @@ export function TimePickerPanel({ value, onConfirm, onCancel }: { value: string;
             <Pressable
               key={slot}
               accessibilityRole="button"
-              accessibilityLabel={`选择 ${slot}`}
+              accessibilityLabel={t('selectSlot', { time: slot })}
               accessibilityState={{ selected: isSelected }}
               onPress={() => onConfirm(slot)}
               style={({ pressed }) => ({ height: rowHeight, justifyContent: 'center', paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.sm, backgroundColor: isSelected ? theme.colors.surfaceSelected : pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}

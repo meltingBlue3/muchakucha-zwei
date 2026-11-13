@@ -17,6 +17,7 @@ import { Text } from './primitives';
 import { theme } from './theme';
 import { useDesktop } from './use-desktop';
 import { useSidebarRail } from './sidebar-rail';
+import { useTranslation } from '../i18n';
 
 type AccountPanel = 'closed' | 'menu' | 'profile' | 'logout';
 
@@ -27,6 +28,7 @@ type AccountPanel = 'closed' | 'menu' | 'profile' | 'logout';
  */
 export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) {
   const router = useRouter();
+  const { t } = useTranslation(['profile', 'auth']);
   const user = useCurrentUser();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -42,7 +44,7 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
   const close = useCallback(() => { if (!busy) setMode('closed'); }, [busy]);
   const focusInitial = useOverlayFocus({ mode: mode === 'menu' ? 'menu' : 'closed', panel, initial, trigger, onClose: close });
 
-  const title = mode === 'profile' ? '个人资料' : '退出登录';
+  const title = mode === 'profile' ? t('title') : t('auth:logout.action');
   const open = mode !== 'closed';
 
   const openMenu = () => {
@@ -65,7 +67,7 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
       <Pressable
         ref={trigger}
         accessibilityRole="button"
-        accessibilityLabel="个人中心"
+        accessibilityLabel={t('pageTitle')}
         accessibilityState={{ expanded: open }}
         aria-haspopup="menu"
         onPress={openMenu}
@@ -74,7 +76,7 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
           : { alignItems: 'center', justifyContent: 'center', minHeight: theme.controlSizes.touchTarget, minWidth: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.full, opacity: pressed ? 0.7 : 1 }}
       >
         {avatar}
-        {variant === 'row' && !rail ? <View style={{ flex: 1, minWidth: 0 }}><Text variant={desktop ? 'label' : 'bodySm'} color="ink" numberOfLines={1} style={desktop ? { fontSize: theme.typography.meta.fontSize, lineHeight: theme.typography.meta.lineHeight } : undefined}>{user?.displayName ?? '个人中心'}</Text>{user?.username ? <Text variant={desktop ? 'caption' : 'meta'} color={desktop ? 'inkFaint' : 'inkMuted'} numberOfLines={1} style={desktop ? { fontFamily: theme.fontFamilies.numeric, fontWeight: '400' } : undefined}>{user.username}</Text> : null}</View> : null}
+        {variant === 'row' && !rail ? <View style={{ flex: 1, minWidth: 0 }}><Text variant={desktop ? 'label' : 'bodySm'} color="ink" numberOfLines={1} style={desktop ? { fontSize: theme.typography.meta.fontSize, lineHeight: theme.typography.meta.lineHeight } : undefined}>{user?.displayName ?? t('pageTitle')}</Text>{user?.username ? <Text variant={desktop ? 'caption' : 'meta'} color={desktop ? 'inkFaint' : 'inkMuted'} numberOfLines={1} style={desktop ? { fontFamily: theme.fontFamilies.numeric, fontWeight: '400' } : undefined}>{user.username}</Text> : null}</View> : null}
       </Pressable>
       {mode === 'menu' ? (
         <Modal transparent visible animationType="none" onShow={focusInitial} onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
@@ -89,7 +91,7 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
             <View
               ref={panel}
               accessibilityRole="menu"
-              accessibilityLabel="账户菜单"
+              accessibilityLabel={t('accountMenu')}
               accessibilityViewIsModal
               style={{ position: 'absolute', ...placement, width: menuWidth, backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.lg, padding: theme.spacing[2], boxShadow: theme.shadow.soft }}
             >
@@ -100,9 +102,9 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
                 </View>
               ) : null}
               {([
-                { key: 'profile', label: '个人资料', icon: CircleUserRound },
-                { key: 'reminders', label: '提醒', icon: Bell },
-                { key: 'logout', label: '退出登录', icon: LogOut },
+                { key: 'profile', label: t('title'), icon: CircleUserRound },
+                { key: 'reminders', label: t('links.reminders.label'), icon: Bell },
+                { key: 'logout', label: t('auth:logout.action'), icon: LogOut },
               ] as const).map(({ key, label, icon: Icon }, index) => (
                 <Pressable
                   key={key}

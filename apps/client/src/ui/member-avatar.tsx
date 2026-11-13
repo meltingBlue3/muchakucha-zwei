@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { Text } from './primitives';
 import { memberColors, theme } from './theme';
+import { useTranslation } from '../i18n';
 
 type AvatarSize = 'sm' | 'md' | 'lg';
 
@@ -65,11 +66,12 @@ export function MemberAvatar({ id, name, size = 'md', ring = false }: {
  * Who an item belongs to, as overlapping avatars. Announced once as
  * "负责人：小林、妈妈" so the circles never need to be read one by one.
  */
-export function AvatarStack({ members, max = 3, label = '负责人' }: {
+export function AvatarStack({ members, max = 3, label }: {
   members: Array<{ id: string; name: string }>;
   max?: number;
   label?: string;
 }) {
+  const { t } = useTranslation(['shared', 'common']);
   if (members.length === 0) return null;
   const shown = members.slice(0, max);
   const hidden = members.length - shown.length;
@@ -77,7 +79,7 @@ export function AvatarStack({ members, max = 3, label = '负责人' }: {
     <View
       accessible
       accessibilityRole="image"
-      accessibilityLabel={`${label}：${members.map(member => member.name).join('、')}`}
+      accessibilityLabel={t('common:fieldValue', { label: label ?? t('assignee'), value: members.map(member => member.name).join('、') })}
       style={{ flexDirection: 'row', alignItems: 'center' }}
     >
       {shown.map((member, index) => (

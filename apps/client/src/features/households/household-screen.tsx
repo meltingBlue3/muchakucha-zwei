@@ -119,6 +119,7 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
       <AppShell
         accessibilityLabel={accessibilityLabel}
         aside={aside}
+        notesLayout={active === 'notes'}
         {...(detailOpen === undefined ? {} : { detailOpen })}
         paneWidth={paneWidth}
         {...(subpage ? (narrow ? { showBack: true, showProfile: true, title: '' } : {}) : headerRow ? { showProfile: true, headerContent: <HouseholdHeader householdName={householdName} onOpenSwitcher={openMenu} /> } : {})}

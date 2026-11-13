@@ -633,6 +633,7 @@ const useAccessibilityPreferences = () => {
 };
 
 export const AuthShell = ({ children }: PropsWithChildren) => {
+  const { t } = useTranslation('auth');
   const preferences = useAccessibilityPreferences();
   const duration = getMotionDuration(preferences.reducedMotion);
   const { width } = useWindowDimensions();
@@ -643,8 +644,8 @@ export const AuthShell = ({ children }: PropsWithChildren) => {
     <View style={{ flex: 1, minWidth: 0, paddingHorizontal: roomy ? theme.layout.authBrandInset : theme.spacing[10], paddingVertical: theme.spacing[12] }}>
       <BrandMark />
       <View style={{ flex: 1, justifyContent: 'center', paddingVertical: theme.spacing[8] }}>
-        <Text style={roomy ? theme.typography.authHero : theme.typography.authHeroCompact}>{'一家人的日程、任务和笔记，\n放在同一张纸上。'}</Text>
-        <Text color="inkMuted" style={{ marginTop: theme.spacing[4], fontSize: theme.typography.readingBody.fontSize }}>今日 · 日历 · 任务 · 笔记 · 助手</Text>
+        <Text style={roomy ? theme.typography.authHero : theme.typography.authHeroCompact}>{t('hero')}</Text>
+        <Text color="inkMuted" style={{ marginTop: theme.spacing[4], fontSize: theme.typography.readingBody.fontSize }}>{t('heroDestinations')}</Text>
         {preferences.forcedColors ? null : <View style={{ marginTop: theme.spacing[10] }}><AuthTodaySample /></View>}
       </View>
     </View>

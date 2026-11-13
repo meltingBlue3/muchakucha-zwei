@@ -10,7 +10,7 @@ import { i18n } from '../i18n';
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 /** 「日」 for a Sunday, in the interface language. */
-function weekdayName(day: number): string {
+export function weekdayName(day: number): string {
   return i18n.t(`dates:weekdayNames.${WEEKDAYS[day] ?? 'sun'}`);
 }
 
@@ -66,6 +66,10 @@ export function formatDateLabel(value: string): string {
   return i18n.t('dates:withWeekday', { date: formatDayLabel(date), name: weekdayName(date.getDay()) });
 }
 
+export function formatYearMonth(date: Date): string {
+  return i18n.t('dates:yearMonth', { year: date.getFullYear(), month: date.getMonth() + 1 });
+}
+
 /** "2026年9月27日" */
 export function formatDayLabel(date: Date): string {
   return i18n.t('dates:full', { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() });
@@ -102,10 +106,10 @@ export function normalizeDateInput(text: string): string | null {
   return isDateValue(value) ? value : null;
 }
 
-/** Normalizes loose keyboard input such as "9:5", "0905" or "9点"; null when it is not a valid time. */
+/** Normalizes loose keyboard input such as "9:5", "0905", "9点" or "9時"; null when it is not a valid time. */
 export function normalizeTimeInput(text: string): string | null {
   const trimmed = text.trim();
-  const match = /^(\d{1,2})(?:\s*[:：点.]\s*(\d{1,2})?\s*分?)?$/.exec(trimmed) ?? /^(\d{2})(\d{2})$/.exec(trimmed);
+  const match = /^(\d{1,2})(?:\s*[:：点時.]\s*(\d{1,2})?\s*分?)?$/.exec(trimmed) ?? /^(\d{2})(\d{2})$/.exec(trimmed);
   if (!match) return null;
   const value = `${match[1]!.padStart(2, '0')}:${(match[2] ?? '0').padStart(2, '0')}`;
   return isTimeValue(value) ? value : null;

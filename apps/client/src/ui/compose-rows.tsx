@@ -9,6 +9,7 @@ import { useDesktop, useDesktopDensity } from './use-desktop';
 import { FormMessage, Stack, Text } from './primitives';
 import { theme } from './theme';
 import { useWindowStep, type RouteWindowStep } from './window-step';
+import { useTranslation } from '../i18n';
 
 /**
  * Building blocks of the Google Calendar-style compose sheet shared by the
@@ -226,6 +227,7 @@ export function ChoiceField<T extends string>({ name, title, icon, summary, opti
   /** Extra content under the list, such as a hint. */
   children?: ReactNode;
 }) {
+  const { t } = useTranslation('common');
   const desktop = useDesktop();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<T[]>([]);
@@ -265,7 +267,7 @@ export function ChoiceField<T extends string>({ name, title, icon, summary, opti
           })}
         </View>
         {children}
-        {multiple ? <PickerActions onCancel={close} onConfirm={() => { onChange(draft); close(); }} confirmLabel="完成" /> : null}
+        {multiple ? <PickerActions onCancel={close} onConfirm={() => { onChange(draft); close(); }} confirmLabel={t('done')} /> : null}
       </Stack>
     ),
   } : null, [open, title, close, multiple, name, options, emptyValue, draft, value, children, toggle, onChange]);
