@@ -7,7 +7,7 @@ import CalendarDays from 'lucide-react-native/icons/calendar';
 import Pencil from 'lucide-react-native/icons/pencil';
 import { Button, Inline, Stack, Text, TextField } from './primitives';
 import { theme } from './theme';
-import { daysSinceMonday, formatDayLabel, normalizeDateInput, normalizeTimeInput, parseDateValue, toDateValue, WEEK_HEADER } from './date-values';
+import { daysSinceMonday, formatDayLabel, normalizeDateInput, normalizeTimeInput, parseDateValue, toDateValue, weekHeader } from './date-values';
 
 /** Right-aligned 取消 / 确定, like a Material dialog. */
 export function PickerActions({ onCancel, onConfirm, confirmLabel = '确定', confirmDisabled = false }: {
@@ -64,7 +64,7 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
         {navButton('下个月', 1, <ChevronRight size={theme.controlSizes.icon} color={theme.colors.ink} />)}
       </Inline>
       <View style={{ flexDirection: 'row' }} importantForAccessibility="no-hide-descendants" aria-hidden>
-        {WEEK_HEADER.map(day => <Text key={day} variant="caption" style={{ flex: 1, textAlign: 'center' }}>{day}</Text>)}
+        {weekHeader().map(day => <Text key={day} variant="caption" style={{ flex: 1, textAlign: 'center' }}>{day}</Text>)}
       </View>
       {weeks.map((week, row) => (
         <View key={row} style={{ flexDirection: 'row' }}>

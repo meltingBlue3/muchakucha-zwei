@@ -22,7 +22,19 @@ const result = await sessionApiClient.listNotes(token, householdId);
 
 Both come from `src/features/auth/session-runtime.ts`. Routes hold `loading`, `refreshing`, and `error` in local state and refetch through `useFocusEffect` so returning from a child route shows current data. `@tanstack/react-query` is installed but unused — follow the local-state pattern above instead of introducing a second data layer for one screen.
 
-Failures reach the user as Chinese copy describing the next action, never a raw status or code. `src/api/api-client.ts` shows the shape of a rejected call (`status` plus a body carrying `error.code`) and how `SessionRestoreError` classifies authentication failures into `unauthenticated`, `reauthRequired`, and `offline`.
+Failures reach the user as copy in the interface language describing the next action, never a raw status or code; the API's own `message` is never shown. `src/api/api-client.ts` shows the shape of a rejected call (`status` plus a body carrying `error.code`) and how `SessionRestoreError` classifies authentication failures into `unauthenticated`, `reauthRequired`, and `offline`.
+
+## Interface text
+
+The interface is written in Chinese and Japanese, and each device chooses its own language. [src/i18n/index.ts](../../apps/client/src/i18n/index.ts) owns the choice and the i18next instance; the catalogs live in `src/i18n/locales/`, one namespace per feature.
+
+- `zh.ts` is the source. `ja.ts` is typed against it, so a missing or extra key fails the typecheck. Add a string to both in the same change.
+- A component takes `useTranslation` from `src/i18n`, never from `react-i18next`: importing it there loads the catalogs, and the hook re-renders the component when the language changes.
+- A helper outside React reads `i18n.t`, as `src/ui/date-values.ts` does for dates and weekdays. A component that shows such a helper's result still calls `useTranslation`, or it keeps the old language until something else re-renders it.
+- Dates people read go through `date-values.ts`; do not assemble 「月」「日」「周」 by hand.
+- A language's own name (中文, 日本語) is not translated. Everything else a person reads or hears is, accessibility names included.
+- The choice is read synchronously before the first render, from `platform/preferences/language`, and defaults to the system's preferred language through `expo-localization`. A system language the interface is not written in falls back to Chinese, which is why Jest and Playwright, both in English, still read Chinese.
+- Pages are migrated one at a time; the [roadmap](../roadmap.md#待办) lists what is left. Text the app writes into the database, such as a default title, stays in its writer's language: prefer storing a kind and naming it when shown.
 
 ## Session and household
 

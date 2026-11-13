@@ -52,6 +52,11 @@ jest.mock('expo-secure-store', () => {
       requireValidKey(key);
       storedSecrets.delete(key);
     }),
+    getItem: jest.fn((key: string): string | null => {
+      requireNativePlatform();
+      requireValidKey(key);
+      return storedSecrets.get(key) ?? null;
+    }),
     getItemAsync: jest.fn(async (key: string): Promise<string | null> => {
       requireNativePlatform();
       requireValidKey(key);

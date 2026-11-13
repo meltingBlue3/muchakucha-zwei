@@ -10,6 +10,8 @@ import {
   type SessionDestination,
 } from '../src/features/auth/session-bootstrap';
 import { sessionStateStore, sessionTransport, setSessionLostHandler } from '../src/features/auth/session-runtime';
+// Loaded for its effect: the interface language is settled before the first screen renders.
+import '../src/i18n';
 import { installFocusRing } from '../src/platform/focus-ring/focus-ring';
 import { AppStatusBar } from '../src/ui/app-status-bar';
 import { MuchakuchaThemeProvider } from '../src/ui/primitives';

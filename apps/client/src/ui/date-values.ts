@@ -1,9 +1,23 @@
-/** Local "YYYY-MM-DD" / "HH:mm" values shared by the date and time pickers. */
+/**
+ * Local "YYYY-MM-DD" / "HH:mm" values shared by the date and time pickers, and
+ * dates as people read them. The read forms follow the interface language, so
+ * a component that shows one takes `useTranslation` to re-render on a switch.
+ */
 
-const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'] as const;
+import { i18n } from '../i18n';
+
+/** Catalog keys of the weekdays, indexed as `Date.getDay()` counts them. */
+const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+
+/** 「日」 for a Sunday, in the interface language. */
+function weekdayName(day: number): string {
+  return i18n.t(`dates:weekdayNames.${WEEKDAYS[day] ?? 'sun'}`);
+}
 
 /** Weeks start on Monday everywhere: the calendar, its week view, the date picker and weekly repeats. */
-export const WEEK_HEADER = ['一', '二', '三', '四', '五', '六', '日'] as const;
+export function weekHeader(): readonly string[] {
+  return [1, 2, 3, 4, 5, 6, 0].map(weekdayName);
+}
 
 /** Days since the Monday that starts this date's week (Monday 0 … Sunday 6). */
 export function daysSinceMonday(date: Date): number {
@@ -45,16 +59,16 @@ export function toTimeValue(date: Date): string {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-/** "2026-09-27" → "2026年9月27日周日"; other values pass through unchanged. */
+/** "2026-09-27" → "2026年9月27日周日" (日本語では "2026年9月27日(日)"); other values pass through unchanged. */
 export function formatDateLabel(value: string): string {
   if (!isDateValue(value)) return value;
   const date = parseDateValue(value);
-  return `${formatDayLabel(date)}周${WEEKDAY_NAMES[date.getDay()]}`;
+  return i18n.t('dates:withWeekday', { date: formatDayLabel(date), name: weekdayName(date.getDay()) });
 }
 
 /** "2026年9月27日" */
 export function formatDayLabel(date: Date): string {
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+  return i18n.t('dates:full', { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() });
 }
 
 /**
@@ -64,13 +78,15 @@ export function formatDayLabel(date: Date): string {
  * is choosing an exact date.
  */
 export function formatDate(date: Date, { weekday = false }: { weekday?: boolean } = {}, now: Date = new Date()): string {
-  const year = date.getFullYear() === now.getFullYear() ? '' : `${date.getFullYear()}年`;
-  return `${year}${date.getMonth() + 1}月${date.getDate()}日${weekday ? `周${WEEKDAY_NAMES[date.getDay()]}` : ''}`;
+  const text = date.getFullYear() === now.getFullYear()
+    ? i18n.t('dates:monthDay', { month: date.getMonth() + 1, day: date.getDate() })
+    : formatDayLabel(date);
+  return weekday ? i18n.t('dates:withWeekday', { date: text, name: weekdayName(date.getDay()) }) : text;
 }
 
-/** "周日" */
+/** "周日" (日本語では "日曜日") */
 export function formatWeekday(date: Date): string {
-  return `周${WEEKDAY_NAMES[date.getDay()]}`;
+  return i18n.t('dates:weekday', { name: weekdayName(date.getDay()) });
 }
 
 /** "9月27日 14:30", following `formatDate`. */

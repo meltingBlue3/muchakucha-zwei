@@ -12,6 +12,7 @@ import { useId, type ComponentType, type ReactNode } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 
+import { useTranslation } from '../i18n';
 import { Text } from './primitives';
 import { theme } from './theme';
 import { useDesktop, useDesktopDensity } from './use-desktop';
@@ -28,7 +29,8 @@ export interface NavBadge {
 /** Collapses the desktop sidebar to a rail of icons, or expands it again. */
 export function SidebarToggle() {
   const { rail, toggle } = useSidebarRail();
-  const label = rail ? '展开侧栏' : '收起侧栏';
+  const { t } = useTranslation('navigation');
+  const label = rail ? t('expandSidebar') : t('collapseSidebar');
   return (
     <Pressable
       accessibilityRole="button"
@@ -57,24 +59,27 @@ function Badge({ id, badge }: { id: string; badge: NavBadge }) {
 
 type Icon = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 
-/** The five daily destinations, in the order of the tab bar and the sidebar. */
-export const destinations: ReadonlyArray<{ key: 'today' | 'events' | 'tasks' | 'notes' | 'assistant'; label: string; icon: Icon }> = [
-  { key: 'today', label: '今日', icon: Sun },
-  { key: 'events', label: '日历', icon: CalendarDays },
-  { key: 'tasks', label: '任务', icon: CircleCheck },
-  { key: 'notes', label: '笔记', icon: NotebookText },
-  { key: 'assistant', label: '助手', icon: Sparkles },
+/**
+ * The five daily destinations, in the order of the tab bar and the sidebar.
+ * A page's name is `pages.<key>` in the navigation catalog.
+ */
+export const destinations: ReadonlyArray<{ key: 'today' | 'events' | 'tasks' | 'notes' | 'assistant'; icon: Icon }> = [
+  { key: 'today', icon: Sun },
+  { key: 'events', icon: CalendarDays },
+  { key: 'tasks', icon: CircleCheck },
+  { key: 'notes', icon: NotebookText },
+  { key: 'assistant', icon: Sparkles },
 ];
 
 /**
  * The household's maintenance pages. Phones reach them from the household
  * menu; wide screens list them in the sidebar under the main destinations.
  */
-export const familyPages: ReadonlyArray<{ key: 'settings' | 'labels' | 'recurrence-rules' | 'birthdays'; label: string; icon: Icon }> = [
-  { key: 'settings', label: '家庭设置', icon: Settings2 },
-  { key: 'labels', label: '标签管理', icon: Tag },
-  { key: 'recurrence-rules', label: '重复安排', icon: Repeat },
-  { key: 'birthdays', label: '家人生日', icon: Cake },
+export const familyPages: ReadonlyArray<{ key: 'settings' | 'labels' | 'recurrence-rules' | 'birthdays'; icon: Icon }> = [
+  { key: 'settings', icon: Settings2 },
+  { key: 'labels', icon: Tag },
+  { key: 'recurrence-rules', icon: Repeat },
+  { key: 'birthdays', icon: Cake },
 ];
 
 export type FamilyPage = typeof familyPages[number]['key'];
@@ -111,6 +116,7 @@ export function HouseholdNavigation({ householdId, active, belowActive = false, 
   const dense = useDesktopDensity();
   const { rail } = useSidebarRail();
   const badgeId = useId();
+  const { t } = useTranslation('navigation');
   const go = (key: string) => {
     if (active !== key || belowActive) router.replace(householdPath(householdId, key));
   };
@@ -119,10 +125,11 @@ export function HouseholdNavigation({ householdId, active, belowActive = false, 
     return (
       <View
         accessibilityRole="tablist"
-        accessibilityLabel="家庭主导航"
+        accessibilityLabel={t('main')}
         style={{ flexDirection: 'row', backgroundColor: theme.colors.canvas, borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingHorizontal: theme.spacing[1], paddingTop: theme.spacing[1], paddingBottom: theme.spacing[1] }}
       >
-        {destinations.map(({ key, label, icon: TabIcon }) => {
+        {destinations.map(({ key, icon: TabIcon }) => {
+          const label = t(`pages.${key}`);
           const selected = active === key;
           return (
             <Pressable
@@ -143,7 +150,8 @@ export function HouseholdNavigation({ householdId, active, belowActive = false, 
     );
   }
 
-  const item = (key: HouseholdTab, label: string, ItemIcon: Icon, role: 'tab' | 'link') => {
+  const item = (key: typeof destinations[number]['key'] | FamilyPage, ItemIcon: Icon, role: 'tab' | 'link') => {
+    const label = t(`pages.${key}`);
     const selected = active === key;
     const badge = !rail && desktop ? badges?.[key] : undefined;
     const shown = badge && badge.value > 0 ? badge : undefined;
@@ -168,12 +176,12 @@ export function HouseholdNavigation({ householdId, active, belowActive = false, 
   return (
     <View testID="global-sidebar" style={{ width: rail ? theme.layout.railWidth : theme.layout.navigationWidth, backgroundColor: theme.colors.canvas, paddingHorizontal: rail ? theme.spacing[2] : theme.spacing[3], paddingTop: theme.spacing[3], paddingBottom: theme.spacing[2] + 2, gap: theme.spacing[4] }}>
       {header}
-      <View accessibilityRole="tablist" accessibilityLabel="家庭主导航" style={{ gap: theme.spacing[1] / 2 }}>
-        {destinations.map(({ key, label, icon }) => item(key, label, icon, 'tab'))}
+      <View accessibilityRole="tablist" accessibilityLabel={t('main')} style={{ gap: theme.spacing[1] / 2 }}>
+        {destinations.map(({ key, icon }) => item(key, icon, 'tab'))}
       </View>
       <View style={{ gap: theme.spacing[1] / 2 }}>
-        {!rail ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: desktop ? theme.spacing[2] + 2 : theme.spacing[3], marginTop: desktop ? theme.spacing[1] + 2 : 0, marginBottom: theme.spacing[1] + 2, fontWeight: '400' }}>家庭</Text> : null}
-        {familyPages.map(({ key, label, icon }) => item(key, label, icon, 'link'))}
+        {!rail ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: desktop ? theme.spacing[2] + 2 : theme.spacing[3], marginTop: desktop ? theme.spacing[1] + 2 : 0, marginBottom: theme.spacing[1] + 2, fontWeight: '400' }}>{t('family')}</Text> : null}
+        {familyPages.map(({ key, icon }) => item(key, icon, 'link'))}
       </View>
       {!desktop && children ? <View style={{ flex: 1, minHeight: 0 }}>{children}</View> : <View style={{ flex: 1 }} />}
       {footer}

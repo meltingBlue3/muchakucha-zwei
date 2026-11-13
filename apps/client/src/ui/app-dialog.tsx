@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import X from 'lucide-react-native/icons/x';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
+import { useTranslation } from '../i18n';
 import { Button, Heading, Inline, Text } from './primitives';
 
 /** Kept for screen readers and focus, out of sight. */
@@ -75,6 +76,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
     if ((!pane && !popover) || (pane && changed)) focus();
   }, [title, focus, pane, popover]);
   const commandKey = useCommandKeyLabel();
+  const { t } = useTranslation();
   const entrance = usePaneEntrance(pane);
   // In a desktop pane, Ctrl+Enter (⌘+Enter on a Mac) submits the form from anywhere inside it.
   // Listened for while capturing: React Native Web's text fields stop key events from bubbling.
@@ -99,9 +101,9 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
         <Heading ref={initial} tabIndex={-1} variant={sheetAction ? 'label' : 'meta'} color={sheetAction ? 'ink' : 'inkFaint'} level={2} numberOfLines={1} style={headerNote ? visuallyHidden : { flex: 1 }}>{title}</Heading>
         {headerNote ? <Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, fontFamily: theme.fontFamilies.numeric }}>{headerNote}</Text> : null}
         {headerActions}
-        {reading && sheetAction ? <><Button label="取消" tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></> : null}
+        {reading && sheetAction ? <><Button label={t('cancel')} tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></> : null}
         {/* Round and filled, in ink, so it reads as the way out. */}
-        <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ width: theme.layout.desktopControl, height: theme.layout.desktopControl, marginLeft: theme.spacing[1], borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceSelected : hovered ? theme.colors.surfaceSelected : theme.colors.surfaceMuted, ...layoutTransition('background-color') })}><X size={theme.controlSizes.icon - 4} color={theme.colors.ink} strokeWidth={theme.focus.width} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('close', { title })} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ width: theme.layout.desktopControl, height: theme.layout.desktopControl, marginLeft: theme.spacing[1], borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceSelected : hovered ? theme.colors.surfaceSelected : theme.colors.surfaceMuted, ...layoutTransition('background-color') })}><X size={theme.controlSizes.icon - 4} color={theme.colors.ink} strokeWidth={theme.focus.width} /></Pressable>
       </Inline>
       {reading && footer ? <View style={{ paddingVertical: theme.spacing[2], paddingHorizontal: fillContent ? theme.spacing[6] : theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>{footer}</View> : null}
       <ReadingPane.Provider value={reading}><SheetActionSlot.Provider value={setSheetAction}>
@@ -117,11 +119,11 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
           ]}
         >{children}</ScrollView>
       </SheetActionSlot.Provider></ReadingPane.Provider>
-      {!reading && (footer || sheetAction) ? <View style={{ padding: theme.spacing[4], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>{footer}{sheetAction ? <Inline style={{ justifyContent: 'flex-end' }}><Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, paddingLeft: theme.spacing[2], fontFamily: theme.fontFamilies.numeric }}>{`${commandKey} + Enter ${sheetAction.label}`}</Text><Button label="取消" tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></Inline> : null}</View> : null}
+      {!reading && (footer || sheetAction) ? <View style={{ padding: theme.spacing[4], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>{footer}{sheetAction ? <Inline style={{ justifyContent: 'flex-end' }}><Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, paddingLeft: theme.spacing[2], fontFamily: theme.fontFamilies.numeric }}>{`${commandKey} + Enter ${sheetAction.label}`}</Text><Button label={t('cancel')} tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></Inline> : null}</View> : null}
     </View></View>;
   }
   const closeButton = (
-    <Pressable ref={initial} accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent, borderRadius: theme.borderRadii.full })}>
+    <Pressable ref={initial} accessibilityRole="button" accessibilityLabel={t('close', { title })} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent, borderRadius: theme.borderRadii.full })}>
       <X size={sheet ? theme.controlSizes.icon + theme.spacing[1] : theme.controlSizes.icon} color={sheet ? theme.colors.ink : theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
     </Pressable>
   );

@@ -4,6 +4,7 @@ import ChevronRight from 'lucide-react-native/icons/chevron-right';
 
 import { HouseholdScreen } from '../../../../src/features/households/household-screen';
 import { useHouseholdContext } from '../../../../src/features/households/household-context';
+import { useTranslation } from '../../../../src/i18n';
 import { ListGroup, ListRow, RowSlot } from '../../../../src/ui/list-group';
 import { familyPages, householdPath } from '../../../../src/ui/household-navigation';
 import { PageIntro } from '../../../../src/ui/page-intro';
@@ -23,13 +24,14 @@ export default function HouseholdMoreRoute() {
   const router = useRouter();
   const { currentHouseholdId } = useHouseholdContext();
   const householdId = id ?? currentHouseholdId ?? '';
+  const { t } = useTranslation('navigation');
 
   return (
     <HouseholdScreen active="more" accessibilityLabel="家庭空间" width="reading">
       <Stack gap={5}>
         <PageIntro title="家庭" />
         <ListGroup>
-          {familyPages.map(({ key, label, icon: Icon }) => (
+          {familyPages.map(({ key, icon: Icon }) => (
             <ListRow
               key={key}
               accessibilityLabel={DESCRIPTIONS[key].name}
@@ -37,7 +39,7 @@ export default function HouseholdMoreRoute() {
               leading={<RowSlot width={theme.controlSizes.touchTarget}><View style={{ alignItems: 'center' }}><Icon size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /></View></RowSlot>}
               trailing={<ChevronRight size={theme.controlSizes.icon} color={theme.colors.inkFaint} strokeWidth={theme.controlSizes.iconStroke} />}
             >
-              <Text variant="body">{label}</Text>
+              <Text variant="body">{t(`pages.${key}`)}</Text>
               <Text variant="meta">{DESCRIPTIONS[key].description}</Text>
             </ListRow>
           ))}

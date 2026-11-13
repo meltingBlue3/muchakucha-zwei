@@ -13,6 +13,7 @@ import {
   type ViewProps,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from '../i18n';
 import CircleAlert from 'lucide-react-native/icons/circle-alert';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
 import Eye from 'lucide-react-native/icons/eye';
@@ -140,11 +141,12 @@ export const Chip = ({ children, tone = 'muted' }: { children: string; tone?: 'm
   </View>
 );
 
-export const Spinner = ({ label = '正在处理', inverse = false }: { label?: string; inverse?: boolean }) => {
+export const Spinner = ({ label, inverse = false }: { label?: string; inverse?: boolean }) => {
   const activeTheme = useTheme<Theme>();
+  const { t } = useTranslation();
   return (
     <ActivityIndicator
-      accessibilityLabel={label}
+      accessibilityLabel={label ?? t('processing')}
       accessibilityRole="progressbar"
       color={inverse ? activeTheme.colors.surface : activeTheme.colors.inkMuted}
       size="small"
@@ -193,6 +195,7 @@ const webFocusRing = (focused: boolean) =>
 
 export const Button = ({ disabled, label, loading = false, tone = 'primary', expanded, size = 'regular', icon, trailingIcon, style, ...props }: ButtonProps) => {
   const activeTheme = useTheme<Theme>();
+  const { t } = useTranslation();
   const dense = useDesktopDensity();
   const auth = useContext(AuthControlSizes);
   const unavailable = disabled || loading;
@@ -239,7 +242,7 @@ export const Button = ({ disabled, label, loading = false, tone = 'primary', exp
         typeof style === 'function' ? style(state) : style,
       ]}
     >
-      {loading ? <Spinner inverse={tone !== 'secondary'} label={`${label}，正在处理`} /> : null}
+      {loading ? <Spinner inverse={tone !== 'secondary'} label={t('labelProcessing', { label })} /> : null}
       {icon && !loading ? icon(unavailable ? activeTheme.colors.inkMuted : tone === 'secondary' ? activeTheme.colors.ink : activeTheme.colors.surface) : null}
       {/* Desktop controls are 32px pills, so their labels drop to 13. */}
       <Text variant={compact || dense ? 'label' : 'button'} color={unavailable ? 'inkMuted' : tone === 'secondary' ? 'ink' : 'surface'} style={dense ? { fontSize: activeTheme.textVariants.meta.fontSize } : undefined}>{label}</Text>
@@ -257,6 +260,7 @@ export function FormActions({ onCancel, onSubmit, submitting, submitLabel, disab
   disabled?: boolean;
 }) {
   const sheet = useContext(SheetActionSlot);
+  const { t } = useTranslation();
   const submit = useRef(onSubmit);
   const cancel = useRef(onCancel);
   submit.current = onSubmit;
@@ -270,7 +274,7 @@ export function FormActions({ onCancel, onSubmit, submitting, submitLabel, disab
   if (sheet) return null;
   return (
     <Inline gap={3} style={{ marginTop: theme.spacing[4] }}>
-      <Button label="取消" tone="secondary" disabled={submitting} onPress={onCancel} style={{ flex: 1 }} />
+      <Button label={t('cancel')} tone="secondary" disabled={submitting} onPress={onCancel} style={{ flex: 1 }} />
       <Button label={submitLabel} loading={submitting} disabled={disabled} onPress={onSubmit} style={{ flex: 2 }} />
     </Inline>
   );
@@ -282,7 +286,7 @@ export function FormActions({ onCancel, onSubmit, submitting, submitLabel, disab
  * every confirmation in the app reads the same way.
  */
 export function ConfirmActions({
-  cancelLabel = '取消',
+  cancelLabel,
   cancelAccessibilityLabel,
   confirmLabel,
   confirmAccessibilityLabel,
@@ -305,10 +309,11 @@ export function ConfirmActions({
   // Each answer starts at its label's width and shares the rest, so the pair
   // wraps only when the labels themselves do not fit side by side.
   const actionStyle = { flexGrow: 1 };
+  const { t } = useTranslation();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[3] }}>
       <Button
-        label={cancelLabel}
+        label={cancelLabel ?? t('cancel')}
         {...(cancelAccessibilityLabel ? { accessibilityLabel: cancelAccessibilityLabel } : {})}
         tone="secondary"
         disabled={busy}
@@ -474,7 +479,8 @@ export const PasswordField = forwardRef<NativeTextInput, FieldProps>((props, for
     if (typeof forwardedRef === 'function') forwardedRef(node);
     else if (forwardedRef) forwardedRef.current = node;
   };
-  const actionLabel = `${revealed ? '隐藏' : '显示'}${props.label}`;
+  const { t } = useTranslation();
+  const actionLabel = revealed ? t('hideField', { label: props.label }) : t('showField', { label: props.label });
   return (
     <TextField
       {...props}
@@ -536,7 +542,7 @@ export const Banner = ({ children, title, action }: BannerProps) => (
  * A failed load: what went wrong and a way to try again, in one place. Screens
  * keep showing any content they already have beneath it.
  */
-export const LoadError = ({ title, message, onRetry, retryLabel = '重试', retryAccessibilityLabel, retrying = false, disabled = false }: {
+export const LoadError = ({ title, message, onRetry, retryLabel, retryAccessibilityLabel, retrying = false, disabled = false }: {
   title?: string;
   message: string;
   onRetry(): void;
@@ -545,23 +551,26 @@ export const LoadError = ({ title, message, onRetry, retryLabel = '重试', retr
   retrying?: boolean;
   /** Another operation owns the screen; retrying now would race it. */
   disabled?: boolean;
-}) => (
-  <Banner
-    {...(title ? { title } : {})}
-    action={
-      <Button
-        label={retryLabel}
-        {...(retryAccessibilityLabel ? { accessibilityLabel: retryAccessibilityLabel } : {})}
-        tone="secondary"
-        loading={retrying}
-        disabled={disabled}
-        onPress={onRetry}
-      />
-    }
-  >
-    {message}
-  </Banner>
-);
+}) => {
+  const { t } = useTranslation();
+  return (
+    <Banner
+      {...(title ? { title } : {})}
+      action={
+        <Button
+          label={retryLabel ?? t('retry')}
+          {...(retryAccessibilityLabel ? { accessibilityLabel: retryAccessibilityLabel } : {})}
+          tone="secondary"
+          loading={retrying}
+          disabled={disabled}
+          onPress={onRetry}
+        />
+      }
+    >
+      {message}
+    </Banner>
+  );
+};
 
 /** An unknown amount of content still on its way; never shown as an empty list. */
 export const LoadingState = ({ label }: { label: string }) => (
