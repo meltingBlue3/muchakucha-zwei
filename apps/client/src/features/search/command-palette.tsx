@@ -10,6 +10,7 @@ import Inbox from 'lucide-react-native/icons/inbox';
 import NotebookText from 'lucide-react-native/icons/notebook-text';
 import UserRound from 'lucide-react-native/icons/user-round';
 
+import { useTranslation } from '../../i18n';
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { toDateIso } from '../events/calendar-utils';
 import { formatDueDate } from '../tasks/task-utils';
@@ -125,6 +126,7 @@ export function useSearchShortcut(enabled: boolean, toggle: () => void) {
  */
 export function CommandPalette({ householdId, trigger, onClose }: { householdId: string; trigger: RefObject<View | null>; onClose(): void }) {
   const router = useRouter();
+  const { t } = useTranslation('navigation');
   const pathname = usePathname();
   const panel = useRef<View>(null);
   const input = useRef<TextInput>(null);
@@ -176,8 +178,8 @@ export function CommandPalette({ householdId, trigger, onClose }: { householdId:
   const hits = useMemo((): Hit[] => {
     const q = normalize(query.trim());
     const pages: Hit[] = [
-      ...destinations.map(({ key, label, icon }) => ({ id: `page:${key}`, group: '页面', title: label, icon, open: () => go(() => { if (pathname !== householdPath(householdId, key)) router.replace(householdPath(householdId, key)); }) })),
-      ...familyPages.map(({ key, label, icon }) => ({ id: `page:${key}`, group: '页面', title: label, icon, open: () => go(() => { if (pathname !== householdPath(householdId, key)) router.push(householdPath(householdId, key)); }) })),
+      ...destinations.map(({ key, icon }) => ({ id: `page:${key}`, group: '页面', title: t(`pages.${key}`), icon, open: () => go(() => { if (pathname !== householdPath(householdId, key)) router.replace(householdPath(householdId, key)); }) })),
+      ...familyPages.map(({ key, icon }) => ({ id: `page:${key}`, group: '页面', title: t(`pages.${key}`), icon, open: () => go(() => { if (pathname !== householdPath(householdId, key)) router.push(householdPath(householdId, key)); }) })),
       ...accountPages.map(({ path, label, icon }) => ({ id: `page:${path}`, group: '页面', title: label, icon, open: () => go(() => { if (pathname !== path) router.push(path); }) })),
     ];
     if (!q) return pages;
@@ -207,7 +209,7 @@ export function CommandPalette({ householdId, trigger, onClose }: { householdId:
       open: () => openItem('notes', note.id),
     }));
     return [...matchedPages, ...tasks, ...events, ...notes];
-  }, [query, content, householdId, pathname, router, go, openItem, setCalendarYear, setCalendarMonth, setCalendarDate]);
+  }, [query, content, householdId, pathname, router, go, openItem, setCalendarYear, setCalendarMonth, setCalendarDate, t]);
 
   useEffect(() => { setActive(0); }, [query]);
   const current = Math.min(active, Math.max(0, hits.length - 1));

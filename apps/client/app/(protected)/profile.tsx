@@ -7,13 +7,16 @@ import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import CircleUserRound from 'lucide-react-native/icons/circle-user-round';
 import House from 'lucide-react-native/icons/house';
 import Inbox from 'lucide-react-native/icons/inbox';
+import Languages from 'lucide-react-native/icons/languages';
 import { LogoutAction } from '../../src/features/auth/logout-action';
 import { sessionApiClient, sessionStateStore, sessionTransport } from '../../src/features/auth/session-runtime';
 import { useCurrentUser } from '../../src/features/auth/use-current-user';
 import { AccountScreen } from '../../src/features/households/household-screen';
 import { ProfileForm } from '../../src/features/profile/profile-form';
 import { setLunarCalendar, useLunarCalendar } from '../../src/features/lunar/lunar-calendar';
+import { LANGUAGES, LANGUAGE_NAMES, setLanguageChoice, useLanguageChoice, useTranslation, type LanguageChoice } from '../../src/i18n';
 import { AppDialog } from '../../src/ui/app-dialog';
+import { FilterOptions } from '../../src/ui/filter-options';
 import { ListGroup, ListRow, RowSlot } from '../../src/ui/list-group';
 import { PageIntro } from '../../src/ui/page-intro';
 import { Stack, Text } from '../../src/ui/primitives';
@@ -22,9 +25,9 @@ import { theme } from '../../src/ui/theme';
 import { useDesktop } from '../../src/ui/use-desktop';
 
 const LINKS = [
-  { key: 'inbox', label: '收件箱', description: '查看和处理收到的家庭邀请', icon: Inbox, path: '/inbox' },
-  { key: 'households', label: '我的家庭', description: '查看家庭安排，或创建、加入一个家庭', icon: House, path: '/household-handoff' },
-  { key: 'reminders', label: '提醒', description: '任务到期和日程开始前提醒你', icon: Bell, path: '/reminders' },
+  { key: 'inbox', icon: Inbox, path: '/inbox' },
+  { key: 'households', icon: House, path: '/household-handoff' },
+  { key: 'reminders', icon: Bell, path: '/reminders' },
 ] as const;
 
 /** One fact of the profile: its name in the left column, the value, and an optional action. */
@@ -45,8 +48,8 @@ function ProfileFact({ label, value, note, action }: { label: string; value: str
 
 /**
  * 个人中心: the nickname and username as facts with 编辑 beside the nickname
- * (as 家庭名称 in 家庭设置), this device's calendar display, the person's
- * other pages as rows, and 退出登录 at the foot.
+ * (as 家庭名称 in 家庭设置), this device's calendar display and language, the
+ * person's other pages as rows, and 退出登录 at the foot.
  */
 export default function ProfileRoute() {
   const desktop = useDesktop();
@@ -55,48 +58,58 @@ export default function ProfileRoute() {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const lunar = useLunarCalendar();
+  const language = useLanguageChoice();
+  const { t } = useTranslation('profile');
+  // A language is offered under its own name, whatever the interface is in.
+  const languageOptions = [
+    { value: 'system', label: t('language.system'), name: t('language.system') },
+    ...LANGUAGES.map(value => ({ value, label: LANGUAGE_NAMES[value], name: LANGUAGE_NAMES[value] })),
+  ];
   return (
-    <AccountScreen accessibilityLabel="个人中心">
+    <AccountScreen accessibilityLabel={t('pageTitle')}>
       <Stack gap={6}>
-        <PageIntro title={desktop ? '个人资料' : '个人中心'} />
-        {desktop ? <ProfileForm apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} /> : <SettingsSection title="个人资料" icon={<CircleUserRound size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
+        <PageIntro title={desktop ? t('title') : t('pageTitle')} />
+        {desktop ? <ProfileForm apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} /> : <SettingsSection title={t('title')} icon={<CircleUserRound size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />}>
           {desktop ? <ProfileForm apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} /> : <SettingsRows>
-            <ProfileFact label="昵称" value={user?.displayName ?? '—'} action={
-              <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel="编辑昵称" disabled={!user} onPress={() => setEditing(true)} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
-                <Text variant="label" color="link">编辑</Text>
+            <ProfileFact label={t('nickname')} value={user?.displayName ?? '—'} action={
+              <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel={t('editNickname')} disabled={!user} onPress={() => setEditing(true)} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
+                <Text variant="label" color="link">{t('edit')}</Text>
               </Pressable>
             } />
-            <ProfileFact label="用户名" value={user?.username ?? '—'} note="用于登录，暂不支持修改。" />
+            <ProfileFact label={t('username')} value={user?.username ?? '—'} note={t('usernameNote')} />
           </SettingsRows>}
         </SettingsSection>}
-        <SettingsSection title="日历" icon={<CalendarDays size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />} detail="只影响这台设备。">
+        <SettingsSection title={t('calendar.title')} icon={<CalendarDays size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />} detail={t('deviceOnly')}>
           <SettingsRows>
-            <SwitchRow label="显示农历" value={lunar} disabled={false} onChange={setLunarCalendar}>
-              <Text variant="caption">在日历和今日里显示农历日期、节气和传统节日。</Text>
+            <SwitchRow label={t('calendar.showLunar')} value={lunar} disabled={false} onChange={setLunarCalendar}>
+              <Text variant="caption">{t('calendar.showLunarDetail')}</Text>
             </SwitchRow>
           </SettingsRows>
         </SettingsSection>
+        <SettingsSection title={t('language.title')} icon={<Languages size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />} detail={t('deviceOnly')}>
+          <FilterOptions hideLabel label={t('language.title')} options={languageOptions} value={language} onChange={value => setLanguageChoice(value as LanguageChoice)} />
+        </SettingsSection>
         {!desktop ? <ListGroup>
-          {LINKS.map(({ key, label, description, icon: Icon, path }) => (
+          {LINKS.map(({ key, icon: Icon, path }) => (
             <ListRow
               key={key}
-              accessibilityLabel={label}
+              accessibilityLabel={t(`links.${key}.label`)}
               onPress={() => router.push(path)}
               leading={<RowSlot width={theme.controlSizes.touchTarget}><View style={{ alignItems: 'center' }}><Icon size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /></View></RowSlot>}
               trailing={<ChevronRight size={theme.controlSizes.icon} color={theme.colors.inkFaint} strokeWidth={theme.controlSizes.iconStroke} />}
             >
-              <Text variant="body">{label}</Text>
-              <Text variant="meta">{description}</Text>
+              <Text variant="body">{t(`links.${key}.label`)}</Text>
+              <Text variant="meta">{t(`links.${key}.description`)}</Text>
             </ListRow>
           ))}
         </ListGroup> : null}
         {!desktop ? <Stack gap={1}>
           <LogoutAction apiClient={sessionApiClient} onLoggedOut={() => router.replace('/login')} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} />
-          <Text variant="caption" style={{ textAlign: 'center' }}>只影响这台设备，家庭里的内容会保留。</Text>
+          <Text variant="caption" style={{ textAlign: 'center' }}>{t('logoutNote')}</Text>
         </Stack> : null}
       </Stack>
       {editing ? (
-        <AppDialog title="个人资料" busy={busy} onClose={() => setEditing(false)} trigger={editTrigger}>
+        <AppDialog title={t('title')} busy={busy} onClose={() => setEditing(false)} trigger={editTrigger}>
           <ProfileForm onBusyChange={setBusy} apiClient={sessionApiClient} sessionStateStore={sessionStateStore} sessionTransport={sessionTransport} />
         </AppDialog>
       ) : null}

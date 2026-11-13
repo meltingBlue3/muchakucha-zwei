@@ -67,6 +67,49 @@ test('no-household onboarding offers both routes and profile access', async ({ p
   await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
 });
 
+test('the interface language is chosen per device and survives a reload', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page, true);
+  await page.goto('/profile');
+  // A browser in a language the interface is not written in reads Chinese.
+  await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
+  const languages = page.getByRole('radiogroup', { name: '语言' });
+  await expect(languages.getByRole('radio', { name: '跟随系统' })).toBeChecked();
+  await languages.getByRole('radio', { name: '日本語' }).click();
+  // The page already on show changes, without a reload.
+  await expect(page.getByRole('heading', { name: 'プロフィール' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '个人资料' })).toHaveCount(0);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+  await expect(page.getByRole('switch', { name: '農暦を表示' })).toBeVisible();
+  await checkLayout(page);
+  await page.screenshot({ path: 'test-results/account-profile-japanese.png', fullPage: true });
+  await page.getByRole('button', { name: '表示名を編集' }).click();
+  const dialog = page.getByRole('dialog', { name: 'プロフィール', exact: true });
+  await expect(dialog.getByRole('button', { name: 'プロフィールを閉じる' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '保存', exact: true })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'プロフィールを閉じる' }).click();
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'プロフィール' })).toBeVisible();
+  await expect(page.getByRole('radiogroup', { name: '言語' }).getByRole('radio', { name: '日本語' })).toBeChecked();
+  // Following the system again forgets the choice.
+  await page.getByRole('radiogroup', { name: '言語' }).getByRole('radio', { name: 'システムに合わせる' }).click();
+  await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
+});
+
+test('a browser set to Japanese opens in Japanese', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  await mockApi(page, true);
+  await page.goto('/profile');
+  await expect(page.getByRole('heading', { name: 'プロフィール' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+  await context.close();
+});
+
 test('profile only enables saving changed input and announces success', async ({ page }) => {
   // The phone shows the nickname as a fact with 编辑; a wide screen edits it in place (desktop-redesign.spec.ts).
   await page.setViewportSize({ width: 390, height: 844 });

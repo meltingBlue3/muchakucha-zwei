@@ -17,6 +17,7 @@ import { CommandPalette, SearchEntry, useSearchShortcut } from '../search/comman
 import { useSidebarCounts } from './use-sidebar-counts';
 import { Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
+import { useTranslation } from '../../i18n';
 import { useHouseholdContext } from './household-context';
 
 /**
@@ -53,6 +54,7 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
 }) {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { t } = useTranslation('navigation');
   const screenWidth = useWindowDimensions().width;
   const narrow = screenWidth < theme.layout.navigationBreakpoint;
   const desktop = useDesktop();
@@ -159,7 +161,7 @@ export function HouseholdScreen({ active, accessibilityLabel, notice, refreshing
         onClose={() => setMenuOpen(false)}
         onSelect={(next) => { void handleSwitch(next); }}
         visible={menuOpen}
-        links={narrow ? familyPages.map(page => ({ label: page.label, icon: page.icon, onPress: () => router.push(householdPath(householdId, page.key)) })) : []}
+        links={narrow ? familyPages.map(page => ({ label: t(`pages.${page.key}`), icon: page.icon, onPress: () => router.push(householdPath(householdId, page.key)) })) : []}
       />
       {desktop && searchOpen ? <CommandPalette householdId={householdId} trigger={searchTrigger} onClose={() => setSearchOpen(false)} /> : null}
     </>

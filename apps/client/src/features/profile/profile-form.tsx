@@ -3,17 +3,22 @@ import { Controller, useForm } from 'react-hook-form';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
+import { useTranslation } from '../../i18n';
 import type { SessionStateStore } from '../auth/session-state';
 import type { SessionTransport } from '../../platform/session/session-transport';
 import { Banner, Button, LoadError, Spinner, Stack, Text, TextField } from '../../ui/primitives';
 import { MemberAvatar } from '../../ui/member-avatar';
 
-const GENERIC_ERROR = '这次没有完成。请检查网络后重试。';
+// The messages are keys of the profile catalog's form section.
 const nicknameSchema = z
   .string()
   .trim()
-  .min(1, '请输入昵称。')
-  .max(80, '昵称不能超过 80 个字符。');
+  .min(1, 'nicknameRequired')
+  .max(80, 'nicknameTooLong');
+
+function nicknameIssue(message: string | undefined): 'nicknameRequired' | 'nicknameTooLong' | 'checkNickname' {
+  return message === 'nicknameRequired' || message === 'nicknameTooLong' ? message : 'checkNickname';
+}
 
 type ProfileValues = { displayName: string };
 
@@ -52,6 +57,8 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
   const [loadError, setLoadError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const [username, setUsername] = useState<string>();
+  const { t } = useTranslation(['profile', 'common']);
+  const genericError = t('common:genericError');
   const {
     clearErrors,
     control,
@@ -70,7 +77,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
     setLoadError(undefined);
     const accessToken = sessionTransport.getAccessToken();
     if (accessToken === null) {
-      setLoadError(GENERIC_ERROR);
+      setLoadError(genericError);
       setLoading(false);
       return;
     }
@@ -84,7 +91,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
         setUsername(user.username);
       })
       .catch((error: unknown) => {
-        if (!(error instanceof Error && error.name === 'AbortError')) setLoadError(GENERIC_ERROR);
+        if (!(error instanceof Error && error.name === 'AbortError')) setLoadError(genericError);
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -96,7 +103,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
       clearErrors('displayName');
       return true;
     }
-    setError('displayName', { message: parsed.error.issues[0]?.message ?? '请检查昵称。' });
+    setError('displayName', { message: t(`form.${nicknameIssue(parsed.error.issues[0]?.message)}`) });
     return false;
   };
 
@@ -105,12 +112,12 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
     clearErrors();
     const parsed = nicknameSchema.safeParse(values.displayName);
     if (!parsed.success) {
-      setError('displayName', { message: parsed.error.issues[0]?.message ?? '请检查昵称。' });
+      setError('displayName', { message: t(`form.${nicknameIssue(parsed.error.issues[0]?.message)}`) });
       return;
     }
     const accessToken = sessionTransport.getAccessToken();
     if (accessToken === null) {
-      setError('root.server', { message: GENERIC_ERROR });
+      setError('root.server', { message: genericError });
       return;
     }
     try {
@@ -123,31 +130,31 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
         setSavedName(user.displayName);
         setUserId(user.id);
       sessionStateStore.enterAuthenticated({ accessToken, currentUser: user });
-      setSuccess('昵称已更新。');
+      setSuccess(t('form.nicknameUpdated'));
     } catch (error) {
       if (isDisplayNameFailure(error)) {
-        setError('displayName', { message: '请输入 1–80 个字符的昵称。' });
+        setError('displayName', { message: t('form.nicknameLength') });
       } else {
-        setError('root.server', { message: GENERIC_ERROR });
+        setError('root.server', { message: genericError });
       }
     }
   });
 
   if (loading) {
     return (
-      <Stack accessibilityLabel="正在加载个人资料" gap={2}>
-        <Spinner label="正在加载个人资料" />
+      <Stack accessibilityLabel={t('form.loading')} gap={2}>
+        <Spinner label={t('form.loading')} />
       </Stack>
     );
   }
 
   return (
     <Stack gap={6}>
-      {userId ? <MemberAvatar id={userId} name={savedName || '我'} size="lg" /> : null}
+      {userId ? <MemberAvatar id={userId} name={savedName || t('form.me')} size="lg" /> : null}
       {loadError ? (
-        <LoadError title="暂时无法加载资料" message={loadError} retryLabel="重新加载资料" onRetry={() => setReload((value) => value + 1)} />
+        <LoadError title={t('form.loadFailedTitle')} message={loadError} retryLabel={t('form.reload')} onRetry={() => setReload((value) => value + 1)} />
       ) : errors.root?.server?.message ? (
-        <Banner title="暂时无法保存">{errors.root.server.message}</Banner>
+        <Banner title={t('form.saveFailedTitle')}>{errors.root.server.message}</Banner>
       ) : null}
       {success ? (
         <Stack accessibilityLiveRegion="polite" accessibilityRole={'status' as never} gap={1}>
@@ -156,9 +163,9 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
       ) : null}
       {username ? (
         <Stack gap={1}>
-          <Text variant="label">用户名</Text>
+          <Text variant="label">{t('username')}</Text>
           <Text>{username}</Text>
-          <Text variant="caption">用于登录，暂不支持修改。</Text>
+          <Text variant="caption">{t('usernameNote')}</Text>
         </Stack>
       ) : null}
       <Controller
@@ -172,7 +179,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
             {...(errors.displayName?.message === undefined
               ? {}
               : { error: errors.displayName.message })}
-            label="昵称"
+            label={t('nickname')}
             submitAttempt={submitCount}
             returnKeyType="done"
             onSubmitEditing={() => { if (isDirty && !isSubmitting) void submit(); }}
@@ -194,7 +201,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
       />
       <Button
         disabled={loadError !== undefined || isSubmitting || !isDirty}
-        label="保存"
+        label={t('common:save')}
         loading={isSubmitting}
         onPress={() => void submit()}
       />

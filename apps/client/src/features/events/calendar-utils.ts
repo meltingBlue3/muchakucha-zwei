@@ -1,6 +1,6 @@
 /** Pure date helpers for the calendar month grid. No React dependency. */
 
-import { daysSinceMonday, formatDate, WEEK_HEADER } from '../../ui/date-values';
+import { daysSinceMonday, formatDate, weekHeader } from '../../ui/date-values';
 
 export interface CalendarDay {
   date: Date;
@@ -17,7 +17,7 @@ export interface CalendarMonth {
 }
 
 export function getDayNames(): readonly string[] {
-  return WEEK_HEADER;
+  return weekHeader();
 }
 
 export function getCalendarMonth(year: number, month: number, todayIso = toDateIso(new Date())): CalendarMonth {
