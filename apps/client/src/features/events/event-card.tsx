@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { CardActionsMenu } from '../../ui/card-actions-menu';
 import { View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
@@ -8,7 +9,7 @@ import { EventBar, ListRow, RowSlot } from '../../ui/list-group';
 import { LabelTags } from '../labels/label-chip';
 import { RecurrenceBadge } from '../recurrence/recurrence-badge';
 import { birthdayNote } from '../birthdays/birthday-dates';
-import { formatDateRange, formatTime, formatTimeRange } from './calendar-utils';
+import { formatDateRange, formatTime, formatTimeRange, toDateIso } from './calendar-utils';
 import { useDesktop } from '../../ui/use-desktop';
 
 interface EventCardProps {
@@ -26,19 +27,22 @@ interface EventCardProps {
 
 /** One event as a list row: start time, a bar in its label's color, then title and place. */
 export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false, timeColumn = false, selected = false }: EventCardProps) {
+  const { t } = useTranslation('events');
   const activeTheme = useTheme<Theme>();
   const desktop = useDesktop();
   const labels = event.labels ?? [];
   const place = event.location !== null && event.location !== '' ? event.location : null;
   const when = withinDay ? formatTimeRange(event.startTime, event.endTime, event.allDay) : formatDateRange(event.startTime, event.endTime, event.allDay);
-  const startTime = event.allDay ? '全天' : formatTime(event.startTime);
+  const startTime = event.allDay ? t('allDay') : formatTime(event.startTime);
   // Under 全天 or beside a 全天 time column, saying it again adds nothing.
-  const showWhen = when !== '全天';
+  const showWhen = !(withinDay && event.allDay && toDateIso(new Date(event.startTime)) === toDateIso(new Date(event.endTime)));
   const birthday = birthdayNote(event);
+  const subject = t('card', { title: event.title });
+  const name = birthday === null ? subject : t('cardBirthday', { name: subject, birthday });
 
   return (
     <ListRow
-      accessibilityLabel={`日程：${event.title}${birthday === null ? '' : `，${birthday}`}${event.recurrenceRuleId == null ? '' : '，重复'}`}
+      accessibilityLabel={event.recurrenceRuleId == null ? name : t('cardRecurring', { name })}
       onPress={() => onPress(event)}
       selected={selected}
       leading={desktop ? <View style={{ alignSelf: 'stretch', width: activeTheme.spacing[1], backgroundColor: labels[0]?.color ?? activeTheme.colors.inkFaint, marginVertical: activeTheme.spacing[2] }} /> : <>
@@ -48,14 +52,14 @@ export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false,
           <EventBar color={labels[0]?.color ?? activeTheme.colors.inkFaint} />
         </View>
       </>}
-      trailing={<CardActionsMenu subject={`日程：${event.title}`} actions={[
-        ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: `编辑日程：${event.title}`, onPress: onEdit }] : []),
-        ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: `删除日程：${event.title}`, onPress: onDelete }] : []),
+      trailing={<CardActionsMenu subject={subject} actions={[
+        ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: t('editCard', { title: event.title }), onPress: onEdit }] : []),
+        ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: t('deleteCard', { title: event.title }), onPress: onDelete }] : []),
       ]} />}
     >
       <Text variant={desktop ? 'bodySm' : 'body'} color="ink" numberOfLines={desktop ? 1 : 2}>{event.title}</Text>
       {showWhen || place !== null || event.recurrenceRuleId != null || labels.length > 0 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[2], rowGap: activeTheme.spacing[1], marginTop: activeTheme.spacing[1] / 2 }}>
-        {showWhen || desktop ? <Text variant="time">{desktop && event.allDay ? '全天' : when}</Text> : null}
+        {showWhen || desktop ? <Text variant="time">{desktop && event.allDay ? t('allDay') : when}</Text> : null}
         {place !== null ? <Text variant="meta" numberOfLines={1} style={{ flexShrink: 1 }}>{place}</Text> : null}
         {birthday !== null ? <Text variant="meta" numberOfLines={1}>{birthday}</Text> : null}
         {event.recurrenceRuleId != null ? <RecurrenceBadge /> : null}

@@ -1,6 +1,7 @@
 /** Pure date helpers for the calendar month grid. No React dependency. */
 
-import { daysSinceMonday, formatDate, weekHeader } from '../../ui/date-values';
+import { i18n } from '../../i18n';
+import { daysSinceMonday, formatDate, formatYearMonth, weekHeader } from '../../ui/date-values';
 
 export interface CalendarDay {
   date: Date;
@@ -75,7 +76,13 @@ export function toDateRangeIso(year: number, month: number): { start: string; en
 }
 
 export function formatMonthLabel(year: number, month: number): string {
-  return `${year}年${month + 1}月`;
+  return formatYearMonth(new Date(year, month, 1));
+}
+
+export function calendarDayName(date: string, isToday: boolean, count: number): string {
+  const today = isToday ? i18n.t('events:dayLabelToday') : '';
+  const events = count > 0 ? i18n.t('events:dayLabelEvents', { count }) : '';
+  return `${date}${today}${events}`;
 }
 
 export function formatTime(iso: string): string {
@@ -92,7 +99,7 @@ export function formatDateRange(startIso: string, endIso: string, allDay: boolea
   const end = new Date(endIso);
   const startDate = formatDate(start, options);
   const sameDay = toDateIso(start) === toDateIso(end);
-  if (allDay) return sameDay ? `${startDate} 全天` : `${startDate} – ${formatDate(end, options)} 全天`;
+  if (allDay) return i18n.t('events:allDayRange', { range: sameDay ? startDate : `${startDate} – ${formatDate(end, options)}` });
   return sameDay
     ? `${startDate} ${formatTime(startIso)} – ${formatTime(endIso)}`
     : `${startDate} ${formatTime(startIso)} – ${formatDate(end, options)} ${formatTime(endIso)}`;
@@ -105,7 +112,7 @@ export function formatDateRange(startIso: string, endIso: string, allDay: boolea
  */
 export function formatTimeRange(startIso: string, endIso: string, allDay: boolean): string {
   const sameDay = toDateIso(new Date(startIso)) === toDateIso(new Date(endIso));
-  if (allDay) return sameDay ? '全天' : formatDateRange(startIso, endIso, true);
+  if (allDay) return sameDay ? i18n.t('events:allDay') : formatDateRange(startIso, endIso, true);
   return sameDay ? `${formatTime(startIso)}–${formatTime(endIso)}` : formatDateRange(startIso, endIso, false);
 }
 

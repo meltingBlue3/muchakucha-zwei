@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import Check from 'lucide-react-native/icons/check';
@@ -74,6 +75,7 @@ function TaskMark({ attention, done = false, busy = false }: { attention: boolea
  * marker it came from, with its retry.
  */
 function TimelineTask({ task, top, placement, completion, onOpen }: { task: TaskResponseDto; top: number; placement: ViewStyle; completion: TaskCardCompletionProps; onOpen(): void }) {
+  const { t } = useTranslation(['tasks', 'common']);
   const [pressed, setPressed] = useState(false);
   const fine = useDesktopDensity();
   const { onToggleComplete, statusChanging, statusError, onRetryStatus } = completion;
@@ -98,7 +100,7 @@ function TimelineTask({ task, top, placement, completion, onOpen }: { task: Task
         <Pressable
           {...insetFocusRing}
           accessibilityRole="button"
-          accessibilityLabel={`任务：${task.title}`}
+          accessibilityLabel={t('tasks:card.title', { title: task.title })}
           onPress={onOpen}
           onPressIn={() => setPressed(true)}
           onPressOut={() => setPressed(false)}
@@ -114,11 +116,11 @@ function TimelineTask({ task, top, placement, completion, onOpen }: { task: Task
           {onRetryStatus ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`重试：${task.title}`}
+              accessibilityLabel={t('tasks:card.retry', { title: task.title })}
               onPress={onRetryStatus}
               style={({ pressed: down }) => ({ minHeight: fine ? MARKER_HEIGHT : theme.controlSizes.touchTarget, justifyContent: 'center', opacity: down ? 0.7 : 1 })}
             >
-              <Text variant="meta" color="link" style={{ textDecorationLine: 'underline' }}>重试</Text>
+              <Text variant="meta" color="link" style={{ textDecorationLine: 'underline' }}>{t('common:retry')}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -136,6 +138,7 @@ function PaneTitle({ children, link }: { children: string; link?: { label: strin
 }
 
 function TimelineEvent({ event, top, height, left, right, onPress }: { event: EventResponseDto; top: number; height: number; left: string; right: string; onPress(): void }) {
+  const { t } = useTranslation('events');
   const color = eventColor(event);
   const start = toTimeValue(new Date(event.startTime));
   // Under 45 minutes a block has room for one line, so the title shares it with the time.
@@ -143,7 +146,7 @@ function TimelineEvent({ event, top, height, left, right, onPress }: { event: Ev
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`日程：${event.title}`}
+      accessibilityLabel={t('card', { title: event.title })}
       onPress={onPress}
       style={({ pressed }) => ({ position: 'absolute', top, height, left: left as `${number}%`, right: right as `${number}%`, overflow: 'hidden', justifyContent: short ? 'center' : 'flex-start', paddingHorizontal: theme.spacing[2], paddingVertical: short ? 0 : theme.spacing[2], gap: theme.spacing[1] / 2, borderRadius: theme.borderRadii.sm, borderLeftWidth: theme.borderWidths.focus + 1, borderLeftColor: color, backgroundColor: labelTint(color), opacity: pressed ? 0.8 : 1 })}
     >
@@ -191,6 +194,7 @@ function SideColumn({ visible, width, children }: { visible: boolean; width: num
 }
 
 function UpcomingDays({ date, events, tasks, onOpenEvent, onOpenTask }: { date: string; events: EventResponseDto[]; tasks: TaskResponseDto[]; onOpenEvent(event: EventResponseDto): void; onOpenTask(task: TaskResponseDto): void }) {
+  const { t } = useTranslation(['today', 'events']);
   const days = Array.from({ length: 7 }, (_, index) => { const day = parseDateValue(date); day.setDate(day.getDate() + index + 1); return day; });
   const blocks = days.flatMap(day => {
     const iso = toDateIso(day);
@@ -198,14 +202,14 @@ function UpcomingDays({ date, events, tasks, onOpenEvent, onOpenTask }: { date: 
     const dayTasks = tasks.filter(task => task.dueDate && toDateIso(new Date(task.dueDate)) === iso).sort((a, b) => a.dueDate!.localeCompare(b.dueDate!));
     return dayEvents.length + dayTasks.length ? [{ day, iso, dayEvents, dayTasks }] : [];
   });
-  if (!blocks.length) return <Text variant="bodySm">接下来 7 天没有安排。</Text>;
+  if (!blocks.length) return <Text variant="bodySm">{t('noUpcoming')}</Text>;
   return (
     <Stack gap={3}>
       {blocks.map(({ day, iso, dayEvents, dayTasks }) => (
         <View key={iso}>
           <Text variant="meta" style={{ marginBottom: theme.spacing[1] }}>{`${formatDate(day)} ${formatWeekday(day)}`}</Text>
-          {dayEvents.map(event => <AgendaRow key={event.id} label={`接下来日程：${event.title}`} time={event.allDay ? '全天' : toTimeValue(new Date(event.startTime))} title={event.title} onPress={() => onOpenEvent(event)} mark={<View style={{ width: theme.borderWidths.focus + 1, height: circleSize + theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: eventColor(event) }} />} />)}
-          {dayTasks.map(task => { const due = minutes(task.dueDate!); return <AgendaRow key={task.id} label={`接下来任务：${task.title}`} time={due === 0 ? '' : clock(due)} title={task.title} onPress={() => onOpenTask(task)} mark={<TaskMark attention={false} />} />; })}
+          {dayEvents.map(event => <AgendaRow key={event.id} label={t('upcomingEvent', { title: event.title })} time={event.allDay ? t('events:allDay') : toTimeValue(new Date(event.startTime))} title={event.title} onPress={() => onOpenEvent(event)} mark={<View style={{ width: theme.borderWidths.focus + 1, height: circleSize + theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: eventColor(event) }} />} />)}
+          {dayTasks.map(task => { const due = minutes(task.dueDate!); return <AgendaRow key={task.id} label={t('upcomingTask', { title: task.title })} time={due === 0 ? '' : clock(due)} title={task.title} onPress={() => onOpenTask(task)} mark={<TaskMark attention={false} />} />; })}
         </View>
       ))}
     </Stack>
@@ -224,6 +228,7 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
   onOpenEvent(event: EventResponseDto): void; onOpenTask(task: TaskResponseDto): void; onSelectDate(date: string): void;
 }) {
   const scroll = useRef<ScrollView>(null);
+  const { t } = useTranslation(['today', 'tasks', 'events']);
   const initialMinute = useRef(nowMinutes).current;
   const compact = useWindowDimensions().width < theme.layout.railBreakpoint;
   const [rowWidth, setRowWidth] = useState(0);
@@ -250,22 +255,22 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
   const next = <Stack gap={5}>
     <CalendarGrid compact markedDates={markedDates} value={date} onSelect={onSelectDate} />
     <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4] }}>
-      <Text accessibilityRole="header" aria-level={2} variant="label" style={{ marginBottom: theme.spacing[2] }}>未来 7 天</Text>
+      <Text accessibilityRole="header" aria-level={2} variant="label" style={{ marginBottom: theme.spacing[2] }}>{t('nextWeek')}</Text>
       <UpcomingDays date={date} events={upcomingEvents} tasks={upcoming} onOpenEvent={onOpenEvent} onOpenTask={task => { setOpenedFromUpcoming(true); onOpenTask(task); }} />
     </View>
   </Stack>;
-  const groups = [{ title: '逾期', tasks: overdue, tone: 'accent' as const }, { title: '今天', tasks: dateOnly, tone: 'muted' as const }, { title: '待安排', tasks: unscheduled, tone: 'muted' as const }].filter(group => group.tasks.length > 0);
+  const groups = [{ key: 'overdue' as const, tasks: overdue, tone: 'accent' as const }, { key: 'today' as const, tasks: dateOnly, tone: 'muted' as const }, { key: 'undated' as const, tasks: unscheduled, tone: 'muted' as const }].filter(group => group.tasks.length > 0);
   const columnContent = { paddingHorizontal: theme.spacing[5], paddingBottom: theme.spacing[4], gap: theme.spacing[5] } as const;
   const todoContent = { paddingHorizontal: theme.layout.desktopColumnInset, paddingBottom: theme.spacing[4], gap: theme.spacing[3] } as const;
   return <View onLayout={event => setRowWidth(event.nativeEvent.layout.width)} style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}>
     <View style={{ flex: 1, minWidth: 0 }}>
-      <PaneTitle link={{ label: '在日历中查看', onPress: onOpenCalendar }}>时间安排</PaneTitle>
+      <PaneTitle link={{ label: t('openCalendar'), onPress: onOpenCalendar }}>{t('schedule')}</PaneTitle>
       {allDay.length ? <View style={{ flexDirection: 'row', paddingHorizontal: theme.spacing[3], marginBottom: theme.spacing[1] }}>
-        <Text variant="time" style={{ width: theme.layout.timeColumn, paddingTop: theme.spacing[2] }}>全天</Text>
+        <Text variant="time" style={{ width: theme.layout.timeColumn, paddingTop: theme.spacing[2] }}>{t('events:allDay')}</Text>
         <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>{allDay.map(event => {
           const last = new Date(new Date(event.endTime).getTime() - 1);
           const range = toDateIso(last) > toDateIso(new Date(event.startTime)) ? `${formatDate(new Date(event.startTime))} – ${formatDate(last)}` : '';
-          return <Pressable key={event.id} accessibilityRole="button" accessibilityLabel={`日程：${event.title}`} onPress={() => onOpenEvent(event)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[1] + 2, borderRadius: theme.borderRadii.sm, borderLeftWidth: theme.borderWidths.focus + 1, borderLeftColor: eventColor(event), backgroundColor: labelTint(eventColor(event)), opacity: pressed ? 0.8 : 1 })}><Text variant="bodySm" numberOfLines={1} color="ink" style={{ flexShrink: 1 }}>{event.title}</Text>{range ? <Text variant="time" numberOfLines={1}>{range}</Text> : null}</Pressable>;
+          return <Pressable key={event.id} accessibilityRole="button" accessibilityLabel={t('events:card', { title: event.title })} onPress={() => onOpenEvent(event)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[1] + 2, borderRadius: theme.borderRadii.sm, borderLeftWidth: theme.borderWidths.focus + 1, borderLeftColor: eventColor(event), backgroundColor: labelTint(eventColor(event)), opacity: pressed ? 0.8 : 1 })}><Text variant="bodySm" numberOfLines={1} color="ink" style={{ flexShrink: 1 }}>{event.title}</Text>{range ? <Text variant="time" numberOfLines={1}>{range}</Text> : null}</Pressable>;
         })}</Stack>
       </View> : null}
       <ScrollView ref={scroll} testID="today-timeline" style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: theme.spacing[3], paddingTop: theme.spacing[3], paddingBottom: theme.spacing[4] }}>
@@ -293,15 +298,15 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
       </ScrollView>
     </View>
     <SideColumn visible={showTodo} width={todoShare}>
-      <PaneTitle link={{ label: '全部任务', onPress: onOpenTasks }}>待办</PaneTitle>
+      <PaneTitle link={{ label: t('allTasks'), onPress: onOpenTasks }}>{t('todo')}</PaneTitle>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={todoContent}>
-        {groups.length ? groups.map(group => <View key={group.title}><GroupLabel flush tone={group.tone}>{`${group.title}（${group.tasks.length}）`}</GroupLabel><ListGroup flush>{group.tasks.map(renderTask)}</ListGroup></View>) : <Text variant="bodySm">今天没有待办。</Text>}
-        <Button label={groups.length ? '再添一项待办' : '添加待办'} tone="secondary" size="compact" style={{ alignSelf: 'flex-start', marginTop: theme.spacing[1] }} onPress={onCreateTask} />
-        {compact ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], gap: theme.spacing[4] }}><Heading variant="section">接下来</Heading>{next}</View> : null}
+        {groups.length ? groups.map(group => <View key={group.key}><GroupLabel flush tone={group.tone}>{t(`tasks:groups.${group.key}`, { count: group.tasks.length })}</GroupLabel><ListGroup flush>{group.tasks.map(renderTask)}</ListGroup></View>) : <Text variant="bodySm">{t('noTasks')}</Text>}
+        <Button label={groups.length ? t('addAnotherTask') : t('addTask')} tone="secondary" size="compact" style={{ alignSelf: 'flex-start', marginTop: theme.spacing[1] }} onPress={onCreateTask} />
+        {compact ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], gap: theme.spacing[4] }}><Heading variant="section">{t('upcoming')}</Heading>{next}</View> : null}
       </ScrollView>
     </SideColumn>
     {!compact ? <SideColumn visible={showUpcoming} width={theme.layout.todayUpcomingWidth}>
-      <PaneTitle>接下来</PaneTitle>
+      <PaneTitle>{t('upcoming')}</PaneTitle>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={columnContent}>{next}</ScrollView>
     </SideColumn> : null}
   </View>;

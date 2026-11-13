@@ -93,6 +93,33 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
+test('Japanese Today, calendar and event forms use localized names and validation', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'ja-JP', timezoneId: 'Asia/Tokyo', viewport: { width: 320, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await setup(page);
+    await page.goto(`${base}/today`);
+    await expect(page.getByText('予定1件 · タスク0件', { exact: false })).toBeVisible();
+    await page.getByRole('button', { name: `予定：${initialEvent.title}`, exact: true }).click();
+    const detail = page.getByRole('dialog', { name: '予定の詳細', exact: true });
+    await detail.getByRole('button', { name: '予定を編集', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: '予定を編集', exact: true });
+    await editor.getByRole('textbox', { name: '予定のタイトル', exact: true }).fill('');
+    await editor.getByRole('button', { name: '保存', exact: true }).click();
+    await expect(editor.getByText('予定のタイトルを入力してください。')).toBeVisible();
+    const panel = await editor.getByTestId('app-dialog-panel').boundingBox();
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(320);
+
+    await page.goto(`${base}/events`);
+    await expect(page.getByRole('button', { name: '2030年6月15日、今日、予定1件', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '月表示に切り替え', exact: true }).click();
+    await expect(page.getByRole('button', { name: '次の月', exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
 test('calendar filters have visible summaries and Today restores the current month', async ({ page }) => {
   await setup(page);
   await page.goto(`${base}/events`);

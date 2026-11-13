@@ -28,14 +28,14 @@ function currentTimeZone(fallback: string): string {
 }
 
 export default function EventDetailRoute() {
+  const { t } = useTranslation(['events', 'tasks', 'auth', 'navigation']);
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
-  useTranslation('recurrence');
   const desktop = useDesktop();
   const [event, setEvent] = useState<EventResponseDto | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'detailLoadError' | null>(null);
 
   const fetchEvent = useCallback(async () => {
     if (id === undefined || eventId === undefined) return;
@@ -43,13 +43,13 @@ export default function EventDetailRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期，请重新登录。');
+        setError('auth:errors.sessionExpired');
         return;
       }
       const result = await sessionApiClient.getEvent(token, id, eventId);
       setEvent(result);
     } catch {
-      setError('无法加载日程，请重试或确认它是否已被删除。');
+      setError('detailLoadError');
     } finally {
       setLoading(false);
     }
@@ -70,9 +70,9 @@ export default function EventDetailRoute() {
   }, [router, id, eventId]);
 
   if (loading || event === null || error !== null) {
-    return <EventWindow title="日程详情"><Stack gap={4}>
-      {loading ? <LoadingState label="正在加载日程" /> : <>
-        <LoadError message={error ?? '日程未找到或已被删除。'} onRetry={() => void fetchEvent()} />
+    return <EventWindow title={t('detail')}><Stack gap={4}>
+      {loading ? <LoadingState label={t('loading')} /> : <>
+        <LoadError message={t(error ?? 'notFound')} onRetry={() => void fetchEvent()} />
       </>}
     </Stack></EventWindow>;
   }
@@ -86,27 +86,27 @@ export default function EventDetailRoute() {
 
   const when = formatDateRange(event.startTime, event.endTime, event.allDay, { weekday: true });
   return (
-    <EventWindow event={event} title="日程详情" headerActions={<DetailEditButton accessibilityLabel="编辑日程" onPress={handleEdit} />}>
+    <EventWindow event={event} title={t('detail')} headerActions={<DetailEditButton accessibilityLabel={t('edit')} onPress={handleEdit} />}>
       <Stack gap={5}>
         <Stack gap={2}>
           <Heading level={2}>{event.title}</Heading>
-          {cancelled ? <Text variant="label" color="inkMuted">已取消</Text> : null}
+          {cancelled ? <Text variant="label" color="inkMuted">{t('tasks:status.cancelled')}</Text> : null}
         </Stack>
         <DetailPanel>
-          <DetailField label="时间" value={when} />
+          <DetailField label={t('time')} value={when} />
           {!cancelled ? (
             <ReminderDetailField kind="event" householdId={event.householdId} anchor={event.startTime} dateOnly={event.allDay} own choice={event.myReminder ?? DEFAULT_REMINDER} />
           ) : null}
-          {event.location ? <DetailField label="地点" value={event.location} /> : null}
-          {recurrenceSummary ? <DetailField label="重复安排" value={recurrenceSummary.summary} notes={[
+          {event.location ? <DetailField label={t('location')} value={event.location} /> : null}
+          {recurrenceSummary ? <DetailField label={t('navigation:pages.recurrence-rules')} value={recurrenceSummary.summary} notes={[
             recurrenceSummary.clampNote,
             recurrenceSummary.timeZoneNote,
-            cancelled ? '这次重复已取消。' : '当前查看这一次日程，编辑时可选择影响范围。',
+            cancelled ? t('tasks:cancelledRecurrence') : t('occurrenceDetail'),
           ]} /> : null}
         </DetailPanel>
-        {event.description ? <Stack gap={desktop ? 1 : 2} style={desktop ? { borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[4] } : undefined}><Text variant={desktop ? 'meta' : 'label'} color={desktop ? 'inkFaint' : 'inkMuted'}>描述</Text><Text {...(desktop ? { variant: 'bodySm' as const, color: 'ink' as const } : {})}>{event.description}</Text></Stack> : null}
+        {event.description ? <Stack gap={desktop ? 1 : 2} style={desktop ? { borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[4] } : undefined}><Text variant={desktop ? 'meta' : 'label'} color={desktop ? 'inkFaint' : 'inkMuted'}>{t('tasks:description')}</Text><Text {...(desktop ? { variant: 'bodySm' as const, color: 'ink' as const } : {})}>{event.description}</Text></Stack> : null}
         {(event.labels ?? []).length ? <Stack gap={2}>
-          <Text variant="label" color="inkMuted">标签</Text>
+          <Text variant="label" color="inkMuted">{t('labels')}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>{event.labels.map(label => <LabelChip key={label.id} label={label} />)}</View>
         </Stack> : null}
       </Stack>
