@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { announceAlarmLanguage } from './alarm-language';
 
 // SecureStore keys allow only letters, digits, ".", "-" and "_".
 const STORAGE_KEY = 'muchakucha.language.v1';
@@ -20,5 +21,7 @@ export function writeLanguageChoice(language: string | null): void {
   void (language === null ? SecureStore.deleteItemAsync(STORAGE_KEY) : SecureStore.setItemAsync(STORAGE_KEY, language)).catch(() => undefined);
 }
 
-/** Native text takes its glyphs from the system language; there is no page to mark. */
-export function announceLanguage(_tag: string): void {}
+/** The alarm can display text even while JavaScript is stopped. */
+export function announceLanguage(tag: string): void {
+  announceAlarmLanguage(tag);
+}

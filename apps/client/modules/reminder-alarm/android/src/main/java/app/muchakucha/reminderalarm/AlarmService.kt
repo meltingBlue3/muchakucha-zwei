@@ -172,8 +172,6 @@ class AlarmService : Service() {
     private const val ACTION_RING = "app.muchakucha.reminderalarm.RING"
     const val ACTION_DISMISS = "app.muchakucha.reminderalarm.DISMISS"
     const val ACTION_SNOOZE = "app.muchakucha.reminderalarm.SNOOZE"
-    const val DISMISS_LABEL = "知道了"
-    const val SNOOZE_LABEL = "10 分钟后再响"
     private const val RING_MILLIS = 5 * 60_000L
     private const val SNOOZE_MILLIS = 10 * 60_000L
     private val VIBRATION = longArrayOf(0, 800, 800)
