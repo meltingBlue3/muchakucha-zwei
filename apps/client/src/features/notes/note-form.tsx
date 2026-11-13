@@ -87,7 +87,7 @@ export function NoteForm({ draftKey, initial, onSubmit, onCancel, submitLabel, i
           onChangeText={(v) => updateField('title', v)}
           placeholder="添加标题"
           placeholderTextColor={activeTheme.colors.inkMuted}
-          style={[desktop && !reading ? inputs.title : titleInputStyle, { paddingHorizontal: activeTheme.spacing[2] }, desktop && reading ? activeTheme.typography.readingTitle : undefined, noteEditorViewport && { flex: 0 }]}
+          style={[desktop && !reading ? inputs.title : titleInputStyle, desktop && reading ? activeTheme.typography.readingTitle : undefined, { flex: 0, paddingHorizontal: activeTheme.spacing[2] }]}
           maxLength={200}
           accessibilityLabel="笔记标题"
           aria-invalid={titleError !== null}

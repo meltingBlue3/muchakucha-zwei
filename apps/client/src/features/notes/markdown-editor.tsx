@@ -1,6 +1,6 @@
 import { readTextSelection } from '../../platform/text-selection/text-selection';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { Platform, ScrollView, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import BookOpen from 'lucide-react-native/icons/book-open';
 import Pencil from 'lucide-react-native/icons/pencil';
@@ -13,6 +13,7 @@ import type { Theme } from '../../ui/theme';
 import { NoteEditorChromeContext, noteEditorViewport } from './note-editor-chrome';
 import { MarkdownBody } from './markdown-body';
 import { useDesktop } from '../../ui/use-desktop';
+import { insetFocusRing } from '../../platform/focus-ring/focus-ring';
 import { headingLevel, insertLink, insertTable, safeLink, setHeading, toggleBold, type MarkdownEdit, type Selection } from './markdown';
 
 export function MarkdownEditor({ value, onChange, disabled }: { value: string; onChange(value: string): void; disabled: boolean }) {
@@ -20,7 +21,7 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
   const desktop = useDesktop();
   const input = useRef<TextInput>(null);
   const selection = useRef<Selection>({ start: 0, end: 0 });
-  const [cursor, setCursor] = useState<Selection | undefined>(() => noteEditorViewport ? selection.current : undefined);
+  const [cursor, setCursor] = useState<Selection | undefined>(() => Platform.OS === 'android' ? selection.current : undefined);
   const [preview, setPreview] = useState(false);
   const [panel, setPanel] = useState<'heading' | 'link' | 'table' | null>(null);
   const [label, setLabel] = useState('');
@@ -68,7 +69,7 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
       </Stack>,
     } : null,
     // A phone spreads the buttons across the keyboard bar for thumbs; a wide screen keeps them together at the start of the text column.
-    footer: preview ? null : <View accessibilityRole="toolbar" accessibilityLabel="笔记格式" style={desktop ? { flexDirection: 'row', gap: theme.spacing[1], width: '100%', maxWidth: theme.layout.readingWidth, alignSelf: 'center' } : { flexDirection: 'row', justifyContent: 'space-around', gap: theme.spacing[1] }}>
+    footer: preview ? null : <View accessibilityRole="toolbar" accessibilityLabel="笔记格式" style={{ flexDirection: 'row', justifyContent: desktop ? 'flex-start' : 'space-around', gap: theme.spacing[1] }}>
       <IconButton {...toolbarAppearance} label="标题格式" disabled={disabled} icon={<Heading size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => { setError(''); setPanel('heading'); }} />
       <IconButton {...toolbarAppearance} label="粗体" disabled={disabled} icon={<Bold size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => apply(toggleBold(value, selection.current))} />
       <IconButton {...toolbarAppearance} label="链接" disabled={disabled} icon={<Link size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={() => { setLabel(value.slice(selection.current.start, selection.current.end)); setUrl(''); setError(''); setPanel('link'); }} />
@@ -85,16 +86,26 @@ export function MarkdownEditor({ value, onChange, disabled }: { value: string; o
   }), [preview, panel, value, disabled, label, url, columns, rows, error, theme, desktop, apply, closePanel, restore]);
   useEffect(() => { setChrome(chrome); }, [setChrome, chrome]);
   useEffect(() => () => setChrome(null), [setChrome]);
-  const renderedMarkdown = preview ? <MarkdownBody source={value} /> : null;
   return <Stack gap={2} style={noteEditorViewport}>
-    {preview ? (noteEditorViewport ? <ScrollView>{renderedMarkdown}</ScrollView> : renderedMarkdown) : <TextInput
+    {preview ? <ScrollView {...insetFocusRing} tabIndex={0} style={noteEditorViewport}><MarkdownBody source={value} /></ScrollView> : <TextInput
       ref={input} value={value} editable={!disabled} multiline accessibilityLabel="笔记内容"
       placeholder="写下内容，或用下方按钮添加格式…" placeholderTextColor={theme.colors.inkMuted}
       selection={cursor}
       onSelectionChange={event => { selection.current = event.nativeEvent.selection; setCursor(undefined); }}
       onBlur={() => { selection.current = readTextSelection(input.current) ?? selection.current; }}
       onChangeText={onChange}
-      style={[noteEditorViewport ?? { minHeight: theme.controlSizes.field * (desktop ? 8 : 4) }, { color: theme.colors.ink, paddingVertical: theme.spacing[3], paddingHorizontal: theme.spacing[2], fontFamily: theme.fontFamilies.regular, fontSize: desktop ? theme.typography.readingBody.fontSize : theme.typography.body.fontSize, lineHeight: desktop ? theme.typography.readingBody.lineHeight : theme.typography.body.lineHeight, textAlignVertical: 'top' }]}
+      style={[noteEditorViewport, {
+        color: theme.colors.ink,
+        paddingVertical: theme.spacing[3],
+        paddingHorizontal: theme.spacing[2],
+        fontFamily: theme.fontFamilies.regular,
+        fontSize: desktop ? theme.typography.readingBody.fontSize : theme.typography.body.fontSize,
+        lineHeight: desktop ? theme.typography.readingBody.lineHeight : theme.typography.body.lineHeight,
+        textAlignVertical: 'top',
+      }, Platform.OS === 'web' ? {
+        outlineStyle: 'solid',
+        outlineWidth: 0,
+      } : undefined]}
     />}
   </Stack>;
 }

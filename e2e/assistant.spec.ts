@@ -463,7 +463,10 @@ for (const width of [320, 390, 1440]) {
     else await providers.getByRole('button', { name: '返回', exact: true }).click();
     // The first message is typed on the assistant home; the conversation is created for it and sends it.
     const home = page.getByRole('main', { name: '家庭助手', exact: true });
-    await home.getByLabel('开始新对话', { exact: true }).fill('这周出门前需要准备什么？');
+    const firstMessage = home.getByLabel('开始新对话', { exact: true });
+    await firstMessage.fill('这周出门前需要准备什么？');
+    await expect(firstMessage).toHaveCSS('outline-style', 'solid');
+    await expect(firstMessage).toHaveCSS('outline-width', '0px');
     await home.getByRole('button', { name: '发送', exact: true }).click();
     await expect(page.getByRole('main', { name: '助手对话', exact: true })).toBeVisible();
     const answer = page.getByText('结合任务与《家庭旅行清单》，建议周六出发前准备野餐垫、水和水果。', { exact: true });
@@ -473,7 +476,10 @@ for (const width of [320, 390, 1440]) {
     await expect(answer).toBeVisible();
     await expect(page).toHaveURL(conversationUrl);
     const screen = page.getByRole('main', { name: '助手对话', exact: true });
-    await screen.getByLabel('发送给助手', { exact: true }).fill('继续整理周日的安排');
+    const reply = screen.getByLabel('发送给助手', { exact: true });
+    await reply.fill('继续整理周日的安排');
+    await expect(reply).toHaveCSS('outline-style', 'solid');
+    await expect(reply).toHaveCSS('outline-width', '0px');
     await screen.getByRole('button', { name: '发送', exact: true }).scrollIntoViewIfNeeded();
     await expect(screen.getByRole('button', { name: '发送', exact: true })).toBeInViewport();
     await expect(screen.getByRole('button', { name: '发送', exact: true })).toBeEnabled();

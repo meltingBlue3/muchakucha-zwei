@@ -103,8 +103,20 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
         {/* Round and filled, in ink, so it reads as the way out. */}
         <Pressable accessibilityRole="button" accessibilityLabel={`关闭${title}`} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ width: theme.layout.desktopControl, height: theme.layout.desktopControl, marginLeft: theme.spacing[1], borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceSelected : hovered ? theme.colors.surfaceSelected : theme.colors.surfaceMuted, ...layoutTransition('background-color') })}><X size={theme.controlSizes.icon - 4} color={theme.colors.ink} strokeWidth={theme.focus.width} /></Pressable>
       </Inline>
-      {reading && footer ? <View style={{ padding: theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>{footer}</View> : null}
-      <ReadingPane.Provider value={reading}><SheetActionSlot.Provider value={setSheetAction}><ScrollView tabIndex={0} style={{ flex: 1, minHeight: 0 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingVertical: theme.spacing[5], paddingHorizontal: theme.spacing[6], ...(reading ? { width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[6] * 2, alignSelf: 'center' } : {}) }}>{children}</ScrollView></SheetActionSlot.Provider></ReadingPane.Provider>
+      {reading && footer ? <View style={{ paddingVertical: theme.spacing[2], paddingHorizontal: fillContent ? theme.spacing[6] : theme.spacing[2], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>{footer}</View> : null}
+      <ReadingPane.Provider value={reading}><SheetActionSlot.Provider value={setSheetAction}>
+        <ScrollView
+          tabIndex={fillContent ? -1 : 0}
+          style={{ flex: 1, minHeight: 0 }}
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled={!fillContent}
+          contentContainerStyle={[
+            { paddingVertical: theme.spacing[5], paddingHorizontal: theme.spacing[6] },
+            fillContent ? { flex: 1 } : undefined,
+            reading && !fillContent ? { width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[6] * 2, alignSelf: 'center' } : undefined,
+          ]}
+        >{children}</ScrollView>
+      </SheetActionSlot.Provider></ReadingPane.Provider>
       {!reading && (footer || sheetAction) ? <View style={{ padding: theme.spacing[4], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>{footer}{sheetAction ? <Inline style={{ justifyContent: 'flex-end' }}><Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, paddingLeft: theme.spacing[2], fontFamily: theme.fontFamilies.numeric }}>{`${commandKey} + Enter ${sheetAction.label}`}</Text><Button label="取消" tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></Inline> : null}</View> : null}
     </View></View>;
   }
@@ -130,7 +142,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
             ? { width: '100%', maxHeight: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, padding: theme.spacing[5], paddingBottom: insets.bottom + theme.spacing[5], gap: theme.spacing[4] }
             : sheet
             ? { flex: 1, width: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, paddingTop: theme.spacing[2], paddingHorizontal: theme.spacing[2], paddingBottom: insets.bottom + theme.spacing[2], gap: theme.spacing[2] }
-            : { width: '100%', maxWidth: size === 'editor' ? theme.layout.editorDialogMaxWidth : theme.layout.dialogMaxWidth, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, padding: theme.spacing[6], gap: theme.spacing[4], ...(Platform.OS === 'web' ? { boxShadow: theme.shadow.raised } : {}) }}>
+            : { width: '100%', maxWidth: size === 'editor' ? theme.layout.editorDialogMaxWidth : theme.layout.dialogMaxWidth, height: fillContent ? '100%' : undefined, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, padding: theme.spacing[6], gap: theme.spacing[4], ...(Platform.OS === 'web' ? { boxShadow: theme.shadow.raised } : {}) }}>
             {sheet ? (
               <Inline gap={1} style={{ paddingRight: theme.spacing[2] }}>
                 {closeButton}
@@ -147,7 +159,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
             )}
             <SheetActionSlot.Provider value={sheet ? setSheetAction : null}>
               <ScrollView
-                {...(Platform.OS === 'web' && size === 'editor' ? { tabIndex: 0 } : {})}
+                {...(Platform.OS === 'web' && size === 'editor' ? { tabIndex: fillContent ? -1 : 0 } : {})}
                 keyboardDismissMode={scrollKeyboardDismissMode}
                 keyboardShouldPersistTaps="handled"
                 scrollEnabled={!fillContent}

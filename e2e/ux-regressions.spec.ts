@@ -329,6 +329,36 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
+for (const width of [390, 800, 1700]) {
+  test(`Markdown note editor fills the writing area at ${width}px`, async ({ page }) => {
+    await setup(page);
+    await page.setViewportSize({ width, height: 720 });
+    await page.goto(`/households/${a}/notes/new`);
+    const input = page.getByRole('textbox', { name: '笔记内容' });
+    const editor = page.getByRole(width >= 1024 ? 'region' : 'dialog', { name: '创建笔记', exact: true });
+    const panel = editor.getByTestId('app-dialog-panel');
+    const source = '给家人的笔记\n'.repeat(60);
+    await editor.getByRole('textbox', { name: '笔记标题' }).press('Tab');
+    await expect(input).toBeFocused();
+    await input.fill(source);
+    await expect.soft(input).toHaveCSS('outline-width', '0px', { timeout: 1500 });
+    await expect.soft(input).toHaveCSS('outline-style', 'solid', { timeout: 1500 });
+
+    const smaller = (await input.boundingBox())!;
+    await page.setViewportSize({ width, height: 960 });
+    await expect.poll(async () => (await input.boundingBox())!.height).toBeGreaterThan(smaller.height + 200);
+    const body = (await input.boundingBox())!;
+    const frame = (await panel.boundingBox())!;
+    const nextControl = width === 390 ? await editor.getByRole('toolbar').boundingBox()
+      : width === 800 ? await editor.getByRole('button', { name: '取消', exact: true }).boundingBox() : null;
+    expect(body.width).toBeGreaterThan(frame.width * 0.85);
+    expect((nextControl?.y ?? frame.y + frame.height) - (body.y + body.height)).toBeLessThan(48);
+    expect(await input.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+    await expect(input).toHaveValue(source);
+    await expect(input).toHaveCSS('border-left-width', '0px');
+  });
+}
+
 for (const width of [320, 390, 1440]) {
   test(`Markdown note editor preserves source and fits ${width}px`, async ({ page }) => {
     const requests = await setup(page);
