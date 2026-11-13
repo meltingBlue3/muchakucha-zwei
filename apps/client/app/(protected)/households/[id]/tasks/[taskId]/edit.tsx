@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../../src/i18n';
 import { notifyContentChanged } from '../../../../../../src/features/content/content-changes';
 import { hasRecurrenceFieldErrors } from '../../../../../../src/features/recurrence/recurrence-options';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
@@ -35,8 +36,6 @@ import type { CreateTaskDto } from '@muchakucha/api-client';
 type PendingSeriesAction =
   { kind: 'save'; data: CreateTaskDto; mode: SeriesScopeMode };
 
-const SERIES_FAILURE = '没有完成。这个重复安排没有发生任何改变，请重试。';
-const SERIES_MISSING = '这一次重复已经被其他人删除了。返回后可以看到最新的安排。';
 
 function taskSeriesUpdate(data: CreateTaskDto, labelIds: string[]): Omit<UpdateSeriesDto, 'expectedUpdatedAt' | 'expectedRuleUpdatedAt'> {
   const status = data.status;
@@ -60,6 +59,7 @@ function taskSeriesUpdate(data: CreateTaskDto, labelIds: string[]): Omit<UpdateS
 }
 
 export default function EditTaskRoute() {
+  const { t } = useTranslation(['tasks', 'common', 'auth', 'households', 'reminders']);
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId: string }>();
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:tasks:${taskId}:`;
@@ -77,13 +77,13 @@ export default function EditTaskRoute() {
   const [task, setTask] = useState<TaskResponseDto | null>(null);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<'auth:errors.sessionExpired' | 'editLoadError' | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<Awaited<ReturnType<typeof saveOwnReminder>> | 'auth:errors.sessionExpired' | 'assigneeRemoved' | 'editDenied' | 'missingOnSave' | 'saveRetry' | 'saveConnection'>(null);
   const [selectedLabelIds, setSelectedLabelIds] = useWorkspaceState<string[]>(draftPrefix + 'labels', []);
   const [pendingSeriesAction, setPendingSeriesAction] = useState<PendingSeriesAction | null>(null);
   const [seriesSubmitting, setSeriesSubmitting] = useState<SeriesScope | null>(null);
-  const [seriesError, setSeriesError] = useState<string | null>(null);
+  const [seriesError, setSeriesError] = useState<'auth:errors.sessionExpired' | 'seriesMissing' | 'seriesFailure' | null>(null);
 
   const householdId = id ?? currentHouseholdId;
   const currentHousehold = households.find((h) => h.id === (id ?? currentHouseholdId)) ?? null;
@@ -98,7 +98,7 @@ export default function EditTaskRoute() {
     const token = await sessionTransport.getAccessToken();
     if (token === null) throw new Error('Session expired');
     const [latest, household] = await Promise.all([sessionApiClient.getTask(token, id!, taskId!), sessionApiClient.getHousehold(token, id!)]);
-    return { ...latest, assigneeNames: latest.assigneeIds.map(userId => household.members.find(member => member.userId === userId)?.displayName ?? '已退出的成员') };
+    return { ...latest, assigneeNames: latest.assigneeIds.map(userId => household.members.find(member => member.userId === userId)?.displayName ?? t('formerMember')) };
   }, setTask);
 
   const fetchTask = useCallback(async (showLoading = true) => {
@@ -107,7 +107,7 @@ export default function EditTaskRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        if (showLoading) setLoadError('登录已过期，请重新登录。');
+        if (showLoading) setLoadError('auth:errors.sessionExpired');
         return;
       }
       const [taskResult, householdResult] = await Promise.all([
@@ -120,7 +120,7 @@ export default function EditTaskRoute() {
       workspace.seed(draftPrefix + 'labels', (taskResult.labels ?? []).map((l) => l.id));
     } catch {
       // Keep the current authoritative snapshot when a silent refresh fails.
-      if (showLoading) setLoadError('无法加载任务，请重试或确认它是否已被删除。');
+      if (showLoading) setLoadError('editLoadError');
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -161,7 +161,7 @@ export default function EditTaskRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setSubmitError('登录已过期，请重新登录。');
+        setSubmitError('auth:errors.sessionExpired');
         setSubmitting(false);
         return;
       }
@@ -181,16 +181,16 @@ export default function EditTaskRoute() {
       } else if (error instanceof ApiClientError) {
         const details = (error.body as { error?: { details?: Array<{ field?: string }> } } | undefined)?.error?.details;
         if (details?.some((d) => d.field === 'assigneeIds')) {
-          setSubmitError('存在负责人已不再是该家庭成员，请重新选择负责人。');
+          setSubmitError('assigneeRemoved');
         } else if (error.status === 403) {
-          setSubmitError('你没有权限编辑这个任务。');
+          setSubmitError('editDenied');
         } else if (error.status === 404) {
-          setSubmitError('任务不存在或已被删除。');
+          setSubmitError('missingOnSave');
         } else {
-          setSubmitError('保存失败，请重试。');
+          setSubmitError('saveRetry');
         }
       } else {
-        setSubmitError('保存失败，请检查网络连接后重试。');
+        setSubmitError('saveConnection');
       }
       setSubmitting(false);
     }
@@ -209,7 +209,7 @@ export default function EditTaskRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setSeriesError('登录已过期，请重新登录。');
+        setSeriesError('auth:errors.sessionExpired');
         return;
       }
 
@@ -241,8 +241,8 @@ export default function EditTaskRoute() {
       }
       setSeriesError(
         caught instanceof ApiClientError && caught.status === 404
-          ? SERIES_MISSING
-          : SERIES_FAILURE,
+          ? 'seriesMissing'
+          : 'seriesFailure',
       );
       await fetchTask(false);
     } finally {
@@ -257,7 +257,7 @@ export default function EditTaskRoute() {
 
   if (viewState === 'accessChanged') {
     return (
-      <AppShell accessibilityLabel="家庭访问权已变化">
+      <AppShell accessibilityLabel={t('households:accessChanged')}>
         <AccessChangedPanel
           hasOtherHouseholds={households.length > 0}
           {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
@@ -269,16 +269,16 @@ export default function EditTaskRoute() {
   }
 
   return (
-    <TaskWindow draftPrefix={draftPrefix} size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : "编辑任务"} busy={submitting || seriesSubmitting !== null} onClose={closeEdit} onBackStep={pendingSeriesAction ? closeEdit : undefined} exitAllowed={exitAllowed}>
+    <TaskWindow draftPrefix={draftPrefix} size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : t('edit')} busy={submitting || seriesSubmitting !== null} onClose={closeEdit} onBackStep={pendingSeriesAction ? closeEdit : undefined} exitAllowed={exitAllowed}>
       <Stack gap={4}>
         {pendingSeriesAction ? null : <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />}
 
         {pendingSeriesAction ? <SeriesScopeContent
-          error={seriesError} mode={pendingSeriesAction.mode} onClose={closeEdit}
+          error={seriesError === null ? null : t(seriesError)} mode={pendingSeriesAction.mode} onClose={closeEdit}
           onSelect={scope => void handleSeriesSelect(scope)} submitting={seriesSubmitting}
-        /> : loading ? <LoadingState label="正在加载任务" /> : task !== null ? (
+        /> : loading ? <LoadingState label={t('loading')} /> : task !== null ? (
           <Stack gap={4}>
-            {submitError !== null && <Banner>{submitError}</Banner>}
+            {submitError !== null && <Banner>{t(submitError)}</Banner>}
             {conflict.panel}
             <TaskForm
             draftKey={draftPrefix + 'form'}
@@ -286,7 +286,7 @@ export default function EditTaskRoute() {
               members={memberOptions}
               onSubmit={handleSubmit}
               onCancel={closeEdit}
-              submitLabel="保存"
+              submitLabel={t('common:save')}
               isSubmitting={submitting}
               householdId={householdId}
               selectedLabelIds={selectedLabelIds}
@@ -295,7 +295,7 @@ export default function EditTaskRoute() {
           </Stack>
         ) : (
           <Stack gap={3}>
-            <LoadError message={loadError ?? '任务未找到或已被删除。'} onRetry={() => void fetchTask()} />
+            <LoadError message={t(loadError ?? 'notFound')} onRetry={() => void fetchTask()} />
           </Stack>
         )}
       </Stack>

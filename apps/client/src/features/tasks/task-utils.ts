@@ -1,24 +1,12 @@
+import { i18n } from '../../i18n';
 import { formatDate, formatDateTime } from '../../ui/date-values';
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: '待办',
-  in_progress: '进行中',
-  completed: '已完成',
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  low: '低',
-  medium: '中',
-  high: '高',
-  urgent: '紧急',
-};
-
 export function statusLabel(status: string): string {
-  return STATUS_LABELS[status] ?? status;
+  return i18n.t(`tasks:status.${status}`, { defaultValue: status });
 }
 
 export function priorityLabel(priority: string): string {
-  return PRIORITY_LABELS[priority] ?? priority;
+  return i18n.t(`tasks:priority.${priority}`, { defaultValue: priority });
 }
 
 export function formatDueDate(iso: string | null): string {

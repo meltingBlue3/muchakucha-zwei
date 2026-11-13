@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { ApiClientError } from '@muchakucha/api-client';
@@ -11,11 +12,11 @@ import { Banner, ConfirmActions, LoadError, LoadingState, Stack, Text } from '..
 import { useWorkspaceStore } from '../../ui/workspace-state';
 import { canDeleteContent, type DeletableResource } from './use-content-delete';
 
-const names = { tasks: '任务', events: '日程', notes: '笔记' };
 const windows = { tasks: TaskWindow, events: EventWindow, notes: NoteWindow };
 interface DeleteTarget { title: string; recurring: boolean; allowed: boolean }
 
 export function DeleteContentScreen({ resource }: { resource: DeletableResource }) {
+  const { t } = useTranslation(['deleteContent', 'auth']);
   const { id, taskId, eventId, noteId } = useLocalSearchParams<{ id: string; taskId?: string; eventId?: string; noteId?: string }>();
   const contentId = resource === 'tasks' ? taskId : resource === 'events' ? eventId : noteId;
   const { close } = useRouteWindowClose(resource);
@@ -24,8 +25,9 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
   const [target, setTarget] = useState<DeleteTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<SeriesScope | 'single' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const name = names[resource];
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'loadFailed' | 'accessLost' | 'removed' | 'failed' | null>(null);
+  const confirmLabel = t(`confirm.${resource}`);
+  const errorText = error === 'loadFailed' ? t(`loadFailed.${resource}`) : error === null ? null : t(error);
   const Window = windows[resource];
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,7 +36,7 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
     try {
       if (!id || !contentId) throw new Error('Missing resource');
       const token = await sessionTransport.getAccessToken();
-      if (token === null) { setError('登录已过期，请重新登录。'); return; }
+      if (token === null) { setError('auth:errors.sessionExpired'); return; }
       const [content, household] = await Promise.all([
         resource === 'tasks' ? sessionApiClient.getTask(token, id, contentId)
           : resource === 'events' ? sessionApiClient.getEvent(token, id, contentId)
@@ -44,9 +46,9 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
       const actor = household.members.find(member => member.isCurrentUser);
       setTarget({ title: content.title, recurring: 'recurrenceRuleId' in content && content.recurrenceRuleId != null, allowed: canDeleteContent(actor?.role, actor?.userId, content.createdBy) });
     } catch {
-      setError(`无法加载${name}，请重试或确认它是否已被删除。`);
+      setError('loadFailed');
     } finally { setLoading(false); }
-  }, [id, contentId, resource, name]);
+  }, [id, contentId, resource]);
   useEffect(() => { void load(); }, [load]);
 
   const remove = async (scope?: SeriesScope) => {
@@ -55,7 +57,7 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
-      if (token === null) { setError('登录已过期，请重新登录。'); return; }
+      if (token === null) { setError('auth:errors.sessionExpired'); return; }
       if (resource === 'tasks') {
         if (scope) await sessionApiClient.deleteTaskSeries(token, id, contentId, scope);
         else await sessionApiClient.deleteTask(token, id, contentId);
@@ -68,19 +70,19 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
       close();
     } catch (caught: unknown) {
       setError(caught instanceof ApiClientError && caught.status === 403
-        ? '你已没有删除权限，请关闭窗口后刷新。'
+        ? 'accessLost'
         : caught instanceof ApiClientError && caught.status === 404
-          ? '内容已不存在，请关闭窗口后刷新。'
-          : '删除失败，请检查网络后重试。');
+          ? 'removed'
+          : 'failed');
     } finally { setSubmitting(null); }
   };
 
-  return <Window size="standard" title={`删除${name}`} busy={submitting !== null} onClose={close} exitAllowed={exitAllowed}>
-    {loading ? <LoadingState label={`正在加载${name}`} /> : target === null ? <LoadError message={error ?? `无法加载${name}。`} onRetry={() => void load()} /> : !target.allowed ? <Text accessibilityRole="alert">你没有删除这条{name}的权限。</Text> : <Stack gap={4}>
-      {target.recurring ? <SeriesScopeContent mode="delete" confirmLabel={`确认删除${name}`} error={error} submitting={submitting === 'single' ? null : submitting} onClose={close} onSelect={scope => void remove(scope)} /> : <>
-        <Text>确定要删除「{target.title}」吗？此操作不可撤销。</Text>
-        {error ? <Banner>{error}</Banner> : null}
-        <ConfirmActions cancelLabel="取消删除" confirmLabel={`确认删除${name}`} destructive busy={submitting !== null} onCancel={close} onConfirm={() => void remove()} />
+  return <Window size="standard" title={t(`title.${resource}`)} busy={submitting !== null} onClose={close} exitAllowed={exitAllowed}>
+    {loading ? <LoadingState label={t(`loading.${resource}`)} /> : target === null ? <LoadError message={errorText ?? t(`missing.${resource}`)} onRetry={() => void load()} /> : !target.allowed ? <Text accessibilityRole="alert">{t(`denied.${resource}`)}</Text> : <Stack gap={4}>
+      {target.recurring ? <SeriesScopeContent mode="delete" confirmLabel={confirmLabel} error={errorText} submitting={submitting === 'single' ? null : submitting} onClose={close} onSelect={scope => void remove(scope)} /> : <>
+        <Text>{t('question', { title: target.title })}</Text>
+        {errorText ? <Banner>{errorText}</Banner> : null}
+        <ConfirmActions cancelLabel={t('cancel')} confirmLabel={confirmLabel} destructive busy={submitting !== null} onCancel={close} onConfirm={() => void remove()} />
       </>}
     </Stack>}
   </Window>;

@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useTheme } from '@shopify/restyle';
 import Repeat from 'lucide-react-native/icons/repeat';
 import { View } from 'react-native';
@@ -5,10 +6,11 @@ import { View } from 'react-native';
 import type { Theme } from '../../ui/theme';
 
 export function RecurrenceBadge() {
+  const { t } = useTranslation('recurrence');
   const activeTheme = useTheme<Theme>();
 
   return (
-    <View accessible accessibilityLabel="重复" accessibilityRole="image">
+    <View accessible accessibilityLabel={t('repeat')} accessibilityRole="image">
       <Repeat color={activeTheme.colors.inkMuted} size={14} strokeWidth={2} />
     </View>
   );

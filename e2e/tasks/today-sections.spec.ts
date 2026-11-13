@@ -154,6 +154,8 @@ test(`completing a task is one tap and stays undoable${recurring ? ' (recurring)
 
 for (const recurring of [false, true]) {
 test(`the detail page carries 进行中 as its own action${recurring ? ' (recurring)' : ''}`, async ({ page }) => {
+  // On desktop the two open states are in the status menu.
+  await page.setViewportSize({ width: 390, height: 844 });
   const owner = await prepareAccount('detail');
   const household = await apiCall(owner.accessToken, 'POST', '/households', { name: '详情之家' });
   expect(household.status).toBe(201);

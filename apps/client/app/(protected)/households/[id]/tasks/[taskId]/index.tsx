@@ -40,16 +40,16 @@ function currentTimeZone(fallback: string): string {
 }
 
 export default function TaskDetailRoute() {
+  const { t } = useTranslation(['tasks', 'shared', 'auth', 'navigation', 'editConflict']);
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId: string }>();
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
-  useTranslation('recurrence');
   const desktop = useDesktop();
   const userId = useCurrentUser()?.id ?? '';
   const [task, setTask] = useState<TaskResponseDto | null>(null);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'detailLoadError' | null>(null);
 
   const fetchTask = useCallback(async () => {
     if (id === undefined || taskId === undefined) return;
@@ -57,7 +57,7 @@ export default function TaskDetailRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setError('登录已过期，请重新登录。');
+        setError('auth:errors.sessionExpired');
         return;
       }
       const [taskResult, householdResult] = await Promise.all([
@@ -67,7 +67,7 @@ export default function TaskDetailRoute() {
       setTask(taskResult);
       setMembers(householdResult.members);
     } catch {
-      setError('无法加载任务。');
+      setError('detailLoadError');
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,7 @@ export default function TaskDetailRoute() {
   useContentChanges(id, fetchTask);
 
   const [statusBusy, setStatusBusy] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<'auth:errors.sessionExpired' | 'statusConflict' | 'statusDenied' | 'statusFailed' | null>(null);
 
   // 进行中 lives here rather than on the card: it is a deliberate stage, not a
   // step on the way to done, and putting it in the list's completion control
@@ -97,7 +97,7 @@ export default function TaskDetailRoute() {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setStatusError('登录已过期，请重新登录。');
+        setStatusError('auth:errors.sessionExpired');
         return;
       }
       await sessionApiClient.updateTask(token, id, taskId, {
@@ -109,9 +109,9 @@ export default function TaskDetailRoute() {
       await fetchTask();
     } catch (caught: unknown) {
       setStatusError(
-        isEditConflict(caught) ? '内容已更新，请查看最新状态后再操作。' : caught instanceof ApiClientError && caught.status === 403
-          ? '你没有权限修改这个任务。'
-          : '状态没有更新成功，请重试。',
+        isEditConflict(caught) ? 'statusConflict' : caught instanceof ApiClientError && caught.status === 403
+          ? 'statusDenied'
+          : 'statusFailed',
       );
       if (isEditConflict(caught)) await fetchTask();
     } finally {
@@ -125,18 +125,18 @@ export default function TaskDetailRoute() {
   }, [router, id, taskId]);
 
   if (loading || task === null || error !== null) {
-    return <TaskWindow title="任务详情" busy={statusBusy}>
+    return <TaskWindow title={t('detail')} busy={statusBusy}>
       <Stack gap={4}>
-        {loading ? <LoadingState label="正在加载任务" /> : <>
-          <LoadError message={error ?? '任务未找到或已被删除。'} onRetry={() => void fetchTask()} />
+        {loading ? <LoadingState label={t('loading')} /> : <>
+          <LoadError message={t(error ?? 'notFound')} onRetry={() => void fetchTask()} />
         </>}
       </Stack>
     </TaskWindow>;
   }
 
-  const assignees = (task.assigneeIds ?? []).map((uid) => ({ id: uid, name: members.find((m) => m.userId === uid)?.displayName ?? '未知成员' }));
+  const assignees = (task.assigneeIds ?? []).map((uid) => ({ id: uid, name: members.find((m) => m.userId === uid)?.displayName ?? t('unknownMember') }));
   const assigneeNames = (task.assigneeIds ?? []).map(
-    (uid) => members.find((m) => m.userId === uid)?.displayName ?? '未知成员',
+    (uid) => members.find((m) => m.userId === uid)?.displayName ?? t('unknownMember'),
   );
   const cancelled = task.status === 'cancelled';
   const overdue = isOverdue(task.dueDate ?? null) && task.status !== 'completed' && !cancelled;
@@ -146,17 +146,17 @@ export default function TaskDetailRoute() {
       ? null
       : formatRecurrenceSummary(recurrence, currentTimeZone(recurrence.timezone));
 
-  const completion = !cancelled ? <Button label={task.status === 'completed' ? '标记为未完成' : '标记为完成'} {...(desktop ? { size: 'compact' as const, icon: (color: string) => task.status === 'completed' ? null : <Check size={activeTheme.controlSizes.icon - 5} color={color} strokeWidth={activeTheme.focus.width} /> } : {})} loading={statusBusy} onPress={() => void writeStatus(task.status === 'completed' ? 'pending' : 'completed')} /> : null;
+  const completion = !cancelled ? <Button label={task.status === 'completed' ? t('markIncomplete') : t('markComplete')} {...(desktop ? { size: 'compact' as const, icon: (color: string) => task.status === 'completed' ? null : <Check size={activeTheme.controlSizes.icon - 5} color={color} strokeWidth={activeTheme.focus.width} /> } : {})} loading={statusBusy} onPress={() => void writeStatus(task.status === 'completed' ? 'pending' : 'completed')} /> : null;
   // 编辑 sits in the title bar like 保存 in the edit window. On a phone the footer keeps the one status action;
   // in the wide detail pane it sits under the title, beside the status it changes.
   const footer = !desktop && (!cancelled || statusError) ? (
     <Stack gap={2}>
-      {statusError ? <Banner>{statusError}</Banner> : null}
+      {statusError ? <Banner>{t(statusError)}</Banner> : null}
       {completion}
     </Stack>
   ) : null;
   return (
-    <TaskWindow title="任务详情" busy={statusBusy} footer={footer} headerActions={<DetailEditButton accessibilityLabel="编辑任务" disabled={statusBusy} onPress={handleEdit} />}>
+    <TaskWindow title={t('detail')} busy={statusBusy} footer={footer} headerActions={<DetailEditButton accessibilityLabel={t('edit')} disabled={statusBusy} onPress={handleEdit} />}>
       <Stack gap={desktop ? 4 : 5}>
         {desktop ? <Stack gap={3}>
           {/* The wide pane follows the list row: completion mark, title, then the status it changes. */}
@@ -166,24 +166,24 @@ export default function TaskDetailRoute() {
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[2], paddingLeft: cancelled ? 0 : activeTheme.layout.desktopControl + activeTheme.spacing[2] }}>
             {completion}
-            {cancelled ? <Text variant="label" color="inkMuted">已取消</Text> : task.status !== 'completed' ? <TaskStatusMenu status={task.status === 'in_progress' ? 'in_progress' : 'pending'} busy={statusBusy} onChange={(next) => void writeStatus(next)} /> : <Text variant="meta" color="success">已完成</Text>}
+            {cancelled ? <Text variant="label" color="inkMuted">{t('status.cancelled')}</Text> : task.status !== 'completed' ? <TaskStatusMenu status={task.status === 'in_progress' ? 'in_progress' : 'pending'} busy={statusBusy} onChange={(next) => void writeStatus(next)} /> : <Text variant="meta" color="success">{t('status.completed')}</Text>}
           </View>
-          {statusError ? <Banner>{statusError}</Banner> : null}
+          {statusError ? <Banner>{t(statusError)}</Banner> : null}
         </Stack> : <Stack gap={2}>
           <Heading level={2}>{task.title}</Heading>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: activeTheme.spacing[2] }}>
-            <Text variant="label" color={task.status === 'completed' ? 'success' : task.status === 'in_progress' ? 'ink' : 'inkMuted'}>{cancelled ? '已取消' : statusLabel(task.status)}</Text>
-            {overdue ? <Text variant="label" color="destructive">已逾期</Text> : null}
+            <Text variant="label" color={task.status === 'completed' ? 'success' : task.status === 'in_progress' ? 'ink' : 'inkMuted'}>{cancelled ? t('status.cancelled') : statusLabel(task.status)}</Text>
+            {overdue ? <Text variant="label" color="destructive">{t('overdueStatus')}</Text> : null}
             {/* 进行中 is a deliberate stage, offered beside the status it changes rather than behind a "more" toggle. */}
             {!cancelled && task.status !== 'completed' ? (
-              <Pressable accessibilityRole="button" accessibilityLabel={task.status === 'in_progress' ? '退回待办' : '标记为进行中'} disabled={statusBusy} onPress={() => void writeStatus(task.status === 'in_progress' ? 'pending' : 'in_progress')} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', marginLeft: 'auto' }}>
-                <Text variant="label" color={statusBusy ? 'inkMuted' : 'link'}>{task.status === 'in_progress' ? '退回待办' : '标记为进行中'}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={task.status === 'in_progress' ? t('returnPending') : t('markInProgress')} disabled={statusBusy} onPress={() => void writeStatus(task.status === 'in_progress' ? 'pending' : 'in_progress')} style={{ minHeight: activeTheme.controlSizes.touchTarget, justifyContent: 'center', marginLeft: 'auto' }}>
+                <Text variant="label" color={statusBusy ? 'inkMuted' : 'link'}>{task.status === 'in_progress' ? t('returnPending') : t('markInProgress')}</Text>
               </Pressable>
             ) : null}
           </View>
         </Stack>}
         <DetailPanel>
-          <DetailField label={desktop ? '截止' : '截止日期'} value={desktop && task.dueDate ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}><Text variant="bodySm" color={overdue ? 'destructive' : 'ink'}>{formatDateTime(new Date(task.dueDate), { weekday: true }).replace(/ 00:00$/, '')}</Text>{overdue ? <Chip tone="accent">已逾期</Chip> : toDateValue(new Date(task.dueDate)) === toDateValue(new Date()) ? <Chip tone="accent">今天</Chip> : null}</View> : task.dueDate ? formatDueDate(task.dueDate) : '未设置'} urgent={overdue} />
+          <DetailField label={desktop ? t('due') : t('editConflict:dueDate')} value={desktop && task.dueDate ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}><Text variant="bodySm" color={overdue ? 'destructive' : 'ink'}>{formatDateTime(new Date(task.dueDate), { weekday: true }).replace(/ 00:00$/, '')}</Text>{overdue ? <Chip tone="accent">{t('overdueStatus')}</Chip> : toDateValue(new Date(task.dueDate)) === toDateValue(new Date()) ? <Chip tone="accent">{t('today')}</Chip> : null}</View> : task.dueDate ? formatDueDate(task.dueDate) : t('unset')} urgent={overdue} />
           {/* A finished task reminds nobody, so it shows no reminder. */}
           {task.dueDate && (task.status === 'pending' || task.status === 'in_progress') ? (
             <ReminderDetailField
@@ -195,21 +195,25 @@ export default function TaskDetailRoute() {
               choice={task.myReminder ?? DEFAULT_REMINDER}
             />
           ) : null}
-          <DetailField label="负责人" value={desktop && assignees.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[3], rowGap: activeTheme.spacing[1] }}>{assignees.map(member => <View key={member.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] + 2 }}><MemberAvatar id={member.id} name={member.name} size="sm" /><Text variant="bodySm" color="ink">{member.name}</Text></View>)}</View> : assigneeNames.join('、') || '未分配'} />
-          <DetailField label="优先级" value={priorityLabel(task.priority)} urgent={task.priority === 'urgent'} />
-          {recurrenceSummary ? <DetailField label={desktop ? '重复' : '重复安排'} value={recurrenceSummary.summary} notes={[
+          <DetailField label={t('shared:assignee')} value={desktop && assignees.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[3], rowGap: activeTheme.spacing[1] }}>{assignees.map(member => <View key={member.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] + 2 }}><MemberAvatar id={member.id} name={member.name} size="sm" /><Text variant="bodySm" color="ink">{member.name}</Text></View>)}</View> : assigneeNames.join('、') || t('unassigned')} />
+          <DetailField label={t('editConflict:priority')} value={priorityLabel(task.priority)} urgent={task.priority === 'urgent'} />
+          {recurrenceSummary ? <DetailField label={desktop ? t('editConflict:repeat') : t('navigation:pages.recurrence-rules')} value={recurrenceSummary.summary} notes={[
             recurrenceSummary.clampNote,
             recurrenceSummary.timeZoneNote,
-            cancelled ? '这次重复已取消。' : '当前查看这一次任务，编辑时可选择影响范围。',
-          ]} /> : desktop ? <DetailField label="重复" value={<Text variant="bodySm" color="inkMuted">不重复</Text>} /> : null}
-          {desktop && (task.labels ?? []).length ? <DetailField label="标签" value={<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>{task.labels?.map(label => <LabelChip key={label.id} label={label} small />)}</View>} /> : null}
+            cancelled ? t('cancelledRecurrence') : t('occurrenceDetail'),
+          ]} /> : desktop ? <DetailField label={t('editConflict:repeat')} value={<Text variant="bodySm" color="inkMuted">{t('noRecurrence')}</Text>} /> : null}
+          {desktop && (task.labels ?? []).length ? <DetailField label={t('editConflict:labels')} value={<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>{task.labels?.map(label => <LabelChip key={label.id} label={label} small />)}</View>} /> : null}
         </DetailPanel>
-        {task.description ? <Stack gap={desktop ? 1 : 2} style={desktop ? { borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[4] } : undefined}><Text variant={desktop ? 'meta' : 'label'} color={desktop ? 'inkFaint' : 'inkMuted'}>描述</Text><Text {...(desktop ? { variant: 'bodySm' as const, color: 'ink' as const } : {})}>{task.description}</Text></Stack> : null}
+        {task.description ? <Stack gap={desktop ? 1 : 2} style={desktop ? { borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[4] } : undefined}><Text variant={desktop ? 'meta' : 'label'} color={desktop ? 'inkFaint' : 'inkMuted'}>{t('description')}</Text><Text {...(desktop ? { variant: 'bodySm' as const, color: 'ink' as const } : {})}>{task.description}</Text></Stack> : null}
         {!desktop && (task.labels ?? []).length ? <Stack gap={2}>
-          <Text variant="label" color="inkMuted">标签</Text>
+          <Text variant="label" color="inkMuted">{t('editConflict:labels')}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>{task.labels?.map(label => <LabelChip key={label.id} label={label} />)}</View>
         </Stack> : null}
-        {desktop ? <Text variant="caption" color="inkFaint" style={{ fontWeight: '400', borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[3] }}>{members.find(m => m.userId === task.createdBy)?.displayName ?? '家人'} 创建于 {formatDate(new Date(task.createdAt))} · 最后更新 {formatDateTime(new Date(task.updatedAt))}</Text> : null}
+        {desktop ? <Text variant="caption" color="inkFaint" style={{ fontWeight: '400', borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[3] }}>{t('metadata', {
+          creator: members.find(m => m.userId === task.createdBy)?.displayName ?? t('creatorFallback'),
+          created: formatDate(new Date(task.createdAt)),
+          updated: formatDateTime(new Date(task.updatedAt)),
+        })}</Text> : null}
       </Stack>
     </TaskWindow>
   );
@@ -218,12 +222,13 @@ export default function TaskDetailRoute() {
 
 /** 待办 ⌄ beside 标记为完成: the two open stages a task can be moved between. */
 function TaskStatusMenu({ status, busy, onChange }: { status: 'pending' | 'in_progress'; busy: boolean; onChange(next: 'pending' | 'in_progress'): void }) {
+  const { t } = useTranslation('tasks');
   const activeTheme = useTheme<Theme>();
   const trigger = useRef<View>(null);
   const [open, setOpen] = useState(false);
   return <>
-    <Button ref={trigger} label={statusLabel(status)} accessibilityLabel={`状态：${statusLabel(status)}，更改状态`} aria-haspopup="menu" tone="secondary" size="compact" expanded={open} disabled={busy} trailingIcon={(color) => <ChevronDown size={activeTheme.controlSizes.icon - 6} color={color} strokeWidth={activeTheme.controlSizes.iconStroke} />} onPress={() => setOpen(true)} />
-    {open ? <AnchoredPopover title="更改状态" trigger={trigger} width={activeTheme.layout.accountMenuWidth} onClose={() => setOpen(false)}>
+    <Button ref={trigger} label={statusLabel(status)} accessibilityLabel={t('changeStatusName', { label: statusLabel(status) })} aria-haspopup="menu" tone="secondary" size="compact" expanded={open} disabled={busy} trailingIcon={(color) => <ChevronDown size={activeTheme.controlSizes.icon - 6} color={color} strokeWidth={activeTheme.controlSizes.iconStroke} />} onPress={() => setOpen(true)} />
+    {open ? <AnchoredPopover title={t('changeStatus')} trigger={trigger} width={activeTheme.layout.accountMenuWidth} onClose={() => setOpen(false)}>
       <Stack gap={1}>{(['pending', 'in_progress'] as const).map(option => <Pressable key={option} accessibilityRole="button" accessibilityLabel={statusLabel(option)} accessibilityState={{ selected: option === status }} onPress={() => { setOpen(false); if (option !== status) onChange(option); }} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: activeTheme.layout.desktopControl, paddingHorizontal: activeTheme.spacing[2], borderRadius: activeTheme.borderRadii.sm, backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.transparent })}>
         <Text variant="bodySm" color="ink">{statusLabel(option)}</Text>
         {option === status ? <Check size={activeTheme.controlSizes.icon - 4} color={activeTheme.colors.ink} strokeWidth={activeTheme.focus.width} /> : null}

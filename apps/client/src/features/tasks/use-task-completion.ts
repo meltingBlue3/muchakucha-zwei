@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { notifyContentChanged } from '../content/content-changes';
 import { isEditConflict } from '../../ui/edit-conflict';
 import { useCallback, useState } from 'react';
@@ -36,8 +37,9 @@ export interface TaskCardCompletionProps {
  * the top of a scrolling list, off screen from the card that failed.
  */
 export function useTaskCompletion(householdId: string | undefined, refresh: () => void) {
+  const { t } = useTranslation(['tasks', 'auth']);
   const [changingTaskId, setChangingTaskId] = useState<string | null>(null);
-  const [failure, setFailure] = useState<{ taskId: string; message: string } | null>(null);
+  const [failure, setFailure] = useState<{ taskId: string; message: 'auth:errors.sessionExpired' | 'statusConflict' | 'statusDenied' | 'statusFailed' } | null>(null);
   const [undoable, setUndoable] = useState<{ task: TaskResponseDto; previousStatus: TaskStatus } | null>(null);
   const [lastAttempt, setLastAttempt] = useState<Attempt | null>(null);
 
@@ -49,7 +51,7 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) {
-        setFailure({ taskId: attempt.task.id, message: '登录已过期，请重新登录。' });
+        setFailure({ taskId: attempt.task.id, message: 'auth:errors.sessionExpired' });
         return;
       }
       const saved = await sessionApiClient.updateTask(token, householdId, attempt.task.id, {
@@ -71,9 +73,9 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
       setFailure({
         taskId: attempt.task.id,
         message:
-          isEditConflict(caught) ? '内容已更新，请查看最新状态后再操作。' : caught instanceof ApiClientError && caught.status === 403
-            ? '你没有权限修改这个任务。'
-            : '状态没有更新成功，请重试。',
+          isEditConflict(caught) ? 'statusConflict' : caught instanceof ApiClientError && caught.status === 403
+            ? 'statusDenied'
+            : 'statusFailed',
       });
       refresh();
     } finally {
@@ -101,18 +103,18 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
   const cardProps = useCallback((task: TaskResponseDto): TaskCardCompletionProps => ({
     onToggleComplete: toggleCompletion,
     statusChanging: changingTaskId === task.id,
-    statusError: failure !== null && failure.taskId === task.id ? failure.message : null,
+    statusError: failure !== null && failure.taskId === task.id ? t(failure.message) : null,
     ...(lastAttempt === null ? {} : { onRetryStatus: retryStatus }),
-  }), [toggleCompletion, changingTaskId, failure, retryStatus, lastAttempt]);
+  }), [toggleCompletion, changingTaskId, failure, retryStatus, lastAttempt, t]);
 
   /** Closes the notice; the completed card then leaves the list with it. */
   const dismissUndo = useCallback((): void => setUndoable(null), []);
 
   /** Props for the page's ActionNotice while a completion can be undone. */
   const undoNotice: ActionNoticeProps | null = undoable === null ? null : {
-    message: `已完成「${undoable.task.title}」`,
-    actionLabel: '撤销',
-    actionAccessibilityLabel: `撤销完成：${undoable.task.title}`,
+    message: t('completedNotice', { title: undoable.task.title }),
+    actionLabel: t('undo'),
+    actionAccessibilityLabel: t('undoCompletion', { title: undoable.task.title }),
     onAction: undoCompletion,
     onDismiss: dismissUndo,
     busy: changingTaskId === undoable.task.id,

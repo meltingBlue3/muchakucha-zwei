@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useContentChanges } from '../content/content-changes';
 import { useResourceNavigation } from '../../ui/use-resource-navigation';
 import { useDesktop } from '../../ui/use-desktop';
@@ -35,8 +36,7 @@ import { EventCard } from './event-card';
 import { toDateIso, toDateRangeIso } from './calendar-utils';
 import {
   applyRecurringFilter,
-  RECURRING_EMPTY_EVENTS,
-  RECURRING_FILTER_GROUP_LABEL,
+  recurringEmptyEvents,
   RECURRING_FILTERS,
   recurringFilterAccessibilityLabel,
   type RecurringFilterKey,
@@ -48,6 +48,7 @@ import type { Theme } from '../../ui/theme';
 const byStart = (a: EventResponseDto, b: EventResponseDto) => Number(b.allDay) - Number(a.allDay) || a.startTime.localeCompare(b.startTime);
 
 export default function CalendarScreen() {
+  const { t } = useTranslation('recurrence');
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const desktop = useDesktop();
@@ -237,7 +238,7 @@ export default function CalendarScreen() {
         />
         {filtersOpen ? <AppDialog title="筛选日程" busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
           <Stack gap={5}>
-            <FilterOptions label={RECURRING_FILTER_GROUP_LABEL} options={RECURRING_FILTERS.map(f => ({ value: f.key, label: f.label, name: recurringFilterAccessibilityLabel(f.key) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
+            <FilterOptions label={t('repeat')} options={RECURRING_FILTERS.map(value => ({ value, label: t(`filter.${value}`), name: recurringFilterAccessibilityLabel(value) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
             {availableLabels.length ? <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(label => ({ value: label.id, label: label.name, name: `筛选标签：${label.name}` }))]} value={labelFilter} onChange={setLabelFilter} /> : null}
           </Stack>
         </AppDialog> : null}
@@ -265,7 +266,7 @@ export default function CalendarScreen() {
               {loading ? <LoadingState label="正在加载日程" /> : null}
               {error ? <LoadError message={error} onRetry={() => void fetchEvents()} retryAccessibilityLabel="重试加载日程" /> : null}
               {!loading && !error && selectedDateEvents.length === 0 ? <EmptyState
-                message={recurringFilter === 'recurring' ? RECURRING_EMPTY_EVENTS : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}
+                message={recurringFilter === 'recurring' ? recurringEmptyEvents() : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}
                 {...(filterSummary ? { action: <Button label="调整筛选" tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
               /> : null}
             </DesktopDayPane>
@@ -275,7 +276,7 @@ export default function CalendarScreen() {
               {loading ? <LoadingState label="正在加载日程" /> : null}
               {error ? <LoadError message={error} onRetry={() => void fetchEvents()} retryAccessibilityLabel="重试加载日程" /> : null}
               {!loading && !error && selectedDateEvents.length === 0 ? <EmptyState
-                message={recurringFilter === 'recurring' ? RECURRING_EMPTY_EVENTS : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}
+                message={recurringFilter === 'recurring' ? recurringEmptyEvents() : labelFilter !== 'all' ? '没有符合筛选条件的日程。' : '这天没有安排。'}
                 {...(filterSummary ? { action: <Button label="调整筛选" tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
               /> : null}
               <ListGroup>

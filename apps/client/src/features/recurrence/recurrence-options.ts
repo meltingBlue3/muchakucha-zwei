@@ -5,11 +5,6 @@ import { lunarAnchorFor } from '../lunar/lunar-recurrence';
 /** The recurrence payload a form submits. */
 export type RecurrenceInput = RecurrenceDto;
 
-const COUNT_ERROR = '重复次数需要在 1 到 1000 之间。';
-const DATE_REQUIRED_ERROR = '请选择重复的截止日期。';
-const TIMEZONE_ERROR = '无法识别当前设备的时区。请检查系统时区设置后重试。';
-
-
 /** Google Calendar's repeat menu: fixed presets plus 自定义…, with a lunar 每年 beside the Gregorian one. */
 export type RecurrencePreset = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'lunarYearly' | 'custom';
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -212,14 +207,16 @@ export function recurrenceInputFromResponse(
   };
 }
 
-export function recurrenceErrorsFromApi(error: unknown): Record<string, string> {
+export type RecurrenceErrorKey = 'endRequired' | 'endOrder' | 'count' | 'timeZone' | 'weekday' | 'lunar' | 'save';
+
+export function recurrenceErrorsFromApi(error: unknown): Record<string, RecurrenceErrorKey> {
   if (typeof error !== 'object' || error === null || !('body' in error)) return {};
   const body = (error as { body?: unknown }).body;
   if (typeof body !== 'object' || body === null || !('error' in body)) return {};
   const apiError = (body as { error?: { code?: string; details?: unknown } }).error;
   if (apiError?.code !== 'VALIDATION_FAILED' || !Array.isArray(apiError.details)) return {};
 
-  const messages: Record<string, string> = {};
+  const messages: Record<string, RecurrenceErrorKey> = {};
   for (const detail of apiError.details) {
     if (typeof detail !== 'object' || detail === null || !('field' in detail)) continue;
     const field = (detail as { field?: unknown }).field;
@@ -227,16 +224,16 @@ export function recurrenceErrorsFromApi(error: unknown): Record<string, string> 
     const leaf = field.slice('recurrence.'.length);
     messages[field] =
       leaf === 'endsOn'
-        ? DATE_REQUIRED_ERROR
+        ? 'endRequired'
         : leaf === 'count'
-          ? COUNT_ERROR
+          ? 'count'
           : leaf === 'timezone'
-            ? TIMEZONE_ERROR
+            ? 'timeZone'
             : leaf === 'byWeekday'
-              ? '至少需要选择一天。'
+              ? 'weekday'
               : leaf === 'lunar'
-                ? '按农历重复只能是每年。'
-                : '重复规则没有保存成功。请检查网络后重试。';
+                ? 'lunar'
+                : 'save';
   }
   return messages;
 }

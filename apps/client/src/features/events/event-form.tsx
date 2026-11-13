@@ -18,6 +18,7 @@ import { LabelPicker } from '../labels/label-picker';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 import {
   recurrenceErrorsFromApi,
+  type RecurrenceErrorKey,
   recurrenceInputFromResponse,
   type RecurrenceInput,
 } from '../recurrence/recurrence-options';
@@ -135,7 +136,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
   const [timeError, setTimeError] = useState<string | null>(null);
   const titleInput = useRef<TextInput>(null);
   const titleErrorId = `event-title-error-${useId()}`;
-  const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, string>>({});
+  const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, RecurrenceErrorKey>>({});
 
   const updateField = useCallback(<K extends keyof EventInput>(key: K, value: EventInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -160,7 +161,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
       return;
     }
     if (form.recurrence?.endsOn !== undefined && form.recurrence.endsOn <= recurrenceStart) {
-      setRecurrenceErrors({ 'recurrence.endsOn': '重复的截止日期必须晚于开始日期。' });
+      setRecurrenceErrors({ 'recurrence.endsOn': 'endOrder' });
       return;
     }
 
