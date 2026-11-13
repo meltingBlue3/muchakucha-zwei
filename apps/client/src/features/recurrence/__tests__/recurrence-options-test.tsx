@@ -55,11 +55,11 @@ describe('custom repeat drafts', () => {
   test('reports every invalid field', () => {
     const draft = { ...draftFromRule(null, start), intervalText: '53', byWeekday: [], ending: 'date' as const, endsOn: start };
     expect(validateDraft(draft, start)).toEqual({
-      interval: '间隔需要在 1 到 52 之间。',
-      byWeekday: '至少需要选择一天。',
-      endsOn: '截止日期必须晚于开始日期。',
+      interval: 'field.invalidInterval',
+      byWeekday: 'validation.weekday',
+      endsOn: 'field.invalidEndOrder',
     });
-    expect(validateDraft({ ...draft, intervalText: '1', byWeekday: [0], ending: 'count', countText: '0' }, start)).toEqual({ count: '重复次数需要在 1 到 1000 之间。' });
+    expect(validateDraft({ ...draft, intervalText: '1', byWeekday: [0], ending: 'count', countText: '0' }, start)).toEqual({ count: 'validation.count' });
   });
 
   test('summaries mention the interval only when it is above one', () => {

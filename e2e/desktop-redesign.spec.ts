@@ -290,6 +290,33 @@ async function setupRecurrenceRules(page: Page) {
   return rules;
 }
 
+test('Japanese recurrence rules localize the list, editor and validation', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 320, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await setup(page);
+    await setupRecurrenceRules(page);
+    await page.goto(`${base}/recurrence-rules`);
+    await page.getByRole('button', { name: /^タスクの繰り返し：倒垃圾、/ }).click();
+    const detail = page.getByRole('dialog', { name: '繰り返しの詳細', exact: true });
+    await detail.getByRole('button', { name: '繰り返しを編集', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: '繰り返しを編集', exact: true });
+    await editor.getByRole('button', { name: /^繰り返しルール/ }).click();
+    const presets = page.getByRole('dialog', { name: '繰り返し', exact: true });
+    await presets.getByRole('radio', { name: 'カスタム…', exact: true }).click();
+    const custom = page.getByRole('dialog', { name: '繰り返しを設定', exact: true });
+    await custom.getByRole('radio', { name: '週', exact: true }).click();
+    await expect(custom.getByRole('checkbox', { name: '月曜日', exact: true })).toHaveText('月');
+    await custom.getByRole('textbox', { name: '繰り返し間隔', exact: true }).fill('53');
+    await custom.getByRole('button', { name: '完了', exact: true }).click();
+    await expect(custom.getByText('間隔は1〜52で入力してください。')).toBeVisible();
+    const panel = custom.getByTestId('app-dialog-panel');
+    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  } finally {
+    await context.close();
+  }
+});
+
 test('a rule opens for reading, and its editor gives way to another rule without asking until something changes', async ({ page }) => {
   await setup(page);
   await setupRecurrenceRules(page);

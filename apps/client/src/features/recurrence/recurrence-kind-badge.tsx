@@ -1,3 +1,4 @@
+import { i18n, useTranslation } from '../../i18n';
 import { useTheme } from '@shopify/restyle';
 import CalendarIcon from 'lucide-react-native/icons/calendar';
 import ListTodoIcon from 'lucide-react-native/icons/list-todo';
@@ -11,16 +12,12 @@ export type RecurrenceKind = 'task' | 'event';
 // The label carries the semantics. Icon and text are both `inkMuted` on
 // purpose: colour must never be the thing that distinguishes a task rule
 // from an event rule in the merged list (D-20 accessibility floor).
-const KIND_LABELS: Record<RecurrenceKind, string> = {
-  task: '任务',
-  event: '日程',
-};
-
 export function recurrenceKindLabel(kind: RecurrenceKind | null): string | null {
-  return kind === null ? null : KIND_LABELS[kind];
+  return kind === null ? null : i18n.t(`recurrence:kind.${kind}`);
 }
 
 export function RecurrenceKindBadge({ kind }: { kind: RecurrenceKind }) {
+  const { t } = useTranslation('recurrence');
   const activeTheme = useTheme<Theme>();
   const Icon = kind === 'task' ? ListTodoIcon : CalendarIcon;
 
@@ -37,7 +34,7 @@ export function RecurrenceKindBadge({ kind }: { kind: RecurrenceKind }) {
     >
       <Icon color={activeTheme.colors.inkMuted} size={14} strokeWidth={2} />
       <Text variant="caption" color="inkMuted">
-        {KIND_LABELS[kind]}
+        {t(`kind.${kind}`)}
       </Text>
     </View>
   );
