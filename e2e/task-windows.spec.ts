@@ -66,6 +66,29 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
+test('Japanese task detail and editor use localized names and validation', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 320, height: 900 } });
+  try {
+    const page = await context.newPage();
+    const { getTask } = await setup(page);
+    await page.goto(`${base}/tasks`);
+    await page.getByRole('button', { name: `タスク：${getTask().title}`, exact: true }).click();
+    const detail = page.getByRole('dialog', { name: 'タスクの詳細', exact: true });
+    await detail.getByRole('button', { name: 'タスクを編集', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: 'タスクを編集', exact: true });
+    const title = editor.getByRole('textbox', { name: 'タスク名', exact: true });
+    await title.fill('');
+    await editor.getByRole('button', { name: '保存', exact: true }).click();
+    await expect(editor.getByText('タスク名を入力してください。')).toBeVisible();
+    await expect(title).toBeFocused();
+    const panel = await editor.getByTestId('app-dialog-panel').boundingBox();
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(320);
+  } finally {
+    await context.close();
+  }
+});
+
 test('direct task window links survive reload and close to a safe destination', async ({ page }) => {
   await setup(page);
   await page.goto(`${base}/tasks/${taskId}`);

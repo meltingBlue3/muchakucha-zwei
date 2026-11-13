@@ -1,3 +1,4 @@
+import { i18n, useTranslation } from '../../../../../../src/i18n';
 import { notifyContentChanged } from '../../../../../../src/features/content/content-changes';
 import { hasRecurrenceFieldErrors } from '../../../../../../src/features/recurrence/recurrence-options';
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
@@ -53,6 +54,7 @@ function eventSeriesUpdate(data: CreateEventDto, labelIds: string[]): Omit<Updat
 }
 
 export default function EditEventRoute() {
+  useTranslation('recurrence');
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
   const { households } = useHouseholdContext();
   const householdName = households.find(household => household.id === id)?.name ?? '';
@@ -108,7 +110,7 @@ export default function EditEventRoute() {
       setError(null);
       const reminderError = await saveOwnReminder('event', id, eventId, myReminder, event?.myReminder);
       if (reminderError !== null) {
-        setError(reminderError);
+        setError(i18n.t(reminderError));
         setIsSubmitting(false);
         return;
       }

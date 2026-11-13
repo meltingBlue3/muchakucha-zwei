@@ -1,3 +1,4 @@
+import type { RecurrenceErrorKey } from './recurrence-options';
 import { useTranslation } from '../../i18n';
 import type { RecurrenceDto } from '@muchakucha/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -54,7 +55,7 @@ interface RecurrenceFieldProps {
   /** Explains where to stop the series instead; shown with a disabled 不重复. */
   turnOffHint?: string;
   /** Server validation messages keyed by `recurrence.<field>`. */
-  errors?: Record<string, string>;
+  errors?: Record<string, RecurrenceErrorKey>;
   /**
    * The rule owns its start date and time, set on the custom page as in
    * Google Calendar. A new recurring task has no other start to follow;
@@ -71,7 +72,7 @@ type Stage = 'closed' | 'options' | 'custom';
  * intervals, weekdays and an end condition.
  */
 export function RecurrenceField({ value, onChange, startDate: formStart, name, icon, disabled = false, disableTurnOff = false, turnOffHint = TURN_OFF_DISABLED_HINT, errors = {}, ownStart = false }: RecurrenceFieldProps) {
-  useTranslation('recurrence');
+  const { t } = useTranslation('recurrence');
   // Where the rule is anchored: its own start when it owns one, else the form's.
   const startDate = ownStart && value ? value.startsOn : formStart;
   const [stage, setStage] = useState<Stage>('closed');
@@ -161,7 +162,7 @@ export function RecurrenceField({ value, onChange, startDate: formStart, name, i
       {ownStart && value ? <View style={{ paddingLeft: ROW_CONTENT_INSET }}><Text variant="caption">{`从${formatDate(new Date(`${value.startsOn}T00:00:00`))}开始${value.startTimeLocal ? `，每次 ${value.startTimeLocal}` : ''}`}</Text></View> : null}
       {value ? <View style={{ paddingLeft: ROW_CONTENT_INSET }}><RecurrenceNotes rule={value} deviceTimeZone={deviceTimeZone() ?? value.timezone} /></View> : null}
       {!inWindow && step ? <View style={{ paddingLeft: ROW_CONTENT_INSET, paddingBottom: theme.spacing[3] }}>{step.content}</View> : null}
-      {serverErrors.map(message => <View key={message} style={{ paddingLeft: ROW_CONTENT_INSET }}><FormMessage>{message}</FormMessage></View>)}
+      {serverErrors.map(message => <View key={message} style={{ paddingLeft: ROW_CONTENT_INSET }}><FormMessage>{t(`validation.${message}`)}</FormMessage></View>)}
     </Stack>
   );
 }

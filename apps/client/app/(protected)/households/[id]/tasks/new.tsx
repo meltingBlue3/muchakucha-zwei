@@ -1,3 +1,4 @@
+import { useTranslation } from '../../../../../src/i18n';
 import { notifyContentChanged } from '../../../../../src/features/content/content-changes';
 import { TaskWindow, useTaskWindowClose } from '../../../../../src/features/tasks/task-window';
 import { DraftNotice } from '../../../../../src/ui/draft-notice';
@@ -19,6 +20,7 @@ import { Banner, LoadError, LoadingState, Stack } from '../../../../../src/ui/pr
 import type { CreateTaskDto } from '@muchakucha/api-client';
 
 export default function CreateTaskRoute() {
+  const { t } = useTranslation(['tasks', 'shared', 'households']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:tasks:new:`;
@@ -85,7 +87,7 @@ export default function CreateTaskRoute() {
 
   if (viewState === 'accessChanged') {
     return (
-      <AppShell accessibilityLabel="家庭访问权已变化">
+      <AppShell accessibilityLabel={t('households:accessChanged')}>
         <AccessChangedPanel
           hasOtherHouseholds={households.length > 0}
           {...(accessChangedHouseholdName === undefined ? {} : { householdName: accessChangedHouseholdName })}
@@ -97,14 +99,14 @@ export default function CreateTaskRoute() {
   }
 
   return (
-    <TaskWindow draftPrefix={draftPrefix} title="创建任务" busy={submitting} exitAllowed={exitAllowed}>
+    <TaskWindow draftPrefix={draftPrefix} title={t('create')} busy={submitting} exitAllowed={exitAllowed}>
       <Stack gap={4}>
         <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
 
         {created !== null ? (
-          <Stack gap={4}><DraftNotice /><LoadError title="任务已创建" message={submitError ?? '内容已创建，标签尚未保存。'} retryLabel="重试保存标签" retrying={submitting} onRetry={() => void retry()} /></Stack>
+          <Stack gap={4}><DraftNotice /><LoadError title={t('created')} message={submitError ?? t('labelsUnsaved')} retryLabel={t('retryLabels')} retrying={submitting} onRetry={() => void retry()} /></Stack>
         ) : loading ? (
-          <LoadingState label="正在加载成员" />
+          <LoadingState label={t('households:settings.loadingMembers')} />
         ) : (
           <Stack gap={4}>
             {submitError !== null ? <Banner>{submitError}</Banner> : null}
@@ -113,7 +115,7 @@ export default function CreateTaskRoute() {
               members={memberOptions}
               onSubmit={handleSubmit}
               onCancel={handleClose}
-              submitLabel="创建"
+              submitLabel={t('shared:create')}
               isSubmitting={submitting}
               householdId={householdId}
               selectedLabelIds={selectedLabelIds}

@@ -1,12 +1,12 @@
 import {
   applyRecurringFilter,
   classifyGenerationWindow,
-  GENERATION_AHEAD_NOTE,
-  GENERATION_BEHIND_BODY,
-  GENERATION_BEHIND_HEADING,
+  generationAheadNote,
+  generationBehindBody,
+  generationBehindHeading,
   isRecurringInstance,
-  RECURRING_EMPTY_EVENTS,
-  RECURRING_EMPTY_TASKS,
+  recurringEmptyEvents,
+  recurringEmptyTasks,
 } from '../recurring-filter';
 
 describe('isRecurringInstance', () => {
@@ -113,11 +113,11 @@ describe('classifyGenerationWindow', () => {
 describe('generation-window and recurring-filter copy', () => {
   test('never contains an arabic digit', () => {
     const combined = [
-      GENERATION_BEHIND_HEADING,
-      GENERATION_BEHIND_BODY,
-      GENERATION_AHEAD_NOTE,
-      RECURRING_EMPTY_TASKS,
-      RECURRING_EMPTY_EVENTS,
+      generationBehindHeading(),
+      generationBehindBody(),
+      generationAheadNote(),
+      recurringEmptyTasks(),
+      recurringEmptyEvents(),
     ].join('');
     expect(combined).toMatch(/^[^0-9]*$/);
   });

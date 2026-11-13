@@ -1,3 +1,5 @@
+import { statusLabel, priorityLabel } from './task-utils';
+import { useTranslation } from '../../i18n';
 import { useContentChanges } from '../content/content-changes';
 import { useResourceNavigation } from '../../ui/use-resource-navigation';
 import { useDesktop } from '../../ui/use-desktop';
@@ -26,10 +28,9 @@ import { mergeLabels, useHouseholdLabels } from '../labels/use-household-labels'
 import {
   applyRecurringFilter,
   classifyGenerationWindow,
-  GENERATION_BEHIND_BODY,
-  GENERATION_BEHIND_HEADING,
-  RECURRING_EMPTY_TASKS,
-  RECURRING_FILTER_GROUP_LABEL,
+  generationBehindBody,
+  generationBehindHeading,
+  recurringEmptyTasks,
   RECURRING_FILTERS,
   recurringFilterAccessibilityLabel,
   type RecurringFilterKey,
@@ -43,29 +44,18 @@ type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
 type PriorityFilterKey = 'all' | 'low' | 'medium' | 'high' | 'urgent';
 
 // Status is the everyday question, so it sits on the page; the rest waits in 筛选.
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'pending', label: '待办' },
-  { key: 'in_progress', label: '进行中' },
-  { key: 'completed', label: '已完成' },
-  { key: 'all', label: '全部' },
-];
+const FILTERS = ['pending', 'in_progress', 'completed', 'all'] as const;
 
-const PRIORITY_FILTERS: { key: PriorityFilterKey; label: string }[] = [
-  { key: 'all', label: '全部优先级' },
-  { key: 'low', label: '低' },
-  { key: 'medium', label: '中' },
-  { key: 'high', label: '高' },
-  { key: 'urgent', label: '紧急' },
-];
+const PRIORITY_FILTERS = ['all', 'low', 'medium', 'high', 'urgent'] as const;
 
-type TaskGroup = { key: string; label: string; tone: 'muted' | 'accent'; tasks: TaskResponseDto[] };
+type TaskGroup = { key: 'completed' | 'overdue' | 'today' | 'later' | 'undated' | 'closed'; tone: 'muted' | 'accent'; tasks: TaskResponseDto[] };
 
 /**
  * Open work grouped by when it is due — 逾期, 今天, 之后, then 待安排 for tasks
  * without a date — so the list reads like a plan. Finished work is one group.
  */
 export function groupTasksByDue(tasks: TaskResponseDto[], status: FilterKey, today: string): TaskGroup[] {
-  if (status === 'completed') return [{ key: 'completed', label: `已完成（${tasks.length}）`, tone: 'muted', tasks }];
+  if (status === 'completed') return [{ key: 'completed', tone: 'muted', tasks }];
   const overdue: TaskResponseDto[] = [];
   const dueToday: TaskResponseDto[] = [];
   const later: TaskResponseDto[] = [];
@@ -80,16 +70,18 @@ export function groupTasksByDue(tasks: TaskResponseDto[], status: FilterKey, tod
     else later.push(task);
   }
   const byDue = (a: TaskResponseDto, b: TaskResponseDto) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime();
-  return [
-    { key: 'overdue', label: `逾期（${overdue.length}）`, tone: 'accent' as const, tasks: overdue.sort(byDue) },
-    { key: 'today', label: `今天（${dueToday.length}）`, tone: 'muted' as const, tasks: dueToday.sort(byDue) },
-    { key: 'later', label: `之后（${later.length}）`, tone: 'muted' as const, tasks: later.sort(byDue) },
-    { key: 'undated', label: `待安排（${undated.length}）`, tone: 'muted' as const, tasks: undated },
-    { key: 'closed', label: `已结束（${closed.length}）`, tone: 'muted' as const, tasks: closed },
-  ].filter(group => group.tasks.length > 0);
+  const groups: TaskGroup[] = [
+    { key: 'overdue', tone: 'accent' as const, tasks: overdue.sort(byDue) },
+    { key: 'today', tone: 'muted' as const, tasks: dueToday.sort(byDue) },
+    { key: 'later', tone: 'muted' as const, tasks: later.sort(byDue) },
+    { key: 'undated', tone: 'muted' as const, tasks: undated },
+    { key: 'closed', tone: 'muted' as const, tasks: closed },
+  ];
+  return groups.filter(group => group.tasks.length > 0);
 }
 
 export default function TaskListScreen() {
+  const { t } = useTranslation(['tasks', 'shared', 'auth', 'navigation', 'editConflict', 'recurrence']);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const desktop = useDesktop();
@@ -104,7 +96,7 @@ export default function TaskListScreen() {
   const [materializedThrough, setMaterializedThrough] = useState<string | null>(null);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'refreshError' | 'loadError' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useWorkspaceState<FilterKey>(`view:${id}:tasks:filter`, 'pending');
   const [priorityFilter, setPriorityFilter] = useWorkspaceState<PriorityFilterKey>(`view:${id}:tasks:priorityFilter`, 'all');
@@ -195,7 +187,7 @@ export default function TaskListScreen() {
       const token = await sessionTransport.getAccessToken();
       if (request !== requestGeneration.current) return;
       if (token === null) {
-        setError('登录已过期，请重新登录。');
+        setError('auth:errors.sessionExpired');
         return;
       }
       const [tasksResult, householdResult] = await Promise.all([
@@ -208,7 +200,7 @@ export default function TaskListScreen() {
       setMaterializedThrough(tasksResult.materializedThrough ?? null);
       setMembers(householdResult.members);
     } catch {
-      if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? '刷新失败，仍显示上次的任务。请检查网络后重试。' : '无法加载任务，请检查网络连接后重试。');
+      if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? 'refreshError' : 'loadError');
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
@@ -261,79 +253,85 @@ export default function TaskListScreen() {
   const groups = useMemo(() => groupTasksByDue(filteredTasks, filter, todayIso), [filteredTasks, filter, todayIso]);
 
   const filterSummary = activeFilterCount ? [
-    priorityFilter !== 'all' ? `${PRIORITY_FILTERS.find(p => p.key === priorityFilter)?.label}优先级` : '',
-    assigneeFilter !== 'all' ? memberNameMap.get(assigneeFilter) ?? '已选负责人' : '',
-    labelFilter !== 'all' ? availableLabels.find(l => l.id === labelFilter)?.name ?? '已选标签' : '',
-    recurringFilter !== 'all' ? '仅重复' : '',
+    priorityFilter !== 'all' ? t('prioritySummary', { label: priorityLabel(priorityFilter) }) : '',
+    assigneeFilter !== 'all' ? memberNameMap.get(assigneeFilter) ?? t('selectedAssignee') : '',
+    labelFilter !== 'all' ? availableLabels.find(l => l.id === labelFilter)?.name ?? t('selectedLabel') : '',
+    recurringFilter !== 'all' ? t('recurringOnly') : '',
   ].filter(Boolean).join(' · ') : undefined;
-  const statusControl = <FilterOptions hideLabel label="任务状态" options={FILTERS.map(f => ({ value: f.key, label: f.label, name: `筛选：${f.label}` }))} value={filter} onChange={value => setFilter(value as FilterKey)} />;
+  const statusControl = <FilterOptions hideLabel label={t('statusField')} options={FILTERS.map(value => {
+    const label = value === 'all' ? t('all') : statusLabel(value);
+    return { value, label, name: t('filterOption', { label }) };
+  })} value={filter} onChange={value => setFilter(value as FilterKey)} />;
 
   return (
     <HouseholdScreen
       active="tasks"
-      accessibilityLabel="家庭任务"
+      accessibilityLabel={t('main')}
       notice={completion.undoNotice}
       refreshing={refreshing}
       onRefresh={handleRefresh}
       width="reading"
-      floatingAction={<FloatingCreateButton label="创建任务" onPress={handleCreateTask} />}
+      floatingAction={<FloatingCreateButton label={t('create')} onPress={handleCreateTask} />}
     >
       <Stack gap={desktop ? 3 : 5} style={desktop ? { maxWidth: theme.layout.listPaneMaxWidth } : undefined}>
         <PageIntro
-          title="任务"
-          {...(filterSummary ? { subtitle: filterSummary } : desktop && !loading ? { subtitle: `${tasks.filter(task => task.status !== 'completed' && task.status !== 'cancelled').length} 项未完成` } : {})}
+          title={t('navigation:pages.tasks')}
+          {...(filterSummary ? { subtitle: filterSummary } : desktop && !loading ? { subtitle: t('openCount', { count: tasks.filter(task => task.status !== 'completed' && task.status !== 'cancelled').length }) } : {})}
           {...(desktop ? { controls: statusControl } : {})}
-          action={<>{desktop ? <><SearchField label="搜索任务" placeholder="搜索任务" value={query} onChangeText={setQuery} /></> : null}<FilterButton ref={filterTrigger} label="筛选任务" count={activeFilterCount} onPress={() => setFiltersOpen(true)} /></>}
+          action={<>{desktop ? <><SearchField label={t('search')} placeholder={t('search')} value={query} onChangeText={setQuery} /></> : null}<FilterButton ref={filterTrigger} label={t('filter')} count={activeFilterCount} onPress={() => setFiltersOpen(true)} /></>}
         />
         {!desktop ? statusControl : null}
-        {filtersOpen ? <AppDialog title="筛选任务" trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
+        {filtersOpen ? <AppDialog title={t('filter')} trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
           <Stack gap={5}>
-            <FilterOptions label="优先级" options={PRIORITY_FILTERS.map(p => ({ value: p.key, label: p.label, name: `优先级筛选：${p.label}` }))} value={priorityFilter} onChange={value => setPriorityFilter(value as PriorityFilterKey)} />
-            <FilterOptions label="负责人" options={[{ value: 'all', label: '全部成员', name: '全部成员' }, ...assigneeOptions.map(m => ({ value: m.userId, label: m.displayName, name: `筛选：${m.displayName}` }))]} value={assigneeFilter} onChange={setAssigneeFilter} />
-            {availableLabels.length ? <FilterOptions label="标签" options={[{ value: 'all', label: '全部标签', name: '全部标签' }, ...availableLabels.map(l => ({ value: l.id, label: l.name, name: `筛选标签：${l.name}` }))]} value={labelFilter} onChange={setLabelFilter} /> : null}
-            <FilterOptions label={RECURRING_FILTER_GROUP_LABEL} options={RECURRING_FILTERS.map(f => ({ value: f.key, label: f.label, name: recurringFilterAccessibilityLabel(f.key) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
+            <FilterOptions label={t('editConflict:priority')} options={PRIORITY_FILTERS.map(value => {
+              const label = value === 'all' ? t('allPriorities') : priorityLabel(value);
+              return { value, label, name: t('priorityOption', { label }) };
+            })} value={priorityFilter} onChange={value => setPriorityFilter(value as PriorityFilterKey)} />
+            <FilterOptions label={t('shared:assignee')} options={[{ value: 'all', label: t('allMembers'), name: t('allMembers') }, ...assigneeOptions.map(m => ({ value: m.userId, label: m.displayName, name: t('filterOption', { label: m.displayName }) }))]} value={assigneeFilter} onChange={setAssigneeFilter} />
+            {availableLabels.length ? <FilterOptions label={t('editConflict:labels')} options={[{ value: 'all', label: t('allLabels'), name: t('allLabels') }, ...availableLabels.map(l => ({ value: l.id, label: l.name, name: t('labelOption', { label: l.name }) }))]} value={labelFilter} onChange={setLabelFilter} /> : null}
+            <FilterOptions label={t('recurrence:repeat')} options={RECURRING_FILTERS.map(value => ({ value, label: t(`recurrence:filter.${value}`), name: recurringFilterAccessibilityLabel(value) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
           </Stack>
         </AppDialog> : null}
 
-        {loading && <LoadingState label="正在加载任务" />}
+        {loading && <LoadingState label={t('loading')} />}
 
-        {error !== null && <LoadError message={error} onRetry={() => void fetchData()} retryAccessibilityLabel="重试加载任务" />}
+        {error !== null && <LoadError message={t(error)} onRetry={() => void fetchData()} retryAccessibilityLabel={t('retryLoad')} />}
 
         {!loading && error === null && filteredTasks.length === 0 && (
           generationWindow === 'behind' ? (
             <StatusPanel
               action={null}
-              body={GENERATION_BEHIND_BODY}
-              heading={GENERATION_BEHIND_HEADING}
+              body={generationBehindBody()}
+              heading={generationBehindHeading()}
               kind="offline"
             />
           ) : (
             <EmptyState
-              {...(tasks.length === 0 ? { title: '还没有任务' } : {})}
+              {...(tasks.length === 0 ? { title: t('emptyTitle') } : {})}
               message={tasks.length === 0
-                ? '创建第一个任务，和家人一起安排。'
+                ? t('emptyMessage')
                 : recurringFilter === 'recurring' &&
                     filter === 'all' &&
                     priorityFilter === 'all' &&
                     assigneeFilter === 'all' &&
                     labelFilter === 'all'
-                  ? RECURRING_EMPTY_TASKS
-                  : '没有符合筛选条件的任务。'}
-              {...(activeFilterCount ? { action: <Button label="调整筛选" tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
+                  ? recurringEmptyTasks()
+                  : t('emptyFiltered')}
+              {...(activeFilterCount ? { action: <Button label={t('adjustFilter')} tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
             />
           )
         )}
 
         {groups.map(group => (
           <View key={group.key}>
-            <GroupLabel flush tone={group.tone}>{group.label}</GroupLabel>
+            <GroupLabel flush tone={group.tone}>{t(`groups.${group.key}`, { count: group.tasks.length })}</GroupLabel>
             <ListGroup flush>
               {group.tasks.map((task) => (
                 <TaskCard
                   table
                   key={task.id}
                   task={task}
-                  assignees={(task.assigneeIds ?? []).map((uid) => ({ id: uid, name: memberNameMap.get(uid) ?? '未知成员' }))}
+                  assignees={(task.assigneeIds ?? []).map((uid) => ({ id: uid, name: memberNameMap.get(uid) ?? t('unknownMember') }))}
                   onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
                   selected={task.id === openTaskId}
                   {...completion.cardProps(task)}

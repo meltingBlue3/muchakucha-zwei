@@ -1,3 +1,5 @@
+import { statusLabel, priorityLabel } from './task-utils';
+import { useTranslation } from '../../i18n';
 import { DraftNotice } from '../../ui/draft-notice';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
@@ -26,24 +28,16 @@ import { alarmValue, choiceFromValue, choiceValue, DEFAULT_REMINDER, fitChoice, 
 import {
   followStartDate,
   recurrenceErrorsFromApi,
+  type RecurrenceErrorKey,
   recurrenceInputFromResponse,
   type RecurrenceInput,
 } from '../recurrence/recurrence-options';
 
-const STATUSES = [
-  { value: 'pending', label: '待办' },
-  { value: 'in_progress', label: '进行中' },
-  { value: 'completed', label: '已完成' },
-] as const;
+const STATUSES = ['pending', 'in_progress', 'completed'] as const;
 
 const UNASSIGNED = '__unassigned__';
 
-const PRIORITIES = [
-  { value: 'low', label: '低' },
-  { value: 'medium', label: '中' },
-  { value: 'high', label: '高' },
-  { value: 'urgent', label: '紧急' },
-] as const;
+const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 
 interface MemberOption {
   userId: string;
@@ -115,6 +109,7 @@ function dueFields(iso: string | null | undefined): Pick<TaskInput, 'dueDate' | 
 }
 
 export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submitLabel, isSubmitting, householdId, selectedLabelIds, onLabelChange }: TaskFormProps) {
+  const { t } = useTranslation(['tasks', 'shared', 'editConflict', 'picker']);
   const activeTheme = useTheme<Theme>();
   const inputs = useComposeInputStyles();
   // A brand-new task's due date starts empty (`EMPTY_TASK.dueDate`), and the
@@ -144,11 +139,12 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
   const [reminder, setReminder] = useWorkspaceState<ReminderOptionValue>(draftKey === undefined ? undefined : `${draftKey}:reminder`, () => choiceValue(initial?.myReminder ?? DEFAULT_REMINDER));
   const [alarm, setAlarm] = useWorkspaceState<AlarmOptionValue>(draftKey === undefined ? undefined : `${draftKey}:alarm`, () => alarmValue(initial?.myReminder ?? DEFAULT_REMINDER));
   const userId = useCurrentUser()?.id ?? '';
-  const [error, setError] = useState<string | null>(null);
-  const [titleError, setTitleError] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [titleInvalid, setTitleInvalid] = useState(false);
+  const titleError = titleInvalid ? t('titleRequired') : null;
   const titleInput = useRef<TextInput>(null);
   const titleErrorId = `task-title-error-${useId()}`;
-  const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, string>>({});
+  const [recurrenceErrors, setRecurrenceErrors] = useState<Record<string, RecurrenceErrorKey>>({});
 
   // Existing repeats keep their anchor even when this occurrence moves or
   // loses its due date. Other tasks use a nonempty default for the picker.
@@ -156,21 +152,21 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
 
   const updateField = useCallback(<K extends keyof TaskInput>(key: K, value: TaskInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-    setError(null);
-    if (key === 'title' && typeof value === 'string' && value.trim() !== '') setTitleError(null);
+    setSaveFailed(false);
+    if (key === 'title' && typeof value === 'string' && value.trim() !== '') setTitleInvalid(false);
     if (key === 'recurrence' || key === 'dueDate') setRecurrenceErrors({});
   }, [setForm]);
 
   const handleSubmit = useCallback(async () => {
     if (form.title.trim().length === 0) {
-      setTitleError('请输入任务标题。');
+      setTitleInvalid(true);
       titleInput.current?.focus();
       return;
     }
     // A new task's rule carries its own start, chosen on the custom repeat page.
     const ruleStart = isCreate && form.recurrence !== null ? form.recurrence.startsOn : recurrenceStart;
     if (form.recurrence?.endsOn !== undefined && form.recurrence.endsOn <= ruleStart) {
-      setRecurrenceErrors({ 'recurrence.endsOn': '重复的截止日期必须晚于开始日期。' });
+      setRecurrenceErrors({ 'recurrence.endsOn': 'endOrder' });
       return;
     }
 
@@ -208,7 +204,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
       if (Object.keys(fieldErrors).length > 0) {
         setRecurrenceErrors(fieldErrors);
       } else {
-        setError('保存失败，请检查网络后重试。');
+        setSaveFailed(true);
       }
     }
   }, [alarm, baseline, form, isCreate, onSubmit, recurrenceStart, reminder]);
@@ -236,8 +232,8 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
   };
   const memberNames = new Map(members.map(member => [member.userId, member.displayName]));
   const assigneeSummary = form.assigneeIds.map(id => memberNames.get(id)).filter(Boolean).join('、');
-  const statusLabel = form.status === 'cancelled' ? '已取消' : STATUSES.find(status => status.value === form.status)?.label ?? form.status;
-  const priorityLabel = PRIORITIES.find(priority => priority.value === form.priority)?.label ?? form.priority;
+  const status = statusLabel(form.status);
+  const priority = priorityLabel(form.priority);
 
   return (
     <Stack gap={0}>
@@ -249,11 +245,11 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
           editable={!isSubmitting}
           value={form.title}
           onChangeText={(v) => updateField('title', v)}
-          placeholder="添加标题"
+          placeholder={t('addTitle')}
           placeholderTextColor={activeTheme.colors.inkMuted}
           style={inputs.title}
           maxLength={200}
-          accessibilityLabel="任务标题"
+          accessibilityLabel={t('titleField')}
           aria-invalid={titleError !== null}
           {...(titleError === null ? {} : { 'aria-describedby': titleErrorId, accessibilityHint: titleError })}
         />
@@ -272,8 +268,8 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
             value={dueRow.date}
             onChange={dueRow.setDate}
             mode="date"
-            placeholder="添加截止日期"
-            accessibilityLabel={dueRow.recurring ? '首次截止日期' : '截止日期'}
+            placeholder={t('addDueDate')}
+            accessibilityLabel={dueRow.recurring ? t('firstDueDate') : t('editConflict:dueDate')}
           />
           <DateField
             appearance="plain"
@@ -284,14 +280,14 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
             mode="time"
             // Beside a full date and the clear button a phone has room for two
             // characters, so a chosen date shortens the prompt.
-            placeholder={dueRow.date === '' ? '添加时间' : '时间'}
+            placeholder={dueRow.date === '' ? t('addTime') : t('picker:name.time')}
             pickerDefault="09:00"
-            accessibilityLabel={dueRow.recurring ? '每次的截止时间' : '截止时间'}
+            accessibilityLabel={dueRow.recurring ? t('occurrenceTime') : t('dueTime')}
           />
           {dueRow.clearable ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={dueRow.recurring ? '清除每次的截止时间' : '清除截止日期'}
+              accessibilityLabel={dueRow.recurring ? t('clearOccurrenceTime') : t('clearDueDate')}
               disabled={isSubmitting}
               onPress={dueRow.clear}
               style={({ pressed }) => ({ width: activeTheme.controlSizes.touchTarget, height: activeTheme.controlSizes.touchTarget, borderRadius: activeTheme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.transparent })}
@@ -301,7 +297,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
           ) : null}
         </FormRow>
         <RecurrenceField
-          name="任务重复设置"
+          name={t('recurrenceSetting')}
           icon={rowIcon(Repeat)}
           disabled={isSubmitting}
           disableTurnOff={isExistingRecurring}
@@ -326,47 +322,47 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
 
       <FormSection>
         <ChoiceField
-          name="负责人"
-          title="负责人"
+          name={t('shared:assignee')}
+          title={t('shared:assignee')}
           icon={rowIcon(Users)}
-          summary={assigneeSummary || '未分配'}
+          summary={assigneeSummary || t('unassigned')}
           muted={assigneeSummary === ''}
           multiple
           emptyValue={UNASSIGNED}
-          options={[{ value: UNASSIGNED, label: '未分配' }, ...members.map(member => ({ value: member.userId, label: member.displayName }))]}
+          options={[{ value: UNASSIGNED, label: t('unassigned') }, ...members.map(member => ({ value: member.userId, label: member.displayName }))]}
           value={form.assigneeIds}
           disabled={isSubmitting}
           onChange={(ids) => updateField('assigneeIds', ids.filter(id => id !== UNASSIGNED))}
         />
         <ChoiceField
-          name="任务状态"
-          title="状态"
+          name={t('statusField')}
+          title={t('editConflict:status')}
           icon={rowIcon(CircleCheck)}
-          summary={statusLabel}
-          options={STATUSES}
+          summary={status}
+          options={STATUSES.map(value => ({ value, label: statusLabel(value) }))}
           value={[form.status]}
           disabled={isSubmitting}
           onChange={([status]) => { if (status) updateField('status', status); }}
         />
         {form.status === 'cancelled' ? (
           <View style={{ paddingLeft: ROW_CONTENT_INSET, flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}>
-            <Text variant="bodySm" style={{ flex: 1 }}>这一次已取消。</Text>
+            <Text variant="bodySm" style={{ flex: 1 }}>{t('occurrenceCancelled')}</Text>
             <Pressable
-              accessibilityLabel="恢复这一次"
+              accessibilityLabel={t('restoreOccurrence')}
               accessibilityRole="button"
               onPress={() => updateField('status', 'pending')}
               style={({ pressed }) => ({ justifyContent: 'center', minHeight: activeTheme.controlSizes.touchTarget, opacity: pressed ? 0.7 : 1 })}
             >
-              <Text variant="label" color="link">恢复这一次</Text>
+              <Text variant="label" color="link">{t('restoreOccurrence')}</Text>
             </Pressable>
           </View>
         ) : null}
         <ChoiceField
-          name="任务优先级"
-          title="优先级"
+          name={t('priorityField')}
+          title={t('editConflict:priority')}
           icon={rowIcon(Flag)}
-          summary={`${priorityLabel}优先级`}
-          options={PRIORITIES}
+          summary={t('prioritySummary', { label: priority })}
+          options={PRIORITIES.map(value => ({ value, label: priorityLabel(value) }))}
           value={[form.priority]}
           disabled={isSubmitting}
           onChange={([priority]) => { if (priority) updateField('priority', priority); }}
@@ -379,12 +375,12 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
             editable={!isSubmitting}
             value={form.description}
             onChangeText={(v) => updateField('description', v)}
-            placeholder="添加说明"
+            placeholder={t('addDescription')}
             placeholderTextColor={activeTheme.colors.inkMuted}
             style={[inputs.row, { minHeight: activeTheme.spacing[16] + activeTheme.spacing[4], textAlignVertical: 'top' }]}
             multiline
             numberOfLines={4}
-            accessibilityLabel="任务描述"
+            accessibilityLabel={t('descriptionField')}
           />
         </FormRow>
       </FormSection>
@@ -403,9 +399,9 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
         </FormSection>
       )}
 
-      {error !== null && (
+      {saveFailed && (
         <Text accessibilityRole="alert" variant="bodySm" color="destructive" style={{ marginTop: activeTheme.spacing[4] }}>
-          {error}
+          {t('saveNetwork')}
         </Text>
       )}
 

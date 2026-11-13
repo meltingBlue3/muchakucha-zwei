@@ -1,3 +1,5 @@
+import { i18n } from '../../i18n';
+
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 
 /**
@@ -23,6 +25,6 @@ export function completionToggleTarget(status: string): TaskStatus | null {
 
 /** Accessible name for the completion control. */
 export function completionActionLabel(status: string): string {
-  if (status === 'cancelled') return '这次重复已取消';
-  return status === 'completed' ? '标记为未完成' : '完成任务';
+  if (status === 'cancelled') return i18n.t('tasks:expiredOccurrence');
+  return i18n.t(status === 'completed' ? 'tasks:markIncomplete' : 'tasks:complete');
 }
