@@ -458,6 +458,16 @@ export class EventsService {
     if (input.description !== undefined) data.description = input.description?.trim() || null;
     if (input.startTime !== undefined) data.startTime = new Date(input.startTime);
     if (input.endTime !== undefined) data.endTime = new Date(input.endTime);
+    // The same order create enforces, checked against whichever side the edit leaves in place.
+    const nextStart = input.startTime === undefined ? event.startTime : new Date(input.startTime);
+    const nextEnd = input.endTime === undefined ? event.endTime : new Date(input.endTime);
+    if (nextEnd <= nextStart) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [{ field: 'endTime', codes: ['must_be_after_start'], message: 'End time must be after start time.' }],
+      });
+    }
     if (input.allDay !== undefined) data.allDay = input.allDay;
     if (input.location !== undefined) data.location = input.location?.trim() || null;
 

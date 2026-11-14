@@ -377,6 +377,27 @@ describe('events CRUD API contract', () => {
     expect(badRange.statusCode).toBe(400);
   });
 
+  test('keeps the end after the start on update, including when only one side moves', async () => {
+    const start = '2030-01-01T09:00:00.000Z';
+    const end = '2030-01-01T10:00:00.000Z';
+    const created = await eventApi(owner.accessToken, householdId, 'POST', '', { title: '时间顺序', startTime: start, endTime: end });
+    expect(created.statusCode).toBe(201);
+    const path = `/${encodeURIComponent(created.json().id)}`;
+
+    for (const change of [
+      { startTime: '2030-01-01T11:00:00.000Z', endTime: '2030-01-01T10:30:00.000Z' },
+      { startTime: '2030-01-01T10:00:00.000Z' },
+      { endTime: '2030-01-01T08:00:00.000Z' },
+    ]) {
+      const response = await eventApi(owner.accessToken, householdId, 'PUT', path, change);
+      expect({ change, status: response.statusCode }).toEqual({ change, status: 400 });
+      expect(response.json().error.code).toBe('VALIDATION_FAILED');
+    }
+
+    const stored = (await eventApi(owner.accessToken, householdId, 'GET', path)).json();
+    expect([stored.startTime, stored.endTime]).toEqual([start, end]);
+  });
+
   test('requires a valid active access-token session', async () => {
     const missing = await app.getHttpAdapter().getInstance().inject({
       method: 'GET',
