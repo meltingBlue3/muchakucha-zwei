@@ -79,10 +79,11 @@ export function formatMonthLabel(year: number, month: number): string {
   return formatYearMonth(new Date(year, month, 1));
 }
 
-export function calendarDayName(date: string, isToday: boolean, count: number): string {
+export function calendarDayName(date: string, isToday: boolean, count: number, holiday: string | null = null): string {
   const today = isToday ? i18n.t('events:dayLabelToday') : '';
+  const named = holiday === null ? '' : i18n.t('events:dayLabelHoliday', { name: holiday });
   const events = count > 0 ? i18n.t('events:dayLabelEvents', { count }) : '';
-  return `${date}${today}${events}`;
+  return `${date}${today}${named}${events}`;
 }
 
 export function formatTime(iso: string): string {

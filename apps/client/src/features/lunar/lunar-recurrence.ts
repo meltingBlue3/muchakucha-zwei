@@ -1,6 +1,7 @@
 import type { LunarAnchorDto } from '@muchakucha/api-client';
 import { LUNAR_LAST_YEAR, formatLunarMonthDay, lunarAnniversary, toLunar, type SolarDate } from '@muchakucha/lunar';
 
+import { currentLanguage } from '../../i18n';
 import { solarDateOf } from './lunar-calendar';
 
 function isoOf(date: SolarDate | null): string | null {
@@ -19,9 +20,9 @@ export function lunarAnchorFor(date: string, previous?: LunarAnchorDto | null): 
   return { month: lunar.month, day: lunar.day };
 }
 
-/** 十月十五. */
+/** 十月十五, in the interface language. */
 export function formatLunarAnchor(anchor: LunarAnchorDto): string {
-  return formatLunarMonthDay(anchor.month, anchor.day);
+  return formatLunarMonthDay(anchor.month, anchor.day, false, currentLanguage());
 }
 
 /** The dates of a lunar yearly rule, every `interval` lunar years from the first on or after `startsOn`. */

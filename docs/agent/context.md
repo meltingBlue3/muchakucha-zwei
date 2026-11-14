@@ -19,6 +19,7 @@ Read this index only when the owning module or entry point of a request is uncle
 | Tasks, filters, status transitions | `src/features/tasks/` |
 | Recurrence pickers, summaries, series scope | `src/features/recurrence/` |
 | Lunar dates in calendars, the per-device 显示农历 choice, lunar repeat anchors | `src/features/lunar/`, `src/platform/preferences/`; conversion in `packages/lunar/` |
+| Holidays in Japan and era years in calendars, and the per-device choice to show them | `src/features/wareki/`, `src/platform/preferences/`; rules in `packages/wareki/` |
 | 家人生日 list and the add-birthday form | `src/features/birthdays/` |
 | Notes and labels | `src/features/notes/`, `src/features/labels/` |
 | Assistant conversations, model settings, action previews | `src/features/assistant/`; routes under `app/(protected)/households/[id]/assistant/` |

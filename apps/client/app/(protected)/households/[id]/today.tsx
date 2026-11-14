@@ -26,6 +26,7 @@ import { EventCard } from '../../../../src/features/events/event-card';
 import { TaskCard } from '../../../../src/features/tasks/task-card';
 import { toDateIso } from '../../../../src/features/events/calendar-utils';
 import { lunarDateOn, useLunarCalendar } from '../../../../src/features/lunar/lunar-calendar';
+import { holidayNameOn, useJapaneseCalendar } from '../../../../src/features/wareki/japanese-calendar';
 import { partitionTodayTasks } from '../../../../src/features/tasks/today-tasks';
 import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../../../src/ui/primitives';
 import { theme } from '../../../../src/ui/theme';
@@ -70,6 +71,7 @@ export default function TodayRoute() {
   const now = useMinuteClock();
   const currentDate = toDateIso(now.date);
   const lunarToday = useLunarCalendar() ? lunarDateOn(currentDate) : null;
+  const holidayToday = useJapaneseCalendar() ? holidayNameOn(currentDate) : null;
   // The API pads its range for client time zones; only local dates belong here.
   const todayEvents = useMemo(() => events.filter(event =>
     toDateIso(new Date(event.startTime)) <= currentDate &&
@@ -214,6 +216,7 @@ export default function TodayRoute() {
     <Text variant="bodySm">
       {/* On a wide screen the sidebar names the page 今日, so the header carries the date in its summary. */}
       {desktop ? `${formatDate(now.date)} ${formatWeekday(now.date)}` : formatWeekday(now.date)}
+      {holidayToday ? ` · ${holidayToday}` : ''}
       {lunarToday ? ` · ${lunarToday}` : ''}
       {ready ? ` · ${t('events:count', { count: todayEvents.length })} · ${t('taskCount', { count: todayTasks.length })}` : ''}
       {ready && overdueTasks.length > 0 ? <Text variant="bodySm" color="accent">{` · ${t('households:overdueCount', { count: overdueTasks.length })}`}</Text> : null}

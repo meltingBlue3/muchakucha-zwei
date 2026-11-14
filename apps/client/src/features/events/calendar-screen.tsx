@@ -31,6 +31,7 @@ import { useHouseholdContext } from '../households/household-context';
 import { mergeLabels, useHouseholdLabels } from '../labels/use-household-labels';
 import { CalendarMonth, type CalendarCellEvent } from './calendar-month';
 import { lunarDescriptionOn, useLunarCalendar } from '../lunar/lunar-calendar';
+import { eraYearOfMonth, holidayNameOn, useJapaneseCalendar } from '../wareki/japanese-calendar';
 import { HouseholdScreen } from '../households/household-screen';
 import { EventCard } from './event-card';
 import { formatMonthLabel, toDateIso, toDateRangeIso } from './calendar-utils';
@@ -67,6 +68,7 @@ export default function CalendarScreen() {
   const { currentHouseholdId } = useHouseholdContext();
 
   const lunar = useLunarCalendar();
+  const japanese = useJapaneseCalendar();
   const clock = useMinuteClock();
   const today = clock.date;
   const todayIso = toDateIso(today);
@@ -183,6 +185,8 @@ export default function CalendarScreen() {
     handleSelectDate(toDateIso(next));
   };
   const lunarLabel = lunar && selectedDateIso ? lunarDescriptionOn(selectedDateIso) : null;
+  const holidayLabel = japanese && selectedDateIso ? holidayNameOn(selectedDateIso) : null;
+  const eraYear = japanese ? eraYearOfMonth(year, month) : null;
   const dateLabel = selectedDateIso ? formatDate(new Date(`${selectedDateIso}T12:00:00`), { weekday: true }) : t('selectedDay');
   const activeFilterCount = [recurringFilter !== 'all', labelFilter !== 'all'].filter(Boolean).length;
   const clearFilters = () => { setLabelFilter('all'); setRecurringFilter('all'); };
@@ -227,7 +231,7 @@ export default function CalendarScreen() {
           title={t('navigation:pages.events')}
           // On a wide screen the month being shown reads right after the page title, with its arrows and 今天; filters stay with the actions.
           {...(desktop ? { subtitle: <Inline gap={3}>
-            <Inline gap={1}><IconButton label={t('previousMonth')} appearance="plain" icon={<ChevronLeft size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />} onPress={() => changeMonth(-1)} /><Text variant="section" color="ink">{formatMonthLabel(year, month)}</Text><IconButton label={t('nextMonth')} appearance="plain" icon={<ChevronRight size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />} onPress={() => changeMonth(1)} /></Inline>
+            <Inline gap={1}><IconButton label={t('previousMonth')} appearance="plain" icon={<ChevronLeft size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />} onPress={() => changeMonth(-1)} /><Text variant="section" color="ink">{formatMonthLabel(year, month)}</Text>{eraYear ? <Text variant="meta">{eraYear}</Text> : null}<IconButton label={t('nextMonth')} appearance="plain" icon={<ChevronRight size={activeTheme.controlSizes.icon} color={activeTheme.colors.inkMuted} />} onPress={() => changeMonth(1)} /></Inline>
             <Button label={t('today')} accessibilityLabel={t('goToToday')} tone="secondary" size="compact" onPress={() => handleSelectDate(toDateIso(new Date()))} />
             {filterSummary ? <Text variant="meta" numberOfLines={1}>{filterSummary}</Text> : null}
           </Inline> } : filterSummary ? { subtitle: filterSummary } : {})}
@@ -244,7 +248,7 @@ export default function CalendarScreen() {
         </AppDialog> : null}
         <View style={{ flexDirection: wide ? 'row' : 'column', gap: desktop ? 0 : activeTheme.spacing[6], alignItems: desktop ? 'stretch' : wide ? 'flex-start' : 'stretch', ...(desktop ? { flex: 1, minHeight: 0 } : {}) }}>
           <View testID="calendar-month-pane" style={{ flex: wide ? 2 : undefined, minWidth: 0 }}>
-            {desktop ? <DesktopMonth year={year} month={month} todayIso={todayIso} selectedDateIso={selectedDateIso} events={filteredEvents} onSelectDate={handleSelectDate} onOpenEvent={handleEventPress} lunar={lunar} /> : <CalendarMonth
+            {desktop ? <DesktopMonth year={year} month={month} todayIso={todayIso} selectedDateIso={selectedDateIso} events={filteredEvents} onSelectDate={handleSelectDate} onOpenEvent={handleEventPress} lunar={lunar} japanese={japanese} /> : <CalendarMonth
               todayIso={todayIso}
               year={year}
               month={month}
@@ -252,6 +256,7 @@ export default function CalendarScreen() {
               {...(wide ? { eventTitlesByDate } : { eventColorsByDate: eventTitlesByDate })}
               selectedDateIso={selectedDateIso}
               lunar={lunar}
+              japanese={japanese}
               mode={compactWeek ? 'week' : 'month'}
               onPrevMonth={() => changeMonth(-1)}
               onNextMonth={() => changeMonth(1)}
@@ -262,7 +267,7 @@ export default function CalendarScreen() {
             />}
           </View>
           {desktop ? <View testID="calendar-agenda-pane" style={{ width: activeTheme.layout.calendarAgendaWidth, minHeight: 0, borderLeftWidth: activeTheme.borderWidths.default, borderLeftColor: activeTheme.colors.separator, ...(paneOpen ? { display: 'none' } : {}) }}>
-            <DesktopDayPane lunar={lunar} dateIso={selectedDateIso ?? todayIso} todayIso={todayIso} events={selectedDateEvents} openEventId={openEventId ?? null} nowMinutes={clock.minutes} onOpen={handleEventPress} onCreate={handleCreateEvent} onEdit={editEvent} onDelete={deleteEvent}>
+            <DesktopDayPane lunar={lunar} japanese={japanese} dateIso={selectedDateIso ?? todayIso} todayIso={todayIso} events={selectedDateEvents} openEventId={openEventId ?? null} nowMinutes={clock.minutes} onOpen={handleEventPress} onCreate={handleCreateEvent} onEdit={editEvent} onDelete={deleteEvent}>
               {loading ? <LoadingState label={t('loading')} /> : null}
               {error ? <LoadError message={t(error)} onRetry={() => void fetchEvents()} retryAccessibilityLabel={t('retryLoad')} /> : null}
               {!loading && !error && selectedDateEvents.length === 0 ? <EmptyState
@@ -271,7 +276,7 @@ export default function CalendarScreen() {
               /> : null}
             </DesktopDayPane>
           </View> :           <View testID="calendar-agenda-pane" style={{ flex: wide ? 1 : undefined, minWidth: 0 }}>
-            <GroupLabel>{[dateLabel, selectedIsToday ? t('today') : null, lunarLabel].filter(Boolean).join(' · ')}</GroupLabel>
+            <GroupLabel>{[dateLabel, selectedIsToday ? t('today') : null, holidayLabel, lunarLabel].filter(Boolean).join(' · ')}</GroupLabel>
             <Stack gap={3}>
               {loading ? <LoadingState label={t('loading')} /> : null}
               {error ? <LoadError message={t(error)} onRetry={() => void fetchEvents()} retryAccessibilityLabel={t('retryLoad')} /> : null}

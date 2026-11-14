@@ -1,7 +1,16 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { setLanguageChoice } from '../../../i18n';
+import { theme } from '../../../ui/theme';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { CalendarMonth } from '../calendar-month';
 import { getCalendarMonth } from '../calendar-utils';
+
+jest.mock('expo-localization', () => ({ getLocales: jest.fn(() => [{ languageCode: 'en' }]) }));
+
+afterEach(async () => {
+  await act(async () => { setLanguageChoice('system'); });
+});
 
 describe('weeks start on Monday', () => {
   test.each([
@@ -57,4 +66,41 @@ test('lunar dates show under the day numbers only when asked for, and keep day n
   expect(view.getByRole('button', { name: '2026年11月11日，今天' })).toBeTruthy();
   await view.rerender(month(false));
   expect(view.queryByText('初三')).toBeNull();
+});
+
+test('lunar text is written the way the interface language writes it', async () => {
+  const view = await render(
+    <MuchakuchaThemeProvider>
+      <CalendarMonth year={2026} month={8} todayIso="2026-09-16" selectedDateIso="2026-09-16" eventsByDate={new Map()} onSelectDate={jest.fn()} onPrevMonth={jest.fn()} onNextMonth={jest.fn()} lunar />
+    </MuchakuchaThemeProvider>,
+  );
+  for (const text of ['中秋节', '教师节', '八月', '初二', '廿二']) expect(view.getAllByText(text).length).toBeGreaterThan(0);
+  await act(async () => { setLanguageChoice('ja'); });
+  // 教师节 is China's own day, so a Japanese calendar shows that date's lunar day instead.
+  for (const text of ['中秋節', '八月', '二', '二十二', '二十九', '白露']) expect(view.getAllByText(text).length).toBeGreaterThan(0);
+  for (const text of ['中秋节', '教师节', '初二', '廿二']) expect(view.queryByText(text)).toBeNull();
+});
+
+test('a holiday in Japan is written in vermilion with its name in place of the lunar text, and the era year heads the month', async () => {
+  const month = (japanese: boolean) => (
+    <MuchakuchaThemeProvider>
+      <CalendarMonth year={2026} month={8} todayIso="2026-09-16" selectedDateIso="2026-09-25" eventsByDate={new Map()} onSelectDate={jest.fn()} onPrevMonth={jest.fn()} onNextMonth={jest.fn()} lunar japanese={japanese} />
+    </MuchakuchaThemeProvider>
+  );
+  const color = (text: string) => StyleSheet.flatten(view.getByText(text).props.style).color;
+  const view = await render(month(true));
+  // 敬老の日, the day it and 秋分の日 enclose, and 秋分の日 over the solar term 秋分; 中秋节 keeps its lunar name.
+  for (const text of ['令和8年', '敬老の日', '休日', '秋分の日', '中秋节', '白露']) expect(view.getByText(text)).toBeTruthy();
+  expect(view.queryByText('秋分')).toBeNull();
+  expect(view.getByRole('button', { name: '2026年9月22日，国民の休日' })).toBeTruthy();
+  expect(view.getByRole('button', { name: '2026年9月16日，今天' })).toBeTruthy();
+  expect([color('21'), color('敬老の日')]).toEqual([theme.colors.accent, theme.colors.accent]);
+  expect(color('14')).toBe(theme.colors.ink);
+  // Today is a pale vermilion mark, so its number cannot be taken for a holiday's.
+  expect(color('16')).toBe(theme.colors.accentStrong);
+  await view.rerender(month(false));
+  for (const text of ['令和8年', '敬老の日', '休日']) expect(view.queryByText(text)).toBeNull();
+  expect(view.getByText('秋分')).toBeTruthy();
+  expect(color('21')).toBe(theme.colors.ink);
+  expect(view.getByRole('button', { name: '2026年9月22日' })).toBeTruthy();
 });

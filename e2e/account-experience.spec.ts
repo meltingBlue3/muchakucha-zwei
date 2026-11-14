@@ -99,7 +99,7 @@ test('the interface language is chosen per device and survives a reload', async 
   await expect(page.getByRole('heading', { name: 'プロフィール' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '个人资料' })).toHaveCount(0);
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
-  await expect(page.getByRole('switch', { name: '農暦を表示' })).toBeVisible();
+  await expect(page.getByRole('switch', { name: '旧暦を表示' })).toBeVisible();
   await expect(page.getByRole('button', { name: '戻る', exact: true })).toBeVisible();
   await checkLayout(page);
   await page.screenshot({ path: 'test-results/account-profile-japanese.png', fullPage: true });

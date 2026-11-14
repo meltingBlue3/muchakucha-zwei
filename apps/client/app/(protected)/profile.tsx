@@ -14,6 +14,7 @@ import { useCurrentUser } from '../../src/features/auth/use-current-user';
 import { AccountScreen } from '../../src/features/households/household-screen';
 import { ProfileForm } from '../../src/features/profile/profile-form';
 import { setLunarCalendar, useLunarCalendar } from '../../src/features/lunar/lunar-calendar';
+import { setJapaneseCalendar, useJapaneseCalendar } from '../../src/features/wareki/japanese-calendar';
 import { LANGUAGES, LANGUAGE_NAMES, setLanguageChoice, useLanguageChoice, useTranslation, type LanguageChoice } from '../../src/i18n';
 import { AppDialog } from '../../src/ui/app-dialog';
 import { FilterOptions } from '../../src/ui/filter-options';
@@ -58,6 +59,7 @@ export default function ProfileRoute() {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const lunar = useLunarCalendar();
+  const japanese = useJapaneseCalendar();
   const language = useLanguageChoice();
   const { t } = useTranslation('profile');
   // A language is offered under its own name, whatever the interface is in.
@@ -83,6 +85,9 @@ export default function ProfileRoute() {
           <SettingsRows>
             <SwitchRow label={t('calendar.showLunar')} value={lunar} disabled={false} onChange={setLunarCalendar}>
               <Text variant="caption">{t('calendar.showLunarDetail')}</Text>
+            </SwitchRow>
+            <SwitchRow label={t('calendar.showJapanese')} value={japanese} disabled={false} onChange={setJapaneseCalendar}>
+              <Text variant="caption">{t('calendar.showJapaneseDetail')}</Text>
             </SwitchRow>
           </SettingsRows>
         </SettingsSection>
