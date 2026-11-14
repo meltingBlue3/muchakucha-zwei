@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Req,
@@ -22,16 +23,15 @@ import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.g
 import { NotesService } from './notes.service.js';
 import { CreateNoteDto, NoteListResponseDto, NoteResponseDto } from './dto/create-note.dto.js';
 import { UpdateNoteDto } from './dto/update-note.dto.js';
-import { IsUUID } from 'class-validator';
 
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
 }
 
-class HouseholdIdParam {
-  @IsUUID('4')
-  householdId!: string;
-}
+// Per-parameter pipes, as in events.controller.ts: an intersection param type
+// emits `Object` metadata, which ValidationPipe skips, so a malformed id would
+// reach Prisma and surface as a 500.
+const uuidParam = new ParseUUIDPipe({ version: '4' });
 
 @ApiTags('notes')
 @ApiBearerAuth()
@@ -45,10 +45,10 @@ export class NotesController {
   @ApiCreatedResponse({ type: NoteResponseDto })
   create(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam,
+    @Param('householdId', uuidParam) householdId: string,
     @Body() input: CreateNoteDto,
   ): Promise<NoteResponseDto> {
-    return this.notesService.create(request.auth.sub, params.householdId, input);
+    return this.notesService.create(request.auth.sub, householdId, input);
   }
 
   @Get()
@@ -56,9 +56,9 @@ export class NotesController {
   @ApiOkResponse({ type: NoteListResponseDto })
   list(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam,
+    @Param('householdId', uuidParam) householdId: string,
   ): Promise<NoteListResponseDto> {
-    return this.notesService.list(request.auth.sub, params.householdId);
+    return this.notesService.list(request.auth.sub, householdId);
   }
 
   @Get(':noteId')
@@ -66,9 +66,10 @@ export class NotesController {
   @ApiOkResponse({ type: NoteResponseDto })
   getById(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { noteId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('noteId', uuidParam) noteId: string,
   ): Promise<NoteResponseDto> {
-    return this.notesService.getById(request.auth.sub, params.householdId, params.noteId);
+    return this.notesService.getById(request.auth.sub, householdId, noteId);
   }
 
   @Put(':noteId')
@@ -76,10 +77,11 @@ export class NotesController {
   @ApiOkResponse({ type: NoteResponseDto })
   update(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { noteId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('noteId', uuidParam) noteId: string,
     @Body() input: UpdateNoteDto,
   ): Promise<NoteResponseDto> {
-    return this.notesService.update(request.auth.sub, params.householdId, params.noteId, input);
+    return this.notesService.update(request.auth.sub, householdId, noteId, input);
   }
 
   @Delete(':noteId')
@@ -88,8 +90,9 @@ export class NotesController {
   @ApiNoContentResponse()
   async delete(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { noteId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('noteId', uuidParam) noteId: string,
   ): Promise<void> {
-    await this.notesService.delete(request.auth.sub, params.householdId, params.noteId);
+    await this.notesService.delete(request.auth.sub, householdId, noteId);
   }
 }

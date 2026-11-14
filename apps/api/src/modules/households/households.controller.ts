@@ -174,6 +174,9 @@ interface AuthenticatedRequest {
   auth: AccessTokenClaims;
 }
 
+// A malformed id would otherwise reach Prisma and surface as a 500.
+const uuidParam = new ParseUUIDPipe({ version: '4' });
+
 @ApiTags('households')
 @Controller('households')
 export class HouseholdsController {
@@ -262,7 +265,7 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household not found or the actor is not a member.' })
   async getHousehold(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', uuidParam) id: string,
   ): Promise<GetHouseholdResponseDto> {
     if (request.auth === undefined) {
       throw new Error('AccessTokenGuard did not attach verified session claims.');
@@ -288,7 +291,7 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household not found or the actor is not a member.' })
   async updateHousehold(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', uuidParam) id: string,
     @Body() input: UpdateHouseholdDto,
   ): Promise<GetHouseholdResponseDto> {
     if (request.auth === undefined) {
@@ -331,7 +334,7 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household not found or actor is not a member.' })
   async sendHouseholdInvitation(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', uuidParam) id: string,
     @Body() input: SendHouseholdInvitationDto,
   ): Promise<SendHouseholdInvitationResponseDto> {
     if (request.auth === undefined) {
@@ -356,7 +359,7 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household not found or actor is not a member.' })
   async listInvitations(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', uuidParam) id: string,
   ): Promise<ListInvitationsResponseDto> {
     if (request.auth === undefined) {
       throw new Error('AccessTokenGuard did not attach verified session claims.');
@@ -375,8 +378,8 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household or invitation not found.' })
   async resendInvitation(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Param('invitationId') invitationId: string,
+    @Param('id', uuidParam) id: string,
+    @Param('invitationId', uuidParam) invitationId: string,
   ): Promise<ResendInvitationResponseDto> {
     if (request.auth === undefined) {
       throw new Error('AccessTokenGuard did not attach verified session claims.');
@@ -394,8 +397,8 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household or invitation not found.' })
   async revokeInvitation(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Param('invitationId') invitationId: string,
+    @Param('id', uuidParam) id: string,
+    @Param('invitationId', uuidParam) invitationId: string,
   ): Promise<RevokeInvitationResponseDto> {
     if (request.auth === undefined) {
       throw new Error('AccessTokenGuard did not attach verified session claims.');
@@ -417,8 +420,8 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household or target membership not found, or actor is not a member.' })
   async changeMemberRole(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Param('membershipId') targetMembershipId: string,
+    @Param('id', uuidParam) id: string,
+    @Param('membershipId', uuidParam) targetMembershipId: string,
     @Body() input: ChangeMemberRoleDto,
   ): Promise<GetHouseholdResponseDto> {
     if (request.auth === undefined) {
@@ -453,8 +456,8 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household or target membership not found, or actor is not a member.' })
   async removeMember(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Param('membershipId') targetMembershipId: string,
+    @Param('id', uuidParam) id: string,
+    @Param('membershipId', uuidParam) targetMembershipId: string,
   ): Promise<GetHouseholdResponseDto> {
     if (request.auth === undefined) {
       throw new Error('AccessTokenGuard did not attach verified session claims.');
@@ -487,7 +490,7 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household or successor membership not found, or actor is not a member.' })
   async transferOwnership(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', uuidParam) id: string,
     @Body() input: TransferOwnershipDto,
   ): Promise<GetHouseholdResponseDto> {
     if (request.auth === undefined) {
@@ -517,7 +520,7 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household not found or caller is not a member.' })
   async leaveMembership(
     @Req() request: AuthenticatedRequest,
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('id', uuidParam) id: string,
   ): Promise<void> {
     if (request.auth === undefined) throw new Error('Missing authenticated session.');
     await this.householdsService.leaveMembership(request.auth.sub, id);
@@ -536,7 +539,7 @@ export class HouseholdsController {
   @ApiNotFoundResponse({ description: 'Household or successor membership not found, or actor is not a member.' })
   async leaveHousehold(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param('id', uuidParam) id: string,
     @Body() input: LeaveHouseholdDto,
   ): Promise<void> {
     if (request.auth === undefined) {

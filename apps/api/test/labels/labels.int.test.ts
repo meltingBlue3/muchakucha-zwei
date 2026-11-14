@@ -176,6 +176,26 @@ describe('labels API contract', () => {
     await addMemberViaDb(householdId, member, 'MEMBER');
   });
 
+  test('malformed path ids are rejected with 400 rather than a driver-level 500', async () => {
+    const labelId = await createLabel(owner, householdId, '路径检查');
+    const taskId = await createTask(owner, householdId, '路径任务');
+    const eventId = await createEvent(owner, householdId, '路径日程');
+    const cases: Array<[method: 'PUT' | 'POST' | 'DELETE', path: string, payload?: unknown]> = [
+      ['PUT', '/households/not-a-uuid/labels/' + labelId, { name: '不应保存' }],
+      ['PUT', `/households/${householdId}/labels/not-a-uuid`, { name: '不应保存' }],
+      ['DELETE', `/households/${householdId}/labels/not-a-uuid`],
+      ['POST', `/households/${householdId}/tasks/not-a-uuid/labels`, { labelIds: [labelId] }],
+      ['DELETE', `/households/${householdId}/tasks/${taskId}/labels/not-a-uuid`],
+      ['POST', `/households/${householdId}/events/not-a-uuid/labels`, { labelIds: [labelId] }],
+      ['DELETE', `/households/${householdId}/events/${eventId}/labels/not-a-uuid`],
+    ];
+    for (const [method, path, payload] of cases) {
+      const response = await request(owner.accessToken, method, path, payload);
+      expect({ method, path, status: response.statusCode }).toEqual({ method, path, status: 400 });
+    }
+    expect(await labelNamesOf(owner, householdId, '/labels')).toEqual(['路径检查']);
+  });
+
   describe('label management', () => {
     test('creates a label with a trimmed name', async () => {
       const response = await householdApi(admin, householdId, 'POST', '/labels', { name: '学校 ', color: '#3B82F6' });
