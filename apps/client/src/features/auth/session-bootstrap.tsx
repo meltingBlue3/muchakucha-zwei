@@ -6,7 +6,7 @@ import type { SessionStateStore } from './session-state';
 import type { RestoreOutcome, SessionTransport } from '../../platform/session/session-transport';
 import { AuthShell, Button, Spinner, Stack, StatusPanel } from '../../ui/primitives';
 
-export const SAFE_INTENDED_ROUTES = ['/household-handoff', '/profile', '/inbox', '/households', '/households/new'] as const;
+export const SAFE_INTENDED_ROUTES = ['/household-handoff', '/profile', '/settings', '/reminders', '/inbox', '/households', '/households/new'] as const;
 export type SafeIntendedRoute = (typeof SAFE_INTENDED_ROUTES)[number] | `/households/${string}`;
 export type SessionDestination = SafeIntendedRoute | '/login' | '/offline';
 

@@ -250,6 +250,8 @@ describe('session bootstrap contract', () => {
     expect(sanitizeIntendedRoute('/households/123e4567-e89b-12d3-a456-426614174000/settings'))
       .toBe('/households/123e4567-e89b-12d3-a456-426614174000/settings');
     expect(sanitizeIntendedRoute('/inbox')).toBe('/inbox');
+    expect(sanitizeIntendedRoute('/settings')).toBe('/settings');
+    expect(sanitizeIntendedRoute('/reminders')).toBe('/reminders');
     expect(sanitizeIntendedRoute('/invite/opaque_token-123')).toBeUndefined();
     expect(sanitizeIntendedRoute('https://attacker.test')).toBeUndefined();
     expect(sanitizeIntendedRoute('javascript:alert(1)')).toBeUndefined();

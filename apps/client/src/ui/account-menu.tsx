@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import Bell from 'lucide-react-native/icons/bell';
 import CircleUserRound from 'lucide-react-native/icons/circle-user-round';
 import LogOut from 'lucide-react-native/icons/log-out';
+import Settings from 'lucide-react-native/icons/settings';
 
 import { useCallback, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
@@ -22,13 +23,14 @@ import { useTranslation } from '../i18n';
 type AccountPanel = 'closed' | 'menu' | 'profile' | 'logout';
 
 /**
- * The signed-in person's avatar, opening 个人资料, the 提醒 page and 退出登录.
+ * The signed-in person's avatar, opening 个人资料, the 设置 and 提醒 pages and
+ * 退出登录.
  * `row` is the sidebar form: avatar and name across the bottom of the
  * navigation.
  */
 export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) {
   const router = useRouter();
-  const { t } = useTranslation(['profile', 'auth']);
+  const { t } = useTranslation(['profile', 'auth', 'settings']);
   const user = useCurrentUser();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -103,6 +105,7 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
               ) : null}
               {([
                 { key: 'profile', label: t('title'), icon: CircleUserRound },
+                { key: 'settings', label: t('settings:title'), icon: Settings },
                 { key: 'reminders', label: t('links.reminders.label'), icon: Bell },
                 { key: 'logout', label: t('auth:logout.action'), icon: LogOut },
               ] as const).map(({ key, label, icon: Icon }, index) => (
@@ -113,9 +116,9 @@ export function AccountMenu({ variant = 'icon' }: { variant?: 'icon' | 'row' }) 
                   accessibilityLabel={label}
                   onPress={() => {
                     if (desktop && key === 'profile') { setMode('closed'); router.push('/profile'); return; }
-                    if (key !== 'reminders') { setMode(key); return; }
+                    if (key === 'profile' || key === 'logout') { setMode(key); return; }
                     setMode('closed');
-                    router.push('/reminders');
+                    router.push(`/${key}`);
                   }}
                   style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.controlSizes.touchTarget, paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
                 >

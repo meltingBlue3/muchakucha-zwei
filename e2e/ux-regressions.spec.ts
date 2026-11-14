@@ -235,6 +235,12 @@ test('family management is a restorable destination', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '家庭', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '打开家庭设置', exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/households/${a}/more$`));
+  // A row in a grouped list draws its ring inside, where the group cannot clip it.
+  const settingsRow = page.getByRole('button', { name: '打开家庭设置', exact: true });
+  await page.keyboard.press('Shift');
+  await settingsRow.focus();
+  await expect(settingsRow).toHaveCSS('outline-color', 'rgb(194, 56, 28)');
+  await expect(settingsRow).toHaveCSS('outline-offset', '-2px');
 });
 
 test('the household menu reaches the family pages on a phone', async ({ page }) => {

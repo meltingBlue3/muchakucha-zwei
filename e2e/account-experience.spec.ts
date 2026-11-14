@@ -88,35 +88,32 @@ test('Japanese sign-up validates in Japanese and keeps the invitation destinatio
 test('the interface language is chosen per device and survives a reload', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, true);
-  await page.goto('/profile');
+  await page.goto('/settings');
   // A browser in a language the interface is not written in reads Chinese.
-  await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '设置', exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
   const languages = page.getByRole('radiogroup', { name: '语言' });
   await expect(languages.getByRole('radio', { name: '跟随系统' })).toBeChecked();
+  // Following the system says which language that is.
+  await expect(languages.getByText('现在是中文', { exact: true })).toBeVisible();
   await languages.getByRole('radio', { name: '日本語' }).click();
   // The page already on show changes, without a reload.
-  await expect(page.getByRole('heading', { name: 'プロフィール' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '个人资料' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '設定', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '设置', exact: true })).toHaveCount(0);
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
   await expect(page.getByRole('switch', { name: '旧暦を表示' })).toBeVisible();
   await expect(page.getByRole('button', { name: '戻る', exact: true })).toBeVisible();
   await checkLayout(page);
-  await page.screenshot({ path: 'test-results/account-profile-japanese.png', fullPage: true });
-  await page.getByRole('button', { name: '表示名を編集' }).click();
-  const dialog = page.getByRole('dialog', { name: 'プロフィール', exact: true });
-  await expect(dialog.getByRole('button', { name: 'プロフィールを閉じる' })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: '保存', exact: true })).toBeDisabled();
-  await dialog.getByRole('button', { name: 'プロフィールを閉じる' }).click();
+  await page.screenshot({ path: 'test-results/account-settings-japanese.png', fullPage: true });
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'プロフィール' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '設定', exact: true })).toBeVisible();
   await expect(page.getByRole('radiogroup', { name: '言語' }).getByRole('radio', { name: '日本語' })).toBeChecked();
   // Following the system again forgets the choice.
   await page.getByRole('radiogroup', { name: '言語' }).getByRole('radio', { name: 'システムに合わせる' }).click();
-  await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '设置', exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '设置', exact: true })).toBeVisible();
 });
 
 test('a browser set to Japanese opens in Japanese', async ({ browser }) => {
@@ -130,37 +127,25 @@ test('a browser set to Japanese opens in Japanese', async ({ browser }) => {
 });
 
 test('profile only enables saving changed input and announces success', async ({ page }) => {
-  // The phone shows the nickname as a fact with 编辑; a wide screen edits it in place (desktop-redesign.spec.ts).
+  // A phone reaches 个人资料 as a window from the account menu; the page, opened by its address, holds the same form.
   await page.setViewportSize({ width: 390, height: 844 });
   await mockApi(page, true);
   await page.goto('/profile');
   await expect(page.getByRole('heading', { name: '个人资料' })).toBeVisible();
   await expect(page.getByText('family_member', { exact: true })).toBeVisible();
+  // Only the account lives here; what this device shows is on 设置.
+  await expect(page.getByRole('radiogroup', { name: '语言' })).toHaveCount(0);
+  await expect(page.getByRole('switch', { name: '显示农历' })).toHaveCount(0);
   await checkLayout(page);
   await page.screenshot({ path: 'test-results/account-profile-mobile.png', fullPage: true });
-  // The nickname is a fact on the page; 编辑 opens the same window as the account menu.
-  const edit = page.getByRole('button', { name: '编辑昵称' });
-  await edit.click();
-  const dialog = page.getByRole('dialog', { name: '个人资料', exact: true });
-  // Opened by pointer, the window focuses its close button without a ring.
-  await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toBeFocused();
-  await expect(dialog.getByRole('button', { name: '关闭个人资料' })).toHaveCSS('outline-style', 'none');
-  const save = dialog.getByRole('button', { name: '保存', exact: true });
-  await expect(dialog.getByLabel('昵称', { exact: true })).toHaveValue('小林');
+  const nickname = page.getByLabel('昵称', { exact: true });
+  const save = page.getByRole('button', { name: '保存', exact: true });
+  await expect(nickname).toHaveValue('小林');
   await expect(save).toBeDisabled();
-  await dialog.getByLabel('昵称', { exact: true }).fill('小林的新昵称');
+  await nickname.fill('小林的新昵称');
   await save.click();
-  await expect(dialog.getByText('昵称已更新。')).toBeVisible();
+  await expect(page.getByText('昵称已更新。')).toBeVisible();
   await expect(save).toBeDisabled();
-  await page.keyboard.press('Escape');
-  await expect(edit).toBeFocused();
-  await expect(page.getByText('小林的新昵称', { exact: true })).toBeVisible();
-  // A row in a grouped list draws its ring inside, where the group cannot clip it.
-  const householdsRow = page.getByRole('button', { name: '我的家庭', exact: true });
-  await page.keyboard.press('Shift');
-  await householdsRow.focus();
-  await expect(householdsRow).toHaveCSS('outline-color', 'rgb(194, 56, 28)');
-  await expect(householdsRow).toHaveCSS('outline-offset', '-2px');
 });
 
 test('blur validation leaves focus where the pointer sent it; only a submit moves it', async ({ page }) => {
@@ -210,6 +195,8 @@ for (const width of [320, 390, 1440]) {
     await expect(page.getByRole('menuitem', { name: '个人资料' })).toBeFocused();
     await page.screenshot({ path: `test-results/account-menu-${width}.png` });
     await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menuitem', { name: '设置' })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('menuitem', { name: '提醒' })).toBeFocused();
     await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('menuitem', { name: '退出登录' })).toBeFocused();
@@ -257,6 +244,35 @@ for (const width of [320, 390, 1440]) {
     await page.getByTestId('app-dialog-dismiss').click({ position: { x: 4, y: 4 } });
     await expect(dialog).toHaveCount(0);
     await expect(trigger).toBeFocused();
+  });
+}
+
+for (const width of [320, 390, 1440]) {
+  test(`设置 is reached from the account menu and applies each change at once at ${width}px`, async ({ page }) => {
+    await mockApi(page, true);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/household-handoff');
+    await page.getByRole('button', { name: '个人中心', exact: true }).click();
+    await page.getByRole('menuitem', { name: '设置', exact: true }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page.getByRole('heading', { name: '设置', exact: true })).toBeVisible();
+    if (width >= 1024) await expect(page.getByRole('navigation', { name: '个人中心导航' }).getByRole('link', { name: '设置', exact: true })).toHaveAttribute('aria-current', 'page');
+    else await expect(page.getByRole('button', { name: '返回', exact: true })).toBeVisible();
+    const lunar = page.getByRole('switch', { name: '显示农历', exact: true });
+    const shown = await lunar.isChecked();
+    await lunar.click();
+    await expect(lunar).toBeChecked({ checked: !shown });
+    await expect(page.getByRole('switch', { name: '显示日本的祝日与和历', exact: true })).not.toBeChecked();
+    await checkLayout(page);
+    await page.screenshot({ path: `test-results/account-settings-${width}.png`, fullPage: true });
+    // Japanese is the longer of the two; it still fits the narrowest phone.
+    await page.getByRole('radiogroup', { name: '语言' }).getByRole('radio', { name: '日本語', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '設定', exact: true })).toBeVisible();
+    await expect(page.getByRole('switch', { name: '旧暦を表示', exact: true })).toBeChecked({ checked: !shown });
+    await checkLayout(page);
+    await page.screenshot({ path: `test-results/account-settings-ja-${width}.png`, fullPage: true });
+    await page.getByRole('button', { name: 'マイページ', exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: '設定', exact: true })).toBeVisible();
   });
 }
 
