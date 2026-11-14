@@ -485,8 +485,24 @@ export class RecurrenceService {
       return createdRule.id;
     });
 
-    await this.materializer.materializeRule(newRuleId);
+    await this.materializeSuccessor(newRuleId);
     return { recurrenceRuleId: newRuleId };
+  }
+
+  /**
+   * The split has committed. As in EventsService.create, immediate generation
+   * only saves waiting for the scheduler, so a transient failure here must not
+   * report a 500 for a series that was in fact saved.
+   */
+  private async materializeSuccessor(ruleId: string): Promise<void> {
+    try {
+      const materialization = await this.materializer.materializeRule(ruleId);
+      if (materialization.skipped) {
+        this.logger.warn(`rule ${ruleId} was locked after its split; the scheduler will generate it`);
+      }
+    } catch (error: unknown) {
+      this.logger.error(`immediate materialization failed for successor rule ${ruleId}`, error);
+    }
   }
 
   /**
@@ -741,7 +757,7 @@ export class RecurrenceService {
     // split transaction COMMITS. materializeRule opens its own transaction and
     // takes the rule's advisory lock; nesting it here would hold that lock for
     // the whole split and make the split's duration depend on generation.
-    await this.materializer.materializeRule(newRuleId);
+    await this.materializeSuccessor(newRuleId);
     return { recurrenceRuleId: newRuleId };
   }
 
