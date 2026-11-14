@@ -435,6 +435,22 @@ describe('notes API contract', () => {
       expect(response.json().error.code).toBe('NOTE_NOT_FOUND');
     });
 
+    test('malformed path ids are rejected with 400 rather than a driver-level 500', async () => {
+      const noteId = await createNote(owner, householdId, { title: '路径检查' });
+      const edit = { title: '不应保存', expectedUpdatedAt: new Date().toISOString() };
+      const cases: Array<[method: 'GET' | 'PUT' | 'DELETE', household: string, note: string, payload?: unknown]> = [
+        ['GET', 'not-a-uuid', noteId],
+        ['GET', householdId, 'not-a-uuid'],
+        ['PUT', householdId, 'not-a-uuid', edit],
+        ['DELETE', householdId, 'not-a-uuid'],
+      ];
+      for (const [method, household, note, payload] of cases) {
+        const response = await noteApi(owner, household, method, `/${note}`, payload);
+        expect({ method, household, note, status: response.statusCode }).toEqual({ method, household, note, status: 400 });
+      }
+      expect((await noteApi(owner, householdId, 'GET', `/${noteId}`)).json().title).toBe('路径检查');
+    });
+
     test('requests without an access token are rejected', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await (app.getHttpAdapter().getInstance() as any).inject({

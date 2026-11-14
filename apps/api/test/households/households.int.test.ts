@@ -404,3 +404,36 @@ describe('household rename API contract', () => {
     expect([missing.statusCode, nonexistent.statusCode]).toEqual([401, 401]);
   });
 });
+
+describe('household path ids', () => {
+  test('malformed path ids are rejected with 400 rather than a driver-level 500', async () => {
+    const owner = await insertActor('path-owner', '家主');
+    const householdId = await createHouseholdViaApi(owner.accessToken, '路径检查');
+    const successor = { successorMembershipId: randomUUID() };
+    const cases: Array<[method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, payload?: unknown]> = [
+      ['GET', '/households/not-a-uuid'],
+      ['PATCH', '/households/not-a-uuid', { name: '不应保存' }],
+      ['POST', '/households/not-a-uuid/invitations', { username: 'someone' }],
+      ['GET', '/households/not-a-uuid/invitations'],
+      ['POST', `/households/${householdId}/invitations/not-a-uuid/resend`],
+      ['POST', `/households/${householdId}/invitations/not-a-uuid/revoke`],
+      ['PATCH', `/households/${householdId}/members/not-a-uuid/role`, { role: 'ADMIN' }],
+      ['DELETE', `/households/${householdId}/members/not-a-uuid`],
+      ['POST', '/households/not-a-uuid/ownership/transfer', successor],
+      ['POST', '/households/not-a-uuid/ownership/leave', successor],
+    ];
+    for (const [method, path, payload] of cases) {
+      const response = await app.getHttpAdapter().getInstance().inject({
+        method,
+        url: `/api/v1${path}`,
+        headers: {
+          authorization: `Bearer ${owner.accessToken}`,
+          ...(payload === undefined ? {} : { 'content-type': 'application/json' }),
+        },
+        ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }),
+      });
+      expect({ method, path, status: response.statusCode }).toEqual({ method, path, status: 400 });
+    }
+    expect((await getHousehold(owner.accessToken, householdId)).json().name).toBe('路径检查');
+  });
+});

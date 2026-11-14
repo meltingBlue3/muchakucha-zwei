@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Req,
@@ -21,16 +22,15 @@ import {
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import { LabelsService } from './labels.service.js';
 import { CreateLabelDto, LabelListResponseDto, LabelResponseDto, TagEntitiesDto, UpdateLabelDto } from './dto/create-label.dto.js';
-import { IsUUID } from 'class-validator';
 
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
 }
 
-class HouseholdIdParam {
-  @IsUUID('4')
-  householdId!: string;
-}
+// Per-parameter pipes, as in events.controller.ts: an intersection param type
+// emits `Object` metadata, which ValidationPipe skips, so a malformed id would
+// reach Prisma and surface as a 500.
+const uuidParam = new ParseUUIDPipe({ version: '4' });
 
 @ApiTags('labels')
 @ApiBearerAuth()
@@ -44,10 +44,10 @@ export class LabelsController {
   @ApiCreatedResponse({ type: LabelResponseDto })
   create(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam,
+    @Param('householdId', uuidParam) householdId: string,
     @Body() input: CreateLabelDto,
   ): Promise<LabelResponseDto> {
-    return this.labelsService.create(request.auth.sub, params.householdId, input);
+    return this.labelsService.create(request.auth.sub, householdId, input);
   }
 
   @Get()
@@ -55,9 +55,9 @@ export class LabelsController {
   @ApiOkResponse({ type: LabelListResponseDto })
   list(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam,
+    @Param('householdId', uuidParam) householdId: string,
   ): Promise<LabelListResponseDto> {
-    return this.labelsService.list(request.auth.sub, params.householdId);
+    return this.labelsService.list(request.auth.sub, householdId);
   }
 
   @Put(':labelId')
@@ -65,10 +65,11 @@ export class LabelsController {
   @ApiOkResponse({ type: LabelResponseDto })
   update(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { labelId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('labelId', uuidParam) labelId: string,
     @Body() input: UpdateLabelDto,
   ): Promise<LabelResponseDto> {
-    return this.labelsService.update(request.auth.sub, params.householdId, params.labelId, input);
+    return this.labelsService.update(request.auth.sub, householdId, labelId, input);
   }
 
   @Delete(':labelId')
@@ -77,9 +78,10 @@ export class LabelsController {
   @ApiNoContentResponse()
   async delete(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { labelId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('labelId', uuidParam) labelId: string,
   ): Promise<void> {
-    await this.labelsService.delete(request.auth.sub, params.householdId, params.labelId);
+    await this.labelsService.delete(request.auth.sub, householdId, labelId);
   }
 }
 
@@ -98,10 +100,11 @@ export class EventLabelsController {
   @ApiNoContentResponse()
   async tag(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { eventId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('eventId', uuidParam) eventId: string,
     @Body() input: TagEntitiesDto,
   ): Promise<void> {
-    await this.labelsService.tagEvent(request.auth.sub, params.householdId, params.eventId, input);
+    await this.labelsService.tagEvent(request.auth.sub, householdId, eventId, input);
   }
 
   @Delete(':labelId')
@@ -110,9 +113,11 @@ export class EventLabelsController {
   @ApiNoContentResponse()
   async untag(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { eventId: string; labelId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('eventId', uuidParam) eventId: string,
+    @Param('labelId', uuidParam) labelId: string,
   ): Promise<void> {
-    await this.labelsService.untagEvent(request.auth.sub, params.householdId, params.eventId, params.labelId);
+    await this.labelsService.untagEvent(request.auth.sub, householdId, eventId, labelId);
   }
 }
 
@@ -129,10 +134,11 @@ export class TaskLabelsController {
   @ApiNoContentResponse()
   async tag(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { taskId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('taskId', uuidParam) taskId: string,
     @Body() input: TagEntitiesDto,
   ): Promise<void> {
-    await this.labelsService.tagTask(request.auth.sub, params.householdId, params.taskId, input);
+    await this.labelsService.tagTask(request.auth.sub, householdId, taskId, input);
   }
 
   @Delete(':labelId')
@@ -141,8 +147,10 @@ export class TaskLabelsController {
   @ApiNoContentResponse()
   async untag(
     @Req() request: AuthenticatedRequest,
-    @Param() params: HouseholdIdParam & { taskId: string; labelId: string },
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('taskId', uuidParam) taskId: string,
+    @Param('labelId', uuidParam) labelId: string,
   ): Promise<void> {
-    await this.labelsService.untagTask(request.auth.sub, params.householdId, params.taskId, params.labelId);
+    await this.labelsService.untagTask(request.auth.sub, householdId, taskId, labelId);
   }
 }
