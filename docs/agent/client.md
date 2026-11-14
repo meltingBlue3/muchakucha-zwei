@@ -16,7 +16,7 @@ Every authenticated call takes the access token as its first argument:
 
 ```ts
 const token = await sessionTransport.getAccessToken();
-if (token === null) { setError('登录已过期，请重新登录。'); return; }
+if (token === null) { setError('auth:errors.sessionExpired'); return; }
 const result = await sessionApiClient.listNotes(token, householdId);
 ```
 
@@ -85,4 +85,4 @@ pnpm --filter client test                          # whole suite, parallel worke
 pnpm --filter client exec jest <path-or-pattern>   # one file or a subset
 ```
 
-Keep `jest` and `@types/jest` on the major that `jest-expo` is built on (29 today); a newer Jest breaks every suite through the React Native test environment. Test files must be named `src/**/__tests__/*-test.tsx`; any other name matches no pattern and silently runs zero tests. Add `pnpm --recursive typecheck` for type-level changes, and see [testing.md](testing.md) when a change needs browser evidence.
+Keep `jest` and `@types/jest` on the major that `jest-expo` is built on (29 today); a newer Jest breaks every suite through the React Native test environment. Test files must be named `src/**/__tests__/*-test.ts` or `*-test.tsx`; any other name matches no pattern and silently runs zero tests. Add `pnpm --recursive typecheck` for type-level changes, and see [testing.md](testing.md) when a change needs browser evidence.
