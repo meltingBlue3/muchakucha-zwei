@@ -6,3 +6,9 @@ onlyBuiltDependencies:
   - argon2
   - esbuild
   - unrs-resolver
+
+# Android native builds on Windows start tools from inside node_modules/.pnpm,
+# and Windows refuses a script path of 260 characters or a working directory
+# of 259. With pnpm's Windows default of 60, react-native-worklets, -reanimated and
+# -gesture-handler land past those limits from an ordinary checkout path.
+virtualStoreDirMaxLength: 40
