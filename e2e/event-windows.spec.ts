@@ -174,7 +174,7 @@ test('a Chinese calendar shows holidays in Japan once this device asks for them'
   await page.getByRole('button', { name: '下一个月', exact: true }).click();
   await expect(page.getByRole('button', { name: '2030年7月15日', exact: true })).toBeVisible();
   await expect(page.getByText('令和12年', { exact: true })).toHaveCount(0);
-  await page.goto('/profile');
+  await page.goto('/settings');
   await page.getByRole('switch', { name: '显示日本的祝日与和历' }).click();
   await page.goto(`${base}/events`);
   await showMonth(page);

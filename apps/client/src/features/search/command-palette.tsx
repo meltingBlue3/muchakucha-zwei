@@ -9,6 +9,7 @@ import CircleCheck from 'lucide-react-native/icons/circle-check';
 import Inbox from 'lucide-react-native/icons/inbox';
 import NotebookText from 'lucide-react-native/icons/notebook-text';
 import UserRound from 'lucide-react-native/icons/user-round';
+import Settings from 'lucide-react-native/icons/settings';
 
 import { useTranslation } from '../../i18n';
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
@@ -45,6 +46,7 @@ const GROUP_LIMIT = 5;
 
 const accountPages = [
   { path: '/profile', label: 'profile:title', icon: UserRound },
+  { path: '/settings', label: 'settings:title', icon: Settings },
   { path: '/reminders', label: 'profile:links.reminders.label', icon: Bell },
   { path: '/inbox', label: 'profile:links.inbox.label', icon: Inbox },
 ] as const;
@@ -127,7 +129,7 @@ export function useSearchShortcut(enabled: boolean, toggle: () => void) {
  */
 export function CommandPalette({ householdId, trigger, onClose }: { householdId: string; trigger: RefObject<View | null>; onClose(): void }) {
   const router = useRouter();
-  const { t } = useTranslation(['search', 'navigation', 'profile', 'tasks', 'notes', 'common']);
+  const { t } = useTranslation(['search', 'navigation', 'profile', 'settings', 'tasks', 'notes', 'common']);
   const pathname = usePathname();
   const panel = useRef<View>(null);
   const input = useRef<TextInput>(null);

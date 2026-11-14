@@ -113,16 +113,6 @@ export const ja: Catalog = {
   profile: {
     accountNavigation: 'マイページのナビゲーション',
     accountMenu: 'アカウントメニュー',
-    calendar: {
-      title: 'カレンダー',
-      showLunar: '旧暦を表示',
-      showLunarDetail: 'カレンダーと「今日」に、中国の旧暦の日付・二十四節気・伝統行事を表示します。',
-      showJapanese: '日本の祝日と和暦を表示',
-      showJapaneseDetail: 'カレンダーと「今日」で日本の祝日を朱色で示し、元号の年を表示します。',
-    },
-    deviceOnly: 'この端末だけに適用されます。',
-    edit: '編集',
-    editNickname: '表示名を編集',
     form: {
       checkNickname: '表示名を確認してください。',
       loading: 'プロフィールを読み込んでいます',
@@ -135,21 +125,32 @@ export const ja: Catalog = {
       reload: 'プロフィールを再読み込み',
       saveFailedTitle: '保存できませんでした',
     },
-    language: {
-      title: '言語',
-      system: 'システムに合わせる',
-    },
     links: {
-      inbox: { label: '受信箱', description: '届いた家族への招待を確認して対応します' },
-      households: { label: 'わたしの家族', description: '家族の予定を見たり、家族を作成・参加したりできます' },
-      reminders: { label: 'リマインダー', description: 'タスクの期限や予定の開始前にお知らせします' },
+      inbox: { label: '受信箱' },
+      households: { label: 'わたしの家族' },
+      reminders: { label: 'リマインダー' },
     },
-    logoutNote: 'この端末だけがログアウトされ、家族の内容はそのまま残ります。',
     nickname: '表示名',
     pageTitle: 'マイページ',
     title: 'プロフィール',
     username: 'ユーザー名',
     usernameNote: 'ログインに使います。今のところ変更できません。',
+  },
+  settings: {
+    title: '設定',
+    deviceOnly: 'この端末だけに適用されます。',
+    language: {
+      title: '言語',
+      system: 'システムに合わせる',
+      systemNow: '現在は{{language}}',
+    },
+    calendar: {
+      title: 'カレンダー',
+      showLunar: '旧暦を表示',
+      showLunarDetail: 'カレンダーと「今日」に、中国の旧暦の日付・二十四節気・伝統行事を表示します。',
+      showJapanese: '日本の祝日と和暦を表示',
+      showJapaneseDetail: 'カレンダーと「今日」で日本の祝日を朱色で示し、元号の年を表示します。',
+    },
   },
   shared: {
     assignee: '担当者',

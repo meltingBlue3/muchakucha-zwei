@@ -114,16 +114,6 @@ export const zh = {
   profile: {
     accountNavigation: '个人中心导航',
     accountMenu: '账户菜单',
-    calendar: {
-      title: '日历',
-      showLunar: '显示农历',
-      showLunarDetail: '在日历和今日里显示农历日期、节气和传统节日。',
-      showJapanese: '显示日本的祝日与和历',
-      showJapaneseDetail: '在日历和今日里把日本的祝日标成朱色，并显示年号。',
-    },
-    deviceOnly: '只影响这台设备。',
-    edit: '编辑',
-    editNickname: '编辑昵称',
     form: {
       checkNickname: '请检查昵称。',
       loading: '正在加载个人资料',
@@ -136,21 +126,32 @@ export const zh = {
       reload: '重新加载资料',
       saveFailedTitle: '暂时无法保存',
     },
-    language: {
-      title: '语言',
-      system: '跟随系统',
-    },
     links: {
-      inbox: { label: '收件箱', description: '查看和处理收到的家庭邀请' },
-      households: { label: '我的家庭', description: '查看家庭安排，或创建、加入一个家庭' },
-      reminders: { label: '提醒', description: '任务到期和日程开始前提醒你' },
+      inbox: { label: '收件箱' },
+      households: { label: '我的家庭' },
+      reminders: { label: '提醒' },
     },
-    logoutNote: '只影响这台设备，家庭里的内容会保留。',
     nickname: '昵称',
     pageTitle: '个人中心',
     title: '个人资料',
     username: '用户名',
     usernameNote: '用于登录，暂不支持修改。',
+  },
+  settings: {
+    title: '设置',
+    deviceOnly: '只影响这台设备。',
+    language: {
+      title: '语言',
+      system: '跟随系统',
+      systemNow: '现在是{{language}}',
+    },
+    calendar: {
+      title: '日历',
+      showLunar: '显示农历',
+      showLunarDetail: '在日历和今日里显示农历日期、节气和传统节日。',
+      showJapanese: '显示日本的祝日与和历',
+      showJapaneseDetail: '在日历和今日里把日本的祝日标成朱色，并显示年号。',
+    },
   },
   shared: {
     assignee: '负责人',

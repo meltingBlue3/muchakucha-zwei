@@ -50,7 +50,7 @@ for (const width of [1024, 1280, 1440, 1920]) {
     await setup(page);
     await page.setViewportSize({ width, height: 900 });
     const sidebarWidth = width < 1280 ? 64 : 248;
-    for (const destination of ['today', 'events', 'tasks', 'notes', `assistant/conversations/${conversationId}`, 'settings', 'labels', 'recurrence-rules', '/profile', '/reminders', '/inbox']) {
+    for (const destination of ['today', 'events', 'tasks', 'notes', `assistant/conversations/${conversationId}`, 'settings', 'labels', 'recurrence-rules', '/profile', '/settings', '/reminders', '/inbox']) {
       await page.goto(destination.startsWith('/') ? destination : `${base}/${destination}`);
       if (destination.startsWith('assistant/')) {
         // The assistant's columns carry their own 56px headers in place of the shared one.

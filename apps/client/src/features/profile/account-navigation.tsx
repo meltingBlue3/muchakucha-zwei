@@ -9,17 +9,19 @@ import { useInboxCount } from '../inbox/use-inbox-count';
 import UserRound from 'lucide-react-native/icons/user-round';
 import Bell from 'lucide-react-native/icons/bell';
 import Inbox from 'lucide-react-native/icons/inbox';
+import Settings from 'lucide-react-native/icons/settings';
 import House from 'lucide-react-native/icons/house';
 
 const destinations = [
   { titleKey: 'profile:title', path: '/profile', icon: UserRound },
+  { titleKey: 'settings:title', path: '/settings', icon: Settings },
   { titleKey: 'profile:links.reminders.label', path: '/reminders', icon: Bell },
   { titleKey: 'profile:links.inbox.label', path: '/inbox', icon: Inbox },
   { titleKey: 'profile:links.households.label', path: '/household-handoff', icon: House },
 ] as const;
 
 export function AccountNavigation() {
-  const { t } = useTranslation(['households', 'profile']);
+  const { t } = useTranslation(['households', 'profile', 'settings']);
   const router = useRouter();
   const path = usePathname();
   const inboxCount = useInboxCount(true);
