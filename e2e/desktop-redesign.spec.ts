@@ -581,3 +581,44 @@ test('家人生日 is framed like the other family lists: create in the header, 
   await expect(page.getByRole('button', { name: /^外婆的农历生日，农历冬月初八 · 12月17日周四，37 天后，/ })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('birthdays-390.png') });
 });
+
+for (const width of [320, 1440]) {
+  test(`Japanese 家人生日 reads Japanese in the list and the add form at ${width}px`, async ({ browser }, testInfo) => {
+    const context = await browser.newContext({ locale: 'ja-JP', timezoneId: 'Asia/Shanghai', viewport: { width, height: 900 } });
+    try {
+      const page = await context.newPage();
+      await setup(page);
+      const birthday = (id: string, title: string, lunar: { month: number; day: number } | null, next: string) => ({ id, kind: 'event', title, freq: 'YEARLY', interval: 1, byWeekday: [], startsOn: next, endsOn: null, count: null, timezone: 'Asia/Shanghai', startTimeLocal: null, durationMinutes: null, lunar, occasion: 'birthday', birthYear: 1968, nextOccurrenceDate: next, updatedAt: version });
+      // A title stays as its writer saved it; everything around it follows the interface.
+      const rules = [birthday('birthday-1', '妈妈的生日', null, '2026-11-10'), birthday('birthday-2', 'おばあちゃんの旧暦の誕生日', { month: 11, day: 8 }, '2026-12-17')];
+      await page.route(url => url.pathname.endsWith('/recurrence-rules'), route => route.fulfill({ json: { rules, total: rules.length } }));
+      await page.goto(`${base}/birthdays`);
+      await expect(page.getByRole('button', { name: /^妈妈的生日、毎年11月10日 · 11月10日\(火\)、今日、58歳$/ })).toBeVisible();
+      await expect(page.getByRole('button', { name: /^おばあちゃんの旧暦の誕生日、旧暦十一月八日 · 12月17日\(木\)、37日後、/ })).toBeVisible();
+      await expect(page.getByText(/[农岁]|天后/)).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath(`birthdays-ja-${width}.png`) });
+
+      await page.getByRole('button', { name: '誕生日を追加', exact: true }).click();
+      // A window on a phone, the pane beside the list on a wide screen.
+      const form = page.getByRole(width < 1024 ? 'dialog' : 'region', { name: '誕生日を追加', exact: true });
+      await form.getByRole('textbox', { name: '誰の誕生日', exact: true }).fill('お母さん');
+      await expect(form.getByRole('radio', { name: '旧暦で祝う', exact: true })).toBeChecked();
+      await form.getByRole('button', { name: /^誕生日の日付/ }).click();
+      await page.getByRole('radio', { name: '十一月', exact: true }).click();
+      await page.getByRole('radio', { name: '十一月八日', exact: true }).click();
+      await page.getByRole('button', { name: '完了', exact: true }).click();
+      await expect(page.getByRole('button', { name: /^誕生日の日付.旧暦十一月八日$/ })).toBeVisible();
+      await form.getByRole('textbox', { name: '生まれた年', exact: true }).fill('1968');
+      await expect(form.getByText(/^新暦 196[89]年\d+月\d+日$/)).toBeVisible();
+      await expect(form.getByText(/^旧暦十一月八日：12月\d+日\(.\) · 58歳$/)).toBeVisible();
+      if (width < 1024) expect(await form.getByTestId('app-dialog-panel').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath(`birthday-form-ja-${width}.png`) });
+    } finally {
+      await context.close();
+    }
+  });
+}

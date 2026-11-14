@@ -8,12 +8,11 @@ import { BirthdayForm } from '../../../../../src/features/birthdays/birthday-for
 import { notifyContentChanged } from '../../../../../src/features/content/content-changes';
 import { toDateIso } from '../../../../../src/features/events/calendar-utils';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
+import { useTranslation } from '../../../../../src/i18n';
 import { HouseholdContextNote } from '../../../../../src/ui/household-components';
 import { Banner, LoadError, Stack } from '../../../../../src/ui/primitives';
 import { RouteWindow, useRouteWindowClose } from '../../../../../src/ui/route-window';
 import { useWorkspaceState, useWorkspaceStore } from '../../../../../src/ui/workspace-state';
-
-const SAVE_ERROR = '生日没有保存成功，请检查网络后重试。';
 
 /**
  * 添加生日. Saving creates one yearly series per birthday, one after the other;
@@ -21,6 +20,7 @@ const SAVE_ERROR = '生日没有保存成功，请检查网络后重试。';
  * failure creates only the rest and never a second copy.
  */
 export default function CreateBirthdayRoute() {
+  const { t } = useTranslation('birthdays');
   const { id } = useLocalSearchParams<{ id: string }>();
   const { households } = useHouseholdContext();
   const householdName = households.find(household => household.id === id)?.name ?? '';
@@ -31,8 +31,9 @@ export default function CreateBirthdayRoute() {
   const [pending, setPending] = useState<CreateEventDto[]>([]);
   const [saved, setSaved] = useWorkspaceState<string[]>(draftPrefix + 'saved', []);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [people, setPeople] = useState<string[]>([]);
+  const [failed, setFailed] = useState(false);
+  /** Everyone else in the household, by the name it knows them by; null until loaded. */
+  const [others, setOthers] = useState<string[] | null>(null);
   const todayIso = toDateIso(new Date());
 
   useEffect(() => {
@@ -43,8 +44,7 @@ export default function CreateBirthdayRoute() {
       try {
         const household = await sessionApiClient.getHousehold(token, id);
         if (!active) return;
-        // 我 first, then everyone else by the name the household knows them by.
-        setPeople(['我', ...household.members.filter(member => !member.isCurrentUser).map(member => member.displayName)]);
+        setOthers(household.members.filter(member => !member.isCurrentUser).map(member => member.displayName));
       } catch {
         // Without the members the name is typed in full.
       }
@@ -55,7 +55,7 @@ export default function CreateBirthdayRoute() {
   const save = useCallback(async (events: CreateEventDto[]) => {
     setPending(events);
     setSubmitting(true);
-    setError(null);
+    setFailed(false);
     const done = [...saved];
     try {
       const token = await sessionTransport.getAccessToken();
@@ -71,23 +71,26 @@ export default function CreateBirthdayRoute() {
       exitAllowed.current = true;
       close();
     } catch {
-      setError(SAVE_ERROR);
+      setFailed(true);
     } finally {
       setSubmitting(false);
     }
   }, [close, draftPrefix, id, saved, setSaved, workspace]);
 
-  const partly = saved.length > 0 && error !== null;
+  // 我 first, then everyone else.
+  const people = others === null ? [] : [t('me'), ...others];
+  const partly = saved.length > 0 && failed;
+  const unsaved = pending.filter(event => !saved.includes(event.title)).map(event => event.title);
   return (
-    <RouteWindow draftPrefix={draftPrefix} resource="birthdays" title="添加生日" busy={submitting} exitAllowed={exitAllowed} fallback={<BirthdayListScreen />}>
+    <RouteWindow draftPrefix={draftPrefix} resource="birthdays" title={t('add')} busy={submitting} exitAllowed={exitAllowed} fallback={<BirthdayListScreen />}>
       <Stack gap={4}>
         <HouseholdContextNote householdName={householdName} />
-        {error !== null && !partly ? <Banner>{error}</Banner> : null}
+        {failed && !partly ? <Banner>{t('save.error')}</Banner> : null}
         {partly ? (
           <LoadError
-            title={`已保存${saved.join('、')}`}
-            message={`${pending.filter(event => !saved.includes(event.title)).map(event => event.title).join('、') || '其余的生日'}还没有保存。`}
-            retryLabel="继续保存"
+            title={t('save.saved', { titles: saved.join(t('save.separator')) })}
+            message={t('save.pending', { titles: unsaved.join(t('save.separator')) || t('save.rest') })}
+            retryLabel={t('save.continue')}
             retrying={submitting}
             onRetry={() => void save(pending)}
           />

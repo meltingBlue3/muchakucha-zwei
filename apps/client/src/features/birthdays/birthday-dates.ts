@@ -1,7 +1,7 @@
 import type { CreateEventDto, EventResponseDto, RecurrenceResponseDto, ReminderChoiceDto } from '@muchakucha/api-client';
 import { formatLunarDate, formatLunarMonthDay, fromLunar, toLunar } from '@muchakucha/lunar';
 
-import { currentLanguage } from '../../i18n';
+import { currentLanguage, i18n } from '../../i18n';
 import { solarDateOf } from '../lunar/lunar-calendar';
 import { nextLunarDate } from '../lunar/lunar-recurrence';
 
@@ -24,7 +24,8 @@ export const EMPTY_BIRTHDAY: BirthdayDraft = { name: '', calendar: 'lunar', mont
 export const BIRTH_YEAR_MIN = 1900;
 export const NAME_MAX = 40;
 
-export type BirthdayErrors = Partial<Record<'name' | 'date' | 'birthYear', string>>;
+/** The fields that need fixing; the form says what is wrong with each, in the interface language. */
+export type BirthdayErrors = Partial<Record<'name' | 'date' | 'birthYear', true>>;
 
 const pad = (value: number) => String(value).padStart(2, '0');
 const isoOf = (year: number, month: number, day: number) => `${year}-${pad(month)}-${pad(day)}`;
@@ -35,9 +36,12 @@ export function solarMonthDays(month: number): number {
   return month === 2 ? 29 : new Date(Date.UTC(2000, month, 0)).getUTCDate();
 }
 
+// Text here comes in the interface language. A component that shows it calls
+// `useTranslation`, so it renders again when the language changes.
+
 /** 3月2日 or 农历十月十五. */
 export function formatBirthdayDate(calendar: BirthdayCalendar, month: number, day: number): string {
-  return calendar === 'lunar' ? formatLunarDate(month, day, false, currentLanguage()) : `${month}月${day}日`;
+  return calendar === 'lunar' ? formatLunarDate(month, day, false, currentLanguage()) : i18n.t('dates:monthDay', { month, day });
 }
 
 export function birthYearOf(draft: BirthdayDraft): number | null {
@@ -47,11 +51,11 @@ export function birthYearOf(draft: BirthdayDraft): number | null {
 
 export function validateBirthday(draft: BirthdayDraft, todayIso: string): BirthdayErrors {
   const errors: BirthdayErrors = {};
-  if (draft.name.trim() === '') errors.name = '请填写是谁的生日。';
-  if (draft.month === 0 || draft.day === 0) errors.date = '请选择生日的日期。';
+  if (draft.name.trim() === '') errors.name = true;
+  if (draft.month === 0 || draft.day === 0) errors.date = true;
   if (draft.birthYearText !== '') {
     const year = birthYearOf(draft);
-    if (year === null || year < BIRTH_YEAR_MIN || year > Number(todayIso.slice(0, 4))) errors.birthYear = `出生年份需要在 ${BIRTH_YEAR_MIN} 到今年之间。`;
+    if (year === null || year < BIRTH_YEAR_MIN || year > Number(todayIso.slice(0, 4))) errors.birthYear = true;
   }
   return errors;
 }
@@ -90,7 +94,7 @@ export interface OtherBirthday {
   day: number;
   /** The year of birth in that calendar: a 腊月 birthday is lunar 1968 and Gregorian 1969. */
   year: number;
-  /** 公历 1968年12月4日 or 农历戊申年十月十五, to check against an ID card or a family record. */
+  /** 公历 1968年12月4日 or 农历 1968年十月十五, to check against an ID card or a family record. */
   birthDate: string;
 }
 
@@ -100,13 +104,13 @@ export function otherBirthday(draft: BirthdayDraft): OtherBirthday | null {
   if (draft.calendar === 'lunar') {
     const solar = fromLunar({ year, month: draft.month, day: draft.day, leap: false });
     if (solar === null) return null;
-    return { calendar: 'solar', month: solar.month, day: solar.day, year: solar.year, birthDate: `公历 ${solar.year}年${solar.month}月${solar.day}日` };
+    return { calendar: 'solar', month: solar.month, day: solar.day, year: solar.year, birthDate: i18n.t('birthdays:form.otherBirthDate.solar', { date: i18n.t('dates:full', { year: solar.year, month: solar.month, day: solar.day }) }) };
   }
   if (draft.day > new Date(Date.UTC(year, draft.month, 0)).getUTCDate()) return null;
   const lunar = toLunar(solarDateOf(isoOf(year, draft.month, draft.day)));
   if (lunar === null) return null;
   // Someone born in a leap month keeps the ordinary month's date each year.
-  return { calendar: 'lunar', month: lunar.month, day: lunar.day, year: lunar.year, birthDate: `农历 ${lunar.year}年${formatLunarMonthDay(lunar.month, lunar.day, lunar.leap)}` };
+  return { calendar: 'lunar', month: lunar.month, day: lunar.day, year: lunar.year, birthDate: i18n.t('birthdays:form.otherBirthDate.lunar', { year: lunar.year, date: formatLunarMonthDay(lunar.month, lunar.day, lunar.leap, currentLanguage()) }) };
 }
 
 /** Age at a birthday on `dateIso`, counting lunar years for a lunar birthday; null without a year of birth. */
@@ -121,7 +125,7 @@ export function ageOn(recurrence: Pick<RecurrenceResponseDto, 'occasion' | 'birt
 /** 十月十五 for a lunar birthday, 11月18日 for a Gregorian one. */
 export function birthdayDateOf(recurrence: Pick<RecurrenceResponseDto, 'lunar' | 'startsOn'>): string {
   if (recurrence.lunar) return formatLunarDate(recurrence.lunar.month, recurrence.lunar.day, false, currentLanguage());
-  return `${Number(recurrence.startsOn.slice(5, 7))}月${Number(recurrence.startsOn.slice(8, 10))}日`;
+  return i18n.t('dates:monthDay', { month: Number(recurrence.startsOn.slice(5, 7)), day: Number(recurrence.startsOn.slice(8, 10)) });
 }
 
 /** 农历十月十五 · 58 岁 on an occurrence of a birthday series; null for any other event. */
@@ -129,12 +133,17 @@ export function birthdayNote(event: Pick<EventResponseDto, 'recurrence' | 'occur
   const recurrence = event.recurrence;
   if (recurrence?.occasion !== 'birthday') return null;
   const age = event.occurrenceDate ? ageOn(recurrence, event.occurrenceDate) : null;
-  const parts = [recurrence.lunar ? birthdayDateOf(recurrence) : null, age === null ? null : `${age} 岁`].filter((part): part is string => part !== null);
+  const parts = [recurrence.lunar ? birthdayDateOf(recurrence) : null, age === null ? null : i18n.t('birthdays:age', { age })].filter((part): part is string => part !== null);
   return parts.length ? parts.join(' · ') : null;
 }
 
+/**
+ * The title saved with the series: 妈妈的农历生日, or お母さんの旧暦の誕生日 from a
+ * Japanese interface. It is written once, in the language of whoever adds the
+ * birthday, and is theirs to change afterwards like any other title.
+ */
 function titleFor(name: string, calendar: BirthdayCalendar): string {
-  return `${name.trim()}的${calendar === 'lunar' ? '农历' : ''}生日`;
+  return i18n.t(calendar === 'lunar' ? 'birthdays:eventTitle.lunar' : 'birthdays:eventTitle.solar', { name: name.trim() });
 }
 
 function eventFor(name: string, calendar: BirthdayCalendar, month: number, day: number, birthYear: number | null, todayIso: string, timezone: string, myReminder: ReminderChoiceDto | undefined): CreateEventDto | null {

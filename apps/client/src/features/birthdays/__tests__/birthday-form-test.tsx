@@ -1,5 +1,6 @@
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
+import { setLanguageChoice } from '../../../i18n';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { BirthdayForm } from '../birthday-form';
 
@@ -13,6 +14,12 @@ jest.mock('../../recurrence/recurrence-options', () => ({
   ...jest.requireActual('../../recurrence/recurrence-options'),
   deviceTimeZone: () => 'Asia/Shanghai',
 }));
+
+jest.mock('expo-localization', () => ({ getLocales: jest.fn(() => [{ languageCode: 'en' }]) }));
+
+afterEach(async () => {
+  await act(async () => { setLanguageChoice('system'); });
+});
 
 async function renderForm() {
   const onSubmit = jest.fn();
@@ -55,7 +62,37 @@ describe('添加生日', () => {
     await fireEvent.press(view.getByLabelText('保存'));
     expect(view.getByText('请填写是谁的生日。')).toBeTruthy();
     expect(view.getByText('请选择生日的日期。')).toBeTruthy();
+    await fireEvent.changeText(view.getByLabelText('出生年份'), '1899');
+    await fireEvent.press(view.getByLabelText('保存'));
+    expect(view.getByText('出生年份需要在 1900 到今年之间。')).toBeTruthy();
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test('a Japanese interface asks in Japanese, counts lunar days its own way and saves a Japanese title', async () => {
+    const { onSubmit, view } = await renderForm();
+    await fireEvent.press(view.getByLabelText('保存'));
+    expect(view.getByText('请填写是谁的生日。')).toBeTruthy();
+    await act(async () => { setLanguageChoice('ja'); });
+    // What was already on the page follows the language.
+    expect(view.getByText('誰の誕生日かを入力してください。')).toBeTruthy();
+    expect(view.queryByText('请填写是谁的生日。')).toBeNull();
+
+    await fireEvent.changeText(view.getByLabelText('誰の誕生日'), 'お母さん');
+    expect(view.getByRole('radio', { name: '旧暦で祝う' }).props.accessibilityState.checked).toBe(true);
+    await fireEvent.press(view.getByRole('button', { name: '誕生日の日付，日付を選択' }));
+    await fireEvent.press(view.getByRole('radio', { name: '十月' }));
+    await fireEvent.press(view.getByRole('radio', { name: '十月十五日' }));
+    await fireEvent.press(view.getByRole('button', { name: '完了' }));
+    await fireEvent.changeText(view.getByLabelText('生まれた年'), '1968');
+    expect(view.getByText('新暦 1968年12月4日')).toBeTruthy();
+    await fireEvent(view.getByLabelText('新暦の誕生日も祝う'), 'valueChange', true);
+    expect(view.getByText('旧暦十月十五日：11月23日(月) · 58歳')).toBeTruthy();
+    expect(view.getByText('新暦の誕生日：12月4日(金) · 58歳')).toBeTruthy();
+
+    await fireEvent.press(view.getByLabelText('保存'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const events = onSubmit.mock.calls[0][0] as Array<{ title: string }>;
+    expect(events.map(event => event.title)).toEqual(['お母さんの旧暦の誕生日', 'お母さんの誕生日']);
   });
 
   test('switching to 公历 asks for the date again in Gregorian months', async () => {

@@ -1,4 +1,9 @@
-import { ageOn, birthdayEvents, birthdayNote, EMPTY_BIRTHDAY, nextBirthday, otherBirthday, validateBirthday, type BirthdayDraft } from '../birthday-dates';
+import { setLanguageChoice } from '../../../i18n';
+import { ageOn, birthdayDateOf, birthdayEvents, birthdayNote, EMPTY_BIRTHDAY, formatBirthdayDate, nextBirthday, otherBirthday, validateBirthday, type BirthdayDraft } from '../birthday-dates';
+
+jest.mock('expo-localization', () => ({ getLocales: jest.fn(() => [{ languageCode: 'en' }]) }));
+
+afterEach(() => setLanguageChoice('system'));
 
 const today = '2026-11-11';
 const tz = 'Asia/Shanghai';
@@ -83,8 +88,31 @@ describe('ages and validation', () => {
   });
 
   test('asks for a name and a date, and a plausible year', () => {
-    expect(validateBirthday(EMPTY_BIRTHDAY, today)).toEqual({ name: '请填写是谁的生日。', date: '请选择生日的日期。' });
-    expect(validateBirthday({ ...mom, birthYearText: '2030' }, today)).toEqual({ birthYear: '出生年份需要在 1900 到今年之间。' });
+    expect(validateBirthday(EMPTY_BIRTHDAY, today)).toEqual({ name: true, date: true });
+    expect(validateBirthday({ ...mom, birthYearText: '2030' }, today)).toEqual({ birthYear: true });
+    expect(validateBirthday({ ...mom, birthYearText: '1899' }, today)).toEqual({ birthYear: true });
     expect(validateBirthday(mom, today)).toEqual({});
+  });
+});
+
+describe('in a Japanese interface', () => {
+  beforeEach(() => setLanguageChoice('ja'));
+
+  test('a birthday added there is titled in Japanese, with the same dates', () => {
+    const events = birthdayEvents({ ...mom, name: 'お母さん', month: 12, day: 3, alsoOther: true }, today, tz);
+    expect(events.map(event => [event.title, event.recurrence?.startsOn, event.recurrence?.birthYear])).toEqual([
+      ['お母さんの旧暦の誕生日', '2027-01-10', 1968],
+      ['お母さんの誕生日', '2027-01-20', 1969],
+    ]);
+  });
+
+  test('dates and ages read the Japanese way', () => {
+    expect(formatBirthdayDate('lunar', 10, 15)).toBe('旧暦十月十五日');
+    expect(formatBirthdayDate('solar', 3, 2)).toBe('3月2日');
+    expect(birthdayDateOf({ lunar: null, startsOn: '2026-11-18' })).toBe('11月18日');
+    expect(otherBirthday(mom)!.birthDate).toBe('新暦 1968年12月4日');
+    expect(otherBirthday({ ...mom, calendar: 'solar', month: 12, day: 4 })!.birthDate).toBe('旧暦 1968年十月十五日');
+    const recurrence = { occasion: 'birthday' as const, birthYear: 1968, lunar: { month: 10, day: 15 }, startsOn: '2026-11-23' } as never;
+    expect(birthdayNote({ recurrence, occurrenceDate: '2026-11-23' })).toBe('旧暦十月十五日 · 58歳');
   });
 });

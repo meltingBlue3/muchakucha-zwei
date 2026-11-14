@@ -7,6 +7,7 @@ import Hash from 'lucide-react-native/icons/hash';
 import { useTheme } from '@shopify/restyle';
 import type { CreateEventDto } from '@muchakucha/api-client';
 
+import { i18n, useTranslation } from '../../i18n';
 import { DraftNotice } from '../../ui/draft-notice';
 import { FilterOptions } from '../../ui/filter-options';
 import { FormRow, FormSection, RowMessage, ROW_CONTENT_INSET, SummaryRow, rowIcon, useComposeInputStyles } from '../../ui/compose-rows';
@@ -22,6 +23,7 @@ import { ReminderField } from '../reminders/reminder-field';
 import { alarmValue, choiceFromValue, choiceValue, DEFAULT_REMINDER, fitChoice, sameChoice, type AlarmOptionValue, type ReminderOptionValue } from '../reminders/reminder-rules';
 import {
   ageOn,
+  BIRTH_YEAR_MIN,
   birthYearOf,
   birthdayEvents,
   EMPTY_BIRTHDAY,
@@ -36,11 +38,6 @@ import {
 } from './birthday-dates';
 import { MonthDayPicker } from './month-day-picker';
 
-const CALENDARS: Array<{ value: BirthdayCalendar; label: string; name: string }> = [
-  { value: 'lunar', label: '农历', name: '按农历过生日' },
-  { value: 'solar', label: '公历', name: '按公历过生日' },
-];
-
 /** 农历十月十五：11月23日周一 · 58 岁, the next time a birthday comes round. */
 function nextLine(calendar: BirthdayCalendar, month: number, day: number, birthYear: number | null, todayIso: string): string | null {
   const next = nextBirthday(calendar, month, day, todayIso);
@@ -48,7 +45,10 @@ function nextLine(calendar: BirthdayCalendar, month: number, day: number, birthY
   const date = formatDate(new Date(`${next}T12:00:00`), { weekday: true });
   const age = ageOn({ occasion: 'birthday', birthYear, lunar: calendar === 'lunar' ? { month, day } : null }, next);
   // A Gregorian date would only repeat itself, so that line names the calendar instead.
-  return `${calendar === 'lunar' ? formatBirthdayDate(calendar, month, day) : '公历生日'}：${date}${age === null ? '' : ` · ${age} 岁`}`;
+  const label = calendar === 'lunar' ? formatBirthdayDate(calendar, month, day) : i18n.t('birthdays:form.solarBirthday');
+  return age === null
+    ? i18n.t('birthdays:form.nextLine', { label, date })
+    : i18n.t('birthdays:form.nextLineAge', { label, date, age: i18n.t('birthdays:age', { age }) });
 }
 
 /**
@@ -65,6 +65,7 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
   onSubmit(events: CreateEventDto[]): void;
   onCancel(): void;
 }) {
+  const { t } = useTranslation(['birthdays', 'common', 'recurrence']);
   const activeTheme = useTheme<Theme>();
   const inputs = useComposeInputStyles();
   const dense = useDesktopDensity();
@@ -95,11 +96,11 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
   };
 
   const step = useMemo<RouteWindowStep | null>(() => picking ? {
-    title: draft.calendar === 'lunar' ? '农历生日' : '公历生日',
+    title: t(draft.calendar === 'lunar' ? 'form.pickerTitle.lunar' : 'form.pickerTitle.solar'),
     onClose: () => setPicking(false),
     onReturn: () => (dateTrigger.current as unknown as { focus?(): void } | null)?.focus?.(),
     content: <MonthDayPicker calendar={draft.calendar} month={draft.month} day={draft.day} onCancel={() => setPicking(false)} onDone={(month, day) => { update({ month, day }); setPicking(false); }} />,
-  } : null, [draft.calendar, draft.day, draft.month, picking, update]);
+  } : null, [draft.calendar, draft.day, draft.month, picking, t, update]);
   const inWindow = useWindowStep(step);
 
   const birthYear = birthYearOf(draft);
@@ -121,6 +122,13 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
     onSubmit(birthdayEvents(draft, todayIso, timezone, sameChoice(choice, DEFAULT_REMINDER) ? undefined : choice));
   };
 
+  const calendars: Array<{ value: BirthdayCalendar; label: string; name: string }> = [
+    { value: 'lunar', label: t('form.calendars.lunar'), name: t('form.calendars.lunarName') },
+    { value: 'solar', label: t('form.calendars.solar'), name: t('form.calendars.solarName') },
+  ];
+  const nameError = errors.name ? t('form.errors.name') : undefined;
+  const yearError = errors.birthYear ? t('form.errors.birthYear', { min: BIRTH_YEAR_MIN }) : undefined;
+  const alsoOtherLabel = other === null ? '' : t(other.calendar === 'solar' ? 'form.alsoOther.solar' : 'form.alsoOther.lunar');
   const textSize = dense ? 'bodySm' : 'body';
   // Content under an icon row starts where that row's text does; a phone also indents rows without an icon.
   const contentInset = dense ? activeTheme.layout.desktopControl + activeTheme.spacing[2] : ROW_CONTENT_INSET;
@@ -133,18 +141,18 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
           editable={!submitting}
           value={draft.name}
           onChangeText={name => update({ name })}
-          placeholder="谁的生日"
+          placeholder={t('form.name')}
           placeholderTextColor={activeTheme.colors.inkMuted}
           style={inputs.title}
           maxLength={NAME_MAX}
-          accessibilityLabel="谁的生日"
-          aria-invalid={errors.name !== undefined}
-          {...(errors.name === undefined ? {} : { 'aria-describedby': nameErrorId, accessibilityHint: errors.name })}
+          accessibilityLabel={t('form.name')}
+          aria-invalid={nameError !== undefined}
+          {...(nameError === undefined ? {} : { 'aria-describedby': nameErrorId, accessibilityHint: nameError })}
         />
       </FormRow>
-      {errors.name !== undefined ? <RowMessage id={nameErrorId}>{errors.name}</RowMessage> : null}
+      {nameError !== undefined ? <RowMessage id={nameErrorId}>{nameError}</RowMessage> : null}
       {people.length ? (
-        <View accessibilityRole="radiogroup" accessibilityLabel="选择家人" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], paddingLeft: dense ? 0 : ROW_CONTENT_INSET, paddingBottom: activeTheme.spacing[3] }}>
+        <View accessibilityRole="radiogroup" accessibilityLabel={t('form.people')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], paddingLeft: dense ? 0 : ROW_CONTENT_INSET, paddingBottom: activeTheme.spacing[3] }}>
           {people.map(person => {
             const selected = draft.name.trim() === person;
             return (
@@ -167,12 +175,12 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
 
       <FormSection>
         <FormRow icon={rowIcon(Cake)}>
-          <FilterOptions label="按农历还是公历过" hideLabel value={draft.calendar} options={CALENDARS} onChange={chooseCalendar} />
+          <FilterOptions label={t('form.calendar')} hideLabel value={draft.calendar} options={calendars} onChange={chooseCalendar} />
         </FormRow>
         <SummaryRow
-          name="生日日期"
+          name={t('form.date')}
           icon={rowIcon(CalendarDays)}
-          summary={chosen ? formatBirthdayDate(draft.calendar, draft.month, draft.day) : '选择日期'}
+          summary={chosen ? formatBirthdayDate(draft.calendar, draft.month, draft.day) : t('form.chooseDate')}
           muted={!chosen}
           open={picking}
           disabled={submitting}
@@ -180,7 +188,7 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
           onPress={() => setPicking(current => !current)}
         />
         {!inWindow && step ? <View style={{ paddingLeft: contentInset, paddingBottom: activeTheme.spacing[3] }}>{step.content}</View> : null}
-        {errors.date !== undefined ? <RowMessage>{errors.date}</RowMessage> : null}
+        {errors.date ? <RowMessage>{t('form.errors.date')}</RowMessage> : null}
         <FormRow icon={rowIcon(Hash)}>
           <TextInput
             editable={!submitting}
@@ -188,26 +196,26 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
             onChangeText={text => update({ birthYearText: text.replace(/[^0-9]/g, '').slice(0, 4), ...(text === '' ? { alsoOther: false } : {}) })}
             keyboardType="number-pad"
             maxLength={4}
-            placeholder={draft.calendar === 'lunar' ? '出生年份（农历，可不填）' : '出生年份（可不填）'}
+            placeholder={t(draft.calendar === 'lunar' ? 'form.birthYearPlaceholder.lunar' : 'form.birthYearPlaceholder.solar')}
             placeholderTextColor={activeTheme.colors.inkMuted}
             style={inputs.row}
-            accessibilityLabel="出生年份"
-            aria-invalid={errors.birthYear !== undefined}
-            {...(errors.birthYear === undefined ? {} : { 'aria-describedby': yearErrorId, accessibilityHint: errors.birthYear })}
+            accessibilityLabel={t('form.birthYear')}
+            aria-invalid={yearError !== undefined}
+            {...(yearError === undefined ? {} : { 'aria-describedby': yearErrorId, accessibilityHint: yearError })}
           />
         </FormRow>
-        {errors.birthYear !== undefined
-          ? <RowMessage id={yearErrorId}>{errors.birthYear}</RowMessage>
-          : <View style={{ paddingLeft: contentInset, paddingBottom: activeTheme.spacing[1] }}><Text variant="caption" color="inkMuted">填了年份，日程里会显示几岁。</Text></View>}
+        {yearError !== undefined
+          ? <RowMessage id={yearErrorId}>{yearError}</RowMessage>
+          : <View style={{ paddingLeft: contentInset, paddingBottom: activeTheme.spacing[1] }}><Text variant="caption" color="inkMuted">{t('form.birthYearHint')}</Text></View>}
         {other !== null ? (
           <FormRow icon={rowIcon(CalendarPlus)}>
             <View style={{ flex: 1 }}>
-              <Text variant={textSize}>{other.calendar === 'solar' ? '也过公历生日' : '也过农历生日'}</Text>
+              <Text variant={textSize}>{alsoOtherLabel}</Text>
               <Text variant="caption">{other.birthDate}</Text>
             </View>
             <Switch
               disabled={submitting}
-              accessibilityLabel={other.calendar === 'solar' ? '也过公历生日' : '也过农历生日'}
+              accessibilityLabel={alsoOtherLabel}
               value={draft.alsoOther}
               onValueChange={alsoOther => update({ alsoOther })}
               trackColor={{ false: activeTheme.colors.border, true: activeTheme.colors.primary }}
@@ -228,14 +236,14 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
       </FormSection>
 
       {preview.length ? (
-        <View accessibilityLabel={`下一次：${preview.join('；')}`} style={{ marginTop: activeTheme.spacing[4], marginLeft: contentInset, padding: activeTheme.spacing[3], borderRadius: activeTheme.borderRadii.sm, backgroundColor: activeTheme.colors.surfaceSubtle, gap: activeTheme.spacing[1] }}>
-          <Text variant="caption" color="inkMuted">下一次</Text>
+        <View accessibilityLabel={t('form.nextName', { lines: preview.join(t('form.nextSeparator')) })} style={{ marginTop: activeTheme.spacing[4], marginLeft: contentInset, padding: activeTheme.spacing[3], borderRadius: activeTheme.borderRadii.sm, backgroundColor: activeTheme.colors.surfaceSubtle, gap: activeTheme.spacing[1] }}>
+          <Text variant="caption" color="inkMuted">{t('form.next')}</Text>
           {preview.map(line => <Text key={line} variant="bodySm" color="ink">{line}</Text>)}
         </View>
       ) : null}
-      {timeZoneError ? <RowMessage>无法识别当前设备的时区。请检查系统时区设置后重试。</RowMessage> : null}
+      {timeZoneError ? <RowMessage>{t('recurrence:validation.timeZone')}</RowMessage> : null}
 
-      <FormActions onCancel={onCancel} onSubmit={submit} submitting={submitting} submitLabel="保存" />
+      <FormActions onCancel={onCancel} onSubmit={submit} submitting={submitting} submitLabel={t('common:save')} />
     </Stack>
   );
 }
