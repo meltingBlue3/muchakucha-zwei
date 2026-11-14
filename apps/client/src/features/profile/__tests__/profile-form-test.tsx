@@ -1,5 +1,5 @@
 import type { CurrentUserDto } from '@muchakucha/api-client';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { LogoutAction } from '../../auth/logout-action';
@@ -229,10 +229,13 @@ describe('current-device logout contract', () => {
       </MuchakuchaThemeProvider>,
     );
     const confirm = view.getByRole('button', { name: '确认退出登录' });
-    // Press without awaiting React's flush: the busy signal must already be out,
-    // so an Escape in the same frame cannot close the window mid-request.
-    confirm.props.onClick?.() ?? confirm.props.onPress?.();
-    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+    // Check inside act, before it flushes React's re-render: the busy signal
+    // must already be out, so an Escape in the same frame cannot close the
+    // window mid-request.
+    await act(() => {
+      confirm.props.onClick?.() ?? confirm.props.onPress?.();
+      expect(onBusyChange).toHaveBeenLastCalledWith(true);
+    });
     finish();
     await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
   });

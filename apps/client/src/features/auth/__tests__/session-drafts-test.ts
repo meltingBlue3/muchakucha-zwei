@@ -1,5 +1,4 @@
-jest.mock('../../../platform/session/session-transport.native', () => ({ createNativeSessionTransport: () => ({}) }));
-jest.mock('../../../platform/session/session-transport.web', () => ({ createWebSessionTransport: () => ({}) }));
+jest.mock('../../../platform/session/session-transport', () => ({ createSessionTransport: () => ({}) }));
 jest.mock('../../../ui/workspace-runtime', () => ({
   draftWorkspace: { activateAccount: jest.fn(), endSession: jest.fn(), suspendSession: jest.fn() },
 }));

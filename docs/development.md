@@ -67,7 +67,7 @@ HOST=0.0.0.0 PORT=3100 pnpm --filter api dev
 EXPO_PUBLIC_API_ORIGIN=http://<开发机局域网 IP>:3100 pnpm --filter client exec expo start --lan
 ```
 
-命令行环境变量优先于客户端的 `.env`。连接失败时检查电脑防火墙和对应端口。Android 允许开发时的明文 HTTP；iOS 未配置 ATS 例外，需使用 HTTPS，或改用 Android / Web 联调。
+命令行环境变量优先于客户端的 `.env`。连接失败时检查电脑防火墙和对应端口。只有 Android 开发版（`APP_VARIANT=development`，见 [app.config.js](../apps/client/app.config.js)）允许明文 HTTP，预览版和正式版只走 HTTPS；iOS 未配置 ATS 例外，需使用 HTTPS，或改用 Android / Web 联调。
 
 ## AI 助手
 

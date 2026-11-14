@@ -83,3 +83,5 @@ export function createWebCurrentHouseholdStore(): CurrentHouseholdStore {
     },
   };
 }
+
+export const createCurrentHouseholdStore: () => CurrentHouseholdStore = createWebCurrentHouseholdStore;

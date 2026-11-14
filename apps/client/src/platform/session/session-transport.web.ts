@@ -14,6 +14,7 @@ import {
   type IssuedSession,
   type RestoreOutcome,
   type SessionTransport,
+  type SessionTransportFactory,
   type WebSessionRequest,
 } from './session-transport';
 
@@ -142,3 +143,5 @@ export function createWebSessionTransport(
     restore: refresh,
   };
 }
+
+export const createSessionTransport: SessionTransportFactory = createWebSessionTransport;

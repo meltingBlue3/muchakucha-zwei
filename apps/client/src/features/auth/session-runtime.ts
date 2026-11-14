@@ -1,24 +1,19 @@
 import { draftWorkspace } from '../../ui/workspace-runtime';
 import { ApiClient } from '@muchakucha/api-client';
-import { Platform } from 'react-native';
 
 import { notifyAfterSuccess } from '../../api/notify-after-success';
 import { withSessionRetry } from '../../api/session-retry';
 import { cancelAllReminders } from '../../platform/reminders/reminder-notifications';
 import { REMINDER_INPUT_CALLS, remindersMayHaveChanged } from '../reminders/reminder-signal';
 import { createSessionStateStore } from './session-state';
-import { createNativeSessionTransport } from '../../platform/session/session-transport.native';
-import { createWebSessionTransport } from '../../platform/session/session-transport.web';
+import { createSessionTransport } from '../../platform/session/session-transport';
 
 const apiOrigin = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
 // The transport refreshes through the raw client; screens use the retrying one.
 const rawApiClient = new ApiClient(apiOrigin);
 export const sessionStateStore = createSessionStateStore();
-export const sessionTransport =
-  Platform.OS === 'web'
-    ? createWebSessionTransport(rawApiClient)
-    : createNativeSessionTransport(rawApiClient);
+export const sessionTransport = createSessionTransport(rawApiClient);
 
 let sessionLostHandler: (() => void) | null = null;
 /** The root layout routes to sign-in when a refresh finds the session gone. */

@@ -1,21 +1,6 @@
-import { canGovern, governanceAction, isPromotion } from '../member-governance';
+import { canGovern, governanceAction } from '../member-governance';
 
 describe('member governance policy', () => {
-  describe('isPromotion', () => {
-    test('MEMBER->ADMIN is a promotion', () => {
-      expect(isPromotion('MEMBER', 'ADMIN')).toBe(true);
-    });
-
-    test('ADMIN->MEMBER is not a promotion', () => {
-      expect(isPromotion('ADMIN', 'MEMBER')).toBe(false);
-    });
-
-    test('OWNER is not a promotion', () => {
-      expect(isPromotion('OWNER', 'ADMIN')).toBe(false);
-      expect(isPromotion('OWNER', 'MEMBER')).toBe(false);
-    });
-  });
-
   describe('canGovern', () => {
     test('owner can govern non-owner members', () => {
       // Actor is OWNER, target is ADMIN (non-owner)
