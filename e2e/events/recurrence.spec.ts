@@ -324,7 +324,7 @@ test.describe('recurring event and task journeys', () => {
     expect(successor).toBeDefined();
     expect(successor.recurrence.byWeekday).not.toContain(removedWeekday);
 
-    // Generation is a rolling per-frequency lookahead (D-11/D-12), so a series
+    // Generation is a rolling per-frequency lookahead, so a series
     // only materializes as far as its frequency's window reaches. A weekly rule
     // has a 6-day lookahead, so anchoring on today with four consecutive weekdays
     // materializes today plus the next three days — every sibling stays in the

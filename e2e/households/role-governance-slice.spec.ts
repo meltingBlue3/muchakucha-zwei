@@ -161,7 +161,7 @@ test('changes a non-owner role', async ({ page, request }) => {
   await expect(page.getByText('角色治理测试家庭').first()).toBeVisible({ timeout: 5000 });
 
   // ============================================================================
-  // D-09: ROLE CHANGE MATRIX — authorized actors can promote and demote.
+  // ROLE CHANGE MATRIX — authorized actors can promote and demote.
   // ============================================================================
 
   // Find membership IDs from the authoritative roster.
@@ -262,7 +262,7 @@ test('changes a non-owner role', async ({ page, request }) => {
   }
 
   // ============================================================================
-  // D-09: FORBIDDEN — admin cannot target owner.
+  // FORBIDDEN — admin cannot target owner.
   // ============================================================================
 
   const ownerMembershipId = freshRoster.find((m) => m.role === 'OWNER')!.membershipId;
@@ -279,7 +279,7 @@ test('changes a non-owner role', async ({ page, request }) => {
   expect(adminTargetBody.error.code).toBe('OWNER_UNTOUCHABLE');
 
   // ============================================================================
-  // D-09: FORBIDDEN — member cannot govern.
+  // FORBIDDEN — member cannot govern.
   // ============================================================================
 
   freshRoster = await getHouseholdMemberships(owner.accessToken, household.id);

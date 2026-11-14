@@ -12,7 +12,7 @@ import { Banner, ConfirmActions, Stack, Text } from '../../../../../src/ui/primi
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
 /**
- * D-11 owner-leave final confirmation page.
+ * Owner-leave final confirmation page.
  *
  * Stage 1 — Consequence summary: displays the successor member name,
  * household name, and the irreversible consequences of leaving
@@ -22,7 +22,7 @@ const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000'
  * with "取消离开" (safe, no mutation) and "确认离开家庭" (destructive)
  * in safe-first DOM order.
  *
- * D-12 recovery: on 204 success, the former owner's membership no longer
+ * Recovery: on 204 success, the former owner's membership no longer
  * exists. Route to /households to let the AccessChangedPanel handle the
  * membership-loss state (freeze, clear cache, explicit routing).
  */
@@ -63,11 +63,11 @@ export default function LeaveHouseholdPage() {
         { successorMembershipId },
       );
 
-      // D-12: membership deleted — route to /households.
+      // Membership deleted — route to /households.
       // The AccessChangedPanel / household context will detect the membership
       // loss and render the explicit access-changed explanation before any
       // further routing. If the user has no other households, they land on
-      // the D-01 create/accept handoff page.
+      // the create/accept handoff page.
       enterAccessChanged(routeHouseholdName, householdId);
       exitAllowed.current = true;
       router.replace('/households');

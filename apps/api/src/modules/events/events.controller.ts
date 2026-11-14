@@ -31,7 +31,7 @@ interface AuthenticatedRequest {
   auth: AccessTokenClaims;
 }
 
-// WR-06: TypeScript emits `Object` as the design:paramtypes metadata for an
+// TypeScript emits `Object` as the design:paramtypes metadata for an
 // intersection param type (the `HouseholdIdParam & { eventId: string }`
 // shape this file used to use), and Nest's ValidationPipe exempts `Object`
 // — so a param class's class-validator decorators never run and a

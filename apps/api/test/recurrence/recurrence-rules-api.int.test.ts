@@ -68,7 +68,6 @@ async function addMemberViaDb(householdId: string, actor: ActorFixture, role: st
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type InjectResponse = { statusCode: number; json: () => any };
 
 async function taskApi(
@@ -82,7 +81,6 @@ async function taskApi(
     const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
     return snapshot.json();
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
     url: `/api/v1/households/${encodeURIComponent(householdId)}/tasks${path}`,
@@ -102,7 +100,6 @@ async function eventApi(
   path: string = '',
   payload?: unknown,
 ): Promise<InjectResponse> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
     url: `/api/v1/households/${encodeURIComponent(householdId)}/events${path}`,
@@ -126,7 +123,6 @@ async function recurrenceRulesApi(
     const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
     return snapshot.json();
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
     url: `/api/v1/households/${encodeURIComponent(householdId)}/recurrence-rules${path}`,
@@ -276,7 +272,7 @@ describe('GET /households/:householdId/recurrence-rules', () => {
     const owner = await insertActor('rules-window-owner');
     const householdId = await createHousehold(owner.accessToken);
 
-    // D-16's core regression: biweekly (interval=2) means the gap between
+    // The core regression: biweekly (interval=2) means the gap between
     // occurrences is 14 days — far wider than the 6-day weekly lookahead.
     // Anchoring the last occurrence 7 days ago means the NEXT occurrence is
     // exactly 7 days from now, comfortably outside the materialization
@@ -432,7 +428,7 @@ describe('GET /households/:householdId/recurrence-rules', () => {
     expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
   });
 
-  // WR-05 regression: currentCalendarDateIn throws for a timezone Intl
+  // Regression: currentCalendarDateIn throws for a timezone Intl
   // cannot resolve. materializeAllDue already wraps every rule in
   // try/catch for exactly this case; toListItem had no equivalent guard,
   // so one bad row used to 500 the entire household's list — including
@@ -524,7 +520,7 @@ describe('GET /households/:householdId/recurrence-rules/:ruleId', () => {
 });
 
 describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
-  // The daily lookahead is 0 days (D-11), so a daily rule can never have a
+  // The daily lookahead is 0 days, so a daily rule can never have a
   // materialized "tomorrow" row — there would be nothing on the far side of
   // the anchor to assert against. A weekly rule covering BOTH today's and
   // tomorrow's weekday materializes exactly the two rows the anchor sits
@@ -557,7 +553,7 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
     const ended = await recurrenceRulesApi(owner.accessToken, householdId, 'POST', `/${ruleId}/end`);
     expect(ended.statusCode).toBe(204);
 
-    // D-14: the anchor is TOMORROW. Today's occurrence may already be done —
+    // The anchor is TOMORROW. Today's occurrence may already be done —
     // ending the recurrence must not swallow it.
     expect(await occurrenceDatesFor('tasks', ruleId)).toEqual([formatIsoDate(today)]);
     expect((await ruleBounds(ruleId)).endsOn).toBe(formatIsoDate(today));
@@ -747,7 +743,7 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
     const ended = await recurrenceRulesApi(owner.accessToken, householdId, 'POST', `/${ruleId}/end`);
     expect(ended.statusCode).toBe(204);
 
-    // D-14: "ended" is not "deleted" — the rule stays visible in the list.
+    // "ended" is not "deleted" — the rule stays visible in the list.
     const afterList = await recurrenceRulesApi(owner.accessToken, householdId, 'GET');
     expect(afterList.statusCode).toBe(200);
     const afterBody = afterList.json() as { rules: RuleListItem[]; total: number };
@@ -783,7 +779,7 @@ describe('POST /households/:householdId/recurrence-rules/:ruleId/end', () => {
 
 describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   // Same constraint the end-anchor block documents: the daily lookahead is 0
-  // days (D-11), so a DAILY rule never materializes a "tomorrow" row and a
+  // days, so a DAILY rule never materializes a "tomorrow" row and a
   // daily fixture would leave nothing on the far side of the anchor to assert
   // against. A weekly rule covering the weekdays of the given days
   // materializes exactly those rows.
@@ -810,7 +806,6 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
   }
 
   async function createLabel(accessToken: string, householdId: string, name: string): Promise<string> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await (app.getHttpAdapter().getInstance() as any).inject({
       method: 'POST',
       url: `/api/v1/households/${householdId}/labels`,
@@ -827,7 +822,6 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     taskId: string,
     labelIds: string[],
   ): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await (app.getHttpAdapter().getInstance() as any).inject({
       method: 'POST',
       url: `/api/v1/households/${householdId}/tasks/${taskId}/labels`,
@@ -892,8 +886,8 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     expect(created.statusCode).toBe(201);
     const oldRuleId = (created.json() as { recurrenceRuleId: string }).recurrenceRuleId;
 
-    // Rename EVERY instance to something distinct. D-02/D-07 make each
-    // occurrence independently renameable, so after this no instance row
+    // Rename EVERY instance to something distinct. Each occurrence is
+    // independently renameable, so after this no instance row
     // carries the series title any more — a template read off any instance
     // whatsoever produces a "Renamed …" value and fails the assertion below.
     const instances = await instancesFor('tasks', oldRuleId);
@@ -912,7 +906,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     expect(response.statusCode).toBe(200);
     const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
 
-    // CR-01's payoff: the successor's template comes from the old rule's
+    // The successor's template comes from the old rule's
     // template_* columns, so one occurrence's rename cannot leak into every
     // occurrence the successor will ever generate.
     expect((await ruleRow(newRuleId)).templateTitle).toBe('Series template title');
@@ -941,7 +935,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     expect(response.statusCode).toBe(200);
     const newRuleId = (response.json() as { recurrenceRuleId: string }).recurrenceRuleId;
 
-    // D-17's guard. The successor is DAILY starting tomorrow and the daily
+    // The seed-row guard. The successor is DAILY starting tomorrow and the daily
     // lookahead is 0 days, so the materializer contributes nothing: this row
     // exists only because the split wrote it. Without the seed the successor
     // would be a permanently row-less rule whose kind cannot even be derived.
@@ -1112,7 +1106,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     expect(error.details[0]!.codes).toContain('no_occurrence_in_range');
 
     // The old rule was already date-bounded inside the transaction before this
-    // rejection fired — D-08 requires the rollback to restore it exactly.
+    // rejection fired — the split is atomic, so the rollback must restore it exactly.
     expect(await ruleBounds(oldRuleId)).toEqual(boundsBefore);
     expect(await occurrenceDatesFor('tasks', oldRuleId)).toEqual(rowsBefore);
     expect(await ruleCountFor(householdId)).toBe(1);
@@ -1157,7 +1151,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
       );
       expect(response.statusCode).toBeGreaterThanOrEqual(400);
 
-      // D-08: no intermediate state survives — no half-ended old rule, no
+      // No intermediate state survives — no half-ended old rule, no
       // orphaned successor, no missing occurrence rows.
       expect(await ruleBounds(oldRuleId)).toEqual(boundsBefore);
       expect(await occurrenceDatesFor('tasks', oldRuleId)).toEqual(rowsBefore);

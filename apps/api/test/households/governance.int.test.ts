@@ -129,7 +129,7 @@ describe('changes roles', () => {
     });
   }
 
-  describe('D-09: role change matrix', () => {
+  describe('role change matrix', () => {
     test('owner promotes member to admin', async () => {
       const owner = await insertUser('owner', '家主');
       const member = await insertUser('member', '成员');
@@ -266,7 +266,7 @@ describe('changes roles', () => {
     });
   });
 
-  describe('D-10: stalled and cross-household rejection', () => {
+  describe('stalled and cross-household rejection', () => {
     test('cross-household target membership returns 404', async () => {
       const ownerA = await insertUser('ownera', '家主A');
       const ownerB = await insertUser('ownerb', '家主B');

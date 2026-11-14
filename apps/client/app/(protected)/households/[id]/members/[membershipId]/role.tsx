@@ -11,7 +11,7 @@ import { Banner, ConfirmActions, Stack, Text } from '../../../../../../src/ui/pr
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
 /**
- * D-09 / D-10 role change confirmation page.
+ * Role change confirmation page.
  *
  * - Promotion (MEMBER->ADMIN): direct confirmation with non-destructive button.
  * - Demotion (ADMIN->MEMBER): Window confirmation with safe-action-first ordering.

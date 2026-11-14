@@ -357,7 +357,7 @@ export class HouseholdsService {
     return { code: 'INVITATION_REVOKED' as const, message: '邀请已撤销。' };
   }
 
-  // ---- Role governance (D-09, D-10) ----
+  // ---- Role governance ----
 
   async changeMemberRole(
     actorId: string,
@@ -384,7 +384,7 @@ export class HouseholdsService {
     const targetMembership = household.memberships.find((m) => m.id === targetMembershipId);
     if (targetMembership === undefined) return null;
 
-    // D-09: owner is never a valid target for role change.
+    // Owner is never a valid target for role change.
     const targetIsOwner = targetMembership.id === household.ownerMembershipId;
     const targetRole: Role = targetIsOwner ? 'OWNER' : (targetMembership.role as Role);
 
@@ -504,7 +504,7 @@ export class HouseholdsService {
     throw new Error('Unreachable: changeMemberRole retry loop exhausted.');
   }
 
-  // ---- Member removal (D-09, D-10) ----
+  // ---- Member removal ----
 
   async removeMember(
     actorId: string,
@@ -530,7 +530,7 @@ export class HouseholdsService {
     const targetMembership = household.memberships.find((m) => m.id === targetMembershipId);
     if (targetMembership === undefined) return null;
 
-    // D-09: owner is never a valid removal target.
+    // Owner is never a valid removal target.
     const targetIsOwner = targetMembership.id === household.ownerMembershipId;
     const targetIsActor = targetMembership.userId === actorId;
 
@@ -644,7 +644,7 @@ export class HouseholdsService {
     throw new Error('Unreachable: removeMember retry loop exhausted.');
   }
 
-  // ---- Ownership transfer (D-10, D-11) ----
+  // ---- Ownership transfer ----
 
   async transferOwnership(
     actorId: string,
@@ -735,7 +735,7 @@ export class HouseholdsService {
             throw new BadRequestException({ code: 'SUCCESSOR_IS_OWNER', message: '不能将所有权转移给自己。' });
           }
 
-          // Reset former owner's role to MEMBER (D-10 / D-11).
+          // Reset former owner's role to MEMBER.
           const demoted = await transaction.membership.updateMany({
             where: {
               id: currentActor.id,
@@ -810,17 +810,17 @@ export class HouseholdsService {
     }
   }
 
-  // ---- Owner leave (D-11, D-12) ----
+  // ---- Owner leave ----
 
   /**
-   * D-11 atomic owner-leave handoff: selects a successor, moves the owner
+   * Atomic owner-leave handoff: selects a successor, moves the owner
    * pointer, deletes the former membership in one Serializable transaction.
    *
    * On success, returns `{ kind: 'completed' }` — the caller was already
    * removed from the household and must not query the household projection.
    * The response status code is 204 (no content).
    *
-   * D-12 recovery: the former owner's membership no longer exists in the DB.
+   * Recovery: the former owner's membership no longer exists in the DB.
    * The client must freeze household actions, clear any cached household
    * state and device persistence for this household, and render the
    * AccessChangedPanel before any further routing.

@@ -193,7 +193,7 @@ describe('task form recurrence integration', () => {
     );
   });
 
-  // WR-07 regression: an existing recurring task with no due date (the
+  // Regression: an existing recurring task with no due date (the
   // field is optional) used to feed the picker startDate="", which its
   // startsOn-sync effect propagated straight into the submitted recurrence
   // — the exact "" that fails the server's format validation. The task
@@ -251,7 +251,7 @@ describe('task form recurrence integration', () => {
     expect(submitted.recurrence?.startsOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  // CR-03 regression: the /series endpoint has no way to detach an
+  // Regression: the /series endpoint has no way to detach an
   // occurrence into a standalone item, so 不重复 must not be offered as a
   // live option when editing a task that already has a recurrence rule.
   test('disables 不重复 when editing an already-recurring task', async () => {

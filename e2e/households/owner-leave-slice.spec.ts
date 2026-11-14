@@ -180,7 +180,7 @@ test('owner hands off and leaves', async ({ page, request }) => {
   await expect(page.getByText('所有权交接测试家庭').first()).toBeVisible({ timeout: 5000 });
 
   // ============================================================================
-  // GREEN: D-11 owner leaves and hands off to successor.
+  // GREEN: owner leaves and hands off to successor.
   // ============================================================================
 
   const leaveResponse = await request.post(
@@ -196,7 +196,7 @@ test('owner hands off and leaves', async ({ page, request }) => {
   expect(leaveResponse.status()).toBe(204);
 
   // ============================================================================
-  // D-11: Verify successor is now the owner.
+  // Verify successor is now the owner.
   // ============================================================================
 
   const verifyResponse = await request.get(
@@ -216,7 +216,7 @@ test('owner hands off and leaves', async ({ page, request }) => {
   expect(owners[0].userId).toBe(successor.userId);
 
   // ============================================================================
-  // D-11/D-12: Former owner (now non-member) cannot access the household.
+  // Former owner (now non-member) cannot access the household.
   // ============================================================================
 
   const formerOwnerResponse = await request.get(
@@ -226,7 +226,7 @@ test('owner hands off and leaves', async ({ page, request }) => {
   expect(formerOwnerResponse.status()).toBe(404);
 
   // ============================================================================
-  // D-11: Non-owner cannot leave as owner.
+  // Non-owner cannot leave as owner.
   // ============================================================================
 
   // Bystander (MEMBER) cannot leave as owner.
@@ -245,7 +245,7 @@ test('owner hands off and leaves', async ({ page, request }) => {
   expect(bystanderBody.error.code).toBe('NOT_OWNER');
 
   // ============================================================================
-  // D-11: Owner pointer unchanged after failed leave attempt by non-owner.
+  // Owner pointer unchanged after failed leave attempt by non-owner.
   // ============================================================================
 
   // Verify the household state is unchanged after bystander's failed attempt.

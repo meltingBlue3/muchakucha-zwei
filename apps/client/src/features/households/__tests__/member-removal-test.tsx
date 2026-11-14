@@ -2,7 +2,7 @@ import { canRemove } from '../member-governance';
 
 describe('member removal policy', () => {
   describe('canRemove', () => {
-    // D-09: owner can remove any non-owner, including other admins.
+    // Owner can remove any non-owner, including other admins.
     test('owner can remove admin', () => {
       expect(canRemove('OWNER', 'ADMIN', false, false)).toBe(true);
     });
@@ -20,7 +20,7 @@ describe('member removal policy', () => {
       expect(canRemove('ADMIN', 'ADMIN', false, false)).toBe(false);
     });
 
-    // D-09: owner is never a valid removal target.
+    // Owner is never a valid removal target.
     test('owner cannot remove another owner', () => {
       expect(canRemove('OWNER', 'OWNER', true, false)).toBe(false);
     });
@@ -29,7 +29,7 @@ describe('member removal policy', () => {
       expect(canRemove('ADMIN', 'OWNER', true, false)).toBe(false);
     });
 
-    // D-09: member cannot remove anyone.
+    // Member cannot remove anyone.
     test('member cannot remove admin', () => {
       expect(canRemove('MEMBER', 'ADMIN', false, false)).toBe(false);
     });

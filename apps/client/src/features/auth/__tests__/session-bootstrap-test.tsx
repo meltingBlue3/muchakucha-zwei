@@ -125,7 +125,7 @@ describe('session bootstrap contract', () => {
     ]);
   });
 
-  test('routes a no-household account only to the Phase 1 handoff', async () => {
+  test('routes a no-household account only to the create/accept handoff', async () => {
     const result = await renderBootstrap({
       outcome: { kind: 'authenticated', session: { accessToken: 'access-secret', currentUser } },
     });

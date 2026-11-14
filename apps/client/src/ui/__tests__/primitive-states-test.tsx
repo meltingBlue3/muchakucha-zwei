@@ -150,7 +150,7 @@ describe('Restyle-owned primitive state contract', () => {
     expect(view.getByLabelText('保存中').props.accessibilityRole).toBe('progressbar');
   });
 
-  test('D-17 gives every touch target, input, and primary button at least 48 by 48 pixels', async () => {
+  test('gives every touch target, input, and primary button at least 48 by 48 pixels', async () => {
     expect(theme.controlSizes.touchTarget).toBeGreaterThanOrEqual(48);
     expect(theme.controlSizes.field).toBe(48);
     expect(theme.controlSizes.primary).toBe(48);
@@ -160,7 +160,7 @@ describe('Restyle-owned primitive state contract', () => {
     expect(style.minWidth).toBeGreaterThanOrEqual(48);
   });
 
-  test('D-17 uses medium radii, one-pixel boundaries, and light hierarchy without stacked rounded cards', () => {
+  test('uses medium radii, one-pixel boundaries, and light hierarchy without stacked rounded cards', () => {
     expect(theme.borderRadii.md).toBe(12);
     expect(theme.borderRadii.lg).toBe(16);
     expect(theme.borderWidths.default).toBe(1);

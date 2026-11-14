@@ -20,12 +20,12 @@ import { resolveSeriesMarks, seriesMarksResponse } from '../recurrence/series-ma
 const TITLE_MIN = 1;
 const TITLE_MAX = 200;
 
-/** UTC midnight for "today" — the boundary IN-04's ended-rule filter uses. */
+/** UTC midnight for "today" — the boundary the ended-rule filter uses. */
 function utcMidnightToday(): Date {
   return new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
 }
 
-// WR-02: parseIsoDate throws a plain Error (not an HttpException) on a
+// parseIsoDate throws a plain Error (not an HttpException) on a
 // regex-valid but non-existent calendar date ("2026-02-30", "2026-13-45"),
 // which StableHttpExceptionFilter maps to a 500. Request-supplied recurrence
 // dates must go through this wrapper instead, so a malformed request stays
@@ -93,7 +93,7 @@ interface ListFilters {
   expandRecurring?: string | undefined;
   startDate?: string | undefined;
   endDate?: string | undefined;
-  /** Only 'true' or 'false' are honored; any other value is treated as unset (D-15). */
+  /** Only 'true' or 'false' are honored; any other value is treated as unset. */
   recurring?: string | undefined;
 }
 
@@ -279,7 +279,7 @@ export class EventsService {
             createdBy: actorId,
           },
         });
-        // D-17: this seed row is a deliberate exception to D-11's lookahead —
+        // This seed row is a deliberate exception to the per-frequency lookahead —
         // it is written unconditionally, not gated by the horizon check that
         // governs every later occurrence. Removing it would break three
         // things: the materializer discriminates a rule as task-owned vs.
@@ -348,7 +348,7 @@ export class EventsService {
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
 
     const { startDate, endDate, recurring } = filters;
-    // WR-03: an unparseable query string used to reach Prisma as
+    // An unparseable query string used to reach Prisma as
     // `startTime.gte: Invalid Date`, which throws inside the query and
     // surfaces as a 500 — `GET /events?startDate=abc` is a one-line
     // reproduction. Reject it here instead, before it reaches the `where`.
@@ -408,7 +408,7 @@ export class EventsService {
         orderBy: { startTime: 'asc' },
         include: { labels: { include: { label: true } }, recurrenceRule: true },
       }),
-      // D-13's monotonic watermark means an ended rule's watermark is frozen
+      // The monotonic watermark means an ended rule's watermark is frozen
       // in the past forever. Counting it into the household _min would
       // permanently under-report generation coverage for every rule that is
       // still active — scope the aggregate to rules that can still advance.
@@ -555,7 +555,7 @@ export class EventsService {
 
     // A generated occurrence must be cancelled, not removed: the generator
     // dedupes on the row itself, so a missing row reads as "not yet
-    // generated" and the occurrence would come back on the next tick (D-07).
+    // generated" and the occurrence would come back on the next tick.
     await this.prisma.$transaction(async (tx) => {
       const updatedAt = await lockContent(tx, 'event', householdId, eventId, expected);
       if (event.recurrenceRuleId !== null) {

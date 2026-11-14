@@ -260,7 +260,7 @@ export class RecurrenceRuleListItemDto extends SeriesMarksResponse {
   // null rather than guessing a type the rule can no longer prove it has.
   @ApiProperty({ enum: ['task', 'event'], nullable: true }) kind!: 'task' | 'event' | null;
   // The rule's own template title, NOT any instance's title — an instance
-  // can be renamed independently (D-02/D-07) and is not a trustworthy label
+  // can be renamed independently and is not a trustworthy label
   // for the series itself.
   @ApiProperty() title!: string;
   @ApiProperty({ enum: RECURRENCE_FREQUENCIES }) freq!: string;

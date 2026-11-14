@@ -37,7 +37,7 @@ interface CanonicalRule {
  * for the first one too whenever `byWeekday` pushes the first materialized
  * occurrence past `startsOn`. Comparing it classified every recurring edit as
  * a rule change, which greys out 仅此一次 and makes per-occurrence edits
- * unreachable (D-07).
+ * unreachable.
  *
  * Optional/absent, null and default values are folded together so that key
  * order and `undefined`-vs-`null` differences between the two shapes cannot

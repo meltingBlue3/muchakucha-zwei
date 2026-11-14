@@ -2,7 +2,7 @@ import { canTransferOwnership } from '../member-governance';
 
 describe('ownership transfer policy', () => {
   describe('canTransferOwnership', () => {
-    // D-10 / D-11: only the current owner can transfer.
+    // Only the current owner can transfer.
     test('owner can transfer to another member', () => {
       expect(canTransferOwnership('OWNER', true, false)).toBe(true);
     });

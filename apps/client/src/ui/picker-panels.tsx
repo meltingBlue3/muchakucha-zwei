@@ -37,7 +37,6 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
     setMonth(current => current.getFullYear() === selected.getFullYear() && current.getMonth() === selected.getMonth()
       ? current : new Date(selected.getFullYear(), selected.getMonth(), 1));
     // Follow the selection only when the value itself changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
   const today = toDateValue(new Date());
   // A desktop month fills its weeks with the neighbouring months' days, as a wall calendar does.

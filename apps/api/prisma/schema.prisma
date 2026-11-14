@@ -202,7 +202,7 @@ model RecurrenceRule {
   birthYear           Int?      @map("birth_year") @db.SmallInt
   // Series-level template. Generated occurrences read their field values from
   // here, never from a sibling instance row — instances are independently
-  // editable (D-02/D-07) and must not become a template for future rows.
+  // editable and must not become a template for future rows.
   templateTitle       String    @map("template_title") @db.VarChar(200)
   templateDescription String?   @map("template_description") @db.Text
   templatePriority    String    @default("medium") @map("template_priority") @db.VarChar(10)
