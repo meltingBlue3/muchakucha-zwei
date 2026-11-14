@@ -162,7 +162,6 @@ test('removes a non-owner member', async ({ page, request }) => {
   // Navigate to the household settings to confirm the member list is reachable.
   await page.goto(`${WEB_ORIGIN}/households/${encodeURIComponent(household.id)}/settings`);
   await page.waitForURL(`/households/${encodeURIComponent(household.id)}/settings`);
-  await page.waitForTimeout(2000);
 
   // Verify the household name is visible.
   await expect(page.getByText('移除测试家庭').first()).toBeVisible({ timeout: 5000 });

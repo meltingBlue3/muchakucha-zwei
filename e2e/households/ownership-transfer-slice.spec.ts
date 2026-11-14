@@ -175,7 +175,6 @@ test('transfers ownership safely', async ({ page, request }) => {
 
   await page.goto(`${WEB_ORIGIN}/households/${encodeURIComponent(household.id)}/settings`);
   await page.waitForURL(`/households/${encodeURIComponent(household.id)}/settings`);
-  await page.waitForTimeout(2000);
 
   await expect(page.getByText('所有权转移测试家庭').first()).toBeVisible({ timeout: 5000 });
 

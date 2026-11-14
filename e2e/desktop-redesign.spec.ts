@@ -456,19 +456,20 @@ test.describe('desktop motion', () => {
   /** Opacity and transform of the pane on every frame for a while after `act`. */
   async function paneFrames(page: Page, act: () => Promise<void>) {
     await page.evaluate(() => {
-      const frames: Array<[string, string]> = [];
-      (window as unknown as { paneFrames: typeof frames }).paneFrames = frames;
+      const recording = { frames: [] as Array<[string, string]>, done: false };
+      (window as unknown as { paneFrames: typeof recording }).paneFrames = recording;
       const start = performance.now();
       const tick = () => {
         const panel = document.querySelector('[data-testid="app-dialog-panel"]');
-        if (panel) { const style = getComputedStyle(panel); frames.push([style.opacity, style.transform]); }
+        if (panel) { const style = getComputedStyle(panel); recording.frames.push([style.opacity, style.transform]); }
         if (performance.now() - start < 1200) requestAnimationFrame(tick);
+        else recording.done = true;
       };
       requestAnimationFrame(tick);
     });
     await act();
-    await page.waitForTimeout(1300);
-    return page.evaluate(() => (window as unknown as { paneFrames: Array<[string, string]> }).paneFrames);
+    await page.waitForFunction(() => (window as unknown as { paneFrames: { done: boolean } }).paneFrames.done);
+    return page.evaluate(() => (window as unknown as { paneFrames: { frames: Array<[string, string]> } }).paneFrames.frames);
   }
 
   test('a pane slides in once; switching items replaces it in place', async ({ page }) => {

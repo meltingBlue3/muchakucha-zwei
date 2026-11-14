@@ -189,7 +189,6 @@ test('manages invitation lifecycle', async ({ page, request }) => {
   // Navigate to the household settings
   await page.goto(`${WEB_ORIGIN}/households/${encodeURIComponent(household.id)}/settings`);
   await page.waitForURL(`/households/${encodeURIComponent(household.id)}/settings`);
-  await page.waitForTimeout(2000);
 
   // Verify the household name is visible
   await expect(page.getByText('温暖小家').first()).toBeVisible({ timeout: 5000 });

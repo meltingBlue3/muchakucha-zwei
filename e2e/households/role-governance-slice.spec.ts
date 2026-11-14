@@ -155,7 +155,6 @@ test('changes a non-owner role', async ({ page, request }) => {
   // Navigate to the household settings to reach member list and governance actions.
   await page.goto(`${WEB_ORIGIN}/households/${encodeURIComponent(household.id)}/settings`);
   await page.waitForURL(`/households/${encodeURIComponent(household.id)}/settings`);
-  await page.waitForTimeout(2000);
 
   // Verify the household name is visible and roster members appear.
   await expect(page.getByText('角色治理测试家庭').first()).toBeVisible({ timeout: 5000 });
