@@ -27,15 +27,7 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "./plugins/with-material3-theme",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "usesCleartextTraffic": true
-          }
-        }
-      ]
+      "./plugins/with-material3-theme"
     ],
     "experiments": {
       "typedRoutes": true

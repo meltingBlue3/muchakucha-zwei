@@ -1,6 +1,6 @@
 import type { CurrentUserDto } from '@muchakucha/api-client';
 
-export { SessionRestoreError } from '../../api/api-client';
+import type { GeneratedSessionClient } from '../../api/api-client';
 
 export type ReauthenticationReason = 'expired' | 'revoked' | 'replayed';
 
@@ -44,3 +44,13 @@ export type NativeSessionRequest = (refreshToken: string) => Promise<IssuedSessi
 export type WebSessionRequest = (options: {
   credentials: 'include';
 }) => Promise<IssuedSession>;
+
+export type SessionTransportFactory = (client: GeneratedSessionClient) => SessionTransport;
+
+/**
+ * This platform's transport. Metro bundles only `.native.ts`, which keeps the
+ * refresh token in SecureStore, or `.web.ts`, which leaves it in an HttpOnly
+ * cookie; both export it, and this declaration is what TypeScript checks
+ * callers against.
+ */
+export declare const createSessionTransport: SessionTransportFactory;

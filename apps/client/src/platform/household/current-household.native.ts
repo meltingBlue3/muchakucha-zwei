@@ -102,3 +102,5 @@ export function createNativeCurrentHouseholdStore(): CurrentHouseholdStore {
     },
   };
 }
+
+export const createCurrentHouseholdStore: () => CurrentHouseholdStore = createNativeCurrentHouseholdStore;

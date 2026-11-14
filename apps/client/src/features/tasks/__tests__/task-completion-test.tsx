@@ -87,7 +87,7 @@ describe('the completion control', () => {
   test('an in-progress task is completed by a single tap', async () => {
     const { getByLabelText } = await renderCard(task({ status: 'in_progress' }));
 
-    fireEvent.press(getByLabelText('完成任务'));
+    await fireEvent.press(getByLabelText('完成任务'));
 
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledTimes(1));
     expect(statusOf(mockUpdateTask.mock.calls[0])).toBe('completed');
@@ -106,10 +106,10 @@ describe('undo after completing', () => {
   test('restores the exact previous status rather than resetting to 待办', async () => {
     const { getByLabelText, queryByLabelText } = await renderCard(task({ status: 'in_progress' }));
 
-    fireEvent.press(getByLabelText('完成任务'));
+    await fireEvent.press(getByLabelText('完成任务'));
     await waitFor(() => expect(queryByLabelText('撤销完成：倒垃圾')).not.toBeNull());
 
-    fireEvent.press(getByLabelText('撤销完成：倒垃圾'));
+    await fireEvent.press(getByLabelText('撤销完成：倒垃圾'));
 
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledTimes(2));
     // The old rotation sent 'pending' here and lost that the task was started.
@@ -119,9 +119,9 @@ describe('undo after completing', () => {
   test('a task completed from 待办 undoes back to 待办', async () => {
     const { getByLabelText, queryByLabelText } = await renderCard(task({ status: 'pending' }));
 
-    fireEvent.press(getByLabelText('完成任务'));
+    await fireEvent.press(getByLabelText('完成任务'));
     await waitFor(() => expect(queryByLabelText('撤销完成：倒垃圾')).not.toBeNull());
-    fireEvent.press(getByLabelText('撤销完成：倒垃圾'));
+    await fireEvent.press(getByLabelText('撤销完成：倒垃圾'));
 
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledTimes(2));
     expect(statusOf(mockUpdateTask.mock.calls[1])).toBe('pending');
@@ -130,7 +130,7 @@ describe('undo after completing', () => {
   test('the notice names the task and 忽略 closes it without writing', async () => {
     const { getByLabelText, getByRole, getByText, queryByText } = await renderCard(task({ status: 'pending' }));
 
-    fireEvent.press(getByLabelText('完成任务'));
+    await fireEvent.press(getByLabelText('完成任务'));
     await waitFor(() => expect(getByText('已完成「倒垃圾」')).toBeTruthy());
     await waitFor(() => expect(getByRole('button', { name: '忽略' })).toBeEnabled());
     await fireEvent.press(getByRole('button', { name: '忽略' }));
@@ -142,7 +142,7 @@ describe('undo after completing', () => {
   test('un-completing offers no undo of its own', async () => {
     const { getByLabelText, queryByLabelText } = await renderCard(task({ status: 'completed' }));
 
-    fireEvent.press(getByLabelText('标记为未完成'));
+    await fireEvent.press(getByLabelText('标记为未完成'));
 
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledTimes(1));
     expect(queryByLabelText('撤销完成：倒垃圾')).toBeNull();
@@ -154,12 +154,12 @@ describe('a failed write', () => {
     mockUpdateTask.mockRejectedValueOnce(new Error('offline'));
     const { getByLabelText, queryByText } = await renderCard(task({ status: 'pending' }));
 
-    fireEvent.press(getByLabelText('完成任务'));
+    await fireEvent.press(getByLabelText('完成任务'));
 
     await waitFor(() => expect(queryByText('状态没有更新成功，请重试。')).not.toBeNull());
 
     mockUpdateTask.mockResolvedValue(undefined);
-    fireEvent.press(getByLabelText('重试：倒垃圾'));
+    await fireEvent.press(getByLabelText('重试：倒垃圾'));
 
     await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledTimes(2));
     // The retry repeats the change that failed, not a fresh guess at one.
@@ -173,7 +173,7 @@ describe('a failed write', () => {
     mockUpdateTask.mockRejectedValueOnce(refused);
     const { getByLabelText, queryByText } = await renderCard(task({ status: 'pending' }));
 
-    fireEvent.press(getByLabelText('完成任务'));
+    await fireEvent.press(getByLabelText('完成任务'));
 
     // Not an ApiClientError instance, so it falls back to the generic message —
     // the branch that matters is that a failure is always surfaced.

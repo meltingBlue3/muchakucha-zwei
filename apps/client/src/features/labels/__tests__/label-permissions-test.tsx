@@ -62,7 +62,7 @@ async function renderAs(actorRole: 'OWNER' | 'ADMIN' | 'MEMBER', labels = [
 ]) {
   mockRole.current = actorRole;
   mockListLabels.mockResolvedValue({ labels });
-  const view = renderRoute();
+  const view = await renderRoute();
   await waitFor(() => expect(mockListLabels).toHaveBeenCalled());
   return view;
 }

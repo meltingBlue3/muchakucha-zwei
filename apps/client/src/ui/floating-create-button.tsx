@@ -9,6 +9,7 @@ import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import CircleCheck from 'lucide-react-native/icons/circle-check';
 import NotebookText from 'lucide-react-native/icons/notebook-text';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
+import { routeFocusFallback } from '../platform/overlays/route-trigger';
 import { DialogBackdrop } from './dialog-backdrop';
 import { Button, Text } from './primitives';
 import { theme } from './theme';
@@ -37,7 +38,7 @@ export function FloatingCreateButton(props: Props) {
     setOpen(true);
   };
   return <>
-    {desktop ? <Button ref={trigger} testID="header-create" label={props.label ?? t('create')} accessibilityLabel={props.label ?? t('createNewContent')} aria-haspopup={props.actions ? 'menu' : undefined} {...(props.actions ? { expanded: open } : {})} icon={(color) => <Plus size={theme.controlSizes.icon - 4} color={color} strokeWidth={theme.focus.width} />} {...(props.actions ? { trailingIcon: () => <ChevronDown size={theme.controlSizes.icon - 6} color={theme.colors.surface} strokeWidth={theme.focus.width} /> } : {})} onPress={openCreate} /> : <Pressable ref={trigger} testID="floating-create" accessibilityRole="button" accessibilityLabel={props.label ?? t('createNewContent')} aria-haspopup={props.actions ? 'menu' : undefined} aria-{...(props.actions ? { expanded: open } : {})} accessibilityState={props.actions ? { expanded: open } : {}} onPress={openCreate} style={({ pressed }) => [buttonStyle, { backgroundColor: pressed ? theme.colors.primaryPressed : theme.colors.primary }]}>
+    {desktop ? <Button ref={trigger} testID="header-create" {...routeFocusFallback} label={props.label ?? t('create')} accessibilityLabel={props.label ?? t('createNewContent')} aria-haspopup={props.actions ? 'menu' : undefined} {...(props.actions ? { expanded: open } : {})} icon={(color) => <Plus size={theme.controlSizes.icon - 4} color={color} strokeWidth={theme.focus.width} />} {...(props.actions ? { trailingIcon: () => <ChevronDown size={theme.controlSizes.icon - 6} color={theme.colors.surface} strokeWidth={theme.focus.width} /> } : {})} onPress={openCreate} /> : <Pressable ref={trigger} testID="floating-create" {...routeFocusFallback} accessibilityRole="button" accessibilityLabel={props.label ?? t('createNewContent')} aria-haspopup={props.actions ? 'menu' : undefined} accessibilityState={props.actions ? { expanded: open } : {}} onPress={openCreate} style={({ pressed }) => [buttonStyle, { backgroundColor: pressed ? theme.colors.primaryPressed : theme.colors.primary }]}>
       <Plus size={theme.spacing[6] + theme.spacing[1]} color={theme.colors.surface} strokeWidth={theme.focus.width} />
     </Pressable>}
     {/* A wide screen anchors a small menu under the button, with no backdrop, like the other desktop menus. */}

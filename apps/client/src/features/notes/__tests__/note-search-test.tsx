@@ -45,7 +45,7 @@ function note(id: string, title: string): NoteResponseDto {
 
 async function renderNotes(notes: NoteResponseDto[]) {
   mockListNotes.mockResolvedValue({ notes, total: notes.length });
-  const view = render(
+  const view = await render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}>
       <MuchakuchaThemeProvider>
         <NotesListRoute />
@@ -113,7 +113,7 @@ describe('notes screen search', () => {
     await waitFor(() => expect(queryByLabelText('笔记：采购清单')).not.toBeNull());
     expect(queryByLabelText('笔记：旅行计划')).not.toBeNull();
 
-    fireEvent.changeText(getByPlaceholderText('按标题搜索'), '旅行');
+    await fireEvent.changeText(getByPlaceholderText('按标题搜索'), '旅行');
 
     await waitFor(() => expect(queryByLabelText('笔记：采购清单')).toBeNull());
     expect(queryByLabelText('笔记：旅行计划')).not.toBeNull();
@@ -123,13 +123,13 @@ describe('notes screen search', () => {
     const { getByLabelText, getByPlaceholderText, queryByLabelText, queryByText } = await renderNotes([note('1', '采购清单')]);
 
     await waitFor(() => expect(queryByLabelText('笔记：采购清单')).not.toBeNull());
-    fireEvent.changeText(getByPlaceholderText('按标题搜索'), '找不到的');
+    await fireEvent.changeText(getByPlaceholderText('按标题搜索'), '找不到的');
 
     await waitFor(() => expect(queryByText(/没有标题匹配/)).not.toBeNull());
     // The no-result state must not be confused with having no notes at all.
     expect(queryByText(/还没有笔记/)).toBeNull();
 
-    fireEvent.press(getByLabelText('清除搜索'));
+    await fireEvent.press(getByLabelText('清除搜索'));
     await waitFor(() => expect(queryByLabelText('笔记：采购清单')).not.toBeNull());
   });
 

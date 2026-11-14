@@ -14,6 +14,7 @@ import {
   type NativeSessionRequest,
   type RestoreOutcome,
   type SessionTransport,
+  type SessionTransportFactory,
 } from './session-transport';
 
 const REFRESH_TOKEN_KEY = 'muchakucha.session.refresh.v1';
@@ -167,3 +168,5 @@ export function createNativeSessionTransport(
     restore: refresh,
   };
 }
+
+export const createSessionTransport: SessionTransportFactory = createNativeSessionTransport;

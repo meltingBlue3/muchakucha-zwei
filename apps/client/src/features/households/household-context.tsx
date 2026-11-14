@@ -1,13 +1,10 @@
 import { draftWorkspace } from '../../ui/workspace-runtime';
 import type { ListMyHouseholdsItemDto } from '@muchakucha/api-client';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
 
 import type { HouseholdApi } from './household-api';
 import { fetchHouseholds } from './household-api';
-import type { CurrentHouseholdStore } from '../../platform/household/current-household';
-import { createNativeCurrentHouseholdStore } from '../../platform/household/current-household.native';
-import { createWebCurrentHouseholdStore } from '../../platform/household/current-household.web';
+import { createCurrentHouseholdStore, type CurrentHouseholdStore } from '../../platform/household/current-household';
 
 export type HouseholdViewState =
   | 'resolving'
@@ -42,12 +39,6 @@ export function useHouseholdContext(): HouseholdContextValue {
     throw new Error('useHouseholdContext must be used within a HouseholdProvider.');
   }
   return context;
-}
-
-function createCurrentHouseholdStore(): CurrentHouseholdStore {
-  return Platform.OS === 'web'
-    ? createWebCurrentHouseholdStore()
-    : createNativeCurrentHouseholdStore();
 }
 
 function sortHouseholds(

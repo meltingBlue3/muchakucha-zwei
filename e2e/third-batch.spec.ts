@@ -221,6 +221,37 @@ for (const role of ['OWNER', 'ADMIN', 'MEMBER']) {
   });
 }
 
+// The deleted card cannot take focus back, so it falls to the page's create
+// button, whatever language its label is in.
+for (const [language, labels] of [
+  ['zh', { more: '更多操作：笔记：待删除笔记', delete: '删除笔记：待删除笔记', confirm: '确认删除笔记' }],
+  ['ja', { more: 'ノート：待删除笔记の操作メニュー', delete: 'ノートを削除：待删除笔记', confirm: 'ノートを削除する' }],
+] as const) {
+  test.describe(`after deleting a note in ${language}`, () => {
+    if (language === 'ja') test.use({ locale: 'ja-JP' });
+    for (const width of [390, 1440]) {
+      test(`focus returns to the create button at ${width}px`, async ({ page }) => {
+        await setup(page);
+        await page.setViewportSize({ width, height: 900 });
+        let deleted = false;
+        const note = { id: noteId, householdId, title: '待删除笔记', body: null, createdBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
+        await page.route(`**/api/v1/households/${householdId}/notes`, route => route.fulfill({ json: { notes: deleted ? [] : [note], total: deleted ? 0 : 1 } }));
+        await page.route(url => url.pathname === `/api/v1/households/${householdId}/notes/${noteId}`, async route => {
+          if (route.request().method() === 'DELETE') deleted = true;
+          await route.fulfill({ json: note });
+        });
+        await page.goto(`${base}/notes`);
+        await page.getByRole('button', { name: labels.more, exact: true }).click();
+        await page.getByRole('menuitem', { name: labels.delete, exact: true }).click();
+        await page.getByRole('button', { name: labels.confirm, exact: true }).click();
+        await expect(page).toHaveURL(`${base}/notes`);
+        expect(deleted).toBe(true);
+        await expect(page.getByTestId(width >= 1024 ? 'header-create' : 'floating-create')).toBeFocused();
+      });
+    }
+  });
+}
+
 test('member cannot delete another author note through the card or direct URL', async ({ page }) => {
   await setup(page, 'MEMBER');
   const note = { id: noteId, householdId, title: '其他成员的笔记', body: null, createdBy: 'other-user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };

@@ -3,14 +3,6 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
 /**
- * D-10: determines whether this role change is a promotion (MEMBER->ADMIN)
- * or a demotion (ADMIN->MEMBER) for routing purposes.
- */
-export function isPromotion(oldRole: 'OWNER' | 'ADMIN' | 'MEMBER', newRole: 'ADMIN' | 'MEMBER'): boolean {
-  return oldRole === 'MEMBER' && newRole === 'ADMIN';
-}
-
-/**
  * Only the owner can appoint or demote admins.
  */
 export function canGovern(
@@ -82,24 +74,6 @@ export function canTransferOwnership(
   if (!actorIsOwner || actorRole !== 'OWNER') return false;
   // Cannot transfer to self.
   if (successorIsSelf) return false;
-  return true;
-}
-
-/**
- * D-11: returns whether the current actor can leave the household.
- * Only the current owner can initiate a leave, and only if other
- * members exist in the household (policy check on member count
- * happens server-side, but client guards for UI).
- */
-export function canLeave(
-  actorRole: 'OWNER' | 'ADMIN' | 'MEMBER',
-  actorIsOwner: boolean,
-  otherMemberCount: number,
-): boolean {
-  // Only the owner can leave through the handoff flow.
-  if (!actorIsOwner || actorRole !== 'OWNER') return false;
-  // Must have at least one other member to select as successor.
-  if (otherMemberCount < 1) return false;
   return true;
 }
 
