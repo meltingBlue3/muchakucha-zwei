@@ -24,7 +24,6 @@ async function dialogAppearance(page: Page) {
 async function setup(page: Page) {
   const requests: { path: string; method: string; data: unknown }[] = [];
   let labelAttempts = 0;
-  let invitationAttempts = 0;
   const task = { id: taskId, householdId: a, title: '检查任务', status: 'pending', priority: 'medium', dueDate: null, description: null, assigneeIds: [], labels: [], createdBy: 'user', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), recurrenceRuleId: null, recurrence: null, occurrenceDate: null };
   await page.addInitScript((id) => localStorage.setItem('muchakucha:currentHouseholdId', id), b);
   await page.route('**/api/v1/**', async (route) => {
@@ -37,11 +36,8 @@ async function setup(page: Page) {
     else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '检查用户', hasHousehold: true };
     else if (path.endsWith('/users/me/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, households: [] };
     else if (path === '/api/v1/households') body = [household(a), household(b)];
-    else if (path.endsWith('/invitations/inbox')) {
-      invitationAttempts++;
-      if (invitationAttempts === 1) status = 503;
-      body = { invitations: [{ id: 'invite', householdName: '家庭 A', inviterDisplayName: '家人', expiresAt: '2099-01-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' }] };
-    } else if (/\/(tasks|events)\/.+\/labels$/.test(path) && method === 'POST') {
+    else if (path.endsWith('/invitations/inbox')) body = { invitations: [{ id: 'invite', householdName: '家庭 A', inviterDisplayName: '家人', expiresAt: '2099-01-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' }] };
+    else if (/\/(tasks|events)\/.+\/labels$/.test(path) && method === 'POST') {
       labelAttempts++;
       status = labelAttempts === 1 ? 503 : 200;
     } else if (path.endsWith('/labels')) body = { labels: [{ id: 'label', name: '家务', color: '#277A72' }] };
@@ -310,8 +306,13 @@ test('a note draft survives cancel and is cleared only after successful save', a
 
 test('a failed inbox has a working retry action', async ({ page }) => {
   await setup(page);
+  // The inbox stays unreachable until the person retries. Failing only the first request is not enough:
+  // a wide screen also asks for the inbox count from the sidebar and the account navigation, which may go first.
+  let inboxDown = true;
+  await page.route('**/api/v1/households/invitations/inbox', (route) => inboxDown ? route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }) : route.fallback());
   await page.goto('/inbox');
   await expect(page.getByText('暂时无法加载收件箱，请检查网络后重试。')).toBeVisible();
+  inboxDown = false;
   await page.getByRole('button', { name: '重试' }).click();
   await expect(page.getByRole('button', { name: '接受「家庭 A」的邀请' })).toBeVisible();
 });

@@ -170,8 +170,8 @@ test.describe('in the calendar', () => {
     await expect(pane.getByRole('button', { name: '日程：妈妈的农历生日', exact: true })).toBeVisible();
     await expect(pane.getByText(`全天 · 农历十月十五 · ${lunar.lunarYear - 1968} 岁`)).toBeVisible();
 
-    // 个人中心 › 显示农历 turns the lunar dates off on this device.
-    await page.goto('/profile');
+    // 设置 › 显示农历 turns the lunar dates off on this device.
+    await page.goto('/settings');
     await page.getByRole('switch', { name: '显示农历' }).click();
     await page.goto(`/households/${householdId}/events`);
     await expect(page.getByTestId('desktop-month-grid')).toBeVisible();
