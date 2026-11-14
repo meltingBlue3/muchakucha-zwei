@@ -85,6 +85,11 @@ async function loginFixture(page: Page, username: string): Promise<void> {
   await loginUsernameFixture(page, username, password);
 }
 
+// The household has no tasks or events, so each page has loaded once its empty state shows.
+const tasksLoaded = (page: Page) => page.getByText('还没有任务', { exact: true });
+// A phone shows Today's empty state; the desktop layout says so in its task column.
+const todayLoaded = (page: Page) => page.getByText(/^(今天很清闲|今天没有待办。)$/).first();
+
 test.describe('tasks and today view accessibility', () => {
   let ownerUsername: string;
   let ownerId: string;
@@ -193,7 +198,7 @@ test.describe('tasks and today view accessibility', () => {
       await page.setViewportSize({ width, height: 900 });
       await loginFixture(page, ownerUsername);
       await page.goto(`/households/${encodeURIComponent(householdId)}/tasks`);
-      await page.waitForTimeout(2000);
+      await expect(tasksLoaded(page)).toBeVisible();
 
       const results = await new AxeBuilder({ page }).analyze();
       expect(results.violations, `tasks list at ${width}px`).toEqual([]);
@@ -205,7 +210,7 @@ test.describe('tasks and today view accessibility', () => {
       await page.setViewportSize({ width, height: 900 });
       await loginFixture(page, ownerUsername);
       await page.goto(`/households/${encodeURIComponent(householdId)}/today`);
-      await page.waitForTimeout(2000);
+      await expect(todayLoaded(page)).toBeVisible();
 
       const results = await new AxeBuilder({ page }).analyze();
       expect(results.violations, `today view at ${width}px`).toEqual([]);
@@ -227,7 +232,7 @@ test.describe('tasks and today view accessibility', () => {
 
     await loginFixture(page, ownerUsername);
     await page.goto(`/households/${encodeURIComponent(householdId)}/today`);
-    await page.waitForTimeout(2000);
+    await expect(todayLoaded(page)).toBeVisible();
 
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations, 'reduced-motion today').toEqual([]);
@@ -249,7 +254,7 @@ test.describe('tasks and today view accessibility', () => {
 
     await loginFixture(page, ownerUsername);
     await page.goto(`/households/${encodeURIComponent(householdId)}/tasks`);
-    await page.waitForTimeout(2000);
+    await expect(tasksLoaded(page)).toBeVisible();
 
     await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
     await context.close();

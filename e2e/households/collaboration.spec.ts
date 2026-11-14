@@ -437,7 +437,6 @@ test('completes the full household collaboration journey', async ({ page, reques
   // Navigate to /households — the selector should list Alice's memberships.
   await page.goto(`${WEB_ORIGIN}/households`);
   await page.waitForURL(/\/households/);
-  await page.waitForTimeout(2000);
 
   // Alice should see the household selector with the household name.
   await expect(page.getByText('アリス家').first()).toBeVisible({ timeout: 5000 });
@@ -445,7 +444,6 @@ test('completes the full household collaboration journey', async ({ page, reques
   // Open the settings page that contains the current household's roster.
   await page.getByRole('link', { name: '家庭设置', exact: true }).click();
   await page.waitForURL(/\/households\/[^/]+\/settings$/);
-  await page.waitForTimeout(2000);
 
   const rosterMain = page.getByRole('main');
 
