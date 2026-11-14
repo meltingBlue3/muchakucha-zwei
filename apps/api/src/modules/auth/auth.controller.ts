@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Headers, HttpCode, Post, Req, Res, SetMetadata, UseGuards } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiBadRequestResponse, ApiBearerAuth, ApiConflictResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { parseExactOrigins } from '../../infrastructure/web-origins.js';
 import { AuthService } from './auth.service.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
 import { RefreshDto, RefreshResponseDto } from './dto/refresh.dto.js';
@@ -36,16 +37,13 @@ function cookieNames(): { refresh: string } {
   };
 }
 
-function configuredWebOrigins(): ReadonlySet<string> {
-  const configured = process.env.WEB_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean);
-  return new Set(configured?.length ? configured : ['http://127.0.0.1:8081']);
-}
-
+// The same WEB_ORIGIN rules as CORS in main.ts. Like cookieNames, this reads
+// the environment per request, which the auth tests rely on to switch a
+// running app into production; startup has already validated the value.
 function isAllowedOrigin(origin: string | undefined): boolean {
   // 非生产环境允许所有来源，便于开发和多设备测试
   if (process.env.NODE_ENV !== 'production') return true;
-  if (origin === undefined) return false;
-  return configuredWebOrigins().has(origin);
+  return origin !== undefined && parseExactOrigins(process.env.WEB_ORIGIN, 'production').has(origin);
 }
 
 @ApiTags('auth')

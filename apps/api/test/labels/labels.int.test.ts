@@ -233,6 +233,23 @@ describe('labels API contract', () => {
       expect(elsewhere.statusCode).toBe(201);
     });
 
+    test('answers simultaneous duplicate names with the duplicate error rather than a 500', async () => {
+      const created = await Promise.all(Array.from({ length: 5 }, () =>
+        householdApi(owner, householdId, 'POST', '/labels', { name: '同时', color: '#10B981' })));
+      expect(created.map(response => response.statusCode).sort()).toEqual([201, 400, 400, 400, 400]);
+      for (const response of created.filter(r => r.statusCode === 400)) {
+        expect(response.json().error.details).toEqual([expect.objectContaining({ field: 'name', codes: ['duplicate'] })]);
+      }
+
+      const labelIds = await Promise.all(['甲', '乙', '丙'].map(name => createLabel(owner, householdId, name)));
+      const renamed = await Promise.all(labelIds.map(labelId =>
+        householdApi(owner, householdId, 'PUT', `/labels/${labelId}`, { name: '改名' })));
+      expect(renamed.map(response => response.statusCode).sort()).toEqual([200, 400, 400]);
+      for (const response of renamed.filter(r => r.statusCode === 400)) {
+        expect(response.json().error.details).toEqual([expect.objectContaining({ field: 'name', codes: ['duplicate'] })]);
+      }
+    });
+
     test('lists household labels by name for every member', async () => {
       await createLabel(owner, householdId, 'b-运动');
       await createLabel(owner, householdId, 'a-学校');
@@ -244,6 +261,23 @@ describe('labels API contract', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().total).toBe(2);
       expect(response.json().labels.map((label: { name: string }) => label.name)).toEqual(['a-学校', 'b-运动']);
+    });
+
+    test('a delete sent with the name and colour it was confirmed on fails once the label has changed', async () => {
+      const labelId = await createLabel(owner, householdId, '旧名');
+      expect((await householdApi(admin, householdId, 'PUT', `/labels/${labelId}`, { name: '新名' })).statusCode).toBe(200);
+      const version = (name: string) => `expectedName=${encodeURIComponent(name)}&expectedColor=${encodeURIComponent('#EF4444')}`;
+
+      const stale = await householdApi(owner, householdId, 'DELETE', `/labels/${labelId}?${version('旧名')}`);
+      expect(stale.statusCode).toBe(409);
+      expect(stale.json().error.code).toBe('EDIT_CONFLICT');
+
+      const half = await householdApi(owner, householdId, 'DELETE', `/labels/${labelId}?expectedName=${encodeURIComponent('新名')}`);
+      expect(half.statusCode).toBe(400);
+      expect(half.json().error.details).toEqual([expect.objectContaining({ field: 'expectedColor' })]);
+
+      const current = await householdApi(owner, householdId, 'DELETE', `/labels/${labelId}?${version('新名')}`);
+      expect(current.statusCode).toBe(204);
     });
 
     test('updates name and color independently', async () => {

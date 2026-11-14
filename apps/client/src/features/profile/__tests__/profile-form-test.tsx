@@ -11,7 +11,6 @@ import { ProfileForm, type ProfileApi } from '../profile-form';
 const currentUser: CurrentUserDto = {
   username: 'family_member',
   displayName: '家庭成员',
-  hasHousehold: false,
   id: 'current-user',
 };
 

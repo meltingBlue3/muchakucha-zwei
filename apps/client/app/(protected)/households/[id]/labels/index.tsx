@@ -5,7 +5,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
-import type { GetHouseholdMemberDto, LabelResponseDto } from '@muchakucha/api-client';
+import { ApiClientError, type GetHouseholdMemberDto, type LabelResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import { canManageLabels } from '../../../../../src/features/labels/label-permissions';
@@ -44,7 +44,7 @@ export default function LabelsIndexRoute() {
   const [name, setName] = useState('');
   const [color, setColor] = useState(labelColorPresets[0]!);
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<'deleteError' | 'saveError' | null>(null);
+  const [actionError, setActionError] = useState<'deleteError' | 'deleteChanged' | 'saveError' | null>(null);
   const [nameError, setNameError] = useState<'nameRequired' | null>(null);
   const nameInput = useRef<TextInput>(null);
   const trigger = useRef(getRouteTrigger());
@@ -94,6 +94,17 @@ export default function LabelsIndexRoute() {
     applyOpen(next);
   };
   const close = () => { if (!busy) { if (pendingAction) setPendingAction(null); else if (action?.kind === 'delete' && deletingFromPane) { setAction({ kind: 'edit', label: action.label }); setDeletingFromPane(false); } else setAction(null); } };
+  // A label renamed or recoloured since the list loaded: show it as it is now and let the person confirm again.
+  const showChangedLabel = async (labelId: string) => {
+    try {
+      const token = await sessionTransport.getAccessToken();
+      if (token === null || !householdId) throw new Error('Session expired');
+      const latest = (await sessionApiClient.listLabels(token, householdId)).labels;
+      setLabels(latest);
+      const current = latest.find(label => label.id === labelId);
+      if (current) { setAction({ kind: 'delete', label: current }); setActionError('deleteChanged'); } else setAction(null);
+    } catch { setActionError('deleteError'); }
+  };
   const submit = async () => {
     if (!householdId || !action || !canManage || busy) return;
     if (action.kind !== 'delete' && !name.trim()) { setNameError('nameRequired'); nameInput.current?.focus(); return; }
@@ -102,7 +113,7 @@ export default function LabelsIndexRoute() {
       const token = await sessionTransport.getAccessToken();
       if (token === null) throw new Error('Session expired');
       if (action.kind === 'delete') {
-        await sessionApiClient.deleteLabel(token, householdId, action.label.id);
+        await sessionApiClient.deleteLabel(token, householdId, action.label.id, { expectedName: action.label.name, expectedColor: action.label.color });
         setLabels(previous => previous.filter(label => label.id !== action.label.id));
       } else {
         const data = { name: name.trim(), color };
@@ -112,7 +123,8 @@ export default function LabelsIndexRoute() {
         setLabels(previous => action.kind === 'create' ? [...previous, result] : previous.map(label => label.id === result.id ? result : label));
       }
       setAction(null);
-    } catch {
+    } catch (caught: unknown) {
+      if (action.kind === 'delete' && caught instanceof ApiClientError && caught.status === 409) { await showChangedLabel(action.label.id); return; }
       setActionError(action.kind === 'delete' ? 'deleteError' : 'saveError');
       // The busy submit button gave up focus; put it back on the name, inside the form, so typing or Escape still reaches it.
       if (action.kind !== 'delete') requestAnimationFrame(() => nameInput.current?.focus());

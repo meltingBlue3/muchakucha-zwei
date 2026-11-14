@@ -25,6 +25,7 @@ import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.g
 import { EventsService } from './events.service.js';
 import { CreateEventDto, EventListResponseDto, EventResponseDto } from './dto/create-event.dto.js';
 import { UpdateEventDto } from './dto/update-event.dto.js';
+import { DeleteVersionQueryDto, deletePrecondition } from '../shared/delete-version.dto.js';
 
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
@@ -106,7 +107,8 @@ export class EventsController {
     @Req() request: AuthenticatedRequest,
     @Param('householdId', uuidParam) householdId: string,
     @Param('eventId', uuidParam) eventId: string,
+    @Query() query: DeleteVersionQueryDto,
   ): Promise<void> {
-    await this.eventsService.delete(request.auth.sub, householdId, eventId);
+    await this.eventsService.delete(request.auth.sub, householdId, eventId, deletePrecondition(query));
   }
 }

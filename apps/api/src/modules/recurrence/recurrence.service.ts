@@ -239,6 +239,7 @@ export class RecurrenceService {
     householdId: string,
     kind: RecurrenceKind,
     occurrenceId: string,
+    expected?: { expectedUpdatedAt: string; expectedRuleUpdatedAt?: string },
   ): Promise<void> {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) {
@@ -246,7 +247,7 @@ export class RecurrenceService {
     }
     await this.prisma.$transaction(async (tx) => {
       await lockTaskAssignments(tx, householdId);
-      const updatedAt = await lockContent(tx, kind, householdId, occurrenceId);
+      const updatedAt = await lockContent(tx, kind, householdId, occurrenceId, expected);
       const occurrence = await this.resolveRuleForOccurrence(tx, kind, householdId, occurrenceId);
       if (!this.canMutate(role, occurrence.createdBy, actorId)) {
         throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can cancel this occurrence.' });
@@ -795,9 +796,10 @@ export class RecurrenceService {
     kind: RecurrenceKind,
     occurrenceId: string,
     scope: SeriesScope,
+    expected?: { expectedUpdatedAt: string; expectedRuleUpdatedAt?: string },
   ): Promise<void> {
     if (scope === 'this_only') {
-      await this.cancelOccurrence(actorId, householdId, kind, occurrenceId);
+      await this.cancelOccurrence(actorId, householdId, kind, occurrenceId, expected);
       return;
     }
 
@@ -807,7 +809,7 @@ export class RecurrenceService {
     }
     await this.prisma.$transaction(async (tx) => {
       await lockTaskAssignments(tx, householdId);
-      await lockContent(tx, kind, householdId, occurrenceId);
+      await lockContent(tx, kind, householdId, occurrenceId, expected);
       const occurrence = await this.resolveRuleForOccurrence(tx, kind, householdId, occurrenceId);
       if (!this.canMutate(role, occurrence.createdBy, actorId)) {
         throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the creator, admin, or owner can delete this series.' });

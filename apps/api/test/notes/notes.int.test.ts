@@ -362,6 +362,61 @@ describe('notes API contract', () => {
     expect((await request('GET', `/${base.id}`)).json().title).toBe('对照后整理');
   });
 
+  test.each(['notes', 'tasks', 'events'])('%s deletes are checked against the version they were confirmed on', async (resource) => {
+    const request = async (method: 'POST' | 'GET' | 'PUT' | 'DELETE', path: string, payload?: Record<string, unknown>) => app.getHttpAdapter().getInstance().inject({
+      method, url: `/api/v1/households/${householdId}/${resource}${path}`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      ...(payload === undefined ? {} : { payload }),
+    });
+    const initial = { title: '要删的内容', ...(resource === 'events' ? { startTime: '2030-01-01T09:00:00Z', endTime: '2030-01-01T10:00:00Z' } : {}) };
+    const base = (await request('POST', '', initial)).json();
+    const edited = await request('PUT', `/${base.id}`, { title: '别人刚改过', expectedUpdatedAt: base.updatedAt });
+    expect(edited.statusCode).toBe(200);
+
+    const stale = await request('DELETE', `/${base.id}?expectedUpdatedAt=${encodeURIComponent(base.updatedAt)}`);
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().error.code).toBe('EDIT_CONFLICT');
+    expect((await request('GET', `/${base.id}`)).json().title).toBe('别人刚改过');
+
+    const malformed = await request('DELETE', `/${base.id}?expectedUpdatedAt=yesterday`);
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json().error.details).toEqual([expect.objectContaining({ field: 'expectedUpdatedAt' })]);
+
+    const current = await request('DELETE', `/${base.id}?expectedUpdatedAt=${encodeURIComponent(edited.json().updatedAt)}`);
+    expect(current.statusCode).toBe(204);
+    expect((await request('GET', `/${base.id}`)).statusCode).toBe(404);
+  });
+
+  test.each(['tasks', 'events'])('%s recurring deletes check both the occurrence and its series', async (resource) => {
+    const request = async (method: 'POST' | 'GET' | 'PUT' | 'DELETE', path: string, payload?: Record<string, unknown>) => app.getHttpAdapter().getInstance().inject({
+      method, url: `/api/v1/households/${householdId}/${resource}${path}`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      ...(payload === undefined ? {} : { payload }),
+    });
+    const today = new Date().toISOString().slice(0, 10);
+    const base = (await request('POST', '', {
+      title: '每天的安排', recurrence: { freq: 'daily', startsOn: today, timezone: 'UTC' },
+      ...(resource === 'events' ? { startTime: `${today}T09:00:00Z`, endTime: `${today}T10:00:00Z` } : {}),
+    })).json();
+    const edited = await request('PUT', `/${base.id}`, { title: '别人刚改过', expectedUpdatedAt: base.updatedAt, expectedRuleUpdatedAt: base.recurrence.updatedAt });
+    expect(edited.statusCode).toBe(200);
+    const saved = (await request('GET', `/${base.id}`)).json();
+    const version = (occurrence: string, rule?: string) =>
+      `expectedUpdatedAt=${encodeURIComponent(occurrence)}${rule === undefined ? '' : `&expectedRuleUpdatedAt=${encodeURIComponent(rule)}`}`;
+
+    const withoutRule = await request('DELETE', `/${base.id}?${version(saved.updatedAt)}`);
+    expect(withoutRule.statusCode).toBe(400);
+    expect(withoutRule.json().error.details).toEqual([expect.objectContaining({ field: 'expectedRuleUpdatedAt', codes: ['required_version'] })]);
+    for (const scope of ['this_only', 'this_and_following']) {
+      const stale = await request('DELETE', `/${base.id}/series?scope=${scope}&${version(base.updatedAt, base.recurrence.updatedAt)}`);
+      expect(stale.statusCode).toBe(409);
+    }
+    expect((await request('GET', `/${base.id}`)).json()).toMatchObject({ title: '别人刚改过', updatedAt: saved.updatedAt });
+
+    const current = await request('DELETE', `/${base.id}/series?scope=this_and_following&${version(saved.updatedAt, saved.recurrence.updatedAt)}`);
+    expect(current.statusCode).toBe(204);
+  });
+
   describe('permissions', () => {
     test.each([
       ['member', () => otherMember],

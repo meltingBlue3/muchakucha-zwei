@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const user = { id: 'ui-user', username: 'family_member', displayName: '小林', hasHousehold: false };
+const user = { id: 'ui-user', username: 'family_member', displayName: '小林' };
 
 async function mockApi(page: Page, authenticated: boolean) {
   await page.route('**/api/v1/**', async (route) => {

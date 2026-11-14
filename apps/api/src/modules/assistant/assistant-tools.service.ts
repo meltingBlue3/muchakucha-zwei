@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { plainToInstance, type ClassConstructor } from 'class-transformer';
-import { isISO8601, validate, type ValidationError } from 'class-validator';
+import { isISO8601, validate } from 'class-validator';
 import { EventsService } from '../events/events.service.js';
 import { TasksService } from '../tasks/tasks.service.js';
 import { NotesService } from '../notes/notes.service.js';
@@ -10,6 +10,7 @@ import { RecurrenceService } from '../recurrence/recurrence.service.js';
 import { firstOccurrence, formatIsoDate, localDateTimeToInstant, parseIsoDate, type CalendarDate } from '../recurrence/recurrence-date.js';
 import type { RecurrenceDto } from '../recurrence/dto/recurrence.dto.js';
 import { assertEditVersion } from '../shared/edit-version.js';
+import { validationDetails } from '../shared/validation-details.js';
 import { allDayBounds, localDateOf, localMidnight, localStamp, shiftDate, wallClock, weekdayOf } from './assistant-time.js';
 import { findLunarDates, formatAnchor, lunarCalendar, occurrenceFacts } from './assistant-lunar.js';
 import type { AssistantActor, AssistantToolActor, AssistantToolCall, AssistantToolDefinition } from './assistant.types.js';
@@ -51,16 +52,6 @@ function invalid(field: string, code: string): never {
   throw new BadRequestException({
     code: 'VALIDATION_FAILED', message: 'Assistant tool arguments are invalid.',
     details: [{ field, codes: [code] }],
-  });
-}
-
-function validationDetails(errors: ValidationError[], prefix = ''): Array<{ field: string; codes: string[] }> {
-  return errors.flatMap(error => {
-    const field = prefix ? `${prefix}.${error.property}` : error.property;
-    return [
-      ...(error.constraints ? [{ field, codes: Object.keys(error.constraints) }] : []),
-      ...validationDetails(error.children ?? [], field),
-    ];
   });
 }
 

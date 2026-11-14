@@ -1,7 +1,7 @@
 import { useTranslation } from '../../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { ApiClientError } from '@muchakucha/api-client';
+import { ApiClientError, type DeleteVersion } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { TaskWindow } from '../tasks/task-window';
 import { EventWindow } from '../events/event-window';
@@ -13,7 +13,7 @@ import { useWorkspaceStore } from '../../ui/workspace-state';
 import { canDeleteContent, type DeletableResource } from './use-content-delete';
 
 const windows = { tasks: TaskWindow, events: EventWindow, notes: NoteWindow };
-interface DeleteTarget { title: string; recurring: boolean; allowed: boolean }
+interface DeleteTarget { title: string; recurring: boolean; allowed: boolean; version: DeleteVersion }
 
 export function DeleteContentScreen({ resource }: { resource: DeletableResource }) {
   const { t } = useTranslation(['deleteContent', 'auth']);
@@ -25,11 +25,12 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
   const [target, setTarget] = useState<DeleteTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<SeriesScope | 'single' | null>(null);
-  const [error, setError] = useState<'auth:errors.sessionExpired' | 'loadFailed' | 'accessLost' | 'removed' | 'failed' | null>(null);
+  const [error, setError] = useState<'auth:errors.sessionExpired' | 'loadFailed' | 'accessLost' | 'removed' | 'changed' | 'failed' | null>(null);
   const confirmLabel = t(`confirm.${resource}`);
   const errorText = error === 'loadFailed' ? t(`loadFailed.${resource}`) : error === null ? null : t(error);
   const Window = windows[resource];
-  const load = useCallback(async () => {
+  // `notice` survives the reload: after a conflict the person sees the latest content and why it was reloaded.
+  const load = useCallback(async (notice: 'changed' | null = null) => {
     setLoading(true);
     setError(null);
     setTarget(null);
@@ -44,7 +45,14 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
         sessionApiClient.getHousehold(token, id),
       ]);
       const actor = household.members.find(member => member.isCurrentUser);
-      setTarget({ title: content.title, recurring: 'recurrenceRuleId' in content && content.recurrenceRuleId != null, allowed: canDeleteContent(actor?.role, actor?.userId, content.createdBy) });
+      const ruleVersion = 'recurrence' in content ? content.recurrence?.updatedAt : undefined;
+      setTarget({
+        title: content.title,
+        recurring: 'recurrenceRuleId' in content && content.recurrenceRuleId != null,
+        allowed: canDeleteContent(actor?.role, actor?.userId, content.createdBy),
+        version: ruleVersion ? { expectedUpdatedAt: content.updatedAt, expectedRuleUpdatedAt: ruleVersion } : { expectedUpdatedAt: content.updatedAt },
+      });
+      setError(notice);
     } catch {
       setError('loadFailed');
     } finally { setLoading(false); }
@@ -58,17 +66,20 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) { setError('auth:errors.sessionExpired'); return; }
+      const { version } = target;
       if (resource === 'tasks') {
-        if (scope) await sessionApiClient.deleteTaskSeries(token, id, contentId, scope);
-        else await sessionApiClient.deleteTask(token, id, contentId);
+        if (scope) await sessionApiClient.deleteTaskSeries(token, id, contentId, scope, version);
+        else await sessionApiClient.deleteTask(token, id, contentId, version);
       } else if (resource === 'events') {
-        if (scope) await sessionApiClient.deleteEventSeries(token, id, contentId, scope);
-        else await sessionApiClient.deleteEvent(token, id, contentId);
-      } else await sessionApiClient.deleteNote(token, id, contentId);
+        if (scope) await sessionApiClient.deleteEventSeries(token, id, contentId, scope, version);
+        else await sessionApiClient.deleteEvent(token, id, contentId, version);
+      } else await sessionApiClient.deleteNote(token, id, contentId, version);
       workspace.clear(`draft:${id}:${resource}:${contentId}:`);
       exitAllowed.current = true;
       close();
     } catch (caught: unknown) {
+      // Someone changed it after this window loaded it: show what it is now and ask again.
+      if (caught instanceof ApiClientError && caught.status === 409) { void load('changed'); return; }
       setError(caught instanceof ApiClientError && caught.status === 403
         ? 'accessLost'
         : caught instanceof ApiClientError && caught.status === 404

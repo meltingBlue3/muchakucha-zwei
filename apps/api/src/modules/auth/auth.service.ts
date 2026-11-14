@@ -3,6 +3,7 @@ import { BadRequestException, ConflictException, Injectable, UnauthorizedExcepti
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { isUniqueConflict } from '../shared/unique-conflict.js';
 import type { RegisterDto } from './dto/register.dto.js';
 import type { LoginDto } from './dto/login.dto.js';
 
@@ -29,10 +30,6 @@ function validationError(field: string, code: string): BadRequestException {
     message: 'Request validation failed.',
     details: [{ field, codes: [code] }],
   });
-}
-
-function isUniqueConflict(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
 }
 
 @Injectable()

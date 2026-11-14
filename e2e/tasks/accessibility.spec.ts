@@ -159,7 +159,6 @@ test.describe('tasks and today view accessibility', () => {
           id: ownerId,
           username: ownerUsername,
           displayName: '无障碍主人',
-          hasHousehold: true,
         }),
       }),
     );

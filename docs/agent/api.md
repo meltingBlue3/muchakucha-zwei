@@ -4,7 +4,7 @@ Read this playbook when changing an endpoint, DTO, error code, permission rule, 
 
 ## Request and response contracts
 
-There are no legacy clients to support. Change `/api/v1` and the current client together when a product rule requires it; regenerate the contract and update callers instead of adding compatibility bypasses. Edit versions are mandatory for tasks, notes, events, and recurrence rules. Recurring occurrence edits also require the rule version.
+There are no legacy clients to support. Change `/api/v1` and the current client together when a product rule requires it; regenerate the contract and update callers instead of adding compatibility bypasses. Edit versions are mandatory for tasks, notes, events, and recurrence rules. Recurring occurrence edits also require the rule version. Deletes take the same versions as optional query parameters (labels: name and colour). The current client always sends them; an unversioned delete stays unchecked only until installed app builds from before the check are replaced. Adding `recurrence` to a one-time task or event turns it into the first occurrence of a new series.
 
 `apps/api/src/main.ts` fixes the shapes every module inherits:
 

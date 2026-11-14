@@ -12,7 +12,6 @@ import { createSessionStateStore } from '../session-state';
 const currentUser = {
   displayName: '家庭成员',
   username: 'member',
-  hasHousehold: false as const,
   id: 'user-1',
 };
 

@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
+import { DeleteVersionQueryDto, deletePrecondition } from '../shared/delete-version.dto.js';
 import { NotesService } from './notes.service.js';
 import { CreateNoteDto, NoteListResponseDto, NoteResponseDto } from './dto/create-note.dto.js';
 import { UpdateNoteDto } from './dto/update-note.dto.js';
@@ -92,7 +94,8 @@ export class NotesController {
     @Req() request: AuthenticatedRequest,
     @Param('householdId', uuidParam) householdId: string,
     @Param('noteId', uuidParam) noteId: string,
+    @Query() query: DeleteVersionQueryDto,
   ): Promise<void> {
-    await this.notesService.delete(request.auth.sub, householdId, noteId);
+    await this.notesService.delete(request.auth.sub, householdId, noteId, deletePrecondition(query));
   }
 }

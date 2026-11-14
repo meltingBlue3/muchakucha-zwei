@@ -21,7 +21,7 @@ async function setup(page: Page) {
     const method = route.request().method();
     let body: unknown;
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'ui-only' };
-    else if (path.endsWith('/users/me')) body = { id: 'user', username: 'xiaolin', displayName: '小林', hasHousehold: true };
+    else if (path.endsWith('/users/me')) body = { id: 'user', username: 'xiaolin', displayName: '小林' };
     else if (path.endsWith('/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, households: [] };
     else if (path.endsWith('/invitations/inbox') || path.endsWith('/invitations')) body = { invitations: [] };
     else if (path === '/api/v1/households') body = [household, { ...household, id: 'other', name: '父母的家' }];

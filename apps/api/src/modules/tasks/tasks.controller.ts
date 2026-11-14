@@ -23,6 +23,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
+import { DeleteVersionQueryDto, deletePrecondition } from '../shared/delete-version.dto.js';
 import { TasksService } from './tasks.service.js';
 import { CreateTaskDto, TaskListResponseDto, TaskResponseDto } from './dto/create-task.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
@@ -104,7 +105,8 @@ export class TasksController {
     @Req() request: AuthenticatedRequest,
     @Param('householdId', uuidParam) householdId: string,
     @Param('taskId', uuidParam) taskId: string,
+    @Query() query: DeleteVersionQueryDto,
   ): Promise<void> {
-    await this.tasksService.delete(request.auth.sub, householdId, taskId);
+    await this.tasksService.delete(request.auth.sub, householdId, taskId, deletePrecondition(query));
   }
 }
