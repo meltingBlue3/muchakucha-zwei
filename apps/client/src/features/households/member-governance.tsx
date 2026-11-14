@@ -1,59 +1,6 @@
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
-import type { ApiClient, ChangeMemberRoleDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-
-/**
- * Minimal API surface required by member governance operations.
- * Testable with a fake client supplying only the required methods.
- */
-export type GovernanceApi = Pick<ApiClient, 'changeMemberRole' | 'removeMember' | 'transferOwnership' | 'leaveHousehold'>;
-
-export interface ChangeRoleParams {
-  accessToken: string;
-  householdId: string;
-  targetMembershipId: string;
-  newRole: ChangeMemberRoleDto['role'];
-}
-
-/**
- * Calls the server-authoritative role-change endpoint.
- * Returns the updated household projection on success.
- * Throws ApiClientError on failure — callers handle error display.
- */
-export async function changeMemberRole(
-  apiClient: GovernanceApi,
-  params: ChangeRoleParams,
-): Promise<{ members: GetHouseholdMemberDto[] }> {
-  return apiClient.changeMemberRole(
-    params.accessToken,
-    params.householdId,
-    params.targetMembershipId,
-    { role: params.newRole },
-  );
-}
-
-export interface RemoveMemberParams {
-  accessToken: string;
-  householdId: string;
-  targetMembershipId: string;
-}
-
-/**
- * Calls the server-authoritative member-removal endpoint.
- * Returns the updated household projection on success.
- * Throws ApiClientError on failure — callers handle error display.
- */
-export async function removeMemberApi(
-  apiClient: GovernanceApi,
-  params: RemoveMemberParams,
-): Promise<{ members: GetHouseholdMemberDto[] }> {
-  return apiClient.removeMember(
-    params.accessToken,
-    params.householdId,
-    params.targetMembershipId,
-  );
-}
 
 /**
  * D-10: determines whether this role change is a promotion (MEMBER->ADMIN)
@@ -138,28 +85,6 @@ export function canTransferOwnership(
   return true;
 }
 
-export interface TransferOwnershipParams {
-  accessToken: string;
-  householdId: string;
-  successorMembershipId: string;
-}
-
-/**
- * Calls the server-authoritative ownership transfer endpoint.
- * Returns the updated household projection on success.
- * Throws ApiClientError on failure — callers handle error display.
- */
-export async function transferOwnershipApi(
-  apiClient: GovernanceApi,
-  params: TransferOwnershipParams,
-): Promise<{ members: GetHouseholdMemberDto[] }> {
-  return apiClient.transferOwnership(
-    params.accessToken,
-    params.householdId,
-    { successorMembershipId: params.successorMembershipId },
-  );
-}
-
 /**
  * D-11: returns whether the current actor can leave the household.
  * Only the current owner can initiate a leave, and only if other
@@ -176,28 +101,6 @@ export function canLeave(
   // Must have at least one other member to select as successor.
   if (otherMemberCount < 1) return false;
   return true;
-}
-
-export interface LeaveHouseholdParams {
-  accessToken: string;
-  householdId: string;
-  successorMembershipId: string;
-}
-
-/**
- * Calls the server-authoritative owner-leave endpoint.
- * Returns void on 204 success — the caller's membership no longer exists.
- * Throws ApiClientError on failure — callers handle error display.
- */
-export async function leaveHouseholdApi(
-  apiClient: GovernanceApi,
-  params: LeaveHouseholdParams,
-): Promise<void> {
-  return apiClient.leaveHousehold(
-    params.accessToken,
-    params.householdId,
-    { successorMembershipId: params.successorMembershipId },
-  );
 }
 
 /**
@@ -222,8 +125,6 @@ export interface UseMemberGovernanceResult {
   transfer: ((successorMembershipId: string, successorDisplayName: string) => void) | undefined;
   /** Navigate to the owner-leave confirmation page. Only available for the current owner. */
   leave: ((successorMembershipId: string, successorDisplayName: string) => void) | undefined;
-  /** Whether any governance mutation is pending. */
-  isBusy: boolean;
 }
 
 export function useMemberGovernance(
@@ -301,6 +202,5 @@ export function useMemberGovernance(
     remove: isMember ? undefined : remove,
     transfer: isOwner ? transfer : undefined,
     leave: isOwner ? leave : undefined,
-    isBusy: false,
   };
 }

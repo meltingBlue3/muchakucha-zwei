@@ -23,7 +23,6 @@ import {
 } from 'class-validator';
 
 export const RECURRENCE_FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'] as const;
-export const RECURRENCE_WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
 export const RECURRENCE_MAX_COUNT = 1000;
 export const RECURRENCE_MAX_INTERVAL = 52;
 export const SERIES_SCOPES = ['this_only', 'this_and_following'] as const;

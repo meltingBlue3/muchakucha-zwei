@@ -39,14 +39,6 @@ export function roleChangeFailure(
   return undefined;
 }
 
-/**
- * D-10: promotion (MEMBER -> ADMIN) confirms directly;
- * demotion (ADMIN -> MEMBER) requires a dedicated confirmation page.
- */
-export function isPromotion(oldRole: Role, newRole: 'ADMIN' | 'MEMBER'): boolean {
-  return oldRole === 'MEMBER' && newRole === 'ADMIN';
-}
-
 export type RemovalFailure =
   | 'TARGET_IS_OWNER'
   | 'INSUFFICIENT_ROLE'

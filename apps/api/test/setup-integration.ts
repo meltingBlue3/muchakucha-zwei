@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { Client } from 'pg';
@@ -6,7 +5,6 @@ import { getTestDatabaseUrl, resetDatabase } from './reset-database.js';
 
 const apiRoot = resolve(import.meta.dirname, '..');
 const repositoryRoot = resolve(apiRoot, '../..');
-const prismaSchema = resolve(apiRoot, 'prisma/schema.prisma');
 
 function run(command: string, args: string[]): void {
   const result = spawnSync(command, args, {
@@ -42,13 +40,6 @@ async function hasReadyPostgres(databaseUrl: string): Promise<boolean> {
 
 export default async function setupIntegration(): Promise<() => Promise<void>> {
   process.env.DATABASE_URL = getTestDatabaseUrl();
-
-  if (!existsSync(prismaSchema)) {
-    // Wave 0 integration contracts are discovered as executable skips before the
-    // schema-owning plan runs. Avoid requiring Docker for collection-only suites;
-    // Plan 01-10 removes this boundary by creating the canonical schema.
-    return async () => undefined;
-  }
 
   if (!(await hasReadyPostgres(process.env.DATABASE_URL))) {
     throw new Error(

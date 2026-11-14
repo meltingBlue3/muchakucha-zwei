@@ -1,4 +1,4 @@
-import type { ApiClient, GetHouseholdResponseDto, ListMyHouseholdsItemDto } from '@muchakucha/api-client';
+import type { ApiClient, ListMyHouseholdsItemDto } from '@muchakucha/api-client';
 
 export type HouseholdApi = Pick<ApiClient, 'listMyHouseholds' | 'getHousehold' | 'updateHousehold' | 'sendHouseholdInvitation' | 'listInvitations' | 'resendInvitation' | 'revokeInvitation' | 'changeMemberRole' | 'removeMember' | 'transferOwnership'>;
 
@@ -15,11 +15,3 @@ export async function fetchHouseholds(
   return { items };
 }
 
-export async function fetchHousehold(
-  apiClient: HouseholdApi,
-  accessToken: string,
-  householdId: string,
-  abortSignal?: AbortSignal,
-): Promise<GetHouseholdResponseDto> {
-  return apiClient.getHousehold(accessToken, householdId, abortSignal);
-}

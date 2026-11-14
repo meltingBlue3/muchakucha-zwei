@@ -1,11 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 
-export const LABEL_COLORS = [
-  '#EF4444', '#F97316', '#F59E0B', '#84CC16', '#10B981',
-  '#06B6D4', '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280',
-] as const;
-
 export class CreateLabelDto {
   @ApiProperty({ description: 'Label name', minLength: 1, maxLength: 40 })
   @IsString()
