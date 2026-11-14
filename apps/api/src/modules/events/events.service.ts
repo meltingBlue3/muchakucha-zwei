@@ -386,13 +386,12 @@ export class EventsService {
     if (recurring === 'true') where.recurrenceRuleId = { not: null };
     else if (recurring === 'false') where.recurrenceRuleId = null;
 
-    const [events, total, watermark] = await Promise.all([
+    const [events, watermark] = await Promise.all([
       this.prisma.event.findMany({
         where,
         orderBy: { startTime: 'asc' },
         include: { labels: { include: { label: true } }, recurrenceRule: true },
       }),
-      this.prisma.event.count({ where }),
       // D-13's monotonic watermark means an ended rule's watermark is frozen
       // in the past forever. Counting it into the household _min would
       // permanently under-report generation coverage for every rule that is
@@ -406,7 +405,7 @@ export class EventsService {
     const reminders = await readReminderChoices(this.prisma, actorId, 'event', events);
     return {
       events: events.map((e) => this.toResponse(e, reminders.get(e.id)!)),
-      total,
+      total: events.length,
       materializedThrough: watermark._min.materializedThrough?.toISOString().slice(0, 10) ?? null,
     };
   }

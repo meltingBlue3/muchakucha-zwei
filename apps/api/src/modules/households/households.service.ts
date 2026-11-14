@@ -115,7 +115,7 @@ export class HouseholdsService {
       where: { id: householdId },
       include: {
         memberships: {
-          include: { user: true },
+          include: { user: { select: { displayName: true, usernameCanonical: true, username: true } } },
         },
       },
     });
@@ -368,11 +368,7 @@ export class HouseholdsService {
     // Load household with fresh membership rows.
     const household = await this.prisma.household.findUnique({
       where: { id: householdId },
-      include: {
-        memberships: {
-          include: { user: true },
-        },
-      },
+      include: { memberships: true },
     });
 
     if (household === null || household.ownerMembershipId === null) return null;
@@ -518,11 +514,7 @@ export class HouseholdsService {
     // Load household with fresh membership rows.
     const household = await this.prisma.household.findUnique({
       where: { id: householdId },
-      include: {
-        memberships: {
-          include: { user: true },
-        },
-      },
+      include: { memberships: true },
     });
 
     if (household === null || household.ownerMembershipId === null) return null;
@@ -662,11 +654,7 @@ export class HouseholdsService {
     // Load household with fresh membership rows.
     const household = await this.prisma.household.findUnique({
       where: { id: householdId },
-      include: {
-        memberships: {
-          include: { user: true },
-        },
-      },
+      include: { memberships: true },
     });
 
     if (household === null || household.ownerMembershipId === null) return null;
@@ -845,11 +833,7 @@ export class HouseholdsService {
     // Load household with fresh membership rows.
     const household = await this.prisma.household.findUnique({
       where: { id: householdId },
-      include: {
-        memberships: {
-          include: { user: true },
-        },
-      },
+      include: { memberships: true },
     });
 
     if (household === null || household.ownerMembershipId === null) return { kind: 'not_found' };

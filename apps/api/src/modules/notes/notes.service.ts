@@ -76,19 +76,16 @@ export class NotesService {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
 
-    const [notes, total] = await Promise.all([
-      this.prisma.note.findMany({
-        where: { householdId },
-        // Most recently touched first: a note earns its place by being worked
-        // on, not by when it happened to be created.
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.note.count({ where: { householdId } }),
-    ]);
+    const notes = await this.prisma.note.findMany({
+      where: { householdId },
+      // Most recently touched first: a note earns its place by being worked
+      // on, not by when it happened to be created.
+      orderBy: { updatedAt: 'desc' },
+    });
 
     return {
       notes: notes.map((n) => this.toResponse(n)),
-      total,
+      total: notes.length,
     };
   }
 
