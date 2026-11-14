@@ -165,7 +165,7 @@ describe('current-user API contract', () => {
     expect(response.statusCode).toBe(400);
   });
 
-  test('does not expose auth internals or claim household and Today data in Phase 1', async () => {
+  test('does not expose auth internals or household and Today data', async () => {
     const response = await me(member.accessToken);
     const body = JSON.stringify(response.json());
     expect(body).not.toMatch(/password|refresh|session|token|households|today/i);

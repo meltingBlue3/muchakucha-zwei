@@ -31,7 +31,7 @@ interface AuthenticatedRequest {
   auth: AccessTokenClaims;
 }
 
-// WR-06: this controller previously took `householdId`/`taskId` with no
+// This controller previously took `householdId`/`taskId` with no
 // pipe at all — not even the intersection-type trap recurrence.controller.ts
 // documents, just no validation whatsoever. A malformed id reached Prisma
 // on a `@db.Uuid` column and surfaced as a 500 instead of a 404.

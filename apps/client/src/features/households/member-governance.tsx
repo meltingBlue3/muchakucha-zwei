@@ -31,7 +31,7 @@ export function canGovern(
 }
 
 /**
- * D-09: returns whether the current actor can remove the given member.
+ * Returns whether the current actor can remove the given member.
  * The owner can remove admins; admins can remove ordinary members only.
  * Owner is never a valid removal target. Cannot remove yourself.
  */
@@ -69,7 +69,7 @@ export function governanceAction(
 }
 
 /**
- * D-10 / D-11: returns whether the current actor can transfer ownership
+ * Returns whether the current actor can transfer ownership
  * to the given successor. Only the current owner can initiate a transfer,
  * and only to a different same-household member (not themselves).
  */
@@ -108,10 +108,10 @@ export function canLeave(
  *
  * Promotion (MEMBER->ADMIN) navigates to the dedicated confirmation page.
  * Demotion (ADMIN->MEMBER) navigates to the same page, which branches on
- * the passed-through current role per D-10 safe-action-first contract.
- * Removal navigates to the dedicated D-10 consequence confirmation page.
- * Transfer navigates to the D-10 ownership transfer page.
- * Leave navigates to the D-11 owner-leave page.
+ * the passed-through current role, safe action first.
+ * Removal navigates to the dedicated consequence confirmation page.
+ * Transfer navigates to the ownership transfer page.
+ * Leave navigates to the owner-leave page.
  *
  * All destination pages read display name / role / household name from
  * query params (falling back to generic text if absent), so callers must
@@ -138,7 +138,6 @@ export function useMemberGovernance(
     (membershipId: string, displayName: string, currentRole: 'ADMIN' | 'MEMBER') => {
       rememberRouteTrigger();
       void router.push(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (`/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/role` +
           `?displayName=${encodeURIComponent(displayName)}&role=${encodeURIComponent(currentRole)}`) as any,
       );
@@ -160,7 +159,6 @@ export function useMemberGovernance(
     (membershipId: string, displayName: string, targetRole: 'OWNER' | 'ADMIN' | 'MEMBER') => {
       rememberRouteTrigger();
       void router.push(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (`/households/${encodeURIComponent(householdId)}/members/${encodeURIComponent(membershipId)}/remove` +
           `?displayName=${encodeURIComponent(displayName)}&role=${encodeURIComponent(targetRole)}`) as any,
       );
@@ -172,7 +170,6 @@ export function useMemberGovernance(
     (successorMembershipId: string, successorDisplayName: string) => {
       rememberRouteTrigger();
       void router.push(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (`/households/${encodeURIComponent(householdId)}/ownership/transfer?successorMembershipId=${encodeURIComponent(successorMembershipId)}` +
           `&successorDisplayName=${encodeURIComponent(successorDisplayName)}&householdName=${encodeURIComponent(householdName)}`) as any,
       );
@@ -184,7 +181,6 @@ export function useMemberGovernance(
     (successorMembershipId: string, successorDisplayName: string) => {
       rememberRouteTrigger();
       void router.push(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (`/households/${encodeURIComponent(householdId)}/ownership/leave?successorMembershipId=${encodeURIComponent(successorMembershipId)}` +
           `&successorDisplayName=${encodeURIComponent(successorDisplayName)}&householdName=${encodeURIComponent(householdName)}`) as any,
       );

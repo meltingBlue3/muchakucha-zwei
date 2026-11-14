@@ -129,10 +129,10 @@ test('lists restores switches and explains access loss', async ({ page, request 
   await page.goto('/households');
   await expect(page).toHaveURL(/\/households/);
 
-  // --- D-12: verify accessChanged behavior ---
+  // --- Verify accessChanged behavior ---
   // After membership loss (removal by owner), the lost member sees
   // the accessChanged explanation, actions are frozen, and only an
-  // explicit user action navigates to the selector or D-01 handoff.
+  // explicit user action navigates to the selector or the create/accept handoff.
   // The lost household's cache and persistence are cleared.
   // No automatic selection or silent switch to another household occurs.
 });

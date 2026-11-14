@@ -16,7 +16,6 @@ const TIME_ZONE = 'Asia/Shanghai';
 let app: NestFastifyApplication;
 let passwordHash: string;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type InjectResponse = { statusCode: number; json: () => any };
 
 async function withDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> {
@@ -48,7 +47,6 @@ async function request(token: string, method: 'GET' | 'POST' | 'PUT', url: strin
     const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${token}` } });
     return snapshot.json();
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (app.getHttpAdapter().getInstance() as any).inject({
     method,
     url,

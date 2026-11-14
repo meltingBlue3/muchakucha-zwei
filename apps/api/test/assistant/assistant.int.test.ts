@@ -24,7 +24,6 @@ let passwordHash: string;
 interface ActorFixture { accessToken: string; userId: string }
 interface ApiResponse {
   statusCode: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   json: () => any;
 }
 

@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { RecurrenceMaterializerService } from './recurrence-materializer.service.js';
 
-// D-18/D-11: daily's lookahead is 0, so a rule's "today" row must appear
+// Daily's lookahead is 0, so a rule's "today" row must appear
 // within roughly an hour of its own local midnight — a coarser tick (the
 // previous 6h) would let a household see stale generation for hours after
 // crossing midnight in its own timezone.

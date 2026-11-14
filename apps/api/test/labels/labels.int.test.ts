@@ -21,7 +21,6 @@ interface ActorFixture {
 
 interface ApiResponse {
   statusCode: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   json: () => any;
 }
 
@@ -63,7 +62,6 @@ async function request(
     const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
     return snapshot.json();
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (app.getHttpAdapter().getInstance() as any).inject({
     method,
     url: `/api/v1${url}`,

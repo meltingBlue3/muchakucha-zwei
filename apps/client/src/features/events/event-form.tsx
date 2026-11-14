@@ -113,7 +113,7 @@ export function EventForm({ draftKey, initial, defaultDate, onSubmit, onCancel, 
   const activeTheme = useTheme<Theme>();
   const inputs = useComposeInputStyles();
   const dense = useDesktopDensity();
-  // CR-03: the /series endpoint has no way to detach an occurrence into a
+  // The /series endpoint has no way to detach an occurrence into a
   // standalone item — selecting 不重复 here omits `recurrence` from the
   // payload, which the server reads as "unchanged" and just continues the
   // series. Disable the option entirely for an already-recurring event

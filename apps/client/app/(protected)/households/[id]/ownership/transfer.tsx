@@ -11,7 +11,7 @@ import { Banner, ConfirmActions, Stack, Text } from '../../../../../src/ui/primi
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
 /**
- * D-10 / D-11 ownership transfer final confirmation page.
+ * Ownership transfer final confirmation page.
  *
  * Stage 1 — Consequence summary: displays the successor member name,
  * household name, and the irreversible consequences of the transfer

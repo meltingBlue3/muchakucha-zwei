@@ -214,7 +214,7 @@ test('transfers ownership safely', async ({ page, request }) => {
   expect(owners.length).toBe(1);
 
   // ============================================================================
-  // D-10: Admin cannot transfer ownership.
+  // Admin cannot transfer ownership.
   // ============================================================================
 
   const adminTargetTransferResponse = await request.post(
@@ -233,7 +233,7 @@ test('transfers ownership safely', async ({ page, request }) => {
   expect(notOwnerBody.error.code).toBe('NOT_OWNER');
 
   // ============================================================================
-  // D-11: Owner pointer unchanged after failed transfer.
+  // Owner pointer unchanged after failed transfer.
   // ============================================================================
 
   // Bystander cannot transfer (MEMBER role) — verify state unchanged.

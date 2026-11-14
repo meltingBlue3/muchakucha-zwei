@@ -78,7 +78,7 @@ export default function HouseholdsIndexRoute() {
             void refreshHouseholds();
           }}
           onCreateNew={() => {
-            // Navigate to D-01 handoff.
+            // Navigate to the create/accept handoff.
             void router.replace('/household-handoff');
           }}
         />

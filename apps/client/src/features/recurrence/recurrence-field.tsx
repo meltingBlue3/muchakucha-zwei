@@ -43,7 +43,7 @@ interface RecurrenceFieldProps {
   name: string;
   icon?: ReactNode;
   disabled?: boolean;
-  /** An occurrence of an existing series cannot be detached here (CR-03). */
+  /** An occurrence of an existing series cannot be detached here. */
   disableTurnOff?: boolean;
   /** Explains where to stop the series instead; shown with a disabled 不重复. */
   turnOffHint?: string;

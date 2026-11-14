@@ -65,7 +65,7 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
       refresh();
     } catch (caught: unknown) {
       if (isEditConflict(caught)) { setLastAttempt(null); setUndoable(null); }
-      // WR-14: a 403 (another member's task), a 404 (the occurrence was
+      // A 403 (another member's task), a 404 (the occurrence was
       // cancelled or split away by someone else), and an offline device all
       // looked identical — the spinner stopped and the card re-rendered
       // unchanged, so the tap appeared not to have registered. Surface it and

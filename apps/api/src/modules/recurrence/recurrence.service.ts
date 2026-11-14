@@ -51,7 +51,7 @@ function localTime(value: string | null): { hour: number; minute: number } {
   return { hour: Number(value.slice(0, 2)), minute: Number(value.slice(3, 5)) };
 }
 
-// WR-02: `parseIsoDate` throws a plain Error (not an HttpException) on a
+// `parseIsoDate` throws a plain Error (not an HttpException) on a
 // regex-valid but non-existent calendar date ("2026-02-30", "2026-13-45"),
 // which StableHttpExceptionFilter maps to a 500. Every call site that feeds
 // a request-supplied date string into parseIsoDate must go through this
@@ -68,7 +68,7 @@ function parseRequestDate(value: string, field: string): CalendarDate {
   }
 }
 
-// CR-02: the wall-clock counterpart to Intl-based helpers elsewhere in this
+// The wall-clock counterpart to Intl-based helpers elsewhere in this
 // module — reads the HH:mm a UTC instant falls on in the given timezone, so
 // a successor rule's startTimeLocal can be derived from a submitted instance
 // time rather than only ever inherited from the rule it is splitting off.
@@ -122,9 +122,9 @@ export class RecurrenceService {
     const kind: 'task' | 'event' | null = rule._count.tasks > 0
       ? 'task'
       : rule._count.events > 0 ? 'event' : null;
-    // D-16: `today` must be computed per-rule in the RULE's own time zone —
+    // `today` must be computed per-rule in the RULE's own time zone —
     // a list spanning rules in different time zones cannot share one "today".
-    // WR-05: currentCalendarDateIn throws for a timezone Intl cannot
+    // currentCalendarDateIn throws for a timezone Intl cannot
     // resolve — materializeAllDue already guards this exact case per-rule
     // ("one rule's timezone becoming unresolvable must not abort the tick
     // for every other household"); this path had no equivalent guard, so a
@@ -178,7 +178,7 @@ export class RecurrenceService {
     // Contract: unresolved (non-null nextOccurrenceDate) rules first, sorted
     // by that date ascending, tied broken by title; ended/exhausted rules
     // (null nextOccurrenceDate) after, sorted by title. Ended rules stay in
-    // the list — D-14: "结束" is not "删除".
+    // the list: "结束" is not "删除".
     items.sort((left, right) => {
       if (left.nextOccurrenceDate !== null && right.nextOccurrenceDate !== null) {
         return left.nextOccurrenceDate === right.nextOccurrenceDate
@@ -346,7 +346,7 @@ export class RecurrenceService {
         }
       }
 
-      // CR-04: `recurrence.endsOn` used to reach Prisma via a raw `new Date()`
+      // `recurrence.endsOn` used to reach Prisma via a raw `new Date()`
       // (regex-valid but calendar-invalid input like "2026-02-30" silently
       // rolls over instead of rejecting; "2026-13-45" 500s after the old
       // rule's endsOn/count were already mutated in this same transaction).
@@ -356,7 +356,7 @@ export class RecurrenceService {
         ? null
         : parseRequestDate(recurrence.endsOn, 'recurrence.endsOn');
 
-      // CR-02: the successor's clock fields used to be inherited from the OLD
+      // The successor's clock fields used to be inherited from the OLD
       // rule unconditionally, even when the request changed the occurrence's
       // own time — `input.startTime`/`input.endTime` (events) or
       // `input.dueDate` (tasks) were written onto the edited instance but
@@ -378,7 +378,7 @@ export class RecurrenceService {
           ? Math.round((new Date(input.endTime).getTime() - new Date(input.startTime).getTime()) / 60_000)
           : occurrence.rule.durationMinutes
       );
-      // Same DB CHECK CR-01 guards on create — a submitted instance span over
+      // The same DB CHECK guards create — a submitted instance span over
       // 24h reaching this successor rule would violate it identically.
       if (nextDurationMinutes !== null && nextDurationMinutes > 1440) {
         throw new BadRequestException({
@@ -513,19 +513,19 @@ export class RecurrenceService {
    * deliberate substitutions (07-RESEARCH-ADDENDUM §8):
    *
    * 1. The anchor is `tomorrow` rather than a selected occurrence's date.
-   *    Under D-11's per-frequency lookahead a healthy weekly rule routinely
+   *    Under the per-frequency lookahead a healthy weekly rule routinely
    *    has no future occurrence at all, so the rule detail screen has no
    *    occurrenceId to hand the occurrence-level path.
    * 2. The successor's template comes from the rule's own `template_*`
-   *    columns (CR-01), never from an instance row. A rule-level edit has no
-   *    "the one you selected", and instances are independently renameable
-   *    (D-02/D-07) — reading a template off an instance would leak a single
+   *    columns, never from an instance row. A rule-level edit has no
+   *    "the one you selected", and instances are independently renameable:
+   *    reading a template off an instance would leak a single
    *    occurrence's edit into every future occurrence of the successor.
    * 3. Assignees and labels still come from the rule's nearest instance: the
    *    rule carries no assignee/label template columns. This is the
    *    documented Path B fallback, not an oversight.
    *
-   * D-08: the entire split is one interactive transaction. A half-applied
+   * The entire split is one interactive transaction. A half-applied
    * split — old rule terminated, successor never created — silently ends a
    * household's recurrence, which is exactly the failure the atomicity
    * requirement exists to prevent.
@@ -706,7 +706,7 @@ export class RecurrenceService {
         });
       }
 
-      // D-17: the successor MUST carry a seed instance row. The materializer
+      // The successor MUST carry a seed instance row. The materializer
       // derives a rule's kind and copies its assignees/labels from the rule's
       // earliest instance — with no seed the successor is an untyped rule
       // that can never generate anything, and the rule list cannot show its
@@ -753,7 +753,7 @@ export class RecurrenceService {
       return createdRule.id;
     });
 
-    // Locked Phase 7 decision: successor materialization begins only after the
+    // Successor materialization begins only after the
     // split transaction COMMITS. materializeRule opens its own transaction and
     // takes the rule's advisory lock; nesting it here would hold that lock for
     // the whole split and make the split's duration depend on generation.
@@ -762,7 +762,7 @@ export class RecurrenceService {
   }
 
   // Shared by deleteSeriesFromOccurrence's this_and_following branch and
-  // endRule (CR-05's lesson: two independent copies of "end a series" drift).
+  // endRule: two independent copies of "end a series" drift apart.
   // A rule only ever owns rows in one of the two instance relations, so
   // running both deleteMany calls unconditionally is a deliberate zero-row
   // no-op on whichever relation the rule doesn't have — this keeps the

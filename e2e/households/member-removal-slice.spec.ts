@@ -168,7 +168,7 @@ test('removes a non-owner member', async ({ page, request }) => {
   await expect(page.getByText('移除测试家庭').first()).toBeVisible({ timeout: 5000 });
 
   // ============================================================================
-  // D-09: REMOVAL — owner removes a non-owner member.
+  // REMOVAL — owner removes a non-owner member.
   // ============================================================================
 
   const removeResponse = await request.delete(
@@ -186,7 +186,7 @@ test('removes a non-owner member', async ({ page, request }) => {
   expect(stillPresent).toBeUndefined();
 
   // ============================================================================
-  // D-09: OWNER CANNOT BE REMOVED — forbidden.
+  // OWNER CANNOT BE REMOVED — forbidden.
   // ============================================================================
 
   const ownerMembership = postRemovalRoster.find((m) => m.role === 'OWNER')!;
@@ -201,7 +201,7 @@ test('removes a non-owner member', async ({ page, request }) => {
   expect(adminOwnerBody.error.code).toBe('OWNER_UNTOUCHABLE');
 
   // ============================================================================
-  // D-09: MEMBER CANNOT REMOVE — forbidden.
+  // MEMBER CANNOT REMOVE — forbidden.
   // ============================================================================
 
   const someNonOwnerMember = postRemovalRoster.find((m) => m.role !== 'OWNER')!;
@@ -216,7 +216,7 @@ test('removes a non-owner member', async ({ page, request }) => {
   expect(memberBody.error.code).toBe('INSUFFICIENT_ROLE');
 
   // ============================================================================
-  // D-09: ADMIN REMOVES ANOTHER ADMIN — works.
+  // ADMIN REMOVES ANOTHER ADMIN — works.
   // ============================================================================
 
   // The admin is still present. Owner removes admin via API as another admin removal test.

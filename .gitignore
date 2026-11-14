@@ -10,3 +10,4 @@ dist/
 .expo/
 apps/api/src/generated/prisma/
 apps/client/android/
+.claude/settings.local.json

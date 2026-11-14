@@ -20,7 +20,7 @@ export { RECURRENCE_MAX_INSTANCES_PER_RUN } from './recurrence-date.js';
 import { RECURRENCE_LOCK_NAMESPACE } from './recurrence-lock.js';
 export { RECURRENCE_LOCK_NAMESPACE } from './recurrence-lock.js';
 
-// D-11: the lookahead window is per-frequency, not a single fixed number of
+// The lookahead window is per-frequency, not a single fixed number of
 // days. daily=0 means "today" only appears after the rule's own local
 // midnight; weekly=6 means a rule becomes eligible exactly one week minus a
 // day before it is due. monthly/yearly reuse 6 as an adjustable default (the
@@ -32,7 +32,7 @@ export const RECURRENCE_LOOKAHEAD_DAYS: Record<string, number> = {
   monthly: 6,
   yearly: 6,
 };
-// WR-10: this used to be the hardcoded literal 6, duplicating the map above
+// This used to be the hardcoded literal 6, duplicating the map above
 // by hand. materializeAllDue's SQL prefilter depends on it being a true
 // maximum ("a rule's local calendar date is at most 1 day ahead of the UTC
 // date, so max lookahead + 1 is a safe superset") — raising any entry in
@@ -95,8 +95,8 @@ export class RecurrenceMaterializerService {
               { materializedThrough: { lt: prefilter } },
             ],
           },
-          // IN-04: a rule whose endsOn has passed can never become due again —
-          // its watermark is frozen (D-13 monotonicity) and re-scanning it on
+          // A rule whose endsOn has passed can never become due again —
+          // its watermark is frozen (it only moves forward) and re-scanning it on
           // every tick forever is pure waste, worse once the tick is hourly.
           {
             OR: [
@@ -187,7 +187,7 @@ export class RecurrenceMaterializerService {
       });
       if (taskTemplate === null && eventTemplate === null) return { skipped: false, created: 0 };
 
-      // D-11: horizon is anchored on the RULE's own local calendar date, not
+      // Horizon is anchored on the RULE's own local calendar date, not
       // the server's UTC date — a 0-day daily lookahead must produce "today"
       // at this rule's local midnight, not whenever the server's UTC date
       // happens to roll over.
@@ -219,7 +219,7 @@ export class RecurrenceMaterializerService {
       const truncated = occurrences.length === RECURRENCE_MAX_INSTANCES_PER_RUN;
       const runWatermark = truncated ? occurrences[occurrences.length - 1]! : horizon;
       const existing = rule.materializedThrough === null ? null : calendarDate(rule.materializedThrough);
-      // D-13: the watermark is forward-only. A narrower D-11 lookahead window
+      // The watermark is forward-only. A narrower lookahead window
       // must not make a rule's watermark regress — generation never deletes
       // rows, so the watermark must not claim it did either. A rule that was
       // materialized further out under the old 90-day window keeps reporting
@@ -244,7 +244,7 @@ export class RecurrenceMaterializerService {
     const time = localTime(rule.startTimeLocal);
     const created = await tx.task.createManyAndReturn({
       // Field values come from the rule's series template, never from a
-      // sibling instance: instances are independently editable (D-02/D-07),
+      // sibling instance: instances are independently editable,
       // and a generated occurrence always starts its own life as `pending`
       // regardless of how any other occurrence was completed or cancelled.
       data: occurrences.map((occurrence) => ({

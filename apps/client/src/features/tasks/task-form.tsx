@@ -122,7 +122,7 @@ export function TaskForm({ draftKey, initial, members, onSubmit, onCancel, submi
   // create only — an existing recurring task's due date is a real,
   // independently-editable field and must not move the repeat rule's anchor.
   const isCreate = initial === undefined;
-  // CR-03: the /series endpoint has no way to detach an occurrence into a
+  // The /series endpoint has no way to detach an occurrence into a
   // standalone item — selecting 不重复 here omits `recurrence` from the
   // payload, which the server reads as "unchanged" and just continues the
   // series. Disable the option entirely for an already-recurring task

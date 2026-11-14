@@ -65,7 +65,6 @@ async function taskApi(
   method: 'GET' | 'POST',
   payload?: unknown,
 ): Promise<{ statusCode: number; json: () => any }> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
     url: `/api/v1/households/${householdId}/tasks`,
@@ -86,7 +85,6 @@ async function taskItemApi(
     const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
     return snapshot.json();
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
     url: `/api/v1/households/${encodeURIComponent(householdId)}/tasks${path}`,
@@ -110,7 +108,6 @@ async function eventApi(
     const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
     return snapshot.json();
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
     url: `/api/v1/households/${encodeURIComponent(householdId)}/events${path}`,
@@ -137,7 +134,7 @@ describe('daily task recurrence tracer', () => {
   test('creates a recurrence rule and five real task occurrences', async () => {
     const owner = await insertActor('recurrence-owner');
     const householdId = await createHousehold(owner.accessToken);
-    // D-11: daily's lookahead is 0, so only "today" materializes for a rule
+    // Daily's lookahead is 0, so only "today" materializes for a rule
     // starting today. Backdate startsOn so the count-5 walk (startsOn..today)
     // lands entirely inside the lookahead horizon and all 5 rows generate
     // immediately, the way this tracer originally asserted.
@@ -206,7 +203,7 @@ describe('daily task recurrence tracer', () => {
 });
 
 describe('recurring events', () => {
-  // D-11: weekly's lookahead is 6 days, so a rule starting today would only
+  // Weekly's lookahead is 6 days, so a rule starting today would only
   // materialize the current week's remaining occurrences. Backdate startsOn
   // well past the lookahead horizon so the full count-6 series (2
   // occurrences/week over ~3 weeks) generates immediately at create time.
@@ -385,7 +382,7 @@ describe('recurring events', () => {
     expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
   });
 
-  // CR-01 regression: a recurring event whose derived duration exceeds 24h
+  // Regression: a recurring event whose derived duration exceeds 24h
   // used to reach Prisma and violate recurrence_rules.duration_minutes'
   // <= 1440 DB CHECK, surfacing as an opaque 500 with the event unsaved.
   test('rejects a recurring event whose span exceeds 24 hours with a 400, not a 500', async () => {
@@ -417,7 +414,7 @@ describe('series template isolation', () => {
   test('generates later occurrences from the rule template, never from an edited earlier instance', async () => {
     const owner = await insertActor('template-isolation-owner');
     const householdId = await createHousehold(owner.accessToken);
-    // D-11: daily's lookahead is 0, so backdate startsOn far enough that the
+    // Daily's lookahead is 0, so backdate startsOn far enough that the
     // open-ended walk (startsOn..today) produces the >10 rows this test's
     // OFFSET 10 needs, immediately at create time.
     const today = currentCalendarDateIn('UTC');
@@ -430,8 +427,8 @@ describe('series template isolation', () => {
     const { recurrenceRuleId, id: firstTaskId } = created.json() as { recurrenceRuleId: string; id: string };
 
     // The earliest surviving instance is exactly the row the materializer used
-    // to treat as a mutable template. Edit it the way D-07 allows ("仅此一次")
-    // and complete it the way D-04 expects.
+    // to treat as a mutable template. Edit it as one occurrence ("仅此一次")
+    // and complete it.
     const edited = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${firstTaskId}`, {
       title: 'Edited once',
       status: 'completed',
@@ -488,7 +485,7 @@ describe('deleting a single occurrence', () => {
   test('cancels a recurring task instead of hard-deleting it, so no run resurrects it', async () => {
     const owner = await insertActor('occurrence-delete-owner');
     const householdId = await createHousehold(owner.accessToken);
-    // D-11: backdate startsOn so at least the 4 rows this test indexes into
+    // Backdate startsOn so at least the 4 rows this test indexes into
     // (ordered[3]) exist immediately at create time.
     const today = currentCalendarDateIn('UTC');
     const startsOn = formatIsoDate(addDays(today, -15));
@@ -525,7 +522,7 @@ describe('deleting a single occurrence', () => {
   test('cancels a recurring event instead of hard-deleting it, so no run resurrects it', async () => {
     const owner = await insertActor('occurrence-delete-event-owner');
     const householdId = await createHousehold(owner.accessToken);
-    // D-11: backdate startsOn so the full count-6 series materializes at
+    // Backdate startsOn so the full count-6 series materializes at
     // create time instead of stalling at the 6-day weekly lookahead.
     const today = currentCalendarDateIn('Asia/Shanghai');
     const startsOn = formatIsoDate(addDays(today, -20));
@@ -567,7 +564,7 @@ describe('per-instance association edits', () => {
   test('does not re-apply the template assignees to instances a later run did not create', async () => {
     const owner = await insertActor('assignee-fanout-owner');
     const householdId = await createHousehold(owner.accessToken);
-    // D-11: backdate startsOn so the >10 rows this test's OFFSET 10 needs
+    // Backdate startsOn so the >10 rows this test's OFFSET 10 needs
     // exist immediately at create time.
     const today = currentCalendarDateIn('UTC');
     const startsOn = formatIsoDate(addDays(today, -15));
@@ -627,7 +624,7 @@ describe('series scope operations', () => {
     householdId: string,
     title: string,
   ): Promise<{ recurrenceRuleId: string; tasks: Array<{ id: string; occurrenceDate: string; title: string; status: string }> }> {
-    // D-11: daily's lookahead is 0, so backdate startsOn to today-6 — the
+    // Daily's lookahead is 0, so backdate startsOn to today-6 — the
     // count-7 walk (startsOn..today) lands entirely inside the lookahead
     // horizon and all 7 rows generate immediately, as this helper's callers
     // (which index into tasks[0..3]) require.
@@ -801,7 +798,7 @@ describe('series scope operations', () => {
     expect(after.future).toEqual(before.future);
   });
 
-  // CR-02 regression: changing an occurrence's own time without touching
+  // Regression: changing an occurrence's own time without touching
   // `recurrence` used to leave the successor rule's startTimeLocal on the
   // OLD rule's value, so the edited occurrence showed the new time but every
   // later generated occurrence reverted to the old one.
@@ -847,7 +844,7 @@ describe('series scope operations', () => {
     expect(new Date(generated!.due_date).getUTCMinutes()).toBe(30);
   });
 
-  // CR-04 regression: a regex-valid but calendar-invalid recurrence.endsOn
+  // Regression: a regex-valid but calendar-invalid recurrence.endsOn
   // used to reach `new Date(...)` directly, either silently rolling over
   // ("2026-02-30" -> 2026-03-02) or 500ing ("2026-13-45") after the old
   // rule's endsOn/count were already mutated in the same transaction.

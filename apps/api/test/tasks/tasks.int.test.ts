@@ -90,7 +90,6 @@ async function taskApi(
     const snapshot = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: readUrl, headers: { authorization: `Bearer ${accessToken}` } });
     return snapshot.json();
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await (app.getHttpAdapter().getInstance() as any).inject({
     method,
     url: `/api/v1/households/${encodeURIComponent(householdId)}/tasks${path}`,

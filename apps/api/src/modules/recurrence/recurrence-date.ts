@@ -249,7 +249,7 @@ export function firstOccurrence(rule: WalkRule): CalendarDate | undefined {
 
 /**
  * Computes a rule's next occurrence ON OR AFTER `from` by walking the rule,
- * not by querying already-generated rows. Under D-11's per-frequency
+ * not by querying already-generated rows. Under the per-frequency
  * lookahead a healthy weekly rule routinely has zero future instance rows —
  * the generation window only materializes what's due soon, but "when is this
  * rule due next" is a question about the RULE, independent of how far
@@ -270,7 +270,7 @@ export function nextOccurrenceFor(
 }
 
 /**
- * The current calendar date in `timeZone`. D-11 anchors the generation window
+ * The current calendar date in `timeZone`. The generation window is anchored
  * on the RULE's local midnight, not the server's — a 0-day daily lookahead in
  * Asia/Shanghai must produce today's row at 00:00 CST, not at 08:00 CST when
  * the UTC date finally rolls over.

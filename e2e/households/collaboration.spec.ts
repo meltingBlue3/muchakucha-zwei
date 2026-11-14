@@ -290,7 +290,7 @@ test('completes the full household collaboration journey', async ({ page, reques
   expect(carolSeesAlices).toBeUndefined();
 
   // ============================================================================
-  // 7. D-12 STALE ACCESS: stale access recovery — membership loss returns 404
+  // 7. STALE ACCESS: stale access recovery — membership loss returns 404
   // Carol (removed member) attempts to access the household.
   //    The server returns 404 (not a member); the UI must show accessChanged.
   // ============================================================================
@@ -338,7 +338,7 @@ test('completes the full household collaboration journey', async ({ page, reques
   expect(ownerCount).toBe(1);
 
   // ============================================================================
-  // 9. D-10/D-11 SAFE ACTIONS: Non-owner cannot transfer ownership.
+  // 9. SAFE ACTIONS: Non-owner cannot transfer ownership.
   // ============================================================================
 
   // Alice (now MEMBER) cannot transfer ownership.
@@ -408,7 +408,7 @@ test('completes the full household collaboration journey', async ({ page, reques
   expect(bobAfterLeave).toBeUndefined();
 
   // ============================================================================
-  // 11. D-12 OWNER LEAVE RECOVERY: Bob (former owner, now has no membership)
+  // 11. OWNER LEAVE RECOVERY: Bob (former owner, now has no membership)
   //     gets 404 when trying to access the household.
   // ============================================================================
 
@@ -508,7 +508,7 @@ test('completes the full household collaboration journey', async ({ page, reques
   expect(daveStillPresent.find((m) => m.userId === dave.userId)).toBeDefined();
 
   // ============================================================================
-  // 15. NO-HOUSEHOLD HANDOFF: Carol (with zero households) sees the D-01
+  // 15. NO-HOUSEHOLD HANDOFF: Carol (with zero households) sees the
   //     create-or-accept handoff, not an empty selector or login page.
   // ============================================================================
 

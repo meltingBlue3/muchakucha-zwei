@@ -38,7 +38,7 @@ import { GetHouseholdResponseDto } from './dto/membership.dto.js';
 import { UpdateHouseholdDto } from './dto/update-household.dto.js';
 import { HouseholdsService } from './households.service.js';
 
-// ---- Invitation Send DTOs (exported from controller per Plan 02-05 scope exception) ----
+// ---- Invitation Send DTOs ----
 
 export class SendHouseholdInvitationDto {
   @ApiProperty({ example: 'family-member', description: 'An existing username. Invitations are bound to this account.' })
@@ -134,7 +134,7 @@ export class RevokeInvitationResponseDto {
   message!: string;
 }
 
-// ---- Role Governance DTOs (D-09, D-10) ----
+// ---- Role Governance DTOs ----
 
 export class ChangeMemberRoleDto {
   @ApiProperty({
@@ -146,7 +146,7 @@ export class ChangeMemberRoleDto {
   role!: 'ADMIN' | 'MEMBER';
 }
 
-// ---- Ownership Transfer DTO (D-10, D-11) ----
+// ---- Ownership Transfer DTO ----
 
 export class TransferOwnershipDto {
   @ApiProperty({
@@ -158,7 +158,7 @@ export class TransferOwnershipDto {
   successorMembershipId!: string;
 }
 
-// ---- Owner-Leave DTO (D-11) ----
+// ---- Owner-Leave DTO ----
 
 export class LeaveHouseholdDto {
   @ApiProperty({
@@ -406,7 +406,7 @@ export class HouseholdsController {
     return this.householdsService.revokeInvitation(request.auth.sub, id, invitationId);
   }
 
-  // ---- Role governance (D-09, D-10) ----
+  // ---- Role governance ----
 
   @Patch(':id/members/:membershipId/role')
   @HttpCode(200)
@@ -442,7 +442,7 @@ export class HouseholdsController {
     return result;
   }
 
-  // ---- Member removal (D-09, D-10) ----
+  // ---- Member removal ----
 
   @Delete(':id/members/:membershipId')
   @HttpCode(200)
@@ -476,7 +476,7 @@ export class HouseholdsController {
     return result;
   }
 
-  // ---- Ownership transfer (D-10, D-11) ----
+  // ---- Ownership transfer ----
 
   @Post(':id/ownership/transfer')
   @HttpCode(200)
@@ -526,7 +526,7 @@ export class HouseholdsController {
     await this.householdsService.leaveMembership(request.auth.sub, id);
   }
 
-  // ---- Owner leave (D-11, D-12) ----
+  // ---- Owner leave ----
 
   @Post(':id/ownership/leave')
   @HttpCode(204)

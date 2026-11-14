@@ -11,7 +11,7 @@ export type RecurrenceKind = 'task' | 'event';
 
 // The label carries the semantics. Icon and text are both `inkMuted` on
 // purpose: colour must never be the thing that distinguishes a task rule
-// from an event rule in the merged list (D-20 accessibility floor).
+// from an event rule in the merged list.
 export function recurrenceKindLabel(kind: RecurrenceKind | null): string | null {
   return kind === null ? null : i18n.t(`recurrence:kind.${kind}`);
 }

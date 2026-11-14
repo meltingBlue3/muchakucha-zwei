@@ -37,9 +37,12 @@ systemctl restart muchakucha-api
 在开发机构建后上传。服务器内存有限，只安装 API 依赖，Web 保持本地构建：
 
 ```bash
-EXPO_PUBLIC_API_ORIGIN=https://47.117.148.16 pnpm --filter client exec expo export --platform web
+EXPO_PUBLIC_API_ORIGIN=https://47.117.148.16 pnpm --filter client exec expo export --platform web --clear
+grep -ohE "https?://(localhost|127\.0\.0\.1|47\.117\.148\.16)[:0-9]*" apps/client/dist/_expo/static/js/web/entry-*.js | sort -u
 rsync -az --delete apps/client/dist/ <server>:/var/www/muchakucha/
 ```
+
+`EXPO_PUBLIC_API_ORIGIN` 在 Metro 转换模块时写进代码，而 Metro 会缓存转换结果，不加 `--clear` 可能沿用上一次导出的地址，比如测试用的本机地址。`grep` 只应输出 `https://47.117.148.16` 一行；出现 `localhost` 或 `127.0.0.1` 时不要上传。`--clear` 会清空正在运行的 `expo start` 共用的缓存，导出前先停掉本机的开发服务器。
 
 ## 首次配置
 

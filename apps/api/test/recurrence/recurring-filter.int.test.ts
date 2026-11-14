@@ -174,7 +174,7 @@ beforeAll(async () => {
 afterAll(async () => { await app?.close(); });
 beforeEach(async () => { await resetDatabase(); });
 
-describe('recurring list filter (D-15) — tasks', () => {
+describe('recurring list filter — tasks', () => {
   test('?recurring=true returns only the recurring task', async () => {
     const actor = await insertActor('recurring-true-tasks');
     const householdId = await createHousehold(actor.accessToken);
@@ -226,7 +226,7 @@ describe('recurring list filter (D-15) — tasks', () => {
   });
 });
 
-describe('recurring list filter (D-15) — events', () => {
+describe('recurring list filter — events', () => {
   test('?recurring=true returns only the recurring event', async () => {
     const actor = await insertActor('recurring-true-events');
     const householdId = await createHousehold(actor.accessToken);

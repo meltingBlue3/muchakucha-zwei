@@ -11,8 +11,6 @@ const securityAssets = [asvsMapPath] as const;
 const EXPECTED_ASVS_SOURCE_URL =
   'https://raw.githubusercontent.com/OWASP/ASVS/v5.0.0/5.0/docs_en/OWASP_Application_Security_Verification_Standard_5.0.0_en.csv';
 const EXPECTED_ASVS_SOURCE_SHA256 = '98c8fe911b9edb403af8ee05d3ce8201ecac2659e313b053890a62847cdcf680';
-// TODO: Phase 2 rows added — recalibrate SHA256 by running the ASVS audit test once
-// the official CSV requirement text is pinned.
 const EXPECTED_REQUIREMENTS_SHA256 = '14fdccac09d0c2276b41a7796cbf494aa60cc078766739a81a9ff7c150d86298';
 
 const EXPECTED_IDS = [

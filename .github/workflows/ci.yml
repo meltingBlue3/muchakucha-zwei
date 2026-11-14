@@ -56,7 +56,8 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:17
+        # The major version production runs; the suite itself accepts 17+.
+        image: postgres:18
         # Throwaway CI-only values, mirrored in the job env below.
         env:
           POSTGRES_DB: muchakucha_test

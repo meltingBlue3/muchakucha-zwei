@@ -124,7 +124,7 @@ export class RecurrenceRulesController {
     return this.recurrenceService.getRule(request.auth.sub, householdId, ruleId);
   }
 
-  // Rule-level edit: no occurrenceId required. Under D-11's narrow lookahead
+  // Rule-level edit: no occurrenceId required. Under the narrow per-frequency lookahead
   // a healthy weekly rule often has no future occurrence for the client to
   // select, so the /series path is unreachable from the rule detail screen.
   @Put(':ruleId')

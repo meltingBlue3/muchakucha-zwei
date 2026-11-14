@@ -27,12 +27,12 @@ const TITLE_MIN = 1;
 const TITLE_MAX = 200;
 const VALID_PRIORITIES: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
 
-/** UTC midnight for "today" — the boundary IN-04's ended-rule filter uses. */
+/** UTC midnight for "today" — the boundary the ended-rule filter uses. */
 function utcMidnightToday(): Date {
   return new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
 }
 
-// WR-02: parseIsoDate throws a plain Error (not an HttpException) on a
+// parseIsoDate throws a plain Error (not an HttpException) on a
 // regex-valid but non-existent calendar date ("2026-02-30", "2026-13-45"),
 // which StableHttpExceptionFilter maps to a 500. Request-supplied recurrence
 // dates must go through this wrapper instead, so a malformed request stays
@@ -86,7 +86,7 @@ interface ListFilters {
   status?: string | undefined;
   priority?: string | undefined;
   assigneeId?: string | undefined;
-  /** Only 'true' or 'false' are honored; any other value is treated as unset (D-15). */
+  /** Only 'true' or 'false' are honored; any other value is treated as unset. */
   recurring?: string | undefined;
 }
 
@@ -168,7 +168,7 @@ export class TasksService {
       }
     }
 
-    // WR-13: a recurring task's per-occurrence dueDate is always derived
+    // A recurring task's per-occurrence dueDate is always derived
     // from the rule's own walk (below), never from this top-level field —
     // it was previously validated then silently discarded, so a caller
     // that submitted one got a 201 with no indication it was ignored.
@@ -241,7 +241,7 @@ export class TasksService {
             createdBy: actorId,
           },
         });
-        // D-17: this seed row is a deliberate exception to D-11's lookahead —
+        // This seed row is a deliberate exception to the per-frequency lookahead —
         // it is written unconditionally, not gated by the horizon check that
         // governs every later occurrence. Removing it would break three
         // things: the materializer discriminates a rule as task-owned vs.
@@ -323,7 +323,7 @@ export class TasksService {
         orderBy: [{ priority: 'asc' }, { dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
         include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
       }),
-      // D-13's monotonic watermark means an ended rule's watermark is frozen
+      // The monotonic watermark means an ended rule's watermark is frozen
       // in the past forever. Counting it into the household _min would
       // permanently under-report generation coverage for every rule that is
       // still active — scope the aggregate to rules that can still advance.
@@ -475,7 +475,7 @@ export class TasksService {
 
     // A generated occurrence must be cancelled, not removed: the generator
     // dedupes on the row itself, so a missing row reads as "not yet
-    // generated" and the occurrence would come back on the next tick (D-07).
+    // generated" and the occurrence would come back on the next tick.
     await this.prisma.$transaction(async (tx) => {
       await lockTaskAssignments(tx, householdId);
       const updatedAt = await lockContent(tx, 'task', householdId, taskId, expected);

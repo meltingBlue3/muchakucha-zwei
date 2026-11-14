@@ -11,14 +11,14 @@ import { Banner, ConfirmActions, Stack, Text } from '../../../../../../src/ui/pr
 const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN ?? 'http://localhost:3000';
 
 /**
- * D-09 / D-10 member removal consequence confirmation page.
+ * Member removal consequence confirmation page.
  *
  * Displays the member name, affected household, and immediate
  * access consequence.  Follows safe-action-first: the safe action
  * returns to the settings page without mutation; the destructive
  * action performs the guarded removal.
  *
- * D-12: when the removed identity is the current user, the response
+ * When the removed identity is the current user, the response
  * 403/404 on the next household request triggers accessChanged flow
  * (membership loss freeze, cache clear, explicit routing).
  */

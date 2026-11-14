@@ -127,7 +127,7 @@ beforeAll(async () => {
 afterAll(async () => { await app?.close(); });
 beforeEach(async () => { await resetDatabase(); });
 
-describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
+describe('per-rule lookahead generation window', () => {
   test('a daily rule materializes through its own timezone\'s current calendar date, not the server UTC date', async () => {
     const actor = await insertActor('kiritimati-lookahead');
     const householdId = await createHousehold(actor.accessToken);
@@ -196,7 +196,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
     expect(dates).toEqual([formatIsoDate(today), formatIsoDate(addDays(today, 6))]);
   });
 
-  test('a watermark ahead of the new horizon never regresses (D-13)', async () => {
+  test('a watermark ahead of the new horizon never regresses', async () => {
     const actor = await insertActor('watermark-monotonic');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
@@ -221,7 +221,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
     expect(await taskOccurrenceDates(ruleId)).toEqual(rowsBefore);
   });
 
-  test('a rule whose endsOn has passed is never selected by materializeAllDue (IN-04)', async () => {
+  test('a rule whose endsOn has passed is never selected by materializeAllDue', async () => {
     const actor = await insertActor('ended-rule-excluded');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
@@ -232,7 +232,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
     });
 
     // Force the rule into an "already ended, never materialized" state — the
-    // state a rule reaches after D-13's monotonic guard freezes it.
+    // state a rule reaches after the monotonic watermark guard freezes it.
     await withDatabase((client) => client.query(
       `UPDATE recurrence_rules SET ends_on = $2::date, materialized_through = NULL WHERE id = $1`,
       [ruleId, formatIsoDate(addDays(today, -1))],
@@ -259,7 +259,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
       timezone: 'UTC',
     });
     // Freeze the second rule's watermark far in the past, as a rule whose
-    // endsOn already passed would be under D-13's monotonic guard.
+    // endsOn already passed would be under the monotonic watermark guard.
     const staleWatermark = formatIsoDate(addDays(today, -20));
     await withDatabase((client) => client.query(
       `UPDATE recurrence_rules SET ends_on = $2::date, materialized_through = $2::date WHERE id = $1`,
@@ -274,7 +274,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
     expect(listed.materializedThrough).toBe(activeWatermark);
   });
 
-  test('a daily rule starting today materializes exactly 1 row, dated today — creation is a standard generation check (D-12)', async () => {
+  test('a daily rule starting today materializes exactly 1 row, dated today — creation is a standard generation check', async () => {
     const actor = await insertActor('create-daily-today');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
@@ -289,7 +289,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
     expect(dates).toEqual([formatIsoDate(today)]);
   });
 
-  test('a weekly rule created outside its lookahead window keeps only the D-17 seed row, with the watermark trailing behind it', async () => {
+  test('a weekly rule created outside its lookahead window keeps only the seed row, with the watermark trailing behind it', async () => {
     const actor = await insertActor('create-weekly-outside');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');
@@ -303,7 +303,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
       timezone: 'UTC',
     });
 
-    // Only the D-17 seed row exists — the next generation-eligible occurrence
+    // Only the seed row exists — the next generation-eligible occurrence
     // (7 days after startsOn) is outside the 6-day weekly lookahead measured
     // from today, not from startsOn.
     const dates = await taskOccurrenceDates(ruleId);
@@ -314,7 +314,7 @@ describe('per-rule lookahead generation window (D-11/D-12/D-13/D-18)', () => {
     expect(await watermarkOf(ruleId)).toBe(formatIsoDate(addDays(today, 6)));
   });
 
-  test('the create response contract still exposes a usable task id and recurrence id (D-17)', async () => {
+  test('the create response contract still exposes a usable task id and recurrence id', async () => {
     const actor = await insertActor('create-response-contract');
     const householdId = await createHousehold(actor.accessToken);
     const today = currentCalendarDateIn('UTC');

@@ -24,10 +24,10 @@ const sourceFilesUnder = (relativeRoot: string): string[] => {
 
 describe('typed design-token and composition contract', () => {
   // ============================================================================
-  // Phase 1: Core design-token contract
+  // Core design-token contract
   // ============================================================================
 
-  test('D-14 exposes one Restyle-owned paper, ink, and vermilion typed theme', () => {
+  test('exposes one Restyle-owned paper, ink, and vermilion typed theme', () => {
     expect(theme.colors.canvas).toBe('#F6F4EF');
     expect(theme.colors.surface).toBe('#FFFFFF');
     expect(theme.colors.ink).toBe('#1D1B18');
@@ -36,7 +36,7 @@ describe('typed design-token and composition contract', () => {
     );
   });
 
-  test('D-15 defines the approved paper, ink-primary, and reserved vermilion semantic palette', () => {
+  test('defines the approved paper, ink-primary, and reserved vermilion semantic palette', () => {
     expect(theme.colors).toMatchObject({
       canvas: '#F6F4EF',
       primary: '#1D1B18',
@@ -92,28 +92,28 @@ describe('typed design-token and composition contract', () => {
     }
   });
 
-  test('D-16 composes authentication from BrandMark and form primitives only', () => {
+  test('composes authentication from BrandMark and form primitives only', () => {
     const primitives = readSource('src/ui/primitives.tsx');
     expect(primitives).toContain('export const BrandMark');
     expect(primitives).toContain('export const AuthShell');
   });
 
-  test('D-16 forbids large household-scene or character illustration primitives', () => {
+  test('forbids large household-scene or character illustration primitives', () => {
     const primitives = readSource('src/ui/primitives.tsx');
     expect(primitives).not.toMatch(/\b(Image|ImageBackground|householdIllustration|characterIllustration)\b/);
   });
 
-  test('D-17 limits elevation to the light Web auth-card hierarchy and avoids heavy native shadows', () => {
+  test('limits elevation to the light Web auth-card hierarchy and avoids heavy native shadows', () => {
     expect(theme.elevation.native).toBe(0);
     expect(theme.elevation.softWeb).toBe('0 1px 2px rgba(29,27,24,0.06), 0 8px 24px rgba(29,27,24,0.08)');
     expect(readSource('src/ui/primitives.tsx')).not.toMatch(/\belevation:\s*[1-9]|shadowOpacity:\s*(?:0\.[2-9]|1)/);
   });
 
   // ============================================================================
-  // Phase 2: Household feature token and composition contract
+  // Household feature token and composition contract
   // ============================================================================
 
-  test('defines the Phase 2 overlay, layout, and motion semantic tokens', () => {
+  test('defines the overlay, layout, and motion semantic tokens', () => {
     expect(theme.colors.overlay).toBe('rgba(29,27,24,0.60)');
     expect(theme.layout.householdMaxWidth).toBe(960);
     expect(theme.layout.switcherWidth).toBe(360);
@@ -168,7 +168,7 @@ describe('typed design-token and composition contract', () => {
     }
   });
 
-  test('D-10/D-11 safe-action and destructive button ordering is preserved', () => {
+  test('safe-action and destructive button ordering is preserved', () => {
     // Confirmation components must render the safe action before the destructive action.
     const confirmationFiles = sourceFilesUnder('src/ui').filter(
       (p) => p.includes('confirmation') || p.includes('Confirmation'),
@@ -202,7 +202,7 @@ describe('typed design-token and composition contract', () => {
     }
   });
 
-  test('D-12 accessChanged is the only membership-loss explanation pattern', () => {
+  test('accessChanged is the only membership-loss explanation pattern', () => {
     // The access-changed explanation must be the first thing shown after membership
     // loss. No automatic fallback entry or login-expiry redirect.
     const contextFiles = sourceFilesUnder('src/features/households').filter(
@@ -257,7 +257,7 @@ describe('typed design-token and composition contract', () => {
   });
 
   test('member total order: OWNER/ADMIN/MEMBER, current user first, then name/email/ID', () => {
-    // The canonical member ordering defined in Plan 02-03:
+    // The canonical member ordering:
     // OWNER -> ADMIN -> MEMBER; current user first within role;
     // normalized display nickname ASC; email ASC; membership/user ID ASC.
     const sortFiles = [
@@ -276,9 +276,8 @@ describe('typed design-token and composition contract', () => {
     expect(hasMemberOrderingLogic).toBe(true);
   });
 
-  test('Phase 2 typography uses only 400 and 600 weights in household components', () => {
-    // Per UI-SPEC: Phase 2 uses only 400 and 600 font weights.
-    // The 500 weight (caption) is a Phase 1 artifact that Phase 2 does not extend.
+  test('household components use only the 400 and 600 type weights', () => {
+    // The 500 weight belongs to the caption style; household components do not use it.
     const householdUiFiles = sourceFilesUnder('src/ui').filter(
       (p) => p.includes('household') || p.includes('member') || p.includes('switch'),
     );

@@ -59,7 +59,7 @@ export function removalFailure(
   targetIsActor: boolean,
   targetRole: Role,
 ): RemovalFailure | undefined {
-  // Owner is never a valid removal target (D-09).
+  // Owner is never a valid removal target.
   if (targetIsOwner) return 'TARGET_IS_OWNER';
 
   // Members have no governance authority.
@@ -79,7 +79,7 @@ export type TransferFailure =
   | 'SUCCESSOR_IS_OWNER';
 
 /**
- * D-10 / D-11: only the current owner can transfer the household
+ * Only the current owner can transfer the household
  * owner pointer, and only to a different existing same-household
  * member.  Transferring to oneself is rejected because it would
  * leave the owner graph unchanged.
@@ -108,7 +108,7 @@ export type LeaveFailure =
   | 'LAST_MEMBER';
 
 /**
- * D-11: only the current owner can leave the household, and must
+ * Only the current owner can leave the household, and must
  * select a different existing same-household member as successor.
  * The owner cannot leave if no successor exists (last member).
  *

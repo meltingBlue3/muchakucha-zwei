@@ -22,7 +22,7 @@ const LOCAL_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'] as const;
 
-// D-19: no generation copy may name a fixed number of days. This is the
+// No generation copy may name a fixed number of days. This is the
 // negative shape the rendered page must never contain.
 const DAY_COUNT_PATTERN = /\d+\s*天/;
 
@@ -176,7 +176,7 @@ async function listRules(accessToken: string, householdId: string): Promise<Rule
   return result.body.rules;
 }
 
-/** A daily rule anchored on today: its only materialized row is today's (D-11/D-12). */
+/** A daily rule anchored on today: its only materialized row is today's. */
 async function createDailyTaskRule(
   accessToken: string,
   householdId: string,
@@ -283,7 +283,7 @@ test.describe('recurrence rule addendum journeys', () => {
     const today = localIsoDate(0);
     const title = `每日打卡-${Date.now()}`;
 
-    // `count: 5` is the point of the fixture: before D-11/D-12 a create would
+    // `count: 5` is the point of the fixture: before the per-frequency lookahead a create would
     // have materialized all five rows up front. The per-frequency lookahead
     // for `daily` is 0 days, so creation is one standard generation pass that
     // reaches today and stops.
@@ -300,7 +300,7 @@ test.describe('recurrence rule addendum journeys', () => {
     // The user-visible half of the same fact: one row, not a batch.
     await expect(page.getByLabel(`任务：${title}，重复`)).toHaveCount(1);
 
-    // D-19: the generation copy explains *when* things appear, never "in N
+    // The generation copy explains *when* things appear, never "in N
     // days". A regression that reintroduces a hardcoded horizon lands here.
     await expect(page.getByText(DAY_COUNT_PATTERN)).toHaveCount(0);
   });
@@ -326,7 +326,7 @@ test.describe('recurrence rule addendum journeys', () => {
     const before = await activeFilterCount(page);
     await page.getByLabel(/^筛选任务/).click();
 
-    // D-15 / addendum a11y contract: the two options are one radio group, not
+    // Accessibility contract: the two options are one radio group, not
     // a pair of unrelated toggles.
     const group = page.getByRole('radiogroup', { name: '重复', exact: true });
     await expect(group).toBeVisible();
@@ -365,7 +365,7 @@ test.describe('recurrence rule addendum journeys', () => {
     const list = ruleListScreen(page);
     const detail = ruleDetailScreen(page);
 
-    // D-20: one merged list. Both rows carry the type in *text*, the frequency
+    // One merged list. Both rows carry the type in *text*, the frequency
     // summary, and the server-computed next occurrence.
     const taskRow = list.getByLabel(`任务重复安排：${taskTitle}，${taskSummary}`);
     await expect(taskRow).toBeVisible();
@@ -400,7 +400,7 @@ test.describe('recurrence rule addendum journeys', () => {
     await detail.getByLabel(END_CONFIRM_ACTION).click();
     await expect(page).toHaveURL(new RegExp(`/households/${householdId}/recurrence-rules$`));
 
-    // D-14: "结束" is not "删除" — the rule stays in the list and says so in
+    // "结束" is not "删除" — the rule stays in the list and says so in
     // words, so opacity is never the only signal.
     await expect(list.getByText(eventTitle, { exact: true })).toBeVisible();
     await expect(list.getByText(endedRowLine(page), { exact: true })).toBeVisible();
@@ -419,7 +419,7 @@ test.describe('recurrence rule addendum journeys', () => {
     expect((await listRules(account.accessToken, householdId))
       .find((rule) => rule.id === taskRuleId)?.nextOccurrenceDate).toBe(today);
 
-    // The D-14 anchor guard. Move the anchor from tomorrow to today and this
+    // The anchor guard. Move the anchor from tomorrow to today and this
     // row disappears, which is exactly the failure this assertion exists for.
     await openTaskList(page, householdId);
     await expect(page.getByLabel(`任务：${taskTitle}，重复`)).toHaveCount(1);
