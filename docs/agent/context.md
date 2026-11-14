@@ -44,7 +44,7 @@ Read this index only when the owning module or entry point of a request is uncle
 
 - API unit: `src/**/*.test.ts` and `test/**/*.unit.test.ts`.
 - API integration: `test/**/*.int.test.ts`, one directory per module, plus `test/security/asvs-v5-l1.test.ts`.
-- Client: `apps/client/src/**/__tests__/*-test.tsx`.
+- Client: `apps/client/src/**/__tests__/*-test.ts(x)`.
 - Browser: `e2e/`, one directory per feature area, with shared login in `e2e/support/auth.ts`.
 
 ## Reference documents
