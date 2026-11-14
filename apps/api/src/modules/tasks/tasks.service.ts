@@ -317,13 +317,12 @@ export class TasksService {
     if (filters.recurring === 'true') where.recurrenceRuleId = { not: null };
     else if (filters.recurring === 'false') where.recurrenceRuleId = null;
 
-    const [tasks, total, watermark] = await Promise.all([
+    const [tasks, watermark] = await Promise.all([
       this.prisma.task.findMany({
         where,
         orderBy: [{ priority: 'asc' }, { dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
         include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
       }),
-      this.prisma.task.count({ where }),
       // D-13's monotonic watermark means an ended rule's watermark is frozen
       // in the past forever. Counting it into the household _min would
       // permanently under-report generation coverage for every rule that is
@@ -337,7 +336,7 @@ export class TasksService {
     const reminders = await readReminderChoices(this.prisma, actorId, 'task', tasks);
     return {
       tasks: tasks.map((t) => this.toResponse(t, reminders.get(t.id)!)),
-      total,
+      total: tasks.length,
       materializedThrough: watermark._min.materializedThrough?.toISOString().slice(0, 10) ?? null,
     };
   }

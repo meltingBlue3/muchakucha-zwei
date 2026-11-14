@@ -99,17 +99,14 @@ export class LabelsService {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
 
-    const [labels, total] = await Promise.all([
-      this.prisma.label.findMany({
-        where: { householdId },
-        orderBy: { name: 'asc' },
-      }),
-      this.prisma.label.count({ where: { householdId } }),
-    ]);
+    const labels = await this.prisma.label.findMany({
+      where: { householdId },
+      orderBy: { name: 'asc' },
+    });
 
     return {
       labels: labels.map((l) => this.toResponse(l)),
-      total,
+      total: labels.length,
     };
   }
 
