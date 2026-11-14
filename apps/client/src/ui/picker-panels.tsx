@@ -91,10 +91,10 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
                     borderRadius: theme.borderRadii.full,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: isSelected ? (isToday ? theme.colors.accent : theme.colors.primary) : pressed ? theme.colors.surfaceMuted : theme.colors.transparent,
+                    backgroundColor: isSelected ? (isToday ? theme.colors.accent : theme.colors.primary) : isToday ? theme.colors.accentSoft : pressed ? theme.colors.surfaceMuted : theme.colors.transparent,
                   })}
                 >
-                  <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accent' : otherMonth ? 'inkFaint' : 'ink'} style={dense || compact ? { fontSize: theme.typography.meta.fontSize + 0.5 } : undefined}>{day.getDate()}</Text>{markedDates.includes(dayValue) ? <View style={{ position: 'absolute', bottom: 0, width: theme.spacing[1], height: theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: isSelected ? theme.colors.surface : theme.colors.inkMuted }} /> : null}
+                  <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accentStrong' : otherMonth ? 'inkFaint' : 'ink'} style={dense || compact ? { fontSize: theme.typography.meta.fontSize + 0.5 } : undefined}>{day.getDate()}</Text>{markedDates.includes(dayValue) ? <View style={{ position: 'absolute', bottom: 0, width: theme.spacing[1], height: theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: isSelected ? theme.colors.surface : theme.colors.inkMuted }} /> : null}
                 </Pressable>
               </View>
             );

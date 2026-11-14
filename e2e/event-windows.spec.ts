@@ -120,6 +120,69 @@ test('Japanese Today, calendar and event forms use localized names and validatio
   }
 });
 
+for (const width of [320, 390, 1440]) {
+  test(`a Japanese calendar marks holidays and names the era year at ${width}px`, async ({ browser }, testInfo) => {
+    const context = await browser.newContext({ locale: 'ja-JP', timezoneId: 'Asia/Tokyo', viewport: { width, height: 900 } });
+    try {
+      const page = await context.newPage();
+      await setup(page);
+      await page.goto(`${base}/events`);
+      if (width < 1024) {
+        await page.getByRole('button', { name: '月表示に切り替え', exact: true }).click();
+        // With another day selected, today keeps a pale vermilion mark, apart from a holiday's vermilion number.
+        await page.getByRole('button', { name: '2030年6月20日', exact: true }).click();
+        const today = page.getByRole('button', { name: '2030年6月15日、今日、予定1件', exact: true }).getByText('15', { exact: true });
+        await expect(today).toHaveCSS('color', 'rgb(158, 46, 22)');
+        await expect(today.locator('..')).toHaveCSS('background-color', 'rgb(251, 232, 225)');
+        await page.screenshot({ path: testInfo.outputPath('japanese-calendar-today.png') });
+      }
+      await page.getByRole('button', { name: '次の月', exact: true }).click();
+      // 海の日 is the third Monday of July.
+      const holiday = page.getByRole('button', { name: '2030年7月15日、海の日', exact: true });
+      await expect(holiday).toBeVisible();
+      await expect(page.getByText('令和12年', { exact: true })).toBeVisible();
+      const vermilion = 'rgb(194, 56, 28)';
+      await expect(holiday.getByText('15', { exact: true })).toHaveCSS('color', vermilion);
+      await expect(holiday.getByText('海の日', { exact: true })).toHaveCSS('color', vermilion);
+      await expect(page.getByRole('button', { name: '2030年7月16日', exact: true }).getByText('16', { exact: true })).not.toHaveCSS('color', vermilion);
+      await holiday.click();
+      // The day's summary names the holiday, then the lunar date as Japanese writes it.
+      await expect(page.getByTestId('calendar-agenda-pane').getByText('海の日 · 旧暦六月十五日', { exact: false })).toBeVisible();
+      await expect(page.getByText('小暑', { exact: true })).toBeVisible();
+      await expect(page.getByText(/^(初|廿)/)).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath(`japanese-calendar-${width}.png`), fullPage: true });
+      // September has two holidays whose names fill the four characters a cell allows.
+      await page.getByRole('button', { name: '次の月', exact: true }).click();
+      await page.getByRole('button', { name: '次の月', exact: true }).click();
+      for (const name of ['敬老の日', '秋分の日']) {
+        const label = page.getByTestId('calendar-month-pane').getByText(name, { exact: true });
+        expect(await label.evaluate(node => node.scrollWidth <= node.clientWidth), name).toBe(true);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`japanese-calendar-september-${width}.png`) });
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test('a Chinese calendar shows holidays in Japan once this device asks for them', async ({ page }) => {
+  await setup(page);
+  await page.goto(`${base}/events`);
+  await showMonth(page);
+  await page.getByRole('button', { name: '下一个月', exact: true }).click();
+  await expect(page.getByRole('button', { name: '2030年7月15日', exact: true })).toBeVisible();
+  await expect(page.getByText('令和12年', { exact: true })).toHaveCount(0);
+  await page.goto('/profile');
+  await page.getByRole('switch', { name: '显示日本的祝日与和历' }).click();
+  await page.goto(`${base}/events`);
+  await showMonth(page);
+  await page.getByRole('button', { name: '下一个月', exact: true }).click();
+  await expect(page.getByRole('button', { name: '2030年7月15日，海の日', exact: true })).toBeVisible();
+  await expect(page.getByText('令和12年', { exact: true })).toBeVisible();
+});
+
 test('calendar filters have visible summaries and Today restores the current month', async ({ page }) => {
   await setup(page);
   await page.goto(`${base}/events`);

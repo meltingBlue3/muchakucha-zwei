@@ -6,6 +6,7 @@ import {
   LUNAR_LAST_YEAR,
   SOLAR_TERMS,
   describeLunarDay,
+  formatLunarDate,
   formatLunarDay,
   formatLunarMonthDay,
   formatLunarYear,
@@ -183,7 +184,7 @@ describe('labels', () => {
     expect(formatLunarMonthDay(11, 8)).toBe('冬月初八');
     expect(formatLunarMonthDay(12, 30)).toBe('腊月三十');
     expect(formatLunarMonthDay(4, 1, true)).toBe('闰四月初一');
-    expect([1, 10, 11, 20, 21, 29, 30].map(formatLunarDay)).toEqual(['初一', '初十', '十一', '二十', '廿一', '廿九', '三十']);
+    expect([1, 10, 11, 20, 21, 29, 30].map(day => formatLunarDay(day))).toEqual(['初一', '初十', '十一', '二十', '廿一', '廿九', '三十']);
     expect(formatLunarYear(2026)).toBe('丙午马年');
     expect(formatLunarYear(1968)).toBe('戊申猴年');
   });
@@ -212,5 +213,51 @@ describe('labels', () => {
     expect(describeLunarDay(solar('2026-11-11'))).toBe('农历十月初三');
     expect(describeLunarDay(solar('2026-06-21'))).toBe('农历五月初七，父亲节，夏至');
     expect(describeLunarDay(solar('1800-01-01'))).toBeNull();
+  });
+});
+
+describe('Japanese names', () => {
+  it('writes months and days in numerals a Japanese reader counts', () => {
+    expect(formatLunarMonthDay(10, 15, false, 'ja')).toBe('十月十五日');
+    expect(formatLunarMonthDay(11, 8, false, 'ja')).toBe('十一月八日');
+    expect(formatLunarMonthDay(1, 1, false, 'ja')).toBe('一月一日');
+    expect(formatLunarMonthDay(4, 1, true, 'ja')).toBe('閏四月一日');
+    expect([1, 10, 11, 20, 21, 29, 30].map(day => formatLunarDay(day, 'ja'))).toEqual(['一日', '十日', '十一日', '二十日', '二十一日', '二十九日', '三十日']);
+    expect(formatLunarDate(8, 15, false, 'ja')).toBe('旧暦八月十五日');
+    expect(formatLunarDate(8, 15)).toBe('农历八月十五');
+  });
+
+  it('labels a month cell in at most three characters', () => {
+    expect(lunarDayLabel(solar('2027-02-06'), 'ja')).toEqual({ text: '春節', kind: 'festival' });
+    expect(lunarDayLabel(solar('2026-09-25'), 'ja')).toEqual({ text: '中秋節', kind: 'festival' });
+    expect(lunarDayLabel(solar('2026-06-21'), 'ja')).toEqual({ text: '父の日', kind: 'festival' });
+    expect(lunarDayLabel(solar('2026-03-05'), 'ja')).toEqual({ text: '啓蟄', kind: 'term' });
+    expect(lunarDayLabel(solar('2026-11-09'), 'ja')).toEqual({ text: '十月', kind: 'month' });
+    expect(lunarDayLabel(solar('2025-07-25'), 'ja')).toEqual({ text: '閏六月', kind: 'month' });
+    expect(lunarDayLabel(solar('2026-11-11'), 'ja')).toEqual({ text: '三', kind: 'day' });
+    for (let ms = Date.UTC(2026, 0, 1); ms < Date.UTC(2028, 0, 1); ms += DAY_MS) {
+      expect(lunarDayLabel(solarAt(ms), 'ja')!.text.length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('leaves out China\'s civic days and falls through to what else the day is', () => {
+    // 国庆节 is an ordinary lunar day, and 劳动节 in 2026 is none of the others either.
+    expect(lunarDayLabel(solar('2026-10-01'), 'ja')).toEqual({ text: '二十一', kind: 'day' });
+    expect(observancesOn(solar('2026-10-01'), 'ja')).toEqual([]);
+    expect(observancesOn(solar('2026-10-01'))).toEqual(['国庆节']);
+  });
+
+  it('names every solar term and every festival but the civic ones', () => {
+    const seen = new Set<string>();
+    for (let ms = Date.UTC(2026, 0, 1); ms < Date.UTC(2027, 0, 1); ms += DAY_MS) {
+      for (const name of observancesOn(solarAt(ms), 'ja')) seen.add(name);
+    }
+    expect(seen.size).toBe(SOLAR_TERMS.length + 12);
+    for (const name of ['啓蟄', '穀雨', '小満', '芒種', '処暑', '旧七夕', '臘八節', '母の日']) expect(seen.has(name), name).toBe(true);
+  });
+
+  it('spells out a day with a Japanese comma', () => {
+    expect(describeLunarDay(solar('2026-11-11'), 'ja')).toBe('旧暦十月三日');
+    expect(describeLunarDay(solar('2026-06-21'), 'ja')).toBe('旧暦五月七日、父の日、夏至');
   });
 });

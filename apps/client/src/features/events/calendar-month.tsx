@@ -10,6 +10,7 @@ import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import ChevronUp from 'lucide-react-native/icons/chevron-up';
 import { formatDayLabel } from '../../ui/date-values';
 import { lunarLabelOn } from '../lunar/lunar-calendar';
+import { eraYearOfMonth, holidayLabelOn, holidayNameOn } from '../wareki/japanese-calendar';
 import { calendarDayName, getCalendarMonth, getDayNames, formatMonthLabel, toDateIso, type CalendarDay } from './calendar-utils';
 
 /** What a detailed month cell shows for one event. */
@@ -40,14 +41,16 @@ interface CalendarMonthProps {
   eventColorsByDate?: Map<string, CalendarCellEvent[]>;
   /** Shows each day's lunar date, solar term or festival under its number. */
   lunar?: boolean;
+  /** Marks Japan's holidays in vermilion, names them under the number, and adds the era year to the heading. */
+  japanese?: boolean;
 }
 
 const TITLES_PER_DAY = 3;
 
 /**
  * The month grid, or one week of it. A filled ink circle marks the selected
- * day and vermilion marks today; days with events carry a dot, or their titles
- * when the grid is wide enough.
+ * day and a pale vermilion one today; a holiday's number is vermilion. Days
+ * with events carry a dot, or their titles when the grid is wide enough.
  */
 export function CalendarMonth({
   todayIso = toDateIso(new Date()),
@@ -65,6 +68,7 @@ export function CalendarMonth({
   eventTitlesByDate,
   eventColorsByDate,
   lunar = false,
+  japanese = false,
 }: CalendarMonthProps) {
   const { t } = useTranslation('events');
   const activeTheme = useTheme<Theme>();
@@ -76,6 +80,9 @@ export function CalendarMonth({
     ? [calendar.weeks.find(row => row.some(day => day.iso === selectedDateIso)) ?? calendar.weeks.find(row => row.some(day => day.isToday)) ?? calendar.weeks[0]!]
     : calendar.weeks;
   const cellSize = activeTheme.controlSizes.touchTarget - activeTheme.spacing[3];
+  /** A line of small text sits by each number. */
+  const labelled = lunar || japanese;
+  const eraYear = japanese ? eraYearOfMonth(year, month) : null;
 
   const arrow = (label: string, Icon: typeof ChevronLeft, onPress: () => void) => (
     <Pressable
@@ -108,15 +115,15 @@ export function CalendarMonth({
         borderRadius: cellSize / 2,
         alignItems: 'center',
         justifyContent: 'center',
-        // Same marks as the date picker: a filled circle selects, vermilion marks today.
+        // Same marks as the date picker: a filled circle selects, and today's is vermilion, pale until selected.
         backgroundColor: selected
           ? day.isToday ? activeTheme.colors.accent : activeTheme.colors.primary
-          : pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.transparent,
+          : day.isToday ? activeTheme.colors.accentSoft : pressed ? activeTheme.colors.surfaceMuted : activeTheme.colors.transparent,
       }}
     >
       <Text
         variant="numeral"
-        color={selected ? 'surface' : day.isToday ? 'accent' : day.isCurrentMonth ? 'ink' : 'inkFaint'}
+        color={selected ? 'surface' : day.isToday ? 'accentStrong' : !day.isCurrentMonth ? 'inkFaint' : japanese && holidayNameOn(day.iso) !== null ? 'accent' : 'ink'}
         style={day.isToday || selected ? { fontFamily: activeTheme.fontFamilies.numericStrong } : undefined}
       >
         {day.dayOfMonth}
@@ -124,28 +131,36 @@ export function CalendarMonth({
     </View>
   );
 
-  // Festivals, solar terms and the first of a lunar month stand out in ink;
-  // vermilion stays reserved for today.
-  const lunarText = (day: CalendarDay) => {
-    const label = lunar ? lunarLabelOn(day.iso) : null;
-    if (label === null) return null;
-    const strong = label.kind !== 'day';
-    return (
+  // A holiday's name takes the place of the lunar text, in vermilion like its
+  // number. Festivals, solar terms and the first of a lunar month stand out in ink.
+  const dayLabel = (day: CalendarDay) => {
+    const holiday = japanese ? holidayLabelOn(day.iso) : null;
+    const label = holiday === null && lunar ? lunarLabelOn(day.iso) : null;
+    const text = holiday ?? label?.text ?? null;
+    // An empty line keeps the event dots of a row level.
+    if (text === null) return detailed ? null : <View style={{ height: activeTheme.typography.lunarDay.lineHeight }} />;
+    const name = (
       <Text
         numberOfLines={1}
-        color={day.isCurrentMonth && strong ? 'ink' : 'inkFaint'}
+        color={!day.isCurrentMonth ? 'inkFaint' : holiday !== null ? 'accent' : label?.kind !== 'day' ? 'ink' : 'inkFaint'}
         style={{ ...activeTheme.typography.lunarDay, fontFamily: activeTheme.fontFamilies.regular }}
       >
-        {label.text}
+        {text}
       </Text>
     );
+    // Four characters are a hair wider than a cell on a 320px screen, so under
+    // the number the text gets the gaps beside the cell as well.
+    return detailed ? name : <View style={{ alignSelf: 'stretch', alignItems: 'center', marginHorizontal: -activeTheme.spacing[1] }}>{name}</View>;
   };
 
   return (
     <View style={{ backgroundColor: activeTheme.colors.surface, borderRadius: activeTheme.borderRadii.lg, paddingHorizontal: activeTheme.spacing[2], paddingTop: activeTheme.spacing[1], paddingBottom: onToggleMode ? 0 : activeTheme.spacing[2] }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         {week && onPrevWeek ? arrow(t('previousWeek'), ChevronLeft, onPrevWeek) : arrow(t('previousMonth'), ChevronLeft, onPrevMonth)}
-        <Text variant="section" accessibilityRole="header" aria-level={2}>{formatMonthLabel(year, month)}</Text>
+        <View style={{ alignItems: 'center' }}>
+          <Text variant="section" accessibilityRole="header" aria-level={2}>{formatMonthLabel(year, month)}</Text>
+          {eraYear ? <Text variant="caption" color="inkFaint" style={{ fontWeight: '400' }}>{eraYear}</Text> : null}
+        </View>
         {week && onNextWeek ? arrow(t('nextWeek'), ChevronRight, onNextWeek) : arrow(t('nextMonth'), ChevronRight, onNextMonth)}
       </View>
 
@@ -170,13 +185,13 @@ export function CalendarMonth({
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
                 aria-pressed={selected}
-                accessibilityLabel={calendarDayName(formatDayLabel(day.date), day.isToday, eventCount)}
+                accessibilityLabel={calendarDayName(formatDayLabel(day.date), day.isToday, eventCount, japanese ? holidayNameOn(day.iso) : null)}
                 style={({ pressed }) => detailed
                   ? { flex: 1, minWidth: 0, minHeight: activeTheme.spacing[16] + activeTheme.spacing[6], padding: activeTheme.spacing[1], gap: activeTheme.spacing[1] / 2, backgroundColor: pressed ? activeTheme.colors.surfaceSubtle : activeTheme.colors.transparent }
-                  : { flex: 1, minHeight: activeTheme.controlSizes.touchTarget + activeTheme.spacing[2] + (lunar ? activeTheme.typography.lunarDay.lineHeight : 0), alignItems: 'center', paddingVertical: activeTheme.spacing[1] }}
+                  : { flex: 1, minHeight: activeTheme.controlSizes.touchTarget + activeTheme.spacing[2] + (labelled ? activeTheme.typography.lunarDay.lineHeight : 0), alignItems: 'center', paddingVertical: activeTheme.spacing[1] }}
               >
                 {({ pressed }) => detailed ? <>
-                  {lunar ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] }}>{dayMark(day, selected, false)}{lunarText(day)}</View> : dayMark(day, selected, false)}
+                  {labelled ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] }}>{dayMark(day, selected, false)}{dayLabel(day)}</View> : dayMark(day, selected, false)}
                   {titles.slice(0, TITLES_PER_DAY).map(event => (
                     <View key={event.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], paddingHorizontal: activeTheme.spacing[1] }}>
                       <View style={{ width: activeTheme.spacing[1] + 1, height: activeTheme.spacing[1] + 1, borderRadius: activeTheme.borderRadii.full, backgroundColor: event.color }} />
@@ -186,8 +201,8 @@ export function CalendarMonth({
                   {titles.length > TITLES_PER_DAY ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: activeTheme.spacing[1] }}>{t('more', { count: titles.length - TITLES_PER_DAY })}</Text> : null}
                 </> : <>
                   {dayMark(day, selected, pressed)}
-                  {lunarText(day)}
-                  <View collapsable={false} style={{ width: activeTheme.spacing[1] + 1, height: activeTheme.spacing[1] + 1, marginTop: lunar ? activeTheme.spacing[1] / 2 : activeTheme.spacing[1], borderRadius: activeTheme.borderRadii.full, backgroundColor: eventCount > 0 ? (titles[0]?.color ?? activeTheme.colors.inkFaint) : activeTheme.colors.transparent }} />
+                  {labelled ? dayLabel(day) : null}
+                  <View collapsable={false} style={{ width: activeTheme.spacing[1] + 1, height: activeTheme.spacing[1] + 1, marginTop: labelled ? activeTheme.spacing[1] / 2 : activeTheme.spacing[1], borderRadius: activeTheme.borderRadii.full, backgroundColor: eventCount > 0 ? (titles[0]?.color ?? activeTheme.colors.inkFaint) : activeTheme.colors.transparent }} />
                 </>}
               </Pressable>
             );

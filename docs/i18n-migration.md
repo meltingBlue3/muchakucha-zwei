@@ -36,20 +36,18 @@ grep -c "47.117.148.16" <输出目录>/_expo/static/js/web/entry-*.js   # 必须
 
 | 批次 | 位置 | 文件 | 行 | 备注 |
 | --- | --- | --- | --- | --- |
-| 生日 | `src/features/birthdays`、`households/[id]/birthdays/new.tsx`、`src/features/lunar/lunar-calendar.ts` | 6 | 约 61 | 先等「待决定」里的前两项 |
+| 生日 | `src/features/birthdays`、`households/[id]/birthdays/new.tsx` | 5 | 约 58 | 先等「待决定」里的第一项；农历的月日名传界面语言即可，见 [lunar-calendar.ts](../apps/client/src/features/lunar/lunar-calendar.ts) |
 
 `apps/api` 里家庭、任务、日程、重复规则的中文错误提示不用翻译：客户端从不显示 API 的 `message`，各功能自己把错误码对应到文案。
 
 ## 迁移之外的任务
 
 1. **麦克风权限说明。** `apps/client/app.json` 里 `expo-audio` 的 `microphonePermission` 是中文，由系统弹窗显示，需要按语言配置。需要新安装包。
-2. **和历的计算包。** 新建 `packages/wareki`：年号表（明治到令和），以及按规则推算的日本祝日（固定日、快乐星期一、振替休日、国民の休日，春分和秋分按日本时间取日）。沿用 [packages/lunar](../packages/lunar/src/index.ts) 的约定：单个 TypeScript 文件，只用可擦除的语法，带测试。太阳黄经的算法可以参考 lunar 包里的 VSOP87 级数。这一项不依赖界面设计，可以先做；界面部分见下面。
+2. **助手不知道日本的祝日和年号。** 日历已经显示它们，API 的助手工具还只引用 `packages/lunar`。要不要让助手回答「下一个祝日是哪天」之类的问题，没有定。助手工具返回给模型的农历日期、节气和节日名也仍是中文写法，日文对话里由模型自己转述。
 
 ## 待决定，定下来之前不要动
 
 - **生日的默认标题。** [birthday-form.tsx](../apps/client/src/features/birthdays/birthday-form.tsx) 把「农历生日 / 公历生日」当标题存进数据库，之后一直是创建者的语言。倾向于不存这段文字、显示时按类型取名；已存的旧数据怎么处理没有定。
-- **农历名称在日文界面怎么显示。** `packages/lunar` 里有 23 行中文：月日名、节气、节日。节气的日文汉字写法不同，例如惊蛰是「啓蟄」、处暑是「処暑」。要定是保留中文原样，还是给日文一套写法。这个包同时被 API 的助手使用。
-- **和历与祝日的界面。** 月历格子里农历和祝日谁优先，祝日标成红日子时朱色怎么用（[design.md](design.md) 把朱色留给强调）。先出手机稿，定稿后再实现。
 - **日文文案的用词。** 现有日文由 Claude 起草，待读日文的家人确认，尤其是「家庭」译作「家族」、「昵称」译作「表示名」。
 
 ## 只能由人验证

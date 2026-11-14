@@ -1,8 +1,9 @@
 import type { CreateEventDto, EventResponseDto, RecurrenceResponseDto, ReminderChoiceDto } from '@muchakucha/api-client';
-import { formatLunarMonthDay, fromLunar, toLunar } from '@muchakucha/lunar';
+import { formatLunarDate, formatLunarMonthDay, fromLunar, toLunar } from '@muchakucha/lunar';
 
+import { currentLanguage } from '../../i18n';
 import { solarDateOf } from '../lunar/lunar-calendar';
-import { formatLunarAnchor, nextLunarDate } from '../lunar/lunar-recurrence';
+import { nextLunarDate } from '../lunar/lunar-recurrence';
 
 export type BirthdayCalendar = 'solar' | 'lunar';
 
@@ -36,7 +37,7 @@ export function solarMonthDays(month: number): number {
 
 /** 3月2日 or 农历十月十五. */
 export function formatBirthdayDate(calendar: BirthdayCalendar, month: number, day: number): string {
-  return calendar === 'lunar' ? `农历${formatLunarMonthDay(month, day)}` : `${month}月${day}日`;
+  return calendar === 'lunar' ? formatLunarDate(month, day, false, currentLanguage()) : `${month}月${day}日`;
 }
 
 export function birthYearOf(draft: BirthdayDraft): number | null {
@@ -119,7 +120,7 @@ export function ageOn(recurrence: Pick<RecurrenceResponseDto, 'occasion' | 'birt
 
 /** 十月十五 for a lunar birthday, 11月18日 for a Gregorian one. */
 export function birthdayDateOf(recurrence: Pick<RecurrenceResponseDto, 'lunar' | 'startsOn'>): string {
-  if (recurrence.lunar) return `农历${formatLunarAnchor(recurrence.lunar)}`;
+  if (recurrence.lunar) return formatLunarDate(recurrence.lunar.month, recurrence.lunar.day, false, currentLanguage());
   return `${Number(recurrence.startsOn.slice(5, 7))}月${Number(recurrence.startsOn.slice(8, 10))}日`;
 }
 

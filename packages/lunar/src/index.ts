@@ -169,19 +169,34 @@ export function lunarAnniversary(lunarYear: number, month: number, day: number):
 // ---------------------------------------------------------------------------
 // Names
 
+/**
+ * The language names are written in. Chinese is the calendar's own; Japanese
+ * writes the same dates the way a Japanese reader meets 旧暦.
+ */
+export type LunarLanguage = 'zh' | 'ja';
+
 const MONTH_NAMES = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月'] as const;
 const DIGITS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'] as const;
+
+/** 一 … 三十, in the numerals both languages share. */
+function numeral(value: number): string {
+  const tens = Math.floor(value / 10);
+  const ones = value % 10;
+  return `${tens > 1 ? DIGITS[tens - 1] : ''}${tens > 0 ? '十' : ''}${ones > 0 ? DIGITS[ones - 1] : ''}`;
+}
 const STEMS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'] as const;
 const BRANCHES = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'] as const;
 const ZODIAC = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'] as const;
 
-/** 正月 … 十月, 冬月, 腊月, with 闰 before a leap month. */
-export function formatLunarMonth(month: number, leap = false): string {
+/** 正月 … 十月, 冬月, 腊月, with 闰 before a leap month. In Japanese 一月 … 十二月, with 閏. */
+export function formatLunarMonth(month: number, leap = false, language: LunarLanguage = 'zh'): string {
+  if (language === 'ja') return month >= 1 && month <= 12 ? `${leap ? '閏' : ''}${numeral(month)}月` : '';
   return `${leap ? '闰' : ''}${MONTH_NAMES[month - 1] ?? ''}`;
 }
 
-/** 初一 … 初十, 十一 … 十九, 二十, 廿一 … 廿九, 三十. */
-export function formatLunarDay(day: number): string {
+/** 初一 … 初十, 十一 … 十九, 二十, 廿一 … 廿九, 三十. In Japanese 一日 … 三十日. */
+export function formatLunarDay(day: number, language: LunarLanguage = 'zh'): string {
+  if (language === 'ja') return day >= 1 && day <= 30 ? `${numeral(day)}日` : '';
   if (day <= 10) return `初${DIGITS[day - 1] ?? ''}`;
   if (day < 20) return `十${DIGITS[day - 11] ?? ''}`;
   if (day === 20) return '二十';
@@ -189,9 +204,14 @@ export function formatLunarDay(day: number): string {
   return '三十';
 }
 
-/** 十月十五, 冬月初八, 闰四月初一. */
-export function formatLunarMonthDay(month: number, day: number, leap = false): string {
-  return `${formatLunarMonth(month, leap)}${formatLunarDay(day)}`;
+/** 十月十五, 冬月初八, 闰四月初一. In Japanese 十月十五日, 十一月八日, 閏四月一日. */
+export function formatLunarMonthDay(month: number, day: number, leap = false, language: LunarLanguage = 'zh'): string {
+  return `${formatLunarMonth(month, leap, language)}${formatLunarDay(day, language)}`;
+}
+
+/** A lunar date said in full: 农历十月十五, or 旧暦十月十五日. */
+export function formatLunarDate(month: number, day: number, leap = false, language: LunarLanguage = 'zh'): string {
+  return `${language === 'ja' ? '旧暦' : '农历'}${formatLunarMonthDay(month, day, leap, language)}`;
 }
 
 /** The sexagenary name of a lunar year, such as 丙午. */
@@ -315,6 +335,23 @@ function chinaOffsetDays(jdUt: number): number {
   return jdUt < CHINA_STANDARD_FROM_JD ? (7 + 45 / 60 + 40 / 3600) / 24 : 8 / 24;
 }
 
+/**
+ * When the Sun reaches `longitude` degrees during a Gregorian year, counted
+ * from 小寒 at 285° in January: days since 1970-01-01 00:00 UT, the time of
+ * day in the fraction. Add a zone's offset before flooring to get its date.
+ */
+export function solarLongitudeTime(year: number, longitude: number): number {
+  // 小寒 is near 6 January, and the Sun moves 15° in about 15.2 days.
+  const sinceFirstTerm = (((longitude - 285) % 360) + 360) % 360 / 15;
+  let jde = dayNumber({ year, month: 1, day: 6 }) + UNIX_EPOCH_JD + sinceFirstTerm * 15.2184;
+  for (let step = 0; step < 12; step += 1) {
+    const gap = ((longitude - apparentSolarLongitude(jde) + 540) % 360) - 180;
+    jde += gap * (365.2422 / 360);
+    if (Math.abs(gap) < 1e-7) break;
+  }
+  return jde - deltaT(year + (sinceFirstTerm + 0.5) / 24) / 86400 - UNIX_EPOCH_JD;
+}
+
 const termCache = new Map<number, ReadonlyMap<number, SolarTerm>>();
 
 /** The day numbers of a Gregorian year's 24 solar terms, in China Standard Time. */
@@ -323,16 +360,8 @@ function termsOfYear(year: number): ReadonlyMap<number, SolarTerm> {
   if (cached !== undefined) return cached;
   const terms = new Map<number, SolarTerm>();
   SOLAR_TERMS.forEach((name, index) => {
-    const target = (285 + 15 * index) % 360;
-    // 小寒 is near 6 January; each term is about 15.2 days after the last.
-    let jde = dayNumber({ year, month: 1, day: 6 }) + UNIX_EPOCH_JD + index * 15.2184;
-    for (let step = 0; step < 12; step += 1) {
-      const gap = ((target - apparentSolarLongitude(jde) + 540) % 360) - 180;
-      jde += gap * (365.2422 / 360);
-      if (Math.abs(gap) < 1e-7) break;
-    }
-    const ut = jde - deltaT(year + (index + 0.5) / 24) / 86400;
-    terms.set(Math.floor(ut + chinaOffsetDays(ut) - UNIX_EPOCH_JD), name);
+    const time = solarLongitudeTime(year, (285 + 15 * index) % 360);
+    terms.set(Math.floor(time + chinaOffsetDays(time + UNIX_EPOCH_JD)), name);
   });
   termCache.set(year, terms);
   return terms;
@@ -380,10 +409,33 @@ function solarFestival(date: SolarDate): string | null {
   return null;
 }
 
+/**
+ * How a Japanese calendar writes the festivals and solar terms. 七夕 is the
+ * lunar one, which Japan keeps on 7 July instead. China's civic days (妇女节,
+ * 国庆节 and the like) are not here: a calendar for a Japanese reader leaves
+ * them out, and 元旦 is Japan's holiday 元日.
+ */
+const JAPANESE_NAMES: ReadonlyMap<string, string> = new Map([
+  ['春节', '春節'], ['元宵节', '元宵節'], ['端午节', '端午節'], ['七夕', '旧七夕'], ['中元节', '中元節'],
+  ['中秋节', '中秋節'], ['重阳节', '重陽節'], ['腊八', '臘八節'], ['小年', '小年'], ['除夕', '除夕'],
+  ['母亲节', '母の日'], ['父亲节', '父の日'],
+  ['小寒', '小寒'], ['大寒', '大寒'], ['立春', '立春'], ['雨水', '雨水'], ['惊蛰', '啓蟄'], ['春分', '春分'],
+  ['清明', '清明'], ['谷雨', '穀雨'], ['立夏', '立夏'], ['小满', '小満'], ['芒种', '芒種'], ['夏至', '夏至'],
+  ['小暑', '小暑'], ['大暑', '大暑'], ['立秋', '立秋'], ['处暑', '処暑'], ['白露', '白露'], ['秋分', '秋分'],
+  ['寒露', '寒露'], ['霜降', '霜降'], ['立冬', '立冬'], ['小雪', '小雪'], ['大雪', '大雪'], ['冬至', '冬至'],
+]);
+
+/** A festival or solar term as a language writes it, or null where that language's calendar leaves the day out. */
+function named(name: string | null, language: LunarLanguage): string | null {
+  if (name === null || language === 'zh') return name;
+  return JAPANESE_NAMES.get(name) ?? null;
+}
+
 /** Every festival and solar term on a date, lunar festivals first. */
-export function observancesOn(date: SolarDate): string[] {
+export function observancesOn(date: SolarDate, language: LunarLanguage = 'zh'): string[] {
   const lunar = toLunar(date);
   return [lunar === null ? null : lunarFestival(lunar), solarFestival(date), solarTermOn(date)]
+    .map(name => named(name, language))
     .filter((name): name is string => name !== null);
 }
 
@@ -395,22 +447,23 @@ export interface LunarDayLabel {
 
 /**
  * The short text a month grid shows under a date: a festival, else a solar
- * term, else the month's name on its first day, else the lunar day.
+ * term, else the month's name on its first day, else the lunar day. In
+ * Japanese the day is its numeral alone, 二十一, so that it fits a narrow cell.
  */
-export function lunarDayLabel(date: SolarDate): LunarDayLabel | null {
+export function lunarDayLabel(date: SolarDate, language: LunarLanguage = 'zh'): LunarDayLabel | null {
   const lunar = toLunar(date);
   if (lunar === null) return null;
-  const festival = lunarFestival(lunar) ?? solarFestival(date);
+  const festival = named(lunarFestival(lunar), language) ?? named(solarFestival(date), language);
   if (festival !== null) return { text: festival, kind: 'festival' };
-  const term = solarTermOn(date);
+  const term = named(solarTermOn(date), language);
   if (term !== null) return { text: term, kind: 'term' };
-  if (lunar.day === 1) return { text: formatLunarMonth(lunar.month, lunar.leap), kind: 'month' };
-  return { text: formatLunarDay(lunar.day), kind: 'day' };
+  if (lunar.day === 1) return { text: formatLunarMonth(lunar.month, lunar.leap, language), kind: 'month' };
+  return { text: language === 'ja' ? numeral(lunar.day) : formatLunarDay(lunar.day), kind: 'day' };
 }
 
-/** 农历十月初三, followed by the day's festivals and solar term: 农历九月廿九，立冬. */
-export function describeLunarDay(date: SolarDate): string | null {
+/** 农历十月初三, followed by the day's festivals and solar term: 农历九月廿九，立冬. In Japanese 旧暦九月二十九日、立冬. */
+export function describeLunarDay(date: SolarDate, language: LunarLanguage = 'zh'): string | null {
   const lunar = toLunar(date);
   if (lunar === null) return null;
-  return [`农历${formatLunarMonthDay(lunar.month, lunar.day, lunar.leap)}`, ...observancesOn(date)].join('，');
+  return [formatLunarDate(lunar.month, lunar.day, lunar.leap, language), ...observancesOn(date, language)].join(language === 'ja' ? '、' : '，');
 }

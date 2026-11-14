@@ -13,6 +13,7 @@ import { RecurrenceBadge } from '../recurrence/recurrence-badge';
 import { toDateIso } from './calendar-utils';
 import { eventLastDate } from './desktop-month';
 import { lunarDescriptionOn } from '../lunar/lunar-calendar';
+import { holidayNameOn } from '../wareki/japanese-calendar';
 import { birthdayNote } from '../birthdays/birthday-dates';
 
 const dayDate = (iso: string) => new Date(`${iso}T12:00:00`);
@@ -124,11 +125,13 @@ export function DayAgendaList({ dateIso, events, openEventId, nowMinutes, onOpen
  * The right column of the desktop calendar: the chosen day as a heading with
  * its count, the day's events, and a way to add one on that day.
  */
-export function DesktopDayPane({ dateIso, todayIso, events, openEventId, nowMinutes, onOpen, onCreate, onEdit, onDelete, lunar = false, children }: {
+export function DesktopDayPane({ dateIso, todayIso, events, openEventId, nowMinutes, onOpen, onCreate, onEdit, onDelete, lunar = false, japanese = false, children }: {
   dateIso: string; todayIso: string; events: EventResponseDto[]; openEventId: string | null; nowMinutes: number;
   onOpen(event: EventResponseDto): void; onCreate(): void; children?: ReactNode;
   /** Names the day's lunar date, festivals and solar term under the heading. */
   lunar?: boolean;
+  /** Names the day's holiday in Japan before them. */
+  japanese?: boolean;
   onEdit?: (event: EventResponseDto) => (() => void) | undefined; onDelete?: (event: EventResponseDto) => (() => void) | undefined;
 }) {
   const date = dayDate(dateIso);
@@ -140,7 +143,7 @@ export function DesktopDayPane({ dateIso, todayIso, events, openEventId, nowMinu
         <Heading variant="section" level={2}>{`${formatDate(date)} ${formatWeekday(date)}`}</Heading>
         {isToday ? <Chip tone="accent">{t('today')}</Chip> : null}
       </View>
-      <Text variant="meta">{[lunar ? lunarDescriptionOn(dateIso) : null, events.length ? t('count', { count: events.length }) : t('noEvents')].filter(Boolean).join(' · ')}</Text>
+      <Text variant="meta">{[japanese ? holidayNameOn(dateIso) : null, lunar ? lunarDescriptionOn(dateIso) : null, events.length ? t('count', { count: events.length }) : t('noEvents')].filter(Boolean).join(' · ')}</Text>
     </View>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing[3], paddingTop: theme.spacing[4] }}>
       <DayAgendaList dateIso={dateIso} events={events} openEventId={openEventId} nowMinutes={isToday ? nowMinutes : null} onOpen={onOpen} {...(onEdit ? { onEdit } : {})} {...(onDelete ? { onDelete } : {})}>{children}</DayAgendaList>
