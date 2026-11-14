@@ -16,12 +16,17 @@ export class RecurrenceScheduler implements OnApplicationBootstrap, OnModuleDest
 
   onApplicationBootstrap(): void {
     if (process.env.NODE_ENV === 'test') return;
-    this.timer = setInterval(() => {
-      void this.materializer.materializeAllDue().catch((error: unknown) => {
-        this.logger.error('recurrence materialization tick failed', error);
-      });
-    }, RECURRENCE_TICK_MS);
+    // Tick once at boot as well: after a deploy or restart, rules that came due
+    // while the server was down should not wait a whole interval.
+    this.tick();
+    this.timer = setInterval(() => this.tick(), RECURRENCE_TICK_MS);
     this.timer.unref();
+  }
+
+  private tick(): void {
+    void this.materializer.materializeAllDue().catch((error: unknown) => {
+      this.logger.error('recurrence materialization tick failed', error);
+    });
   }
 
   onModuleDestroy(): void {

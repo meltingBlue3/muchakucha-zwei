@@ -4,7 +4,7 @@ import { TasksModule } from '../tasks/tasks.module.js';
 import { NotesModule } from '../notes/notes.module.js';
 import { LabelsModule } from '../labels/labels.module.js';
 import { RecurrenceModule } from '../recurrence/recurrence.module.js';
-import { HouseholdsService } from '../households/households.service.js';
+import { HouseholdsModule } from '../households/households.module.js';
 import { AssistantController } from './assistant.controller.js';
 import { AssistantCredentials } from './assistant-credentials.js';
 import { AssistantProvider } from './assistant-provider.js';
@@ -17,9 +17,9 @@ import { AssistantService } from './assistant.service.js';
 export class AssistantModule {
   static register(environment: NodeJS.ProcessEnv = process.env): DynamicModule {
     return { module: AssistantModule,
-      imports: [EventsModule, TasksModule, NotesModule, LabelsModule, RecurrenceModule],
+      imports: [EventsModule, TasksModule, NotesModule, LabelsModule, RecurrenceModule, HouseholdsModule],
       controllers: [AssistantController],
-      providers: [HouseholdsService, AssistantSettingsService, AssistantService, AssistantToolsService, AssistantProvider, AssistantTranscriber,
+      providers: [AssistantSettingsService, AssistantService, AssistantToolsService, AssistantProvider, AssistantTranscriber,
         { provide: AssistantCredentials, useFactory: () => new AssistantCredentials(environment.ASSISTANT_ENCRYPTION_KEY) }],
     };
   }

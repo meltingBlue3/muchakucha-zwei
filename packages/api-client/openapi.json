@@ -1000,6 +1000,24 @@
             }
           },
           {
+            "name": "expectedUpdatedAt",
+            "required": false,
+            "in": "query",
+            "description": "Version read before deleting; a stale delete returns 409 EDIT_CONFLICT. Omitted, the delete is not checked.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedRuleUpdatedAt",
+            "required": false,
+            "in": "query",
+            "description": "With expectedUpdatedAt, required for a recurring occurrence.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "scope",
             "required": true,
             "in": "query",
@@ -1096,6 +1114,24 @@
             "name": "taskId",
             "required": true,
             "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedUpdatedAt",
+            "required": false,
+            "in": "query",
+            "description": "Version read before deleting; a stale delete returns 409 EDIT_CONFLICT. Omitted, the delete is not checked.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedRuleUpdatedAt",
+            "required": false,
+            "in": "query",
+            "description": "With expectedUpdatedAt, required for a recurring occurrence.",
             "schema": {
               "type": "string"
             }
@@ -1526,6 +1562,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "expectedUpdatedAt",
+            "required": false,
+            "in": "query",
+            "description": "Version read before deleting; a stale delete returns 409 EDIT_CONFLICT. Omitted, the delete is not checked.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedRuleUpdatedAt",
+            "required": false,
+            "in": "query",
+            "description": "With expectedUpdatedAt, required for a recurring occurrence.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1769,6 +1823,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "expectedUpdatedAt",
+            "required": false,
+            "in": "query",
+            "description": "Version read before deleting; a stale delete returns 409 EDIT_CONFLICT. Omitted, the delete is not checked.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedRuleUpdatedAt",
+            "required": false,
+            "in": "query",
+            "description": "With expectedUpdatedAt, required for a recurring occurrence.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1980,6 +2052,24 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "expectedUpdatedAt",
+            "required": false,
+            "in": "query",
+            "description": "Version read before deleting; a stale delete returns 409 EDIT_CONFLICT. Omitted, the delete is not checked.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedRuleUpdatedAt",
+            "required": false,
+            "in": "query",
+            "description": "With expectedUpdatedAt, required for a recurring occurrence.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2146,6 +2236,24 @@
             "name": "labelId",
             "required": true,
             "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedName",
+            "required": false,
+            "in": "query",
+            "description": "Name read before deleting; with expectedColor, a changed label returns 409 EDIT_CONFLICT.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedColor",
+            "required": false,
+            "in": "query",
+            "description": "Colour read before deleting; sent with expectedName.",
             "schema": {
               "type": "string"
             }
@@ -3335,17 +3443,12 @@
           "displayName": {
             "type": "string",
             "example": "Family member"
-          },
-          "hasHousehold": {
-            "type": "boolean",
-            "description": "Phase 1 handoff signal; household lookup begins in Phase 2."
           }
         },
         "required": [
           "id",
           "username",
-          "displayName",
-          "hasHousehold"
+          "displayName"
         ]
       },
       "UpdateMeDto": {
@@ -4476,7 +4579,7 @@
             "maxLength": 255
           },
           "recurrence": {
-            "description": "重复规则；省略即不改变当前重复设置",
+            "description": "重复规则：给一次性的条目加上，它就成为新系列的第一次；已属于系列的条目忽略此项，改系列走 /series。省略即不改变。",
             "allOf": [
               {
                 "$ref": "#/components/schemas/RecurrenceDto"
@@ -4741,7 +4844,7 @@
             "description": "截止日期"
           },
           "recurrence": {
-            "description": "重复规则；省略即不改变当前重复设置",
+            "description": "重复规则：给一次性的条目加上，它就成为新系列的第一次；已属于系列的条目忽略此项，改系列走 /series。省略即不改变。",
             "allOf": [
               {
                 "$ref": "#/components/schemas/RecurrenceDto"

@@ -3,7 +3,6 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 const currentUser = {
   displayName: '家庭成员',
   username: 'family-member',
-  hasHousehold: false,
   id: 'playwright-user',
 };
 

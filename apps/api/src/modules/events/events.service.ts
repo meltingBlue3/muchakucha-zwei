@@ -7,6 +7,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type { CreateEventDto, EventResponseDto, EventListResponseDto } from './dto/create-event.dto.js';
 import type { UpdateEventDto } from './dto/update-event.dto.js';
 import { RecurrenceMaterializerService } from '../recurrence/recurrence-materializer.service.js';
+import type { RecurrenceDto } from '../recurrence/dto/recurrence.dto.js';
 import {
   formatIsoDate,
   localDateTimeToInstant,
@@ -127,6 +128,107 @@ export class EventsService {
     return true; // OWNER or ADMIN
   }
 
+  /**
+   * Checks a repeat for an event running from `start` to `end` and works out
+   * its rule and first occurrence. Create and an edit that adds a repeat both
+   * use it, so a converted event becomes the series create would have made.
+   */
+  private seriesPlan(recurrence: RecurrenceDto, start: Date, end: Date) {
+    if (recurrence.endsOn !== undefined && recurrence.count !== undefined) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [{
+          field: 'recurrence.endsOn',
+          codes: ['ends_on_and_count_mutually_exclusive'],
+          message: '结束日期与重复次数只能二选一。',
+        }],
+      });
+    }
+    const marks = resolveSeriesMarks(recurrence, null);
+    const startsOn = parseRequestDate(recurrence.startsOn, 'recurrence.startsOn');
+    const interval = recurrence.interval ?? 1;
+    const firstOccurrence = firstOccurrenceOf({
+      freq: recurrence.freq,
+      interval,
+      byWeekday: recurrence.byWeekday ?? [],
+      startsOn,
+      endsOn: recurrence.endsOn === undefined ? null : parseRequestDate(recurrence.endsOn, 'recurrence.endsOn'),
+      count: recurrence.count ?? null,
+      lunar: recurrence.lunar ?? null,
+    });
+    if (firstOccurrence === undefined) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [{
+          field: 'recurrence.endsOn',
+          codes: ['no_occurrence_in_range'],
+          message: '重复规则在结束日期前没有可生成的日期。',
+        }],
+      });
+    }
+
+    const timeParts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: recurrence.timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(start);
+    const hour = Number(timeParts.find((part) => part.type === 'hour')?.value);
+    const minute = Number(timeParts.find((part) => part.type === 'minute')?.value);
+    const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60_000);
+    // recurrence_rules.duration_minutes has a DB CHECK of <= 1440 (the same
+    // bound RecurrenceDto.durationMinutes enforces for a client-supplied
+    // value, which this derived-from-start/end path never uses). Without
+    // this guard a >24h span — a multi-day all-day event or an overnight
+    // event — reaches Prisma, violates the CHECK inside the transaction,
+    // and surfaces as an opaque 500 rather than a validation error.
+    if (durationMinutes > 1440) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [{
+          field: 'endTime',
+          codes: ['recurring_duration_too_long'],
+          message: '重复事件的单次时长不能超过 24 小时。',
+        }],
+      });
+    }
+    return {
+      firstOccurrence,
+      occurrenceStart: localDateTimeToInstant(firstOccurrence, hour, minute, recurrence.timezone),
+      occurrenceDate: new Date(`${formatIsoDate(firstOccurrence)}T00:00:00.000Z`),
+      rule: {
+        freq: recurrence.freq,
+        interval,
+        byWeekday: recurrence.byWeekday ?? [],
+        startsOn: new Date(`${recurrence.startsOn}T00:00:00.000Z`),
+        endsOn: recurrence.endsOn === undefined ? null : new Date(`${recurrence.endsOn}T00:00:00.000Z`),
+        count: recurrence.count ?? null,
+        timezone: recurrence.timezone,
+        startTimeLocal: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+        durationMinutes,
+        ...marks,
+      },
+    };
+  }
+
+  // A new series is already committed when this runs. D-03's immediate
+  // generation is a latency optimisation, not a correctness invariant — the
+  // scheduler catches up — so a transient failure must not report a 500 for
+  // a series that was in fact saved.
+  private async generateNewSeries(ruleId: string): Promise<void> {
+    try {
+      const materialization = await this.materializer.materializeRule(ruleId);
+      if (materialization.skipped) {
+        this.logger.warn(`rule ${ruleId} was locked when first saved; the scheduler will generate it`);
+      }
+    } catch (error: unknown) {
+      this.logger.error(`immediate materialization failed for rule ${ruleId}`, error);
+    }
+  }
+
   // ---- CRUD ----
 
   async create(
@@ -163,88 +265,13 @@ export class EventsService {
       });
     }
 
-    if (input.recurrence?.endsOn !== undefined && input.recurrence.count !== undefined) {
-      throw new BadRequestException({
-        code: 'VALIDATION_FAILED',
-        message: 'Request validation failed.',
-        details: [{
-          field: 'recurrence.endsOn',
-          codes: ['ends_on_and_count_mutually_exclusive'],
-          message: '结束日期与重复次数只能二选一。',
-        }],
-      });
-    }
-
     if (input.recurrence !== undefined) {
-      const recurrence = input.recurrence;
-      const marks = resolveSeriesMarks(recurrence, null);
-      const startsOn = parseRequestDate(recurrence.startsOn, 'recurrence.startsOn');
-      const interval = recurrence.interval ?? 1;
-      const firstOccurrence = firstOccurrenceOf({
-        freq: recurrence.freq,
-        interval,
-        byWeekday: recurrence.byWeekday ?? [],
-        startsOn,
-        endsOn: recurrence.endsOn === undefined ? null : parseRequestDate(recurrence.endsOn, 'recurrence.endsOn'),
-        count: recurrence.count ?? null,
-        lunar: recurrence.lunar ?? null,
-      });
-      if (firstOccurrence === undefined) {
-        throw new BadRequestException({
-          code: 'VALIDATION_FAILED',
-          message: 'Request validation failed.',
-          details: [{
-            field: 'recurrence.endsOn',
-            codes: ['no_occurrence_in_range'],
-            message: '重复规则在结束日期前没有可生成的日期。',
-          }],
-        });
-      }
-
-      const timeParts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: recurrence.timezone,
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23',
-      }).formatToParts(start);
-      const hour = Number(timeParts.find((part) => part.type === 'hour')?.value);
-      const minute = Number(timeParts.find((part) => part.type === 'minute')?.value);
-      const startTimeLocal = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-      const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60_000);
-      // recurrence_rules.duration_minutes has a DB CHECK of <= 1440 (the same
-      // bound RecurrenceDto.durationMinutes enforces for a client-supplied
-      // value, which this derived-from-start/end path never uses). Without
-      // this guard a >24h span — a multi-day all-day event or an overnight
-      // event — reaches Prisma, violates the CHECK inside the transaction,
-      // and surfaces as an opaque 500 rather than a validation error.
-      if (durationMinutes > 1440) {
-        throw new BadRequestException({
-          code: 'VALIDATION_FAILED',
-          message: 'Request validation failed.',
-          details: [{
-            field: 'endTime',
-            codes: ['recurring_duration_too_long'],
-            message: '重复事件的单次时长不能超过 24 小时。',
-          }],
-        });
-      }
-      const occurrenceStart = localDateTimeToInstant(firstOccurrence, hour, minute, recurrence.timezone);
-      const occurrenceDate = formatIsoDate(firstOccurrence);
-
+      const plan = this.seriesPlan(input.recurrence, start, end);
       const created = await this.prisma.$transaction(async (tx) => {
         const rule = await tx.recurrenceRule.create({
           data: {
             householdId,
-            freq: recurrence.freq,
-            interval,
-            byWeekday: recurrence.byWeekday ?? [],
-            startsOn: new Date(`${recurrence.startsOn}T00:00:00.000Z`),
-            endsOn: recurrence.endsOn === undefined ? null : new Date(`${recurrence.endsOn}T00:00:00.000Z`),
-            count: recurrence.count ?? null,
-            timezone: recurrence.timezone,
-            startTimeLocal,
-            durationMinutes,
-            ...marks,
+            ...plan.rule,
             templateTitle: trimmedTitle,
             templateDescription: input.description?.trim() || null,
             templateLocation: input.location?.trim() || null,
@@ -266,13 +293,13 @@ export class EventsService {
             householdId,
             title: trimmedTitle,
             description: input.description?.trim() || null,
-            startTime: occurrenceStart,
-            endTime: recurringEventEnd(firstOccurrence, occurrenceStart, rule),
+            startTime: plan.occurrenceStart,
+            endTime: recurringEventEnd(plan.firstOccurrence, plan.occurrenceStart, rule),
             allDay: input.allDay ?? false,
             location: input.location?.trim() || null,
             createdBy: actorId,
             recurrenceRuleId: rule.id,
-            occurrenceDate: new Date(`${occurrenceDate}T00:00:00.000Z`),
+            occurrenceDate: plan.occurrenceDate,
           },
         });
         if (input.myReminder !== undefined) {
@@ -281,18 +308,7 @@ export class EventsService {
         return { eventId: template.id, ruleId: rule.id };
       });
 
-      // The rule and its first occurrence are already committed. D-03's
-      // immediate generation is a latency optimisation, not a correctness
-      // invariant — the scheduler catches up — so a transient failure here
-      // must not report a 500 for a series that was in fact saved.
-      try {
-        const materialization = await this.materializer.materializeRule(created.ruleId);
-        if (materialization.skipped) {
-          this.logger.warn(`rule ${created.ruleId} was locked at create time; the scheduler will generate it`);
-        }
-      } catch (error: unknown) {
-        this.logger.error(`immediate materialization failed for rule ${created.ruleId}`, error);
-      }
+      await this.generateNewSeries(created.ruleId);
       const event = await this.prisma.event.findUniqueOrThrow({
         where: { id: created.eventId },
         include: { labels: { include: { label: true } }, recurrenceRule: true },
@@ -470,16 +486,53 @@ export class EventsService {
     if (input.allDay !== undefined) data.allDay = input.allDay;
     if (input.location !== undefined) data.location = input.location?.trim() || null;
 
+    // Adding a repeat to a one-time event makes this row the first occurrence
+    // of the series create would have made. An occurrence that already has a
+    // series ignores `recurrence`: a this-only edit sends the form's value
+    // along, and series changes go through /series.
+    const plan = input.recurrence != null && event.recurrenceRuleId === null
+      ? this.seriesPlan(input.recurrence, nextStart, nextEnd)
+      : null;
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const updatedAt = await lockContent(tx, 'event', householdId, eventId, input);
       await replaceLabels(tx, 'event', householdId, eventId, input.labelIds);
+      if (plan !== null) {
+        const template = { ...event, ...data } as typeof event;
+        const rule = await tx.recurrenceRule.create({
+          data: {
+            householdId,
+            ...plan.rule,
+            templateTitle: template.title,
+            templateDescription: template.description,
+            templateLocation: template.location,
+            templateAllDay: template.allDay,
+            // The series stays with whoever owns the event, so the same people may manage its occurrences.
+            createdBy: event.createdBy,
+          },
+        });
+        // Everyone's reminder on a recurring occurrence lives on its series.
+        await tx.reminderOverride.updateMany({ where: { eventId }, data: { eventId: null, recurrenceRuleId: rule.id } });
+        Object.assign(data, {
+          recurrenceRuleId: rule.id,
+          occurrenceDate: plan.occurrenceDate,
+          startTime: plan.occurrenceStart,
+          endTime: recurringEventEnd(plan.firstOccurrence, plan.occurrenceStart, rule),
+        });
+      }
       return tx.event.update({
         where: { id: eventId }, data: { ...data, updatedAt },
         include: { labels: { include: { label: true } }, recurrenceRule: true },
       });
     });
 
-    return this.toResponse(updated, await readReminderChoice(this.prisma, actorId, 'event', updated));
+    if (plan === null) return this.toResponse(updated, await readReminderChoice(this.prisma, actorId, 'event', updated));
+    await this.generateNewSeries(updated.recurrenceRuleId!);
+    const converted = await this.prisma.event.findUniqueOrThrow({
+      where: { id: eventId },
+      include: { labels: { include: { label: true } }, recurrenceRule: true },
+    });
+    return this.toResponse(converted, await readReminderChoice(this.prisma, actorId, 'event', converted));
   }
 
   async delete(

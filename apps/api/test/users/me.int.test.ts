@@ -119,7 +119,6 @@ describe('current-user API contract', () => {
       id: member.id,
       username: 'member',
       displayName: 'Member',
-      hasHousehold: false,
     });
   });
 

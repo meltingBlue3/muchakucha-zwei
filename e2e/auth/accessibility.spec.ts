@@ -50,7 +50,6 @@ test.describe('Web authentication accessibility matrix', () => {
           id: 'accessibility-user',
           username: 'family-member',
           displayName: '家庭成员',
-          hasHousehold: false,
         }),
       }),
     );

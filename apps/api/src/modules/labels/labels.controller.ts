@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -21,7 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import { LabelsService } from './labels.service.js';
-import { CreateLabelDto, LabelListResponseDto, LabelResponseDto, TagEntitiesDto, UpdateLabelDto } from './dto/create-label.dto.js';
+import { CreateLabelDto, DeleteLabelQueryDto, LabelListResponseDto, LabelResponseDto, TagEntitiesDto, UpdateLabelDto } from './dto/create-label.dto.js';
 
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
@@ -80,8 +81,12 @@ export class LabelsController {
     @Req() request: AuthenticatedRequest,
     @Param('householdId', uuidParam) householdId: string,
     @Param('labelId', uuidParam) labelId: string,
+    @Query() query: DeleteLabelQueryDto,
   ): Promise<void> {
-    await this.labelsService.delete(request.auth.sub, householdId, labelId);
+    const expected = query.expectedName === undefined || query.expectedColor === undefined
+      ? undefined
+      : { name: query.expectedName, color: query.expectedColor };
+    await this.labelsService.delete(request.auth.sub, householdId, labelId, expected);
   }
 }
 

@@ -279,7 +279,6 @@ describe('platform session transport contract', () => {
           id: 'user-1',
           username: 'member',
           displayName: 'Member',
-          hasHousehold: false,
         }) as never;
       });
     const transport = createNativeSessionTransport(
@@ -314,7 +313,6 @@ describe('platform session transport contract', () => {
           id: 'user-1',
           username: 'member',
           displayName: 'Member',
-          hasHousehold: false,
         }) as never,
       );
     const transport = createWebSessionTransport(
@@ -351,7 +349,6 @@ describe('platform session transport contract', () => {
           id: 'user-1',
           username: 'member',
           displayName: 'Member',
-          hasHousehold: false,
         }) as never,
       );
     const transport = createNativeSessionTransport(
@@ -393,7 +390,6 @@ describe('platform session transport contract', () => {
           id: 'user-1',
           username: 'member',
           displayName: 'Member',
-          hasHousehold: false,
         }) as never,
       );
     const transport = createNativeSessionTransport(

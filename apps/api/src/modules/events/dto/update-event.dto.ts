@@ -50,7 +50,7 @@ export class UpdateEventDto {
   @MaxLength(255)
   location?: string;
 
-  @ApiPropertyOptional({ description: '重复规则；省略即不改变当前重复设置', type: () => RecurrenceDto })
+  @ApiPropertyOptional({ description: '重复规则：给一次性的条目加上，它就成为新系列的第一次；已属于系列的条目忽略此项，改系列走 /series。省略即不改变。', type: () => RecurrenceDto })
   @IsOptional()
   @ValidateNested()
   @Type(() => RecurrenceDto)

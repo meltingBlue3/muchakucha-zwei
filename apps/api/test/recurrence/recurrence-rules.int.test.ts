@@ -134,6 +134,31 @@ afterAll(async () => { await app?.close(); });
 beforeEach(async () => { await resetDatabase(); });
 
 describe('daily task recurrence tracer', () => {
+  test('adding a repeat to a one-time task takes the due date from the rule and keeps its people', async () => {
+    const owner = await insertActor('convert-task-owner');
+    const householdId = await createHousehold(owner.accessToken);
+    const startsOn = formatIsoDate(currentCalendarDateIn('UTC'));
+    const oldDue = '2020-01-01T00:00:00.000Z';
+    const created = await taskApi(owner.accessToken, householdId, 'POST', { title: '倒垃圾', dueDate: oldDue, assigneeIds: [owner.userId], myReminder: { mode: 'off', minutesBefore: null, alarm: null } });
+    expect(created.statusCode).toBe(201);
+    const taskId = created.json().id as string;
+
+    // The edit form sends the old due date along; the rule decides the occurrence's own.
+    const converted = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${taskId}`, {
+      dueDate: oldDue,
+      recurrence: { freq: 'daily', startsOn, timezone: 'UTC', startTimeLocal: '08:00' },
+    });
+    expect(converted.statusCode).toBe(200);
+    expect(converted.json()).toMatchObject({
+      id: taskId,
+      dueDate: `${startsOn}T08:00:00.000Z`,
+      assigneeIds: [owner.userId],
+      recurrence: { freq: 'daily', startTimeLocal: '08:00' },
+      myReminder: { mode: 'off' },
+    });
+    expect(converted.json().recurrenceRuleId).not.toBeNull();
+  });
+
   test('creates a recurrence rule and five real task occurrences', async () => {
     const owner = await insertActor('recurrence-owner');
     const householdId = await createHousehold(owner.accessToken);
@@ -349,6 +374,39 @@ describe('recurring events', () => {
     expect(response.json()).toMatchObject({ events: [], total: 0, materializedThrough: null });
   });
 
+  test('adding a repeat to a one-time event makes it the first occurrence of the series create would make', async () => {
+    const owner = await insertActor('convert-event-owner');
+    const householdId = await createHousehold(owner.accessToken);
+    const { recurrence, ...oneTime } = recurringEvent;
+    const created = await eventApi(owner.accessToken, householdId, 'POST', '', { ...oneTime, title: '一次性的活动', myReminder: { mode: 'before', minutesBefore: 30, alarm: null } });
+    expect(created.statusCode).toBe(201);
+    const eventId = created.json().id as string;
+
+    const invalid = await eventApi(owner.accessToken, householdId, 'PUT', `/${eventId}`, { recurrence: { ...recurrence, endsOn: formatIsoDate(eventToday) } });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json().error.details[0].field).toBe('recurrence.endsOn');
+    expect((await eventApi(owner.accessToken, householdId, 'GET', `/${eventId}`)).json().recurrenceRuleId).toBeNull();
+
+    const converted = await eventApi(owner.accessToken, householdId, 'PUT', `/${eventId}`, { title: recurringEvent.title, recurrence });
+    expect(converted.statusCode).toBe(200);
+    expect(converted.json()).toMatchObject({ id: eventId, recurrence: { freq: 'weekly', count: 6 }, myReminder: { mode: 'before', minutesBefore: 30 } });
+    const ruleId = converted.json().recurrenceRuleId as string;
+    expect(ruleId).not.toBeNull();
+
+    // The same request as a create gives the reference series to compare with.
+    const reference = (await eventApi(owner.accessToken, householdId, 'POST', '', recurringEvent)).json();
+    const events = (await eventApi(owner.accessToken, householdId, 'GET', '?recurring=true')).json().events as Array<{ recurrenceRuleId: string; startTime: string; endTime: string; title: string }>;
+    const times = (rule: string) => events.filter(event => event.recurrenceRuleId === rule).map(event => `${event.startTime}/${event.endTime}`).sort();
+    expect(times(ruleId)).toHaveLength(6);
+    expect(times(ruleId)).toEqual(times(reference.recurrenceRuleId));
+    expect(events.filter(event => event.recurrenceRuleId === ruleId).every(event => event.title === recurringEvent.title)).toBe(true);
+
+    // A this-only edit sends the form's repeat along; it must not start a second series.
+    const thisOnly = await eventApi(owner.accessToken, householdId, 'PUT', `/${eventId}`, { title: '只改这一次', recurrence });
+    expect(thisOnly.statusCode).toBe(200);
+    expect(thisOnly.json().recurrenceRuleId).toBe(ruleId);
+  });
+
   test('rejects invalid recurrence bounds and timezones with stable validation errors', async () => {
     const owner = await insertActor('invalid-event-recurrence');
     const householdId = await createHousehold(owner.accessToken);
@@ -374,6 +432,13 @@ describe('recurring events', () => {
     });
     expect(excessiveCount.statusCode).toBe(400);
     expect(excessiveCount.json().error.code).toBe('VALIDATION_FAILED');
+
+    const repeatedWeekday = await eventApi(owner.accessToken, householdId, 'POST', '', {
+      ...recurringEvent,
+      recurrence: { ...recurringEvent.recurrence, freq: 'weekly', byWeekday: [1, 3, 1] },
+    });
+    expect(repeatedWeekday.statusCode).toBe(400);
+    expect(repeatedWeekday.json().error.details).toEqual([expect.objectContaining({ field: 'recurrence.byWeekday', codes: ['arrayUnique'] })]);
   });
 
   test('does not disclose a household to a non-member creating recurrence', async () => {

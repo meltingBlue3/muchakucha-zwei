@@ -45,7 +45,6 @@ export interface CurrentUserDto {
   id: string;
   username: string;
   displayName: string;
-  hasHousehold: false;
 }
 
 export interface CreateHouseholdDto {
@@ -234,6 +233,18 @@ export interface RecurrenceResponseDto {
 }
 
 export type SeriesScope = 'this_only' | 'this_and_following';
+
+/** The version a delete was confirmed against; a stale delete returns 409 EDIT_CONFLICT. */
+export interface DeleteVersion {
+  expectedUpdatedAt: string;
+  expectedRuleUpdatedAt?: string;
+}
+
+/** Labels have no updatedAt; their name and colour are the version. */
+export interface LabelDeleteVersion {
+  expectedName: string;
+  expectedColor: string;
+}
 
 export interface UpdateSeriesDto {
   expectedUpdatedAt: string;

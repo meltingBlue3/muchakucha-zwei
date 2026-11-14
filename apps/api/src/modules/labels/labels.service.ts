@@ -2,12 +2,27 @@ import { lockContent } from '../shared/edit-version.js';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { isUniqueConflict } from '../shared/unique-conflict.js';
 import type { CreateLabelDto, LabelResponseDto, LabelListResponseDto, TagEntitiesDto } from './dto/create-label.dto.js';
 import type { UpdateLabelDto } from './dto/create-label.dto.js';
 
 const NAME_MIN = 1;
 const NAME_MAX = 40;
 const COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
+
+// The pre-check gives the common case a clear answer; the unique index still
+// decides a race, and its P2002 becomes the same error instead of a 500.
+function duplicateName(): BadRequestException {
+  return new BadRequestException({
+    code: 'VALIDATION_FAILED',
+    message: 'Request validation failed.',
+    details: [{ field: 'name', codes: ['duplicate'], message: 'A label with this name already exists in this household.' }],
+  });
+}
+
+function rethrowDuplicate(error: unknown): never {
+  throw isUniqueConflict(error) ? duplicateName() : error;
+}
 
 interface LabelRow {
   id: string;
@@ -77,17 +92,11 @@ export class LabelsService {
     const existing = await this.prisma.label.findUnique({
       where: { householdId_name: { householdId, name } },
     });
-    if (existing !== null) {
-      throw new BadRequestException({
-        code: 'VALIDATION_FAILED',
-        message: 'Request validation failed.',
-        details: [{ field: 'name', codes: ['duplicate'], message: 'A label with this name already exists in this household.' }],
-      });
-    }
+    if (existing !== null) throw duplicateName();
 
     const label = await this.prisma.label.create({
       data: { householdId, name, color: input.color, createdBy: actorId },
-    });
+    }).catch(rethrowDuplicate);
 
     return this.toResponse(label);
   }
@@ -141,13 +150,7 @@ export class LabelsService {
         const conflict = await this.prisma.label.findUnique({
           where: { householdId_name: { householdId, name } },
         });
-        if (conflict !== null) {
-          throw new BadRequestException({
-            code: 'VALIDATION_FAILED',
-            message: 'Request validation failed.',
-            details: [{ field: 'name', codes: ['duplicate'] }],
-          });
-        }
+        if (conflict !== null) throw duplicateName();
       }
 
       data.name = name;
@@ -161,7 +164,7 @@ export class LabelsService {
     const updated = await this.prisma.$transaction(async tx => {
       await this.lockLabelSnapshot(tx, householdId, labelId, expected);
       return tx.label.update({ where: { id: labelId }, data });
-    });
+    }).catch(rethrowDuplicate);
     return this.toResponse(updated);
   }
 

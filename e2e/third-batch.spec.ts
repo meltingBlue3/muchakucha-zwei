@@ -15,7 +15,7 @@ async function setup(page: Page, role = 'OWNER') {
     const household = { id: householdId, name: '周末的家', role, memberCount: 1, ownerMembershipId: 'member' };
     let body: unknown = {};
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'mock-only' };
-    else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '小林', hasHousehold: true };
+    else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '小林' };
     else if (path.endsWith('/users/me/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, households: [] };
     else if (path === '/api/v1/households') body = [household];
     else if (path.endsWith('/' + householdId)) body = { ...household, members: [{ membershipId: 'member', userId: 'user', displayName: '小林', role, isCurrentUser: true }] };
@@ -190,7 +190,8 @@ for (const role of ['OWNER', 'ADMIN', 'MEMBER']) {
     let fail = true;
     const note = { id: noteId, householdId, title: '待删除笔记', body: null, createdBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
     await page.route(`**/api/v1/households/${householdId}/notes`, route => route.fulfill({ json: { notes: deleted ? [] : [note], total: deleted ? 0 : 1 } }));
-    await page.route(`**/api/v1/households/${householdId}/notes/${noteId}`, async route => {
+    // Matched on the path: a confirmed delete carries its version in the query string.
+    await page.route(url => url.pathname === `/api/v1/households/${householdId}/notes/${noteId}`, async route => {
       if (route.request().method() === 'DELETE') {
         if (fail) { await route.fulfill({ status: 500, json: { error: { code: 'server_error' } } }); return; }
         deleted = true;

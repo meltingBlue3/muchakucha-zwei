@@ -20,7 +20,4 @@ export class CurrentUserDto {
 
   @ApiProperty({ example: 'Family member' })
   displayName!: string;
-
-  @ApiProperty({ description: 'Phase 1 handoff signal; household lookup begins in Phase 2.' })
-  hasHousehold!: false;
 }

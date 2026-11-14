@@ -181,7 +181,7 @@ const recurrence: Schema = {
   properties: {
     freq: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'yearly'] },
     interval: { type: 'integer', minimum: 1, maximum: 52 },
-    byWeekday: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, maxItems: 7 },
+    byWeekday: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, maxItems: 7, uniqueItems: true },
     startsOn: { ...date, description: 'The first date of the series. A daily, weekly, monthly or Gregorian yearly rule repeats from it (a yearly one on its month and day). With lunar it may be any date up to the first occurrence. The first event lands on the rule’s first date; startTime and endTime give only its time of day and length.' },
     endsOn: date, count: { type: 'integer', minimum: 1, maximum: 1000 },
     timezone: string(64, 'IANA timezone, for example Asia/Shanghai.'),

@@ -9,6 +9,7 @@ import {
   UpdateRecurrenceRuleDto,
   UpdateSeriesDto,
 } from './dto/recurrence.dto.js';
+import { deletePrecondition } from '../shared/delete-version.dto.js';
 import { RecurrenceService } from './recurrence.service.js';
 
 interface AuthenticatedRequest {
@@ -54,7 +55,7 @@ export class EventSeriesController {
     @Query() query: DeleteSeriesQueryDto,
   ): Promise<void> {
     return this.recurrenceService.deleteSeriesFromOccurrence(
-      request.auth.sub, householdId, 'event', eventId, query.scope,
+      request.auth.sub, householdId, 'event', eventId, query.scope, deletePrecondition(query),
     );
   }
 }
@@ -91,7 +92,7 @@ export class TaskSeriesController {
     @Query() query: DeleteSeriesQueryDto,
   ): Promise<void> {
     return this.recurrenceService.deleteSeriesFromOccurrence(
-      request.auth.sub, householdId, 'task', taskId, query.scope,
+      request.auth.sub, householdId, 'task', taskId, query.scope, deletePrecondition(query),
     );
   }
 }

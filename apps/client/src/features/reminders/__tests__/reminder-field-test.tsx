@@ -11,7 +11,7 @@ jest.mock('../../../ui/date-field', () => ({
     return <TextInput accessibilityLabel={accessibilityLabel} onChangeText={onChange} value={value} />;
   },
 }));
-jest.mock('../../auth/use-current-user', () => ({ useCurrentUser: () => ({ id: 'me', username: 'me', displayName: '我', hasHousehold: true }) }));
+jest.mock('../../auth/use-current-user', () => ({ useCurrentUser: () => ({ id: 'me', username: 'me', displayName: '我' }) }));
 jest.mock('../reminder-settings', () => ({
   useReminderSettings: () => ({
     settings: { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, households: [] },

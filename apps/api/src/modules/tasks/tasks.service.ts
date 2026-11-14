@@ -15,6 +15,7 @@ import type {
 import { TASK_STATUSES } from './dto/create-task.dto.js';
 import type { UpdateTaskDto } from './dto/update-task.dto.js';
 import { RecurrenceMaterializerService } from '../recurrence/recurrence-materializer.service.js';
+import type { RecurrenceDto } from '../recurrence/dto/recurrence.dto.js';
 import {
   formatIsoDate,
   localDateTimeToInstant,
@@ -182,59 +183,15 @@ export class TasksService {
       });
     }
 
-    if (input.recurrence?.endsOn !== undefined && input.recurrence.count !== undefined) {
-      throw new BadRequestException({
-        code: 'VALIDATION_FAILED',
-        message: 'Request validation failed.',
-        details: [{ field: 'recurrence.endsOn', codes: ['ends_on_and_count_mutually_exclusive'], message: '结束日期与重复次数只能二选一。' }],
-      });
-    }
-
     if (input.recurrence !== undefined) {
-      const recurrence = input.recurrence;
-      const marks = resolveSeriesMarks(recurrence, null);
-      const startsOn = parseRequestDate(recurrence.startsOn, 'recurrence.startsOn');
-      const interval = recurrence.interval ?? 1;
-      const firstOccurrence = firstOccurrenceOf({
-        freq: recurrence.freq,
-        interval,
-        byWeekday: recurrence.byWeekday ?? [],
-        startsOn,
-        endsOn: recurrence.endsOn === undefined ? null : parseRequestDate(recurrence.endsOn, 'recurrence.endsOn'),
-        count: recurrence.count ?? null,
-        lunar: recurrence.lunar ?? null,
-      });
-      if (firstOccurrence === undefined) {
-        throw new BadRequestException({
-          code: 'VALIDATION_FAILED',
-          message: 'Request validation failed.',
-          details: [{
-            field: 'recurrence.endsOn',
-            codes: ['no_occurrence_in_range'],
-            message: '重复规则在结束日期前没有可生成的日期。',
-          }],
-        });
-      }
-      const firstOccurrenceIso = formatIsoDate(firstOccurrence);
-      const startTime = recurrence.startTimeLocal ?? null;
-      const hour = startTime === null ? 0 : Number(startTime.slice(0, 2));
-      const minute = startTime === null ? 0 : Number(startTime.slice(3, 5));
+      const plan = this.seriesPlan(input.recurrence);
       const created = await this.prisma.$transaction(async (tx) => {
         await lockTaskAssignments(tx, householdId);
         await this.validateAssigneeIds(tx, householdId, assigneeIds);
         const rule = await tx.recurrenceRule.create({
           data: {
             householdId,
-            freq: recurrence.freq,
-            interval,
-            byWeekday: recurrence.byWeekday ?? [],
-            startsOn: new Date(`${recurrence.startsOn}T00:00:00.000Z`),
-            endsOn: recurrence.endsOn === undefined ? null : new Date(`${recurrence.endsOn}T00:00:00.000Z`),
-            count: recurrence.count ?? null,
-            timezone: recurrence.timezone,
-            startTimeLocal: startTime,
-            durationMinutes: recurrence.durationMinutes ?? null,
-            ...marks,
+            ...plan.rule,
             templateTitle: trimmedTitle,
             templateDescription: input.description?.trim() || null,
             templatePriority: input.priority ?? 'medium',
@@ -257,10 +214,10 @@ export class TasksService {
             description: input.description?.trim() || null,
             status: input.status ?? 'pending',
             priority: input.priority ?? 'medium',
-            dueDate: localDateTimeToInstant(firstOccurrence, hour, minute, recurrence.timezone),
+            dueDate: plan.dueDate,
             createdBy: actorId,
             recurrenceRuleId: rule.id,
-            occurrenceDate: new Date(`${firstOccurrenceIso}T00:00:00.000Z`),
+            occurrenceDate: plan.occurrenceDate,
             assignees: { create: assigneeIds.map((userId) => ({ userId })) },
           },
         });
@@ -269,16 +226,7 @@ export class TasksService {
         }
         return { taskId: task.id, ruleId: rule.id };
       });
-      // See EventsService.create: the series is already committed, so a
-      // transient materialization failure must not surface as a 500.
-      try {
-        const materialization = await this.materializer.materializeRule(created.ruleId);
-        if (materialization.skipped) {
-          this.logger.warn(`rule ${created.ruleId} was locked at create time; the scheduler will generate it`);
-        }
-      } catch (error: unknown) {
-        this.logger.error(`immediate materialization failed for rule ${created.ruleId}`, error);
-      }
+      await this.generateNewSeries(created.ruleId);
       const task = await this.prisma.task.findUniqueOrThrow({
         where: { id: created.taskId },
           include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
@@ -434,6 +382,14 @@ export class TasksService {
       }
     }
 
+    // Adding a repeat to a one-time task makes this row the first occurrence
+    // of the series create would have made, due when the rule says: the edit
+    // form sends the old due date along. An occurrence that already has a
+    // series ignores `recurrence`: a this-only edit sends the form's value
+    // along, and series changes go through /series.
+    const plan = input.recurrence != null && task.recurrenceRuleId === null ? this.seriesPlan(input.recurrence) : null;
+    if (plan !== null) data.dueDate = plan.dueDate;
+
     const updated = await this.prisma.$transaction(async (tx) => {
       await lockTaskAssignments(tx, householdId);
       const updatedAt = await lockContent(tx, 'task', householdId, taskId, input);
@@ -443,13 +399,106 @@ export class TasksService {
         await tx.taskAssignee.createMany({ data: nextAssigneeIds.map(userId => ({ taskId, userId })) });
       }
       await replaceLabels(tx, 'task', householdId, taskId, input.labelIds);
+      if (plan !== null) {
+        const template = { ...task, ...data } as typeof task;
+        const rule = await tx.recurrenceRule.create({
+          data: {
+            householdId,
+            ...plan.rule,
+            templateTitle: template.title,
+            templateDescription: template.description,
+            templatePriority: template.priority,
+            // The series stays with whoever owns the task, so the same people may manage its occurrences.
+            createdBy: task.createdBy,
+          },
+        });
+        // Everyone's reminder on a recurring occurrence lives on its series.
+        await tx.reminderOverride.updateMany({ where: { taskId }, data: { taskId: null, recurrenceRuleId: rule.id } });
+        Object.assign(data, { recurrenceRuleId: rule.id, occurrenceDate: plan.occurrenceDate });
+      }
       return tx.task.update({
         where: { id: taskId }, data: { ...data, updatedAt },
           include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
       });
     });
 
-    return this.toResponse(updated, await readReminderChoice(this.prisma, actorId, 'task', updated));
+    if (plan === null) return this.toResponse(updated, await readReminderChoice(this.prisma, actorId, 'task', updated));
+    await this.generateNewSeries(updated.recurrenceRuleId!);
+    const converted = await this.prisma.task.findUniqueOrThrow({
+      where: { id: taskId },
+      include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+    });
+    return this.toResponse(converted, await readReminderChoice(this.prisma, actorId, 'task', converted));
+  }
+
+  /**
+   * Checks a repeat for a task and works out its rule and first occurrence.
+   * Create and an edit that adds a repeat both use it, so a converted task
+   * becomes the series create would have made.
+   */
+  private seriesPlan(recurrence: RecurrenceDto) {
+    if (recurrence.endsOn !== undefined && recurrence.count !== undefined) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [{ field: 'recurrence.endsOn', codes: ['ends_on_and_count_mutually_exclusive'], message: '结束日期与重复次数只能二选一。' }],
+      });
+    }
+    const marks = resolveSeriesMarks(recurrence, null);
+    const startsOn = parseRequestDate(recurrence.startsOn, 'recurrence.startsOn');
+    const interval = recurrence.interval ?? 1;
+    const firstOccurrence = firstOccurrenceOf({
+      freq: recurrence.freq,
+      interval,
+      byWeekday: recurrence.byWeekday ?? [],
+      startsOn,
+      endsOn: recurrence.endsOn === undefined ? null : parseRequestDate(recurrence.endsOn, 'recurrence.endsOn'),
+      count: recurrence.count ?? null,
+      lunar: recurrence.lunar ?? null,
+    });
+    if (firstOccurrence === undefined) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: 'Request validation failed.',
+        details: [{
+          field: 'recurrence.endsOn',
+          codes: ['no_occurrence_in_range'],
+          message: '重复规则在结束日期前没有可生成的日期。',
+        }],
+      });
+    }
+    const startTime = recurrence.startTimeLocal ?? null;
+    const hour = startTime === null ? 0 : Number(startTime.slice(0, 2));
+    const minute = startTime === null ? 0 : Number(startTime.slice(3, 5));
+    return {
+      dueDate: localDateTimeToInstant(firstOccurrence, hour, minute, recurrence.timezone),
+      occurrenceDate: new Date(`${formatIsoDate(firstOccurrence)}T00:00:00.000Z`),
+      rule: {
+        freq: recurrence.freq,
+        interval,
+        byWeekday: recurrence.byWeekday ?? [],
+        startsOn: new Date(`${recurrence.startsOn}T00:00:00.000Z`),
+        endsOn: recurrence.endsOn === undefined ? null : new Date(`${recurrence.endsOn}T00:00:00.000Z`),
+        count: recurrence.count ?? null,
+        timezone: recurrence.timezone,
+        startTimeLocal: startTime,
+        durationMinutes: recurrence.durationMinutes ?? null,
+        ...marks,
+      },
+    };
+  }
+
+  // See EventsService.generateNewSeries: the series is already committed, so
+  // a transient materialization failure must not surface as a 500.
+  private async generateNewSeries(ruleId: string): Promise<void> {
+    try {
+      const materialization = await this.materializer.materializeRule(ruleId);
+      if (materialization.skipped) {
+        this.logger.warn(`rule ${ruleId} was locked when first saved; the scheduler will generate it`);
+      }
+    } catch (error: unknown) {
+      this.logger.error(`immediate materialization failed for rule ${ruleId}`, error);
+    }
   }
 
   async delete(

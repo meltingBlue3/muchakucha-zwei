@@ -111,7 +111,7 @@ EXPO_PUBLIC_API_ORIGIN=http://<开发机局域网 IP>:3100 pnpm --filter client 
 - API 契约通过 `pnpm openapi:generate` 生成，并用 `pnpm openapi:check` 检查；`packages/api-client` 仅存生成产物。
 - `packages/lunar` 是客户端与 API 共用的农历模块，以 TypeScript 源码发布：Metro 和 Vitest 直接编译，API 运行时由 Node 24 的类型剥离加载，所以 API 构建不需要先构建它。它只能是单个文件、只用可擦除的语法（`erasableSyntaxOnly`），不能有相对导入。年份表按 GB/T 33661 的规则由朔日和中气算出，覆盖农历 1900–2100 年；`index.test.ts` 逐日对照 Node 自带的 ICU，并列出 ICU 因朔日或中气贴近午夜而算错的年份。名称有中文和日文两套写法，由调用方传入语言；节气的日期始终按中国时间取，与日本历书偶尔相差一天。
 - `packages/wareki` 以同样的方式提供和历年号与日本的祝日，约束相同。祝日按《国民の祝日に関する法律》各个时期的规则推算，从 1948 年起；春分の日、秋分の日取太阳到达黄经 0°、180° 时的日本日期，黄经由 `packages/lunar` 计算。明治从 1873 年改用公历起算，更早的日期没有对应的和历年。未来年份的祝日是按现行规则算出的，法律修改后要跟着改表。
-- 协作编辑提交原始 `expectedUpdatedAt`，重复实例另带 `expectedRuleUpdatedAt`。冲突时整次修改不写入，保留草稿及原始版本，查看最新内容后再整理保存；刷新或重试不能自动接受新版本。草稿实现见 [client.md](agent/client.md#drafts)。
+- 协作编辑提交原始 `expectedUpdatedAt`，重复实例另带 `expectedRuleUpdatedAt`。冲突时整次修改不写入，保留草稿及原始版本，查看最新内容后再整理保存；刷新或重试不能自动接受新版本。删除也在查询参数里带上确认时读到的版本（标签用名称和颜色），过期则返回 409，客户端重新读取并请用户再确认；不带版本的删除照旧执行，给尚未更新的旧版 App 留着。草稿实现见 [client.md](agent/client.md#drafts)。
 - 成员离开家庭保留共享内容，清理其任务负责人关系及后续重复分配；所有者需先交接所有权。角色与权限入口见 [context.md](agent/context.md#api)。
 - 日历按请求起止日期补齐重复实例，范围最多 366 天，不推进后台连续生成进度，也不补齐中间未查询的日期。
 - 当前账户仅支持用户名，尚无密码找回或人工重置。原生行为需设备验收，Web 测试不能替代真机检查。

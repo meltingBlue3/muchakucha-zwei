@@ -209,7 +209,6 @@ test.describe('household accessibility matrix', () => {
           id: owner.userId,
           username: owner.username,
           displayName: '家主',
-          hasHousehold: true,
         }),
       }),
     );

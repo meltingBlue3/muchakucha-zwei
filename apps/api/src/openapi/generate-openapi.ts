@@ -53,7 +53,6 @@ export interface CurrentUserDto {
   id: string;
   username: string;
   displayName: string;
-  hasHousehold: false;
 }
 
 export interface CreateHouseholdDto {
@@ -242,6 +241,18 @@ export interface RecurrenceResponseDto {
 }
 
 export type SeriesScope = 'this_only' | 'this_and_following';
+
+/** The version a delete was confirmed against; a stale delete returns 409 EDIT_CONFLICT. */
+export interface DeleteVersion {
+  expectedUpdatedAt: string;
+  expectedRuleUpdatedAt?: string;
+}
+
+/** Labels have no updatedAt; their name and colour are the version. */
+export interface LabelDeleteVersion {
+  expectedName: string;
+  expectedColor: string;
+}
 
 export interface UpdateSeriesDto {
   expectedUpdatedAt: string;
@@ -606,6 +617,8 @@ import type {
   UpdateSeriesDto,
   SeriesMutationResponseDto,
   SeriesScope,
+  DeleteVersion,
+  LabelDeleteVersion,
   EventResponseDto,
   EventListResponseDto,
   CreateTaskDto,
@@ -635,6 +648,13 @@ export class ApiClientError extends Error {
     super(\`API request failed with status \${status}.\`);
     this.name = 'ApiClientError';
   }
+}
+
+function withQuery(path: string, query: object | undefined): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query ?? {})) if (typeof value === 'string') params.set(key, value);
+  const search = params.toString();
+  return search === '' ? path : \`\${path}?\${search}\`;
 }
 
 export class ApiClient {
@@ -965,11 +985,12 @@ export class ApiClient {
     accessToken: string,
     householdId: string,
     eventId: string,
+    version?: DeleteVersion,
     signal?: AbortSignal,
   ): Promise<void> {
     return this.authenticated<void>(
       'DELETE',
-      \`/api/v1/households/\${encodeURIComponent(householdId)}/events/\${encodeURIComponent(eventId)}\`,
+      withQuery(\`/api/v1/households/\${encodeURIComponent(householdId)}/events/\${encodeURIComponent(eventId)}\`, version),
       accessToken,
       undefined,
       signal,
@@ -997,11 +1018,12 @@ export class ApiClient {
     householdId: string,
     eventId: string,
     scope: SeriesScope,
+    version?: DeleteVersion,
     signal?: AbortSignal,
   ): Promise<void> {
     return this.authenticated<void>(
       'DELETE',
-      \`/api/v1/households/\${encodeURIComponent(householdId)}/events/\${encodeURIComponent(eventId)}/series?scope=\${encodeURIComponent(scope)}\`,
+      withQuery(\`/api/v1/households/\${encodeURIComponent(householdId)}/events/\${encodeURIComponent(eventId)}/series\`, { scope, ...version }),
       accessToken,
       undefined,
       signal,
@@ -1082,11 +1104,12 @@ export class ApiClient {
     accessToken: string,
     householdId: string,
     taskId: string,
+    version?: DeleteVersion,
     signal?: AbortSignal,
   ): Promise<void> {
     return this.authenticated<void>(
       'DELETE',
-      \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}\`,
+      withQuery(\`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}\`, version),
       accessToken,
       undefined,
       signal,
@@ -1114,11 +1137,12 @@ export class ApiClient {
     householdId: string,
     taskId: string,
     scope: SeriesScope,
+    version?: DeleteVersion,
     signal?: AbortSignal,
   ): Promise<void> {
     return this.authenticated<void>(
       'DELETE',
-      \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}/series?scope=\${encodeURIComponent(scope)}\`,
+      withQuery(\`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}/series\`, { scope, ...version }),
       accessToken,
       undefined,
       signal,
@@ -1191,11 +1215,12 @@ export class ApiClient {
     accessToken: string,
     householdId: string,
     noteId: string,
+    version?: DeleteVersion,
     signal?: AbortSignal,
   ): Promise<void> {
     return this.authenticated<void>(
       'DELETE',
-      \`/api/v1/households/\${encodeURIComponent(householdId)}/notes/\${encodeURIComponent(noteId)}\`,
+      withQuery(\`/api/v1/households/\${encodeURIComponent(householdId)}/notes/\${encodeURIComponent(noteId)}\`, version),
       accessToken,
       undefined,
       signal,
@@ -1253,11 +1278,12 @@ export class ApiClient {
     accessToken: string,
     householdId: string,
     labelId: string,
+    version?: LabelDeleteVersion,
     signal?: AbortSignal,
   ): Promise<void> {
     return this.authenticated<void>(
       'DELETE',
-      \`/api/v1/households/\${encodeURIComponent(householdId)}/labels/\${encodeURIComponent(labelId)}\`,
+      withQuery(\`/api/v1/households/\${encodeURIComponent(householdId)}/labels/\${encodeURIComponent(labelId)}\`, version),
       accessToken,
       undefined,
       signal,

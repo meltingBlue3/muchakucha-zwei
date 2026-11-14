@@ -33,7 +33,7 @@ async function setup(page: Page): Promise<Writes> {
     let body: unknown = {};
     const household = { id: householdId, name: '小林之家', role: 'OWNER', memberCount: 1, ownerMembershipId: 'member' };
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'mock-only' };
-    else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '小林', hasHousehold: true };
+    else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '小林' };
     else if (path.endsWith('/users/me/reminder-settings')) {
       if (method === 'PUT') {
         const next = route.request().postDataJSON() as { taskMinutesBefore: number | null; eventMinutesBefore: number | null; dateOnlyTime: string; alarm: boolean; mutedHouseholdIds: string[] };

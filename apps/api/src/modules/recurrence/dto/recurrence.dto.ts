@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { DeleteVersionQueryDto } from '../../shared/delete-version.dto.js';
 import {
   ArrayMaxSize,
+  ArrayUnique,
   IsArray,
   IsIn,
   IsInt,
@@ -77,7 +79,7 @@ export class RecurrenceDto {
   interval?: number;
 
   @ApiPropertyOptional({ type: [Number] })
-  @IsOptional() @IsArray() @ArrayMaxSize(7) @IsInt({ each: true }) @Min(0, { each: true }) @Max(6, { each: true })
+  @IsOptional() @IsArray() @ArrayMaxSize(7) @ArrayUnique() @IsInt({ each: true }) @Min(0, { each: true }) @Max(6, { each: true })
   byWeekday?: number[];
 
   @ApiProperty({ example: '2026-08-13' })
@@ -235,7 +237,7 @@ export class UpdateRecurrenceRuleDto {
   recurrence!: RecurrenceDto;
 }
 
-export class DeleteSeriesQueryDto {
+export class DeleteSeriesQueryDto extends DeleteVersionQueryDto {
   @ApiProperty({ enum: SERIES_SCOPES })
   @IsString() @IsIn(SERIES_SCOPES)
   scope!: SeriesScope;

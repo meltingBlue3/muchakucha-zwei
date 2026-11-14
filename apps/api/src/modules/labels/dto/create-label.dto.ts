@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsArray, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
 
 export class CreateLabelDto {
   @ApiProperty({ description: 'Label name', minLength: 1, maxLength: 40 })
@@ -12,6 +12,19 @@ export class CreateLabelDto {
   @ApiProperty({ description: 'Hex color (e.g. #EF4444)', pattern: '^#[0-9A-Fa-f]{6}$' })
   @IsString()
   color!: string;
+}
+
+/** Labels have no updatedAt; the name and colour read before deleting are its version. Send both or neither. */
+export class DeleteLabelQueryDto {
+  @ApiPropertyOptional({ description: 'Name read before deleting; with expectedColor, a changed label returns 409 EDIT_CONFLICT.' })
+  @ValidateIf((query: DeleteLabelQueryDto) => query.expectedName !== undefined || query.expectedColor !== undefined)
+  @IsString()
+  expectedName?: string;
+
+  @ApiPropertyOptional({ description: 'Colour read before deleting; sent with expectedName.' })
+  @ValidateIf((query: DeleteLabelQueryDto) => query.expectedName !== undefined || query.expectedColor !== undefined)
+  @IsString()
+  expectedColor?: string;
 }
 
 export class UpdateLabelDto {
