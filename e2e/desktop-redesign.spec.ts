@@ -320,6 +320,27 @@ async function setupRecurrenceRules(page: Page) {
   return rules;
 }
 
+test('an owner alone in the household can leave, and is told the household goes too', async ({ page }) => {
+  await setup(page);
+  let left = false;
+  const owner = { membershipId: 'member', userId: 'user', displayName: '小林', username: 'xiaolin', role: 'OWNER', isCurrentUser: true };
+  await page.route(url => url.pathname === `/api/v1/households/${householdId}`, route => route.fulfill({ json: { id: householdId, name: '林家小院', role: 'OWNER', memberCount: 1, ownerMembershipId: 'member', members: [owner] } }));
+  await page.route(url => url.pathname === '/api/v1/households', route => route.fulfill({ json: left ? [] : [{ id: householdId, name: '林家小院', role: 'OWNER', memberCount: 1, ownerMembershipId: 'member' }] }));
+  await page.route(url => url.pathname === `/api/v1/households/${householdId}/leave`, route => { left = true; return route.fulfill({ status: 204, body: '' }); });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/settings`);
+  await expect(page.getByText('你是这个家庭唯一的成员。离开后，家庭会连同其中的日程、任务、笔记和标签一起删除。', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '离开家庭', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '确认离开家庭', exact: true });
+  await expect(dialog.getByText('你是「林家小院」唯一的成员。离开后，这个家庭会连同其中的日程、任务、笔记和标签一起永久删除，还没处理的邀请也会失效。此操作不可撤销。', { exact: true })).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await dialog.getByRole('button', { name: '离开并删除家庭', exact: true }).click();
+  await expect.poll(() => left).toBe(true);
+  // Nothing is left to open, so the person lands where a household is created or joined.
+  await expect(page).toHaveURL(/\/household-handoff$/);
+  await expect(page.getByRole('heading', { name: '开始设置你的家庭', exact: true })).toBeVisible();
+});
+
 test('Japanese recurrence rules localize the list, editor and validation', async ({ browser }) => {
   const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 320, height: 900 } });
   try {

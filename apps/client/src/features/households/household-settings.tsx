@@ -442,6 +442,8 @@ export function HouseholdSettings({
 
   const otherMembers = data.members.filter((m) => !m.isCurrentUser);
   const canTransferBeforeLeaving = actorIsOwner && otherMembers.length > 0 && governance.transfer !== undefined;
+  // Nobody can take over, so the owner's leaving deletes the household; the confirmation says so.
+  const soleOwner = actorIsOwner && otherMembers.length === 0;
 
   const editButton = actorIsOwner ? (
     <Pressable ref={editTrigger} accessibilityRole="button" accessibilityLabel={t('settings.editName')} onPress={() => { setRenameValue(authoritativeName); setRenameError(undefined); setRenameSuccess(undefined); setActiveForm('rename'); }} style={{ minHeight: theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2] }}>
@@ -457,9 +459,9 @@ export function HouseholdSettings({
     <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flex: 1, fontWeight: key === 'name' ? '600' : '400' }}>{value}</Text>
     {trailing}
   </Inline>;
-  const leaveEntry = !actorIsOwner || canTransferBeforeLeaving ? (
+  const leaveEntry = !actorIsOwner || canTransferBeforeLeaving || soleOwner ? (
     <Pressable ref={leaveTrigger} accessibilityRole="button" accessibilityLabel={t('governance.leave')} onPress={() => {
-      if (actorIsOwner) { setSuccessorId(null); setLeaveOpen(true); }
+      if (actorIsOwner && !soleOwner) { setSuccessorId(null); setLeaveOpen(true); }
       else { rememberRouteTrigger(); router.push(`/households/${encodeURIComponent(householdId)}/leave?householdName=${encodeURIComponent(authoritativeName)}`); }
     }} style={({ pressed }) => desktop
       ? { minHeight: theme.layout.desktopControl, flexDirection: 'row', gap: theme.spacing[1] + 2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing[3] + 2, borderRadius: theme.borderRadii.full, borderWidth: theme.borderWidths.default, borderColor: theme.colors.destructive, backgroundColor: pressed ? theme.colors.destructiveSoft : 'transparent' }
@@ -516,7 +518,7 @@ export function HouseholdSettings({
           </SettingsSection>
         ) : null}
         {desktop && leaveEntry ? <SettingsSection title={t('governance.leave')} icon={null}>
-          <Text variant="meta">{actorIsOwner ? t('settings.ownerLeaveDetail') : t('settings.memberLeaveDetail')}</Text>
+          <Text variant="meta">{soleOwner ? t('settings.soleOwnerLeaveDetail') : actorIsOwner ? t('settings.ownerLeaveDetail') : t('settings.memberLeaveDetail')}</Text>
           <View style={{ alignSelf: 'flex-start' }}>{leaveEntry}</View>
         </SettingsSection> : wide ? leaveEntry : null}
         </Stack>

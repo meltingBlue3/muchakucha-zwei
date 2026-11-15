@@ -8,7 +8,7 @@ import type {
   MembershipResponseDto,
 } from './dto/create-household.dto.js';
 import type { GetHouseholdMemberDto, GetHouseholdResponseDto } from './dto/membership.dto.js';
-import { leaveFailure, removalFailure, roleChangeFailure, transferFailure, type Role } from './household-policy.js';
+import { directLeaveOutcome, leaveFailure, removalFailure, roleChangeFailure, transferFailure, type Role } from './household-policy.js';
 
 interface HouseholdMemberRow {
   membershipId: string;
@@ -781,23 +781,31 @@ export class HouseholdsService {
   }
 
   /** Remove the caller's membership and task assignments. Content belongs to the household,
-   * not the membership, so events, tasks, notes and their authors remain intact.
+   * not the membership, so events, tasks, notes and their authors remain intact. An owner
+   * who is the last member deletes the household and everything in it instead.
    */
   async leaveMembership(actorId: string, householdId: string): Promise<void> {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         await this.prisma.$transaction(async (tx) => {
-          // Use the same household lock as ownership transfer and member removal.
+          // Use the same household lock as ownership transfer, member removal and
+          // invitation acceptance, so no one joins between the count and the delete.
           await tx.$queryRaw`SELECT "id" FROM "households" WHERE "id" = ${householdId}::uuid FOR UPDATE`;
           const household = await tx.household.findUnique({
-            where: { id: householdId }, include: { memberships: { where: { userId: actorId } } },
+            where: { id: householdId }, include: { memberships: { select: { id: true, userId: true } } },
           });
-          const membership = household?.memberships[0];
+          const membership = household?.memberships.find((m) => m.userId === actorId);
           if (household === null || membership === undefined) {
             throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found or access denied.' });
           }
-          if (household.ownerMembershipId === membership.id) {
+          const outcome = directLeaveOutcome(household.ownerMembershipId === membership.id, household.memberships.length);
+          if (outcome === 'OWNER_TRANSFER_REQUIRED') {
             throw new ForbiddenException({ code: 'OWNER_TRANSFER_REQUIRED', message: '请先转让家庭所有权，再离开家庭。' });
+          }
+          if (outcome === 'DELETE_HOUSEHOLD') {
+            // Memberships, invitations and all household content cascade with it.
+            await tx.household.delete({ where: { id: householdId } });
+            return;
           }
           await removeMemberAssignments(tx, householdId, actorId);
           await tx.membership.delete({ where: { id: membership.id } });
