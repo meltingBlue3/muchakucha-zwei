@@ -77,6 +77,8 @@ export interface RouteWindowProps {
   busy?: boolean;
   children: ReactNode;
   footer?: ReactNode;
+  /** Desktop pane only: an action such as 删除 at the left of the form's footer; dropped while a step or confirmation shows. */
+  footerStart?: ReactNode;
   headerActions?: ReactNode;
   /** On the desktop pane, a quiet line shown in the header instead of the title, such as when a note was updated. */
   headerNote?: string;
@@ -91,7 +93,7 @@ export interface RouteWindowProps {
   fillContent?: boolean;
 }
 
-export function RouteWindow({ title, busy = false, children, footer, headerActions, headerNote, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor', draftPrefix, fillContent = false }: RouteWindowProps) {
+export function RouteWindow({ title, busy = false, children, footer, footerStart, headerActions, headerNote, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor', draftPrefix, fillContent = false }: RouteWindowProps) {
   const { t } = useTranslation('common');
   const focused = useIsFocused();
   const docked = (size === 'editor' || draftPrefix !== undefined) && DOCKED_RESOURCES.has(resource);
@@ -165,7 +167,7 @@ export function RouteWindow({ title, busy = false, children, footer, headerActio
       <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={backgroundInteractive ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
-      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes' && overList} wide={besideToday} fillContent={fillContent && !step && !confirmation} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })}>
+      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes' && overList} wide={besideToday} fillContent={fillContent && !step && !confirmation} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })} {...(footerStart === undefined || confirmation || step ? {} : { footerStart })}>
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>

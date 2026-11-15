@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Pencil from 'lucide-react-native/icons/pencil';
 import { Button, IconButton, Stack, Text } from './primitives';
 import { theme } from './theme';
@@ -17,6 +17,19 @@ export function DetailEditButton({ accessibilityLabel, onPress, disabled = false
   const pencil = (color: string) => <Pencil size={theme.controlSizes.icon - 5} color={color} strokeWidth={theme.controlSizes.iconStroke} />;
   if (desktop && !worded) return <IconButton appearance="plain" label={accessibilityLabel} disabled={disabled} icon={pencil(theme.colors.inkMuted)} onPress={onPress} />;
   return <Button label={t('edit')} accessibilityLabel={accessibilityLabel} tone="secondary" size="compact" disabled={disabled} {...(desktop ? { icon: pencil } : {})} onPress={onPress} />;
+}
+
+/**
+ * A closing action such as 删除 at the left of a pane's footer: quieter than the
+ * form's answers on the right, in the destructive colour, and only a question
+ * opener — the confirmation that follows does the deleting. Its text lines up
+ * with the pane's content.
+ */
+export function FooterDestructiveAction({ label, accessibilityLabel = label, onPress, disabled = false }: { label: string; accessibilityLabel?: string; onPress(): void; disabled?: boolean }) {
+  const desktop = useDesktop();
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} disabled={disabled} accessibilityState={{ disabled }} onPress={onPress} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ minHeight: desktop ? theme.layout.desktopControl : theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed || hovered ? theme.colors.destructiveSoft : theme.colors.transparent })}>
+    <Text variant="label" color={disabled ? 'inkMuted' : 'destructive'}>{label}</Text>
+  </Pressable>;
 }
 
 /** The grouped key facts of an item in its detail window. */

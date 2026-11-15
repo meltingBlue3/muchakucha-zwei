@@ -27,7 +27,7 @@ function webDialogName(title: string): object {
   return Platform.OS === 'web' ? { 'aria-label': title } : {};
 }
 
-export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, headerActions, headerNote, reading = false, anchored = false, wide = false, fillContent = false }: {
+export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, footerStart, headerActions, headerNote, reading = false, anchored = false, wide = false, fillContent = false }: {
   title: string;
   busy: boolean;
   onClose(): void;
@@ -41,6 +41,11 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
    */
   docked?: boolean;
   footer?: ReactNode;
+  /**
+   * Desktop pane only: an action at the left of the form's footer, such as 删除,
+   * in place of the Ctrl + Enter hint. The shortcut keeps working.
+   */
+  footerStart?: ReactNode;
   headerActions?: ReactNode;
   /** Desktop pane only: shown in the header in place of the title, which stays as the pane's (visually hidden) heading. */
   headerNote?: string;
@@ -119,7 +124,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
           ]}
         >{children}</ScrollView>
       </SheetActionSlot.Provider></ReadingPane.Provider>
-      {!reading && (footer || sheetAction) ? <View style={{ padding: theme.spacing[4], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>{footer}{sheetAction ? <Inline style={{ justifyContent: 'flex-end' }}><Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, paddingLeft: theme.spacing[2], fontFamily: theme.fontFamilies.numeric }}>{`${commandKey} + Enter ${sheetAction.label}`}</Text><Button label={t('cancel')} tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></Inline> : null}</View> : null}
+      {!reading && (footer || sheetAction) ? <View style={{ padding: theme.spacing[4], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>{footer}{sheetAction ? <Inline style={{ justifyContent: 'flex-end' }}>{footerStart ? <>{footerStart}<View style={{ flex: 1 }} /></> : <Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, paddingLeft: theme.spacing[2], fontFamily: theme.fontFamilies.numeric }}>{`${commandKey} + Enter ${sheetAction.label}`}</Text>}<Button label={t('cancel')} tone="secondary" disabled={sheetAction.submitting} onPress={() => sheetAction.onCancel?.()} /><Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} /></Inline> : null}</View> : null}
     </View></View>;
   }
   const closeButton = (

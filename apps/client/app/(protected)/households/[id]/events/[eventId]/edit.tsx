@@ -4,7 +4,11 @@ import { hasRecurrenceFieldErrors } from '../../../../../../src/features/recurre
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
 import { HouseholdContextNote } from '../../../../../../src/ui/household-components';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
-import { EventWindow } from '../../../../../../src/features/events/event-window';
+import { EventWindow, useEventWindowClose } from '../../../../../../src/features/events/event-window';
+import { DeleteContentQuestion, useContentDeletion } from '../../../../../../src/features/content/content-deletion';
+import { useCanDeleteContent } from '../../../../../../src/features/content/use-content-delete';
+import { FooterDestructiveAction } from '../../../../../../src/ui/detail-fields';
+import { useDesktop } from '../../../../../../src/ui/use-desktop';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -51,7 +55,7 @@ function eventSeriesUpdate(data: CreateEventDto, labelIds: string[]): Omit<Updat
 }
 
 export default function EditEventRoute() {
-  const { t } = useTranslation(['events', 'common', 'tasks', 'auth', 'reminders']);
+  const { t } = useTranslation(['events', 'common', 'tasks', 'auth', 'reminders', 'deleteContent']);
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
   const { households } = useHouseholdContext();
   const householdName = households.find(household => household.id === id)?.name ?? '';
@@ -68,6 +72,11 @@ export default function EditEventRoute() {
   const [pendingSeriesAction, setPendingSeriesAction] = useState<PendingSeriesAction | null>(null);
   const [seriesSubmitting, setSeriesSubmitting] = useState<SeriesScope | null>(null);
   const [seriesError, setSeriesError] = useState<'auth:errors.sessionExpired' | 'tasks:seriesMissing' | 'tasks:seriesFailure' | null>(null);
+  // 删除 sits where the pane's Ctrl + Enter hint was; it asks in the pane and closes it, detail included, once the event is gone.
+  const desktop = useDesktop();
+  const canDelete = useCanDeleteContent();
+  const { close: closeWindows } = useEventWindowClose();
+  const deletion = useContentDeletion('events', id, eventId, () => { exitAllowed.current = true; closeWindows(); });
 
 
   const conflict = useEditConflict(draftPrefix, event, async () => {
@@ -201,13 +210,17 @@ export default function EditEventRoute() {
   }, [eventId, fetchEvent, id, pendingSeriesAction, router, selectedLabelIds, workspace, draftPrefix, conflict, exitEdit]);
 
   const handleCancel = () => {
-    if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
+    if (deletion.target) deletion.cancel();
+    else if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
     else exitEdit();
   };
+  const asking = deletion.target !== null || pendingSeriesAction !== null;
 
   return (
-    <EventWindow draftPrefix={draftPrefix} size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : t('edit')} busy={isSubmitting || seriesSubmitting !== null} onClose={handleCancel} onBackStep={pendingSeriesAction ? handleCancel : undefined} exitAllowed={exitAllowed}>
-      {pendingSeriesAction ? <SeriesScopeContent mode={pendingSeriesAction.mode} error={seriesError === null ? null : t(seriesError)} submitting={seriesSubmitting} onClose={handleCancel} onSelect={scope => void handleSeriesSelect(scope)} />
+    <EventWindow draftPrefix={draftPrefix} size={asking ? 'standard' : 'editor'} title={deletion.target ? t('deleteContent:title.events') : pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : t('edit')} busy={isSubmitting || seriesSubmitting !== null || deletion.submitting !== null} onClose={handleCancel} onBackStep={asking ? handleCancel : undefined} exitAllowed={exitAllowed}
+      {...(desktop && event !== null && !asking && canDelete(event) ? { footerStart: <FooterDestructiveAction label={t('deleteContent:title.events')} disabled={isSubmitting} onPress={() => deletion.open(event)} /> } : {})}>
+      {deletion.target ? <DeleteContentQuestion resource="events" deletion={deletion} onCancel={handleCancel} />
+        : pendingSeriesAction ? <SeriesScopeContent mode={pendingSeriesAction.mode} error={seriesError === null ? null : t(seriesError)} submitting={seriesSubmitting} onClose={handleCancel} onSelect={scope => void handleSeriesSelect(scope)} />
         : loading ? <LoadingState label={t('loading')} /> : event === null ? <Stack gap={3}>
           <LoadError message={t(error ?? 'notFound')} onRetry={() => void fetchEvent()} />
         </Stack> : <Stack gap={4}>
