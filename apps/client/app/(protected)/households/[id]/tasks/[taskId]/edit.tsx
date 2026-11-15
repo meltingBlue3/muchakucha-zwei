@@ -2,7 +2,11 @@ import { useTranslation } from '../../../../../../src/i18n';
 import { notifyContentChanged } from '../../../../../../src/features/content/content-changes';
 import { hasRecurrenceFieldErrors } from '../../../../../../src/features/recurrence/recurrence-options';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
-import { TaskWindow } from '../../../../../../src/features/tasks/task-window';
+import { TaskWindow, useTaskWindowClose } from '../../../../../../src/features/tasks/task-window';
+import { DeleteContentQuestion, useContentDeletion } from '../../../../../../src/features/content/content-deletion';
+import { useCanDeleteContent } from '../../../../../../src/features/content/use-content-delete';
+import { FooterDestructiveAction } from '../../../../../../src/ui/detail-fields';
+import { useDesktop } from '../../../../../../src/ui/use-desktop';
 import { useEditConflict, captureEditBaseline } from '../../../../../../src/ui/edit-conflict';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -59,13 +63,18 @@ function taskSeriesUpdate(data: CreateTaskDto, labelIds: string[]): Omit<UpdateS
 }
 
 export default function EditTaskRoute() {
-  const { t } = useTranslation(['tasks', 'common', 'auth', 'households', 'reminders']);
+  const { t } = useTranslation(['tasks', 'common', 'auth', 'households', 'reminders', 'deleteContent']);
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId: string }>();
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:tasks:${taskId}:`;
   const router = useRouter();
   const exitEdit = useEditWindowExit('tasks', taskId);
   const exitAllowed = useRef(false);
+  // 删除 sits where the pane's Ctrl + Enter hint was; it asks in the pane and closes it, detail included, once the task is gone.
+  const desktop = useDesktop();
+  const canDelete = useCanDeleteContent();
+  const { close: closeWindows } = useTaskWindowClose();
+  const deletion = useContentDeletion('tasks', id, taskId, () => { exitAllowed.current = true; closeWindows(); });
   const {
     viewState,
     households,
@@ -251,9 +260,11 @@ export default function EditTaskRoute() {
   }, [fetchTask, householdId, pendingSeriesAction, router, selectedLabelIds, taskId, workspace, draftPrefix, conflict, exitEdit]);
 
   const closeEdit = () => {
-    if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
+    if (deletion.target) deletion.cancel();
+    else if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
     else exitEdit();
   };
+  const asking = deletion.target !== null || pendingSeriesAction !== null;
 
   if (viewState === 'accessChanged') {
     return (
@@ -269,11 +280,13 @@ export default function EditTaskRoute() {
   }
 
   return (
-    <TaskWindow draftPrefix={draftPrefix} size={pendingSeriesAction ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : t('edit')} busy={submitting || seriesSubmitting !== null} onClose={closeEdit} onBackStep={pendingSeriesAction ? closeEdit : undefined} exitAllowed={exitAllowed}>
+    <TaskWindow draftPrefix={draftPrefix} size={asking ? 'standard' : 'editor'} title={deletion.target ? t('deleteContent:title.tasks') : pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : t('edit')} busy={submitting || seriesSubmitting !== null || deletion.submitting !== null} onClose={closeEdit} onBackStep={asking ? closeEdit : undefined} exitAllowed={exitAllowed}
+      {...(desktop && task !== null && !asking && canDelete(task) ? { footerStart: <FooterDestructiveAction label={t('deleteContent:title.tasks')} disabled={submitting} onPress={() => deletion.open(task)} /> } : {})}>
       <Stack gap={4}>
-        {pendingSeriesAction ? null : <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />}
+        {asking ? null : <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />}
 
-        {pendingSeriesAction ? <SeriesScopeContent
+        {deletion.target ? <DeleteContentQuestion resource="tasks" deletion={deletion} onCancel={closeEdit} />
+          : pendingSeriesAction ? <SeriesScopeContent
           error={seriesError === null ? null : t(seriesError)} mode={pendingSeriesAction.mode} onClose={closeEdit}
           onSelect={scope => void handleSeriesSelect(scope)} submitting={seriesSubmitting}
         /> : loading ? <LoadingState label={t('loading')} /> : task !== null ? (

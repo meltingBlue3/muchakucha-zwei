@@ -1,8 +1,10 @@
 import { useTranslation } from '../../../../../../src/i18n';
-import { EventWindow } from '../../../../../../src/features/events/event-window';
+import { EventWindow, useEventWindowClose } from '../../../../../../src/features/events/event-window';
+import { DeleteContentQuestion, useContentDeletion } from '../../../../../../src/features/content/content-deletion';
+import { useCanDeleteContent } from '../../../../../../src/features/content/use-content-delete';
 import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { EventResponseDto } from '@muchakucha/api-client';
@@ -12,7 +14,7 @@ import { LabelChip } from '../../../../../../src/features/labels/label-chip';
 import { formatDateRange } from '../../../../../../src/features/events/calendar-utils';
 import { recurrenceInputFromResponse } from '../../../../../../src/features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../../../../../../src/features/recurrence/recurrence-summary';
-import { DetailField, DetailPanel, DetailEditButton } from '../../../../../../src/ui/detail-fields';
+import { DetailField, DetailPanel, DetailEditButton, FooterDestructiveAction } from '../../../../../../src/ui/detail-fields';
 import { useDesktop } from '../../../../../../src/ui/use-desktop';
 import { ReminderDetailField } from '../../../../../../src/features/reminders/reminder-detail';
 import { DEFAULT_REMINDER } from '../../../../../../src/features/reminders/reminder-rules';
@@ -28,7 +30,7 @@ function currentTimeZone(fallback: string): string {
 }
 
 export default function EventDetailRoute() {
-  const { t } = useTranslation(['events', 'tasks', 'auth', 'navigation']);
+  const { t } = useTranslation(['events', 'tasks', 'auth', 'navigation', 'deleteContent']);
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
@@ -36,6 +38,11 @@ export default function EventDetailRoute() {
   const [event, setEvent] = useState<EventResponseDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<'auth:errors.sessionExpired' | 'detailLoadError' | null>(null);
+  // 删除日程 asks inside the pane, where it was pressed, and closes the pane once the event is gone.
+  const { close } = useEventWindowClose();
+  const exitAllowed = useRef(false);
+  const canDelete = useCanDeleteContent();
+  const deletion = useContentDeletion('events', id, eventId, () => { exitAllowed.current = true; close(); });
 
   const fetchEvent = useCallback(async () => {
     if (id === undefined || eventId === undefined) return;
@@ -77,6 +84,12 @@ export default function EventDetailRoute() {
     </Stack></EventWindow>;
   }
 
+  if (deletion.target !== null) {
+    return <EventWindow title={t('deleteContent:title.events')} busy={deletion.submitting !== null} onClose={deletion.cancel} onBackStep={deletion.cancel} exitAllowed={exitAllowed}>
+      <DeleteContentQuestion resource="events" deletion={deletion} onCancel={deletion.cancel} />
+    </EventWindow>;
+  }
+
   const recurrence = recurrenceInputFromResponse(event.recurrence);
   const recurrenceSummary =
     recurrence === null
@@ -86,7 +99,8 @@ export default function EventDetailRoute() {
 
   const when = formatDateRange(event.startTime, event.endTime, event.allDay, { weekday: true });
   return (
-    <EventWindow event={event} title={t('detail')} headerActions={<DetailEditButton accessibilityLabel={t('edit')} onPress={handleEdit} />}>
+    <EventWindow event={event} title={t('detail')} headerActions={<DetailEditButton accessibilityLabel={t('edit')} onPress={handleEdit} />} exitAllowed={exitAllowed}
+      {...(desktop && canDelete(event) ? { footer: <View style={{ flexDirection: 'row', alignItems: 'center' }}><FooterDestructiveAction label={t('deleteContent:title.events')} onPress={() => deletion.open(event)} /></View> } : {})}>
       <Stack gap={5}>
         <Stack gap={2}>
           <Heading level={2}>{event.title}</Heading>

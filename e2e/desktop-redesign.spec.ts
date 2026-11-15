@@ -324,6 +324,81 @@ async function setupRecurrenceRules(page: Page) {
   return rules;
 }
 
+test('an event is deleted from its detail pane, and edit panes offer delete where the shortcut hint was', async ({ page }) => {
+  await setup(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const writes: string[] = [];
+  await page.route(url => /\/(events|tasks)\/[^/]+$/.test(url.pathname), async route => {
+    const method = route.request().method();
+    const path = new URL(route.request().url()).pathname;
+    if (method === 'DELETE') { writes.push(`DELETE ${path}`); await route.fulfill({ status: 204, body: '' }); return; }
+    if (method === 'PUT') writes.push(`PUT ${path}`);
+    await route.fallback();
+  });
+  await page.goto(`${base}/events`);
+  await page.getByRole('button', { name: /^日程：朵朵家长会/ }).first().click();
+  const detail = page.getByRole('region', { name: '日程详情', exact: true });
+  await expect(detail.getByRole('heading', { name: '朵朵家长会', exact: true })).toBeVisible();
+
+  // The edit pane: 删除日程 at the start of the footer in place of the hint; Ctrl+Enter still saves.
+  await detail.getByRole('button', { name: '编辑日程', exact: true }).click();
+  const edit = page.getByRole('region', { name: '编辑日程', exact: true });
+  const remove = edit.getByRole('button', { name: '删除日程', exact: true });
+  await expect(remove).toBeVisible();
+  await expect(edit.getByText(/Enter 保存/)).toHaveCount(0);
+  const removeBox = (await remove.boundingBox())!;
+  const cancelBox = (await edit.getByRole('button', { name: '取消', exact: true }).boundingBox())!;
+  expect(Math.abs(removeBox.y + removeBox.height / 2 - (cancelBox.y + cancelBox.height / 2))).toBeLessThan(2);
+  expect(removeBox.x + removeBox.width).toBeLessThan(cancelBox.x);
+  await edit.getByRole('textbox', { name: '日程标题', exact: true }).fill('朵朵家长会（下午）');
+  await page.keyboard.press('Control+Enter');
+  await expect.poll(() => writes).toContain(`PUT /api/v1/households/${householdId}/events/event-2`);
+  await expect(detail.getByRole('heading', { name: '朵朵家长会', exact: true })).toBeVisible();
+
+  // The detail: 删除日程 asks inside the pane, and 取消删除 returns to the detail.
+  await detail.getByRole('button', { name: '删除日程', exact: true }).click();
+  const question = page.getByRole('region', { name: '删除日程', exact: true });
+  await expect(question.getByText('确定要删除「朵朵家长会」吗？此操作不可撤销。', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await question.getByRole('button', { name: '取消删除', exact: true }).click();
+  await expect(detail.getByRole('heading', { name: '朵朵家长会', exact: true })).toBeVisible();
+  expect(writes.filter(write => write.startsWith('DELETE'))).toEqual([]);
+  await detail.getByRole('button', { name: '删除日程', exact: true }).click();
+  await question.getByRole('button', { name: '确认删除日程', exact: true }).click();
+  await expect(page).toHaveURL(`${base}/events`);
+  await expect(page.getByRole('region')).toHaveCount(0);
+  expect(writes).toContain(`DELETE /api/v1/households/${householdId}/events/event-2`);
+
+  // A task's edit pane deletes the same way and closes, detail and all.
+  await page.goto(`${base}/tasks`);
+  await page.getByRole('button', { name: '任务：交物业费 1', exact: true }).click();
+  await page.getByRole('region', { name: '任务详情', exact: true }).getByRole('button', { name: '编辑任务', exact: true }).click();
+  const taskEdit = page.getByRole('region', { name: '编辑任务', exact: true });
+  await expect(taskEdit.getByText(/Enter 保存/)).toHaveCount(0);
+  await taskEdit.getByRole('button', { name: '删除任务', exact: true }).click();
+  await page.getByRole('region', { name: '删除任务', exact: true }).getByRole('button', { name: '确认删除任务', exact: true }).click();
+  await expect(page).toHaveURL(`${base}/tasks`);
+  await expect(page.getByRole('region')).toHaveCount(0);
+  expect(writes).toContain(`DELETE /api/v1/households/${householdId}/tasks/${taskId(0)}`);
+});
+
+test('a member sees no delete in the pane for an event someone else created', async ({ page }) => {
+  await setup(page);
+  await page.route(url => url.pathname === '/api/v1/households', route => route.fulfill({ json: [{ id: householdId, name: '林家小院', role: 'MEMBER', memberCount: 2, ownerMembershipId: 'member-2' }] }));
+  await page.route(url => url.pathname.endsWith('/events/event-2'), route => route.fulfill({ json: { id: 'event-2', householdId, title: '朵朵家长会', startTime: '2026-11-10T10:00:00+08:00', endTime: '2026-11-10T11:30:00+08:00', allDay: false, labels: [], location: '学校', description: null, createdBy: 'user-2', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null } }));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/events`);
+  await page.getByRole('button', { name: /^日程：朵朵家长会/ }).first().click();
+  const detail = page.getByRole('region', { name: '日程详情', exact: true });
+  await expect(detail.getByRole('heading', { name: '朵朵家长会', exact: true })).toBeVisible();
+  await expect(detail.getByRole('button', { name: '删除日程', exact: true })).toHaveCount(0);
+  await detail.getByRole('button', { name: '编辑日程', exact: true }).click();
+  const edit = page.getByRole('region', { name: '编辑日程', exact: true });
+  await expect(edit.getByText('Ctrl + Enter 保存', { exact: true })).toBeVisible();
+  await expect(edit.getByRole('button', { name: '删除日程', exact: true })).toHaveCount(0);
+});
+
 test('个人中心 beside a household: the sidebar leads back to it, and the content column sits in the middle', async ({ page }) => {
   await setup(page);
   for (const width of [1280, 1920]) {
