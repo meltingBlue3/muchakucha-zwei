@@ -1002,7 +1002,42 @@ describe('changes roles', () => {
       const after = (await getHousehold(member.accessToken, household.id)).json();
       expect(after.ownerMembershipId).toBe(successor.membershipId);
       expect(after.members).toHaveLength(1);
-      expect((await leaveDirectly(member.accessToken, household.id)).statusCode).toBe(403);
+    });
+
+    test('an owner who is the last member deletes the household, its content and its open invitations', async () => {
+      const owner = await insertUser('owner-alone', '家主');
+      const invitee = await insertUser('invitee-alone', '受邀者');
+      const household = await createHouseholdWithRole(app, owner.id, owner.accessToken, '独居');
+      const prisma = app.get(PrismaService);
+      const common = { householdId: household.id, createdBy: owner.id, title: '会一起删除' };
+      await prisma.event.create({ data: { ...common, startTime: new Date(), endTime: new Date() } });
+      await prisma.task.create({ data: common });
+      await prisma.note.create({ data: common });
+      await prisma.label.create({ data: { householdId: household.id, createdBy: owner.id, name: '标签', color: '#3B7DD8' } });
+      const invited = await app.inject({ method: 'POST', url: `/api/v1/households/${household.id}/invitations`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { username: 'invitee-alone' } });
+      expect(invited.statusCode).toBe(201);
+      const invitationId = invited.json().invitationId as string;
+
+      expect((await leaveDirectly(owner.accessToken, household.id)).statusCode).toBe(204);
+
+      expect((await getHousehold(owner.accessToken, household.id)).statusCode).toBe(404);
+      const list = await app.inject({ method: 'GET', url: '/api/v1/households', headers: { authorization: `Bearer ${owner.accessToken}` } });
+      expect(list.json()).toEqual([]);
+      expect(await prisma.household.findUnique({ where: { id: household.id } })).toBeNull();
+      const where = { householdId: household.id };
+      expect(await prisma.membership.count({ where })).toBe(0);
+      expect(await prisma.event.count({ where })).toBe(0);
+      expect(await prisma.task.count({ where })).toBe(0);
+      expect(await prisma.note.count({ where })).toBe(0);
+      expect(await prisma.label.count({ where })).toBe(0);
+      expect(await prisma.invitation.count({ where })).toBe(0);
+      // The accounts stay; the invitation is gone from the inbox and cannot be accepted.
+      expect(await prisma.user.findUnique({ where: { id: owner.id } })).not.toBeNull();
+      const inbox = await app.inject({ method: 'GET', url: '/api/v1/households/invitations/inbox', headers: { authorization: `Bearer ${invitee.accessToken}` } });
+      expect(inbox.json().invitations).toEqual([]);
+      const accept = await app.inject({ method: 'POST', url: '/api/v1/households/invitations/accept', headers: { authorization: `Bearer ${invitee.accessToken}` }, payload: { invitationId } });
+      expect(accept.statusCode).toBe(404);
+      expect(await prisma.membership.count({ where: { userId: invitee.id } })).toBe(0);
     });
   });
 

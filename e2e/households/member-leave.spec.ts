@@ -180,6 +180,38 @@ for (const role of ['MEMBER', 'ADMIN']) {
   });
 }
 
+test('an owner alone in the household can leave, and the household and its content go too', async ({ page, request }) => {
+  const owner = await prepareAccount('alone', '独自家主');
+  const household = await createHousehold(owner.accessToken, '只剩我一个');
+  const headers = { authorization: `Bearer ${owner.accessToken}` };
+  const task = await request.post(`${API_ORIGIN}/api/v1/households/${household.id}/tasks`, { headers, data: { title: '一起删除的任务' } });
+  expect(task.status()).toBe(201);
+  await loginUsernameFixture(page, owner.username, password);
+  await page.goto(`${WEB_ORIGIN}/households/${household.id}/settings`);
+  await page.getByRole('button', { name: '离开家庭', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '确认离开家庭', exact: true });
+  await expect(dialog.getByText('你是「只剩我一个」唯一的成员。离开后，这个家庭会连同其中的日程、任务、笔记和标签一起永久删除，还没处理的邀请也会失效。此操作不可撤销。', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '取消离开', exact: true }).click();
+  expect((await request.get(`${API_ORIGIN}/api/v1/households/${household.id}`, { headers })).status()).toBe(200);
+  await page.getByRole('button', { name: '离开家庭', exact: true }).click();
+  const left = page.waitForResponse((r) => r.url().endsWith(`/households/${household.id}/leave`) && r.request().method() === 'POST');
+  await dialog.getByRole('button', { name: '离开并删除家庭', exact: true }).click();
+  expect((await left).status()).toBe(204);
+  // With no household left, the person lands where one is created or joined.
+  await expect(page).toHaveURL(/\/household-handoff$/);
+  await expect(page.getByRole('heading', { name: '开始设置你的家庭', exact: true })).toBeVisible();
+  expect((await request.get(`${API_ORIGIN}/api/v1/households/${household.id}`, { headers })).status()).toBe(404);
+  expect(await (await request.get(`${API_ORIGIN}/api/v1/households`, { headers })).json()).toEqual([]);
+  const database = new Client({ connectionString: DATABASE_URL });
+  await database.connect();
+  try {
+    const remaining = await database.query('SELECT count(*)::int AS count FROM "tasks" WHERE "household_id" = $1', [household.id]);
+    expect(remaining.rows[0]?.count).toBe(0);
+  } finally {
+    await database.end();
+  }
+});
+
 test('owner transfers ownership in settings before choosing to leave', async ({ page }) => {
   const owner = await prepareAccount('owner', '家主');
   const successor = await prepareAccount('successor', '接任者');

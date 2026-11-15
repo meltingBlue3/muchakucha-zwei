@@ -515,8 +515,8 @@ export class HouseholdsController {
   @UseGuards(AccessTokenGuard)
   @ApiBearerAuth()
   @ApiOperation({ operationId: 'leaveHouseholdMembership' })
-  @ApiNoContentResponse({ description: 'Caller left; shared household content is retained.' })
-  @ApiForbiddenResponse({ description: 'OWNER_TRANSFER_REQUIRED: transfer ownership before leaving.' })
+  @ApiNoContentResponse({ description: 'Caller left; shared household content is retained. When the caller is the owner and the only member, the household and all of its content are deleted.' })
+  @ApiForbiddenResponse({ description: 'OWNER_TRANSFER_REQUIRED: the owner transfers ownership before leaving while other members remain.' })
   @ApiNotFoundResponse({ description: 'Household not found or caller is not a member.' })
   async leaveMembership(
     @Req() request: AuthenticatedRequest,

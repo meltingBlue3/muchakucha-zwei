@@ -102,6 +102,29 @@ export function transferFailure(
   return undefined;
 }
 
+export type DirectLeaveOutcome =
+  | 'LEAVE'
+  | 'DELETE_HOUSEHOLD'
+  | 'OWNER_TRANSFER_REQUIRED';
+
+/**
+ * Leaving without naming a successor. A member or admin simply leaves. The
+ * owner hands the household over first while anyone else remains in it; an
+ * owner who is the last member takes the household with them, because no one
+ * is left to own it or to see its content.
+ *
+ * This function is pure — it does not access the database. The member count
+ * must be read under the household lock that invitations and membership
+ * changes share.
+ */
+export function directLeaveOutcome(
+  actorIsOwner: boolean,
+  memberCount: number,
+): DirectLeaveOutcome {
+  if (!actorIsOwner) return 'LEAVE';
+  return memberCount <= 1 ? 'DELETE_HOUSEHOLD' : 'OWNER_TRANSFER_REQUIRED';
+}
+
 export type LeaveFailure =
   | 'NOT_OWNER'
   | 'SUCCESSOR_IS_OWNER'
