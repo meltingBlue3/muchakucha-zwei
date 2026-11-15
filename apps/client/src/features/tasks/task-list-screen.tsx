@@ -4,7 +4,6 @@ import { useContentChanges } from '../content/content-changes';
 import { useResourceNavigation } from '../../ui/use-resource-navigation';
 import { useDesktop } from '../../ui/use-desktop';
 import { SearchField } from '../../ui/search-field';
-import { theme } from '../../ui/theme';
 import { useOpenWindowItem } from '../../ui/route-window';
 import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../content/use-content-delete';
@@ -273,7 +272,7 @@ export default function TaskListScreen() {
       width="reading"
       floatingAction={<FloatingCreateButton label={t('create')} onPress={handleCreateTask} />}
     >
-      <Stack gap={desktop ? 3 : 5} style={desktop ? { maxWidth: theme.layout.listPaneMaxWidth } : undefined}>
+      <Stack gap={desktop ? 3 : 5}>
         <PageIntro
           title={t('navigation:pages.tasks')}
           {...(filterSummary ? { subtitle: filterSummary } : desktop && !loading ? { subtitle: t('openCount', { count: tasks.filter(task => task.status !== 'completed' && task.status !== 'cancelled').length }) } : {})}

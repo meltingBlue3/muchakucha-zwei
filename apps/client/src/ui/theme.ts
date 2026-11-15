@@ -240,7 +240,6 @@ export const theme = createTheme({
     detailPaneWidthCompact: 360,
     detailPaneWidthMax: 520,
     detailGrowthBreakpoint: 1600,
-    listPaneMaxWidth: 880,
     notesListWidth: 340,
     readingWidth: 680,
     desktopRowHeight: 40,

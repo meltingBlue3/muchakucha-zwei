@@ -96,6 +96,10 @@ for (const width of [1024, 1280, 1440, 1920]) {
     await page.goto(`${base}/tasks`);
     const first = page.getByRole('button', { name: '任务：交物业费 1', exact: true });
     const second = page.getByRole('button', { name: '任务：检查朵朵的数学作业 2', exact: true });
+    // With nothing open the rows run edge to edge like the other family lists, however wide the window.
+    const sidebarWidth = width < 1280 ? 64 : 248;
+    const rowFrame = (await first.locator('xpath=../..').boundingBox())!;
+    expect([rowFrame.x, rowFrame.width]).toEqual([sidebarWidth + 1, width - sidebarWidth - 1 - 9]);
     await first.click();
     const detail = page.getByRole('region', { name: '任务详情', exact: true });
     await expect(detail).toBeVisible();
