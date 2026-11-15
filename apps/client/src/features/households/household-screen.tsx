@@ -188,7 +188,8 @@ export function AccountScreen({ accessibilityLabel, refreshing, onRefresh, showI
   const desktop = useDesktop();
   const { currentHouseholdId } = useHouseholdContext();
   const refresh = { ...(refreshing === undefined ? {} : { refreshing }), ...(onRefresh ? { onRefresh } : {}) };
-  const content = desktop ? <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}><AccountNavigation /><ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: theme.spacing[10], paddingVertical: theme.spacing[8], width: '100%', maxWidth: theme.layout.accountContentWidth + theme.spacing[10] * 2 }}><AccountContent>{children}</AccountContent></ScrollView></View> : children;
+  // The content column keeps its reading width and sits in the middle of the room beside the navigation.
+  const content = desktop ? <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}><AccountNavigation /><ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: theme.spacing[10], paddingVertical: theme.spacing[8], width: '100%', maxWidth: theme.layout.accountContentWidth + theme.spacing[10] * 2, alignSelf: 'center' }}><AccountContent>{children}</AccountContent></ScrollView></View> : children;
   if (wide && currentHouseholdId !== null) {
     return <HouseholdScreen active="account" subpage accessibilityLabel={accessibilityLabel} width="reading" {...(desktop ? { layout: 'workspace' as const } : {})} {...refresh}>{content}</HouseholdScreen>;
   }

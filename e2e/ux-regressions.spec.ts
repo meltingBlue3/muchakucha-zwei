@@ -101,7 +101,8 @@ for (const width of [320, 390, 1440]) {
     let appearance: Awaited<ReturnType<typeof dialogAppearance>> | undefined;
     if (width >= 1024) {
       await expect(page).toHaveURL(/profile$/);
-      await expect(page.getByRole('textbox', { name: '昵称', exact: true })).toBeVisible();
+      // A wide screen reads the nickname as text until 编辑 opens it in its row.
+      await expect(page.getByRole('button', { name: '编辑昵称', exact: true })).toBeVisible();
       await page.getByRole('link', { name: '家庭设置', exact: true }).click();
     } else {
       await expect(page.getByRole('dialog', { name: '个人资料' })).toBeVisible();

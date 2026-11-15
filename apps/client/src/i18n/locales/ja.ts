@@ -114,7 +114,9 @@ export const ja: Catalog = {
     accountNavigation: 'マイページのナビゲーション',
     accountMenu: 'アカウントメニュー',
     form: {
+      basics: '基本情報',
       checkNickname: '表示名を確認してください。',
+      editNickname: '表示名を編集',
       loading: 'プロフィールを読み込んでいます',
       loadFailedTitle: 'プロフィールを読み込めません',
       me: '自分',

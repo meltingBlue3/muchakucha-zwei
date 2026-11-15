@@ -207,12 +207,42 @@ for (const width of [320, 390, 1440]) {
     await page.getByRole('menuitem', { name: '个人资料' }).click();
     if (width >= 1024) {
       await expect(page).toHaveURL(/profile$/);
-      await expect(page.getByRole('navigation', { name: '个人中心导航' })).toBeVisible();
+      const navigation = page.getByRole('navigation', { name: '个人中心导航' });
+      await expect(navigation).toBeVisible();
+      // Without a household there is no sidebar to return to one: 我的家庭 leads to creating or joining one.
+      await expect(navigation.getByRole('link', { name: '我的家庭', exact: true })).toBeVisible();
+      // The column keeps its width in the middle of the room beside the navigation.
+      const heading = (await page.getByRole('heading', { name: '个人资料', exact: true }).boundingBox())!;
+      const nav = (await navigation.boundingBox())!;
+      const workspace = (await page.getByTestId('desktop-workspace').filter({ has: navigation }).boundingBox())!;
+      expect(Math.abs((heading.x - (nav.x + nav.width)) - (workspace.x + workspace.width - (heading.x + 640)))).toBeLessThanOrEqual(2);
+      // The nickname reads as text until 编辑 turns its row into a field.
+      await expect(page.getByLabel('昵称', { exact: true })).toHaveCount(0);
+      const edit = page.getByRole('button', { name: '编辑昵称', exact: true });
+      await edit.click();
       const nickname = page.getByLabel('昵称', { exact: true });
+      await expect(nickname).toBeFocused();
       await expect(nickname).toHaveValue('小林');
-      await nickname.fill('新的昵称');
-      await page.getByRole('button', { name: '保存', exact: true }).click();
+      // 保存 is a compact button beside the field, not a bar across the form.
+      const save = page.getByRole('button', { name: '保存', exact: true });
+      await expect(save).toBeDisabled();
+      const field = (await nickname.boundingBox())!;
+      const button = (await save.boundingBox())!;
+      expect(button.width).toBeLessThan(field.width / 3);
+      expect(button.x).toBeGreaterThan(field.x + field.width);
+      expect(Math.abs(button.y + button.height / 2 - (field.y + field.height / 2))).toBeLessThanOrEqual(1);
+      // Escape leaves the row unchanged.
+      await nickname.fill('不保存的昵称');
+      await page.keyboard.press('Escape');
+      await expect(page.getByLabel('昵称', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('小林', { exact: true })).toBeVisible();
+      await expect(edit).toBeFocused();
+      await edit.click();
+      await page.getByLabel('昵称', { exact: true }).fill('新的昵称');
+      await page.keyboard.press('Enter');
       await expect(page.getByText('昵称已更新。')).toBeVisible();
+      await expect(page.getByText('新的昵称', { exact: true })).toBeVisible();
+      await expect(edit).toBeFocused();
       await expect(page.getByRole('dialog')).toHaveCount(0);
       await checkLayout(page);
       await page.screenshot({ path: `test-results/account-profile-${width}.png` });

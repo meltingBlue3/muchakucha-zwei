@@ -1,6 +1,7 @@
 import type { ApiClient, CurrentUserDto } from '@muchakucha/api-client';
 import { Controller, useForm } from 'react-hook-form';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Platform, View } from 'react-native';
 import { z } from 'zod';
 
 import { useTranslation } from '../../i18n';
@@ -8,6 +9,9 @@ import type { SessionStateStore } from '../auth/session-state';
 import type { SessionTransport } from '../../platform/session/session-transport';
 import { Banner, Button, LoadError, Spinner, Stack, Text, TextField } from '../../ui/primitives';
 import { MemberAvatar } from '../../ui/member-avatar';
+import { SettingsSection } from '../../ui/settings-section';
+import { theme } from '../../ui/theme';
+import { useDesktop } from '../../ui/use-desktop';
 
 // The messages are keys of the profile catalog's form section.
 const nicknameSchema = z
@@ -57,6 +61,11 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
   const [loadError, setLoadError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const [username, setUsername] = useState<string>();
+  const desktop = useDesktop();
+  // Desktop edits the nickname in its row; the row reads as text until 编辑.
+  const [editing, setEditing] = useState(false);
+  const editTrigger = useRef<View>(null);
+  const wasEditing = useRef(false);
   const { t } = useTranslation(['profile', 'common']);
   const genericError = t('common:genericError');
   const {
@@ -131,6 +140,7 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
         setUserId(user.id);
       sessionStateStore.enterAuthenticated({ accessToken, currentUser: user });
       setSuccess(t('form.nicknameUpdated'));
+      setEditing(false);
     } catch (error) {
       if (isDisplayNameFailure(error)) {
         setError('displayName', { message: t('form.nicknameLength') });
@@ -140,10 +150,89 @@ export const ProfileForm = ({ apiClient, sessionStateStore, sessionTransport, on
     }
   });
 
+  // Leaving the field, by saving or cancelling, returns focus to 编辑.
+  useEffect(() => {
+    const left = wasEditing.current && !editing;
+    wasEditing.current = editing;
+    if (!left) return undefined;
+    const frame = requestAnimationFrame(() => editTrigger.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [editing]);
+
+  const cancelEditing = () => {
+    reset({ displayName: savedName });
+    clearErrors();
+    setEditing(false);
+  };
+
   if (loading) {
     return (
       <Stack accessibilityLabel={t('form.loading')} gap={2}>
         <Spinner label={t('form.loading')} />
+      </Stack>
+    );
+  }
+
+  if (desktop) {
+    // One fact per row, as on 家庭设置's 基本信息: the label in its column, then the value.
+    const row = (label: string, value: ReactNode, trailing?: ReactNode, alignTop = false) => <View style={{ flexDirection: 'row', alignItems: alignTop ? 'flex-start' : 'center', gap: theme.spacing[3], minHeight: theme.layout.desktopRowHeight, paddingVertical: alignTop ? theme.spacing[1] : 0, borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }}>
+      <Text variant="meta" color="inkFaint" style={{ width: theme.layout.fieldLabelColumn, ...(alignTop ? { paddingTop: (theme.layout.desktopField - theme.typography.meta.lineHeight) / 2 } : {}) }}>{label}</Text>
+      <View style={{ flex: 1, minWidth: 0 }}>{value}</View>
+      {trailing}
+    </View>;
+    const nicknameField = <Controller
+      control={control}
+      name="displayName"
+      render={({ field: { onBlur, onChange, ref, value } }) => (
+        <TextField
+          hideLabel
+          autoFocus
+          autoCapitalize="words"
+          autoComplete="name"
+          disabled={isSubmitting}
+          {...(errors.displayName?.message === undefined ? {} : { error: errors.displayName.message })}
+          label={t('nickname')}
+          submitAttempt={submitCount}
+          returnKeyType="done"
+          onSubmitEditing={() => { if (isDirty && !isSubmitting) void submit(); }}
+          onKeyPress={(event) => { if (Platform.OS === 'web' && event.nativeEvent.key === 'Escape' && !isSubmitting) cancelEditing(); }}
+          onBlur={onBlur}
+          onChangeText={(next) => {
+            setSuccess(undefined);
+            onChange(next);
+            if (getFieldState('displayName').error !== undefined) validateNickname();
+          }}
+          ref={ref}
+          textContentType="name"
+          value={value}
+        />
+      )}
+    />;
+    return (
+      <Stack gap={3}>
+        {loadError ? (
+          <LoadError title={t('form.loadFailedTitle')} message={loadError} retryLabel={t('form.reload')} onRetry={() => setReload((value) => value + 1)} />
+        ) : errors.root?.server?.message ? (
+          <Banner title={t('form.saveFailedTitle')}>{errors.root.server.message}</Banner>
+        ) : null}
+        <SettingsSection title={t('form.basics')} icon={null}>
+          <View style={{ marginTop: theme.spacing[1] }}>
+            {editing
+              ? row(t('nickname'), nicknameField, <View style={{ flexDirection: 'row', gap: theme.spacing[2], marginTop: (theme.layout.desktopField - theme.layout.desktopControl) / 2 }}>
+                <Button label={t('common:cancel')} tone="secondary" size="compact" disabled={isSubmitting} onPress={cancelEditing} />
+                <Button label={t('common:save')} size="compact" loading={isSubmitting} disabled={isSubmitting || !isDirty} onPress={() => void submit()} />
+              </View>, true)
+              : row(t('nickname'), <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
+                {userId ? <MemberAvatar id={userId} name={savedName || t('form.me')} size="sm" /> : null}
+                <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1, fontWeight: '600' }}>{savedName}</Text>
+              </View>, <Button ref={editTrigger} label={t('common:edit')} accessibilityLabel={t('form.editNickname')} tone="secondary" size="compact" disabled={loadError !== undefined} style={{ minHeight: theme.spacing[6] + 2, paddingHorizontal: theme.spacing[3] }} onPress={() => { setSuccess(undefined); setEditing(true); }} />)}
+            {username ? row(t('username'), <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: theme.spacing[3] }}>
+              <Text variant="bodySm" color="ink">{username}</Text>
+              <Text variant="meta" color="inkFaint">{t('usernameNote')}</Text>
+            </View>) : null}
+          </View>
+        </SettingsSection>
+        {success ? <Text variant="meta" accessibilityLiveRegion="polite" accessibilityRole={'status' as never}>{success}</Text> : null}
       </Stack>
     );
   }
