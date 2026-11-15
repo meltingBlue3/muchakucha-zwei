@@ -6,6 +6,7 @@ import { theme } from '../../ui/theme';
 import { LogoutAction } from '../auth/logout-action';
 import { sessionApiClient, sessionStateStore, sessionTransport } from '../auth/session-runtime';
 import { useInboxCount } from '../inbox/use-inbox-count';
+import { useHouseholdContext } from '../households/household-context';
 import UserRound from 'lucide-react-native/icons/user-round';
 import Bell from 'lucide-react-native/icons/bell';
 import Inbox from 'lucide-react-native/icons/inbox';
@@ -25,8 +26,12 @@ export function AccountNavigation() {
   const router = useRouter();
   const path = usePathname();
   const inboxCount = useInboxCount(true);
+  // With a household, its sidebar frames these pages and 今日 already leads back to it;
+  // 我的家庭 stays only while there is none, as the way to create or join one.
+  const { currentHouseholdId } = useHouseholdContext();
+  const shown = currentHouseholdId === null ? destinations : destinations.filter(({ path: target }) => target !== '/household-handoff');
   return <View role="navigation" accessibilityLabel={t('profile:accountNavigation')} style={{ width: theme.layout.accountNavWidth, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator, paddingHorizontal: theme.spacing[2] + 2, paddingVertical: theme.spacing[3], gap: theme.spacing[1] / 2 }}>
-    {destinations.map(({ titleKey, path: target, icon: Icon }) => {
+    {shown.map(({ titleKey, path: target, icon: Icon }) => {
       const title = t(titleKey);
       const current = path === target;
       const count = target === '/inbox' ? inboxCount : 0;

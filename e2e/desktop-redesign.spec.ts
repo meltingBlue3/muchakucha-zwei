@@ -320,6 +320,21 @@ async function setupRecurrenceRules(page: Page) {
   return rules;
 }
 
+test('个人中心 beside a household: the sidebar leads back to it, and the content column sits in the middle', async ({ page }) => {
+  await setup(page);
+  for (const width of [1280, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/profile');
+    const navigation = page.getByRole('navigation', { name: '个人中心导航', exact: true });
+    await expect(navigation.getByRole('link')).toHaveText(['个人资料', '设置', '提醒', '收件箱']);
+    await expect(page.getByTestId('global-sidebar').getByRole('tab', { name: '今日', exact: true })).toBeVisible();
+    const heading = (await page.getByRole('heading', { name: '个人资料', exact: true }).boundingBox())!;
+    const nav = (await navigation.boundingBox())!;
+    const workspace = (await page.getByTestId('desktop-workspace').filter({ has: navigation }).boundingBox())!;
+    expect(Math.abs((heading.x - (nav.x + nav.width)) - (workspace.x + workspace.width - (heading.x + 640)))).toBeLessThanOrEqual(2);
+  }
+});
+
 test('an owner alone in the household can leave, and is told the household goes too', async ({ page }) => {
   await setup(page);
   let left = false;

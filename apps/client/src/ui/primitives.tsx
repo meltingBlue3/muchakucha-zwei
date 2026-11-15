@@ -380,10 +380,15 @@ type FieldProps = TextInputProps & {
   /** Submit attempt counter; each increase re-focuses the first invalid field even if its error is unchanged. */
   submitAttempt?: number;
   trailing?: ReactNode;
+  /** Keeps the field's accessible name while dropping the visible label, for a row whose own label already names it. */
+  hideLabel?: boolean;
 };
 
+/** Kept for screen readers and `aria-labelledby`, out of sight. */
+const visuallyHidden = { position: 'absolute' as const, width: 1, height: 1, overflow: 'hidden' as const, opacity: 0 };
+
 export const TextField = forwardRef<NativeTextInput, FieldProps>(
-  ({ disabled, error, hint, submitAttempt, trailing, label, nativeID, onBlur, onFocus, style, ...props }, ref) => {
+  ({ disabled, error, hint, submitAttempt, trailing, label, hideLabel = false, nativeID, onBlur, onFocus, style, ...props }, ref) => {
     const activeTheme = useTheme<Theme>();
     const dense = useDesktopDensity();
     const auth = useContext(AuthControlSizes);
@@ -407,7 +412,7 @@ export const TextField = forwardRef<NativeTextInput, FieldProps>(
     }, [error, submitAttempt]);
     return (
       <Stack gap={2}>
-        <Text nativeID={`${inputId}-label`} variant="label">
+        <Text nativeID={`${inputId}-label`} variant="label" style={hideLabel ? visuallyHidden : undefined}>
           {label}
         </Text>
         <View>

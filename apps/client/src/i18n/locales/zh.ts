@@ -115,7 +115,9 @@ export const zh = {
     accountNavigation: '个人中心导航',
     accountMenu: '账户菜单',
     form: {
+      basics: '基本信息',
       checkNickname: '请检查昵称。',
+      editNickname: '编辑昵称',
       loading: '正在加载个人资料',
       loadFailedTitle: '暂时无法加载资料',
       me: '我',
