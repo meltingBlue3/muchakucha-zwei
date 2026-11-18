@@ -32,6 +32,9 @@
     "experiments": {
       "typedRoutes": true
     },
+    "locales": {
+      "ja": "./locales/ja.json"
+    },
     "android": {
       "package": "app.muchakucha.zwei",
       "permissions": [
