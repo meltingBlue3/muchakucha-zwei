@@ -40,7 +40,7 @@ function currentTimeZone(fallback: string): string {
 }
 
 export default function TaskDetailRoute() {
-  const { t } = useTranslation(['tasks', 'shared', 'auth', 'navigation', 'editConflict']);
+  const { t } = useTranslation(['tasks', 'shared', 'auth', 'recurrence', 'editConflict']);
   const { id, taskId } = useLocalSearchParams<{ id: string; taskId: string }>();
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
@@ -197,7 +197,7 @@ export default function TaskDetailRoute() {
           ) : null}
           <DetailField label={t('shared:assignee')} value={desktop && assignees.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[3], rowGap: activeTheme.spacing[1] }}>{assignees.map(member => <View key={member.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] + 2 }}><MemberAvatar id={member.id} name={member.name} size="sm" /><Text variant="bodySm" color="ink">{member.name}</Text></View>)}</View> : assigneeNames.join('、') || t('unassigned')} />
           <DetailField label={t('editConflict:priority')} value={priorityLabel(task.priority)} urgent={task.priority === 'urgent'} />
-          {recurrenceSummary ? <DetailField label={desktop ? t('editConflict:repeat') : t('navigation:pages.recurrence-rules')} value={recurrenceSummary.summary} notes={[
+          {recurrenceSummary ? <DetailField label={desktop ? t('editConflict:repeat') : t('recurrence:detailField')} value={recurrenceSummary.summary} notes={[
             recurrenceSummary.clampNote,
             recurrenceSummary.timeZoneNote,
             cancelled ? t('cancelledRecurrence') : t('occurrenceDetail'),

@@ -30,7 +30,7 @@ function currentTimeZone(fallback: string): string {
 }
 
 export default function EventDetailRoute() {
-  const { t } = useTranslation(['events', 'tasks', 'auth', 'navigation', 'deleteContent']);
+  const { t } = useTranslation(['events', 'tasks', 'auth', 'recurrence', 'deleteContent']);
   const { id, eventId } = useLocalSearchParams<{ id: string; eventId: string }>();
   const router = useRouter();
   const activeTheme = useTheme<Theme>();
@@ -112,7 +112,7 @@ export default function EventDetailRoute() {
             <ReminderDetailField kind="event" householdId={event.householdId} anchor={event.startTime} dateOnly={event.allDay} own choice={event.myReminder ?? DEFAULT_REMINDER} />
           ) : null}
           {event.location ? <DetailField label={t('location')} value={event.location} /> : null}
-          {recurrenceSummary ? <DetailField label={t('navigation:pages.recurrence-rules')} value={recurrenceSummary.summary} notes={[
+          {recurrenceSummary ? <DetailField label={t('recurrence:detailField')} value={recurrenceSummary.summary} notes={[
             recurrenceSummary.clampNote,
             recurrenceSummary.timeZoneNote,
             cancelled ? t('tasks:cancelledRecurrence') : t('occurrenceDetail'),
