@@ -16,6 +16,7 @@ export const zh = {
     genericError: '这次没有完成。请检查网络后重试。',
     hideField: '隐藏{{label}}',
     labelProcessing: '{{label}}，正在处理',
+    nameValue: '{{name}}，{{value}}',
     processing: '正在处理',
     retry: '重试',
     save: '保存',

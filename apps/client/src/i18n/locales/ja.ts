@@ -15,6 +15,7 @@ export const ja: Catalog = {
     genericError: '完了できませんでした。ネットワークを確認して、もう一度お試しください。',
     hideField: '{{label}}を隠す',
     labelProcessing: '{{label}}、処理中',
+    nameValue: '{{name}}、{{value}}',
     processing: '処理中',
     retry: '再試行',
     save: '保存',
