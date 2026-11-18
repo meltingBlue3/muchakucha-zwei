@@ -1,0 +1,5 @@
+{
+  "ios": {
+    "NSMicrophoneUsageDescription": "Muchakucha Zwei はマイクで音声を録音し、家族が設定した文字起こしサービスで編集できるテキストに変換します。"
+  }
+}
