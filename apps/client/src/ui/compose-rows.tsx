@@ -115,13 +115,14 @@ export function SummaryRow({ name, summary, icon, open, disabled = false, onPres
   /** Placeholder-style summary for an empty optional value. */
   muted?: boolean;
 }) {
+  const { t } = useTranslation('common');
   const dense = useDesktopDensity();
   return (
     <FormRow icon={icon}>
       <Pressable
         ref={trigger}
         accessibilityRole="button"
-        accessibilityLabel={`${name}，${summary}`}
+        accessibilityLabel={t('nameValue', { name, value: summary })}
         accessibilityState={{ disabled, expanded: open }}
         aria-haspopup="dialog"
         disabled={disabled}

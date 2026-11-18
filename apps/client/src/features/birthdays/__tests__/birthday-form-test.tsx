@@ -79,7 +79,7 @@ describe('添加生日', () => {
 
     await fireEvent.changeText(view.getByLabelText('誰の誕生日'), 'お母さん');
     expect(view.getByRole('radio', { name: '旧暦で祝う' }).props.accessibilityState.checked).toBe(true);
-    await fireEvent.press(view.getByRole('button', { name: '誕生日の日付，日付を選択' }));
+    await fireEvent.press(view.getByRole('button', { name: '誕生日の日付、日付を選択' }));
     await fireEvent.press(view.getByRole('radio', { name: '十月' }));
     await fireEvent.press(view.getByRole('radio', { name: '十月十五日' }));
     await fireEvent.press(view.getByRole('button', { name: '完了' }));
