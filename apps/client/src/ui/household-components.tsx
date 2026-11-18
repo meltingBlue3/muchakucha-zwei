@@ -158,7 +158,8 @@ export const AppShell = ({
       <View testID={desktop ? 'desktop-workspace' : undefined} style={{ flex: 1, minWidth: 0, ...(desktop ? { backgroundColor: theme.colors.surface, margin: theme.layout.workspaceInset, marginLeft: wideNavigation ? 0 : theme.layout.workspaceInset, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, borderRadius: theme.layout.workspaceRadius, overflow: 'hidden' } : {}) }}>
       {desktop && showPageHeader ? <View testID="desktop-page-header" style={{ height: theme.layout.pageHeaderHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], paddingHorizontal: theme.spacing[6], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
         {showBack && !wideNavigation ? <IconButton label={t('back')} appearance="plain" icon={<ArrowLeft size={theme.controlSizes.icon} color={theme.colors.ink} />} onPress={handleBack} /> : null}
-        <Heading variant="section" level={1} numberOfLines={1}>{pageHeader?.title ?? accessibilityLabel ?? title ?? ''}</Heading>
+        {/* The page name never shortens; a crowded header cuts the summary instead. */}
+        <Heading variant="section" level={1} numberOfLines={1} style={{ flexShrink: 0 }}>{pageHeader?.title ?? accessibilityLabel ?? title ?? ''}</Heading>
         {pageHeader?.subtitle ? <View style={{ flexShrink: 1 }}>{typeof pageHeader.subtitle === 'string' ? <Text variant="meta" numberOfLines={1}>{pageHeader.subtitle}</Text> : pageHeader.subtitle}</View> : null}
         {pageHeader?.controls ? <View style={{ marginLeft: theme.spacing[2] }}>{pageHeader.controls}</View> : null}
         <View style={{ flex: 1 }} />

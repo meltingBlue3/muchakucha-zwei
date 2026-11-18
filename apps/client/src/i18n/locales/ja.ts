@@ -39,7 +39,8 @@ export const ja: Catalog = {
       events: 'カレンダー',
       tasks: 'タスク',
       notes: 'ノート',
-      assistant: 'アシスタント',
+      // 幅 320px の画面ではタブ1つが約 62px。「アシスタント」は2行に折り返す。
+      assistant: 'AI',
       settings: '家族の設定',
       labels: 'ラベル管理',
       'recurrence-rules': '繰り返しの予定',
@@ -516,6 +517,7 @@ export const ja: Catalog = {
     },
   },
   recurrence: {
+    detailField: '繰り返し',
     kind: {
       task: 'タスク',
       event: '予定',
@@ -570,7 +572,7 @@ export const ja: Catalog = {
       endDateError: '終了日は明日より後にしてください。',
       saveTitle: '繰り返しの変更を保存',
       confirmSave: '保存する',
-      label: '繰り返しルール',
+      label: '繰り返し',
     },
     preset: {
       none: '繰り返さない',
@@ -1059,7 +1061,7 @@ export const ja: Catalog = {
       familyAssistant: '家族アシスタント',
       offline: 'オフラインです。接続が戻るとアシスタントを使えます。',
       loading: 'アシスタントを読み込み中',
-      intro: '細かな用事は任せて、\n家族と過ごす時間を。',
+      intro: '雑用は任せて、\n家族との時間を。',
       description: '予定の確認、タスクの記録、ノートの整理。\nやりたいことを教えてください。',
       start: '新しい会話を始める',
       needModel: 'モデル設定を追加するか、家族に設定の共有を頼んでください。',
@@ -1073,12 +1075,12 @@ export const ja: Catalog = {
       recording: '録音中',
       finish: '録音を終了',
       message: 'アシスタントへのメッセージ',
-      placeholder: '何を聞きたいですか？何をしましょうか？',
+      placeholder: '質問や頼みごとをどうぞ',
       openSettings: '設定を開く',
       confirmBeforeChanges: '変更する前に確認できます',
       voice: '音声入力',
       send: '送信',
-      weekPrompt: '今週の予定は？準備することはありますか？',
+      weekPrompt: '今週の予定と準備することは？',
       notesPrompt: '最近の家族ノートを整理して',
     },
     models: {

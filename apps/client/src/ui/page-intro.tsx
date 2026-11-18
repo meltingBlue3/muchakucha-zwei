@@ -28,13 +28,14 @@ export function PageIntro({ title, subtitle, controls, action }: {
   }, [desktop, setHeader, title, subtitle, controls, action]);
   if (desktop && setHeader) return null;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: theme.spacing[4] }}>
-      <View style={{ flex: 1, minWidth: 0, gap: theme.spacing[1] / 2 }}>
-        <Heading variant="display">{title}</Heading>
-        {typeof subtitle === 'string' ? <Text variant="bodySm">{subtitle}</Text> : subtitle}
+    <View style={{ gap: theme.spacing[1] / 2 }}>
+      {/* The title keeps its line: when it and the actions do not fit side by side, the actions wrap under it, still on the right. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: theme.spacing[4], rowGap: theme.spacing[2] }}>
+        <Heading variant="display" style={{ flexShrink: 0, maxWidth: '100%' }}>{title}</Heading>
+        {/* As tall as the title line, so the actions sit centered on it. */}
+        {action ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], height: theme.typography.display.lineHeight, marginLeft: 'auto' }}>{action}</View> : null}
       </View>
-      {/* Centered on the title line, so a subtitle never pulls the actions down. */}
-      {action ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], height: theme.typography.display.lineHeight }}>{action}</View> : null}
+      {typeof subtitle === 'string' ? <Text variant="bodySm">{subtitle}</Text> : subtitle}
     </View>
   );
 }

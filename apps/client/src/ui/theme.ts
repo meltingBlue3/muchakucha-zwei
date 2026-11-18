@@ -249,6 +249,8 @@ export const theme = createTheme({
     /** Horizontal padding of a desktop workspace column; flush lists bleed through it. */
     desktopColumnInset: 24,
     desktopSearchWidth: 220,
+    /** Below the rail breakpoint the page header is narrower; Japanese labels need the room. */
+    desktopSearchWidthCompact: 160,
     /** The desktop 创建 menu under the page header's button. */
     createMenuWidth: 184,
     /** The Ctrl K search panel. */

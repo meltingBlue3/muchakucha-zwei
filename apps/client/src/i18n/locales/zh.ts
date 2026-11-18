@@ -517,6 +517,7 @@ export const zh = {
     },
   },
   recurrence: {
+    detailField: '重复安排',
     kind: {
       task: '任务',
       event: '日程',

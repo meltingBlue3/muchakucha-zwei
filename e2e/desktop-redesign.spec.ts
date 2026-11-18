@@ -446,7 +446,7 @@ test('Japanese recurrence rules localize the list, editor and validation', async
     const detail = page.getByRole('dialog', { name: '繰り返しの詳細', exact: true });
     await detail.getByRole('button', { name: '繰り返しを編集', exact: true }).click();
     const editor = page.getByRole('dialog', { name: '繰り返しを編集', exact: true });
-    await editor.getByRole('button', { name: /^繰り返しルール/ }).click();
+    await editor.getByRole('button', { name: /^繰り返し、/ }).click();
     const presets = page.getByRole('dialog', { name: '繰り返し', exact: true });
     await presets.getByRole('radio', { name: 'カスタム…', exact: true }).click();
     const custom = page.getByRole('dialog', { name: '繰り返しを設定', exact: true });

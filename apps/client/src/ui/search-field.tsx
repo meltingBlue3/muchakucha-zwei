@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, TextInput, View } from 'react-native';
+import { Platform, Pressable, TextInput, View, useWindowDimensions } from 'react-native';
 import { Text } from './primitives';
 import Search from 'lucide-react-native/icons/search';
 import X from 'lucide-react-native/icons/x';
@@ -20,6 +20,7 @@ export function SearchField({ label, placeholder, value, onChangeText }: {
   const { t } = useTranslation('shared');
   const [focused, setFocused] = useState(false);
   const dense = useDesktopDensity();
+  const { width } = useWindowDimensions();
   const input = useRef<TextInput>(null);
   // On a desktop, / jumps to the page's search unless the person is already typing somewhere.
   useEffect(() => {
@@ -35,7 +36,7 @@ export function SearchField({ label, placeholder, value, onChangeText }: {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [dense]);
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: dense ? theme.layout.desktopControl : theme.controlSizes.field - theme.spacing[1], ...(dense ? { width: theme.layout.desktopSearchWidth, maxWidth: '100%', paddingRight: theme.spacing[2] } : {}), borderRadius: dense ? theme.borderRadii.sm : theme.borderRadii.md, backgroundColor: focused ? theme.colors.surface : dense ? theme.colors.canvas : theme.colors.surfaceMuted, borderWidth: theme.borderWidths.default, borderColor: focused ? theme.colors.ink : theme.colors.transparent, paddingLeft: dense ? theme.spacing[2] + 2 : theme.spacing[3] }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: dense ? theme.layout.desktopControl : theme.controlSizes.field - theme.spacing[1], ...(dense ? { width: width < theme.layout.railBreakpoint ? theme.layout.desktopSearchWidthCompact : theme.layout.desktopSearchWidth, maxWidth: '100%', paddingRight: theme.spacing[2] } : {}), borderRadius: dense ? theme.borderRadii.sm : theme.borderRadii.md, backgroundColor: focused ? theme.colors.surface : dense ? theme.colors.canvas : theme.colors.surfaceMuted, borderWidth: theme.borderWidths.default, borderColor: focused ? theme.colors.ink : theme.colors.transparent, paddingLeft: dense ? theme.spacing[2] + 2 : theme.spacing[3] }}>
       <Search size={dense ? theme.controlSizes.icon - 5 : theme.controlSizes.icon - theme.spacing[1]} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
       <TextInput
         ref={input}
