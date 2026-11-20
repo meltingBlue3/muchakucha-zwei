@@ -85,8 +85,8 @@ async function openNewEvent(page: Page) {
 
 async function openCustomWeekly(page: Page) {
   await page.getByRole('button', { name: /^日程重复设置/ }).click();
-  await page.getByRole(windowRole(page), { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
-  const custom = page.getByRole(windowRole(page), { name: '自定义重复' });
+  await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
+  const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
   await custom.getByRole('radio', { name: '周', exact: true }).click();
   return custom;
 }
@@ -133,7 +133,7 @@ test.describe('event recurrence accessibility', () => {
     await expect(repeat).toHaveAccessibleName('日程重复设置，不重复');
     await repeat.focus();
     await page.keyboard.press('Enter');
-    const options = page.getByRole(windowRole(page), { name: '重复' });
+    const options = page.getByRole('dialog', { name: '重复', exact: true });
     await expect(options.getByRole('radiogroup', { name: '重复频率' })).toBeVisible();
     await expect(options.getByRole('radio', { name: '不重复' })).toBeChecked();
     await options.getByRole('radio', { name: '不重复' }).focus();

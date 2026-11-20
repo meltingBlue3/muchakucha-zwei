@@ -332,8 +332,8 @@ test('the due row and the repeat interval each stay on one line on a 360px phone
   expect(chosen.height).toBeLessThanOrEqual(lineHeight);
   const recurrence = page.getByRole('button', { name: /^任务重复设置，/ });
   await recurrence.click();
-  await page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
-  const custom = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '自定义重复', exact: true });
+  await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
+  const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
   const rows = await Promise.all([
     custom.getByLabel('重复间隔', { exact: true }),
     ...['天', '周', '个月', '年'].map((unit) => custom.getByRole('radio', { name: unit, exact: true })),
@@ -348,8 +348,8 @@ test('a custom task recurrence validates before applying and survives reload', a
   const recurrence = page.getByRole('button', { name: /^任务重复设置，/ });
   await recurrence.focus();
   await page.keyboard.press('Enter');
-  await page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
-  const custom = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '自定义重复', exact: true });
+  await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
+  const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
   await custom.getByRole('radio', { name: '天', exact: true }).click();
   await custom.getByRole('radio', { name: '重复次数', exact: true }).click();
   await custom.getByLabel('重复次数值', { exact: true }).fill('0');
@@ -425,11 +425,11 @@ for (const width of [390, 1440]) {
     await page.screenshot({ path: testInfo.outputPath(`rule-window-${width}.png`) });
 
     await repeat.click();
-    const options = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '重复', exact: true });
+    const options = page.getByRole('dialog', { name: '重复', exact: true });
     await expect(options.getByRole('radio', { name: '不重复' })).toBeDisabled();
     await expect(options.getByText('要停止这个重复，请在重复安排详情里使用「结束此重复」。', { exact: true })).toBeVisible();
     await options.getByRole('radio', { name: '自定义…' }).click();
-    const custom = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '自定义重复', exact: true });
+    const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
     await expect(custom.getByRole('checkbox', { name: '星期一' })).toBeChecked();
     await custom.getByLabel('重复间隔', { exact: true }).fill('2');
     await custom.getByRole('button', { name: '完成', exact: true }).click();

@@ -194,11 +194,11 @@ test.describe('recurring event and task journeys', () => {
     const repeat = page.getByRole('button', { name: /^日程重复设置/ });
     await expect(repeat).toHaveAccessibleName('日程重复设置，不重复');
     await repeat.click();
-    await page.getByRole(windowRole(page), { name: '重复' }).getByRole('radio', { name: '每天' }).click();
+    await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '每天' }).click();
     await expect(repeat).toHaveAccessibleName('日程重复设置，每天重复');
     await repeat.click();
-    await page.getByRole(windowRole(page), { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
-    const custom = page.getByRole(windowRole(page), { name: '自定义重复' });
+    await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
+    const custom = page.getByRole('dialog', { name: '自定义重复', exact: true });
     await custom.getByRole('radio', { name: '周', exact: true }).click();
     const defaultWeekday = await page.evaluate((value) => new Date(`${value}T12:00:00`).getDay(), startDate);
     const selectedWeekdays = [defaultWeekday, (defaultWeekday + 1) % 7, (defaultWeekday + 2) % 7];
@@ -284,8 +284,8 @@ test.describe('recurring event and task journeys', () => {
     // Weekdays live on the custom repeat page, reached through the repeat row.
     const openCustomRepeat = async () => {
       await page.getByRole('button', { name: /^日程重复设置/ }).click();
-      await page.getByRole(windowRole(page), { name: '重复' }).getByRole('radio', { name: '自定义…' }).click();
-      return page.getByRole(windowRole(page), { name: '自定义重复' });
+      await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '自定义…' }).click();
+      return page.getByRole('dialog', { name: '自定义重复', exact: true });
     };
     let custom = await openCustomRepeat();
     await custom.getByLabel(weekdayLabel(removedWeekday)).click();
