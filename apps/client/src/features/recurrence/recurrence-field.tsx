@@ -4,12 +4,14 @@ import type { RecurrenceDto } from '@muchakucha/api-client';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
+import { AnchoredPopover } from '../../ui/anchored-popover';
 import { OptionRow, ROW_CONTENT_INSET, SummaryRow } from '../../ui/compose-rows';
 import { DateField } from '../../ui/date-field';
 import { PickerActions } from '../../ui/picker-panels';
 import { FormMessage, Inline, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 import { formatDate, parseDateValue, weekdayName } from '../../ui/date-values';
+import { useDesktop } from '../../ui/use-desktop';
 import { useWindowStep, type RouteWindowStep } from '../../ui/window-step';
 import {
   MAX_INTERVAL,
@@ -65,7 +67,8 @@ type Stage = 'closed' | 'options' | 'custom';
  * intervals, weekdays and an end condition.
  */
 export function RecurrenceField({ value, onChange, startDate: formStart, name, icon, disabled = false, disableTurnOff = false, turnOffHint, errors = {}, ownStart = false }: RecurrenceFieldProps) {
-  const { t } = useTranslation('recurrence');
+  const { t } = useTranslation(['recurrence', 'common']);
+  const desktop = useDesktop();
   // Where the rule is anchored: its own start when it owns one, else the form's.
   const startDate = ownStart && value ? value.startsOn : formStart;
   const [stage, setStage] = useState<Stage>('closed');
@@ -125,7 +128,7 @@ export function RecurrenceField({ value, onChange, startDate: formStart, name, i
     close();
   }, [close, draft, onChange, ownStart, startDate, timezone, value]);
 
-  const step = useMemo<RouteWindowStep | null>(() => {
+  const step = useMemo<(RouteWindowStep & { footer?: ReactNode }) | null>(() => {
     const onReturn = () => (trigger.current as unknown as { focus?(): void } | null)?.focus?.();
     if (stage === 'options') {
       return {
@@ -136,16 +139,19 @@ export function RecurrenceField({ value, onChange, startDate: formStart, name, i
       };
     }
     if (stage === 'custom') {
+      const editor = <CustomEditor draft={draft} errors={draftErrors} timeZoneError={timeZoneError} startDate={ownStart ? draft.startsOn : startDate} ownStart={ownStart} compact={desktop} onChange={next => { setDraft(next); setDraftErrors({}); }} />;
+      const actions = <PickerActions onCancel={close} onConfirm={finishCustom} confirmLabel={t('common:done')} />;
       return {
         title: t('field.custom'),
         onClose: close,
         onReturn,
-        content: <CustomEditor draft={draft} errors={draftErrors} timeZoneError={timeZoneError} startDate={ownStart ? draft.startsOn : startDate} ownStart={ownStart} onChange={next => { setDraft(next); setDraftErrors({}); }} onCancel={close} onDone={finishCustom} />,
+        content: desktop ? editor : <Stack gap={4}>{editor}{actions}</Stack>,
+        ...(desktop ? { footer: actions } : {}),
       };
     }
     return null;
-  }, [choose, close, disableTurnOff, turnOffHint, draft, draftErrors, finishCustom, openCustom, ownStart, preset, stage, startDate, summary, timeZoneError, t]);
-  const inWindow = useWindowStep(step);
+  }, [choose, close, desktop, disableTurnOff, turnOffHint, draft, draftErrors, finishCustom, openCustom, ownStart, preset, stage, startDate, summary, timeZoneError, t]);
+  const inWindow = useWindowStep(desktop ? null : step);
 
   const serverErrors = [...new Set(Object.entries(errors).filter(([field]) => field === 'recurrence' || field.startsWith('recurrence.')).map(([, message]) => message))];
 
@@ -156,7 +162,25 @@ export function RecurrenceField({ value, onChange, startDate: formStart, name, i
         ? t('field.startWithTime', { date: formatDate(parseDateValue(value.startsOn)), time: value.startTimeLocal })
         : t('field.start', { date: formatDate(parseDateValue(value.startsOn)) })}</Text></View> : null}
       {value ? <View style={{ paddingLeft: ROW_CONTENT_INSET }}><RecurrenceNotes rule={value} deviceTimeZone={deviceTimeZone() ?? value.timezone} /></View> : null}
-      {!inWindow && step ? <View style={{ paddingLeft: ROW_CONTENT_INSET, paddingBottom: theme.spacing[3] }}>{step.content}</View> : null}
+      {desktop && step ? (
+        <AnchoredPopover
+          key={stage}
+          scrollable
+          title={step.title}
+          trigger={trigger}
+          onClose={close}
+          footer={step.footer}
+          {...(stage === 'custom' ? {
+            width: theme.layout.recurrencePopoverWidth,
+            maxHeight: theme.layout.recurrencePopoverMaxHeight,
+            align: 'end',
+          } : {})}
+        >
+          {step.content}
+        </AnchoredPopover>
+      ) : !inWindow && step ? (
+        <View style={{ paddingLeft: ROW_CONTENT_INSET, paddingBottom: theme.spacing[3] }}>{step.content}</View>
+      ) : null}
       {serverErrors.map(message => <View key={message} style={{ paddingLeft: ROW_CONTENT_INSET }}><FormMessage>{t(`validation.${message}`)}</FormMessage></View>)}
     </Stack>
   );
@@ -242,15 +266,14 @@ function YearlyCalendar({ draft, startDate, month, day, onChange }: { draft: Cus
   );
 }
 
-function CustomEditor({ draft, errors, timeZoneError, startDate, ownStart, onChange, onCancel, onDone }: {
+function CustomEditor({ draft, errors, timeZoneError, startDate, ownStart, onChange, compact }: {
   draft: CustomDraft;
   errors: CustomErrors;
   timeZoneError: boolean;
   startDate: string;
   ownStart: boolean;
   onChange(next: CustomDraft): void;
-  onCancel(): void;
-  onDone(): void;
+  compact: boolean;
 }) {
   const { t } = useTranslation(['recurrence', 'common', 'events']);
   const [, month = '', day = ''] = startDate.split('-');
@@ -262,7 +285,7 @@ function CustomEditor({ draft, errors, timeZoneError, startDate, ownStart, onCha
     byWeekday: draft.byWeekday.includes(weekday) ? draft.byWeekday.filter(current => current !== weekday) : [...draft.byWeekday, weekday],
   });
   return (
-    <Stack gap={4}>
+    <Stack gap={compact ? 3 : 4}>
       <Stack gap={2}>
         <Text variant="label">{t('field.interval')}</Text>
         {/* One line: the units share what 每 and the count leave. */}
@@ -338,7 +361,6 @@ function CustomEditor({ draft, errors, timeZoneError, startDate, ownStart, onCha
         </View>
       </Stack>
       {timeZoneError ? <FormMessage>{t('validation.timeZone')}</FormMessage> : null}
-      <PickerActions onCancel={onCancel} onConfirm={onDone} confirmLabel={t('common:done')} />
     </Stack>
   );
 }

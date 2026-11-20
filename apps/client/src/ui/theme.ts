@@ -282,6 +282,8 @@ export const theme = createTheme({
     authBrandInset: 72,
     authSampleWidth: 480,
     desktopSwitcherWidth: 300,
+    recurrencePopoverWidth: 360,
+    recurrencePopoverMaxHeight: 500,
     authWideBreakpoint: 960,
     authLayoutMaxWidth: 1040,
     authCardMaxWidth: 420,

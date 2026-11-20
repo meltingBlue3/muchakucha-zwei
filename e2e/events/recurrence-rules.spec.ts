@@ -493,7 +493,7 @@ test('a direct rule window preserves draft choices and saves only after confirma
   const repeat = page.getByRole('button', { name: /^重复规则，/ });
   await expect(repeat).toHaveAccessibleName('重复规则，每天重复');
   await repeat.click();
-  const options = page.getByRole(windowRole(page), { name: '重复', exact: true });
+  const options = page.getByRole('dialog', { name: '重复', exact: true });
   // Ending a series is its own action, so 不重复 is not offered here.
   await expect(options.getByRole('radio', { name: '不重复' })).toBeDisabled();
   await options.getByRole('radio', { name: '每周' }).click();

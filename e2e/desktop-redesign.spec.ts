@@ -482,7 +482,7 @@ test('a rule opens for reading, and its editor gives way to another rule without
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await detail.getByRole('button', { name: '编辑重复安排', exact: true }).click();
   await repeat.click();
-  await page.getByRole('region', { name: '重复', exact: true }).getByRole('radio', { name: '每周' }).click();
+  await page.getByRole('dialog', { name: '重复', exact: true }).getByRole('radio', { name: '每周' }).click();
   await first.click();
   const question = page.getByRole('dialog', { name: '修改还没有保存', exact: true });
   await expect(question).toBeVisible();
