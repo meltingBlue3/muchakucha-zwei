@@ -1,8 +1,9 @@
-import { act, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { getLocales } from 'expo-localization';
 import * as SecureStore from 'expo-secure-store';
 
 import { currentLanguage, setLanguageChoice, systemLanguage } from '..';
+import { PromptSuggestions } from '../../features/assistant/assistant-composer';
 import { formatDate, formatDateLabel, formatWeekday, weekHeader } from '../../ui/date-values';
 import { HouseholdNavigation } from '../../ui/household-navigation';
 import { MuchakuchaThemeProvider } from '../../ui/primitives';
@@ -73,4 +74,13 @@ test('a screen already on show changes language when the device setting does', a
   expect(view.getByRole('tab', { name: 'カレンダー' })).toBeTruthy();
   expect(view.queryByRole('tab', { name: '日历' })).toBeNull();
   expect(view.getByLabelText('家族のメインナビゲーション')).toBeTruthy();
+});
+
+test('the Japanese weekly suggestion fills the draft with the displayed request', async () => {
+  setLanguageChoice('ja');
+  const onPick = jest.fn();
+  const view = await render(<MuchakuchaThemeProvider><PromptSuggestions disabled={false} onPick={onPick} /></MuchakuchaThemeProvider>);
+  const prompt = '今週の予定と、準備しておくことを教えて';
+  await fireEvent.press(view.getByRole('button', { name: prompt }));
+  expect(onPick).toHaveBeenCalledWith(prompt);
 });
