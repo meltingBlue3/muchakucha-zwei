@@ -61,6 +61,7 @@ export function sanitizeIntendedRoute(value: string | undefined): SafeIntendedRo
 export interface SessionBootstrapProps extends PropsWithChildren {
   fontsReady: boolean;
   intendedRoute?: string | undefined;
+  takeLaunchRoute?: () => Promise<string | null>;
   onRoute(destination: SessionDestination, intendedRoute?: SafeIntendedRoute): void;
   /** When true, the bootstrap remains visible until household context is also resolved.
    *  Clients observing household resolution should set this to true once it is safe to show children. */
@@ -77,6 +78,7 @@ export const SessionBootstrap = ({
   fontsReady,
   householdReady: householdReadyProp,
   intendedRoute,
+  takeLaunchRoute,
   onRoute,
   restorationRequired = true,
   sessionStateStore,
@@ -95,13 +97,14 @@ export const SessionBootstrap = ({
         : 'resolved',
   );
   const [safeIntendedRoute] = useState(() => sanitizeIntendedRoute(intendedRoute));
+  const launchRoute = useRef<Promise<SafeIntendedRoute | undefined> | undefined>(undefined);
   const householdReady = householdReadyProp ?? true;
 
   const applyOutcome = useCallback(
-    async (outcome: RestoreOutcome): Promise<void> => {
+    async (outcome: RestoreOutcome, destination?: SafeIntendedRoute): Promise<void> => {
       if (outcome.kind === 'authenticated') {
         sessionStateStore.enterAuthenticated(outcome.session);
-        onRoute(safeIntendedRoute ?? '/household-handoff');
+        onRoute(destination ?? '/household-handoff');
         setViewState('resolved');
         return;
       }
@@ -113,24 +116,30 @@ export const SessionBootstrap = ({
       if (outcome.kind === 'reauthRequired') {
         await sessionTransport.clear();
         sessionStateStore.enterReauthenticationRequired(outcome.reason);
-        onRoute('/login', safeIntendedRoute);
+        onRoute('/login', destination);
         setViewState('resolved');
         return;
       }
       sessionStateStore.enterUnauthenticated();
-      onRoute('/login', safeIntendedRoute);
+      onRoute('/login', destination);
       setViewState('resolved');
-    }, [onRoute, safeIntendedRoute, sessionStateStore, sessionTransport],
+    }, [onRoute, sessionStateStore, sessionTransport],
   );
 
   const restore = useCallback(async (): Promise<void> => {
     setViewState('booting');
     try {
-      await applyOutcome(await sessionTransport.restore());
+      // Read the tap once so a retry after going offline can still open its route.
+      launchRoute.current ??= takeLaunchRoute?.().then(
+        route => sanitizeIntendedRoute(route ?? undefined) ?? safeIntendedRoute,
+        () => safeIntendedRoute,
+      ) ?? Promise.resolve(safeIntendedRoute);
+      const [outcome, destination] = await Promise.all([sessionTransport.restore(), launchRoute.current]);
+      await applyOutcome(outcome, destination);
     } catch {
       await applyOutcome({ kind: 'offline', retainedCredential: true });
     }
-  }, [applyOutcome, sessionTransport]);
+  }, [applyOutcome, safeIntendedRoute, sessionTransport, takeLaunchRoute]);
 
   useEffect(() => {
     if (fontsReady && shouldRestore.current) {

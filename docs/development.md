@@ -94,15 +94,22 @@ EXPO_PUBLIC_API_ORIGIN=http://<开发机局域网 IP>:3100 pnpm --filter client 
 
 ## 提醒与闹铃
 
-提醒设置按个人保存，家人之间互不影响，同一账户跨设备同步；每台手机自行排程，不使用服务端推送。这样无需为缺少 Google 服务的国产 Android 接入 FCM 或多个厂商推送通道，代价是其他设备的改动要等本机下次同步才生效。
+提醒设置按个人保存，同一账户跨设备同步。iOS 通过 Expo Push 转交 APNs。启用直连 FCM 的 Google Play Android 由 API 直接投递，允许 Google Play 服务在应用进程结束时显示通知。服务端到期时按最新内容计算，家人改期、取消或修改分配后，收件人无需打开 App。其他设备继续在本机排程，厂商通道后续适配。
 
-- 任务提醒负责人，没有负责人时提醒创建者；日程提醒全体家庭成员。无截止日期的任务不提醒，已完成、已取消和已过去的提醒不补发。
+- 任务提醒负责人，没有负责人时提醒创建者；日程提醒全体家庭成员。无截止日期、已完成的任务和已取消的日程均不提醒。
 - 「默认」跟随个人设置；重复内容的单独提醒作用于整个重复安排。只改提醒不修改内容版本，也不弹出内容修改范围选择。
-- 排程只覆盖未来 7 天、最多 60 条，为 iOS 本地通知容量留余量；需定期打开 App 补排。家人刚分配的任务、别的设备更改的时间或状态，在本机同步前不会反映到系统通知中。
-- Web 仅管理设置，不弹提醒；Android 闹铃是普通通知之外的可选能力，缺少闹铃模块时回退普通通知。联调通知与闹铃使用包含项目原生模块的安装包，不能以 Expo Go 的结果代替安装包验收。
+- 本机排程覆盖未来 7 天、最多 60 条。Android 的响铃闹铃继续使用本机排程，其他设备上的改动会在本机下次同步后生效。Web 仅管理设置。
+- 推送按每台设备最后登记的时区和语言发送，15 秒扫描一次，只处理最近两分钟到期的提醒。设备离线或平台投递失败时可能错过。通知包含标题、时间和打开事项所需的路径。
 - 锁屏显示、后台弹出和厂商省电限制需在系统设置中确认，应用无法完整读取这些开关。普通通知、闹铃、重启与冷启动的待验收项见 [路线图](roadmap.md#待验收)。
 
-服务端规则见 [API 手册](agent/api.md#personal-reminders)，本机对账、录音与平台约束见 [客户端手册](agent/client.md#local-reminders)。
+### 启用 APNs 和 FCM
+
+1. 在 EAS 项目配置 iOS App ID 的 Push Notifications capability 和 APNs 推送密钥。Firebase Android 应用的包名应与构建一致，正式版和预览版为 `app.muchakucha.zwei`，开发版为 `app.muchakucha.zwei.dev`。将匹配的 `google-services.json` 作为 EAS 文件变量 `GOOGLE_SERVICES_JSON` 提供。本地构建可用同名环境变量指向文件。已有本地 `android/` 的项目需先重新运行 Expo prebuild，使原生工程应用 Firebase 配置。[Expo 推送凭证配置](https://docs.expo.dev/push-notifications/push-notifications-setup/) · [EAS 文件变量](https://docs.expo.dev/eas/environment-variables/manage/#secrets-and-file-variables)
+2. API 应用数据库迁移并设置 `REMINDER_PUSH_ENABLED=true`。Android 直连需要启用 Firebase Cloud Messaging API，并把 `REMINDER_FCM_CREDENTIALS_FILE` 指向仓库外的同一 Firebase 项目服务账号 JSON 文件。账号需要 Cloud Messaging 发送权限。API 需要访问 `oauth2.googleapis.com` 与 `fcm.googleapis.com`，设备上的 Google Play 服务需要连接 FCM。[FCM 服务端授权](https://firebase.google.com/docs/cloud-messaging/auth-server) · [通知委托显示](https://firebase.google.com/docs/cloud-messaging/android-message-priority#notification_delegation_with_google_play_services)
+3. 在目标 EAS 构建环境设置 `EXPO_PUBLIC_REMINDER_PUSH_ENABLED=true`，Google Play 版同时设置 `EXPO_PUBLIC_REMINDER_FCM_ENABLED=true` 后构建新包。连接本地 Metro 的开发包也需要在运行 Metro 时设置相应变量。安装后登录并开启通知权限，App 会自动登记。
+4. Expo 路径需要服务端和设备访问 `exp.host`。启用了 Expo 增强推送安全的服务端设置 `EXPO_PUSH_ACCESS_TOKEN`。使用旧版 Expo 路径的 Android 包需要在 EAS 保留 FCM v1 凭证。
+
+服务端规则见 [API 手册](agent/api.md#personal-reminders)，本机对账与平台约束见 [客户端手册](agent/client.md#local-reminders)。
 
 ## 检查与开发约定
 

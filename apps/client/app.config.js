@@ -1,4 +1,7 @@
 module.exports = ({ config }) => {
+  if (process.env.EXPO_PUBLIC_REMINDER_PUSH_ENABLED === 'true' && process.env.GOOGLE_SERVICES_JSON) {
+    config = { ...config, android: { ...config.android, googleServicesFile: process.env.GOOGLE_SERVICES_JSON } };
+  }
   if (process.env.APP_VARIANT !== 'development') return config;
 
   return {

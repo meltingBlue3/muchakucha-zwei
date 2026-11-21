@@ -13,6 +13,7 @@ import { sessionStateStore, sessionTransport, setSessionLostHandler } from '../s
 // Loaded for its effect: the interface language is settled before the first screen renders.
 import '../src/i18n';
 import { installFocusRing } from '../src/platform/focus-ring/focus-ring';
+import { takeLaunchReminderUrl } from '../src/platform/reminders/reminder-notifications';
 import { AppStatusBar } from '../src/ui/app-status-bar';
 import { MuchakuchaThemeProvider } from '../src/ui/primitives';
 
@@ -57,6 +58,7 @@ export default function RootLayout() {
       <SessionBootstrap
         fontsReady={fontsLoaded || fontError !== null}
         intendedRoute={intendedRoute}
+        takeLaunchRoute={takeLaunchReminderUrl}
         onRoute={routeSession}
         restorationRequired={!isPublicContinuation}
         sessionStateStore={sessionStateStore}

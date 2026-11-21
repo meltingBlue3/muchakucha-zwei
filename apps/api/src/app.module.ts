@@ -41,7 +41,7 @@ export class AppModule {
         TasksModule,
         NotesModule,
         LabelsModule,
-        RemindersModule,
+        RemindersModule.register(environment),
         AssistantModule.register(environment),
       ],
       providers: [

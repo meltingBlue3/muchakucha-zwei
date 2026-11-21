@@ -58,13 +58,14 @@ The assistant keeps protocol conversion, bounded execution, and business actions
 
 ## Personal reminders
 
-[reminders.service.ts](../../apps/api/src/modules/reminders/reminders.service.ts) and [reminder-schedule.ts](../../apps/api/src/modules/reminders/reminder-schedule.ts) compute the plan; devices schedule that result instead of duplicating recipient and timing rules.
+[reminders.service.ts](../../apps/api/src/modules/reminders/reminders.service.ts) and [reminder-schedule.ts](../../apps/api/src/modules/reminders/reminder-schedule.ts) share recipient and timing rules across server push and device schedules.
 
 - Settings and overrides belong to the caller. Returning to default deletes an override. Reminder changes neither require nor change the content edit version; assistant tools omit personal `myReminder` data.
 - An override on recurring content belongs to its rule and applies to every occurrence. Splitting a rule copies each user's override to the new rule.
 - The plan must include unmaterialized upcoming occurrences. Derive them after `materializedThrough`, but exclude dates with any existing instance row, including cancelled or completed rows. Stable rule/date keys survive materialization so the same occurrence cannot be scheduled twice.
 - Date-only reminders use the person's configured local reference time in the request time zone, not a default lead time subtracted from UTC midnight. Closed household switches, disabled defaults, and explicit overrides all participate in the server calculation.
 - Alarm choice is independent of timing. An off reminder has no alarm override; the plan resolves defaults before returning `alarm` to the device. User-facing limitations live in the [development guide](../development.md#提醒与闹铃).
+- [reminder-push.service.ts](../../apps/api/src/modules/reminders/reminder-push.service.ts) recomputes due reminders for active registered sessions and claims each device and occurrence time once. Registrations select Expo or direct Firebase Cloud Messaging. Expo receipts and FCM `UNREGISTERED` responses retire invalid tokens. Expired and revoked sessions cannot receive new pushes. A device with native alarms keeps its ringing reminders local.
 
 ## Regenerating the contract
 

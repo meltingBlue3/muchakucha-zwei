@@ -2666,6 +2666,61 @@
         ]
       }
     },
+    "/api/v1/users/me/reminder-push": {
+      "put": {
+        "operationId": "registerReminderPush",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterReminderPushDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderPushStatusDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "reminders"
+        ]
+      },
+      "delete": {
+        "operationId": "unregisterReminderPush",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "reminders"
+        ]
+      }
+    },
     "/api/v1/households/{householdId}/assistant/providers": {
       "get": {
         "operationId": "listAssistantProviders",
@@ -5189,6 +5244,57 @@
         },
         "required": [
           "reminders"
+        ]
+      },
+      "RegisterReminderPushDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "expo",
+              "fcm"
+            ],
+            "default": "expo"
+          },
+          "timeZone": {
+            "type": "string",
+            "example": "Asia/Shanghai",
+            "maxLength": 100
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "zh",
+              "ja"
+            ]
+          },
+          "localAlarms": {
+            "type": "boolean",
+            "description": "Whether this device schedules ringing alarms locally."
+          }
+        },
+        "required": [
+          "token",
+          "timeZone",
+          "language",
+          "localAlarms"
+        ]
+      },
+      "ReminderPushStatusDto": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Whether this session should receive ordinary reminders by push."
+          }
+        },
+        "required": [
+          "active"
         ]
       },
       "AssistantUsageMemberDto": {

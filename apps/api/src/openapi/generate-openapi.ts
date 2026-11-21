@@ -512,6 +512,18 @@ export interface UpcomingReminderListDto {
   reminders: UpcomingReminderDto[];
 }
 
+export interface RegisterReminderPushDto {
+  token: string;
+  provider?: 'expo' | 'fcm';
+  timeZone: string;
+  language: 'zh' | 'ja';
+  localAlarms: boolean;
+}
+
+export interface ReminderPushStatusDto {
+  active: boolean;
+}
+
 export type AssistantProtocol = 'openai-compatible' | 'anthropic' | 'qwen-asr';
 export interface CreateAssistantProviderDto {
   name: string;
@@ -641,6 +653,8 @@ import type {
   ReminderSettingsDto,
   UpdateReminderSettingsDto,
   UpcomingReminderListDto,
+  RegisterReminderPushDto,
+  ReminderPushStatusDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -1430,6 +1444,14 @@ export class ApiClient {
     return this.authenticated<UpcomingReminderListDto>('GET', \`/api/v1/users/me/reminders?timeZone=\${encodeURIComponent(timeZone)}\`, accessToken, undefined, signal);
   }
 
+  async registerReminderPush(accessToken: string, body: RegisterReminderPushDto, signal?: AbortSignal): Promise<ReminderPushStatusDto> {
+    return this.authenticated<ReminderPushStatusDto>('PUT', '/api/v1/users/me/reminder-push', accessToken, body, signal);
+  }
+
+  async unregisterReminderPush(accessToken: string, signal?: AbortSignal): Promise<void> {
+    return this.authenticated<void>('DELETE', '/api/v1/users/me/reminder-push', accessToken, undefined, signal);
+  }
+
   async setTaskReminder(accessToken: string, householdId: string, taskId: string, body: ReminderChoiceDto, signal?: AbortSignal): Promise<ReminderChoiceDto> {
     return this.authenticated<ReminderChoiceDto>('PUT', \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}/my-reminder\`, accessToken, body, signal);
   }
@@ -1698,11 +1720,15 @@ async function generate(): Promise<void> {
     if (reminderSettingsPath?.get?.operationId !== 'getReminderSettings'
       || reminderSettingsPath.put?.operationId !== 'updateReminderSettings'
       || document.paths['/api/v1/users/me/reminders']?.get?.operationId !== 'listUpcomingReminders'
+      || document.paths['/api/v1/users/me/reminder-push']?.put?.operationId !== 'registerReminderPush'
+      || document.paths['/api/v1/users/me/reminder-push']?.delete?.operationId !== 'unregisterReminderPush'
       || document.paths['/api/v1/households/{householdId}/tasks/{taskId}/my-reminder']?.put?.operationId !== 'setTaskReminder'
       || document.paths['/api/v1/households/{householdId}/events/{eventId}/my-reminder']?.put?.operationId !== 'setEventReminder'
       || document.components?.schemas?.ReminderChoiceDto === undefined
       || document.components.schemas.ReminderSettingsDto === undefined
       || document.components.schemas.UpdateReminderSettingsDto === undefined
+      || document.components.schemas.RegisterReminderPushDto === undefined
+      || document.components.schemas.ReminderPushStatusDto === undefined
       || document.components.schemas.UpcomingReminderListDto === undefined) {
       throw new Error('OpenAPI reminder operations or schemas are missing or unstable.');
     }

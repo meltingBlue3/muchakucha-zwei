@@ -1,6 +1,5 @@
 /**
- * Local notifications that the phone schedules for itself. The server never
- * pushes; it only says which reminders this person should get next.
+ * Reminders scheduled on this device, including ringing Android alarms.
  */
 export type NotificationPermission = 'granted' | 'undetermined' | 'denied' | 'blocked' | 'unsupported';
 

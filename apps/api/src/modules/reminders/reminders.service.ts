@@ -42,7 +42,7 @@ function localTime(value: string | null): { hour: number; minute: number } {
   return { hour: Number(value.slice(0, 2)), minute: Number(value.slice(3, 5)) };
 }
 
-function assertTimeZone(timeZone: string | undefined): string {
+export function assertTimeZone(timeZone: string | undefined): string {
   try {
     if (timeZone === undefined || timeZone === '') throw new RangeError('missing');
     new Intl.DateTimeFormat('en-CA', { timeZone }).format();
@@ -135,7 +135,23 @@ export class RemindersService {
    * from the rule, keyed the same way the row will be once it exists.
    */
   async upcoming(userId: string, requestedTimeZone: string | undefined, now = new Date()): Promise<UpcomingReminderListDto> {
-    const timeZone = assertTimeZone(requestedTimeZone);
+    return this.plan(userId, assertTimeZone(requestedTimeZone), { now, windowDays: REMINDER_WINDOW_DAYS });
+  }
+
+  /** Plan afresh at dispatch time, including only reminders that have just fallen due. */
+  async due(userId: string, timeZone: string, since: Date, until: Date): Promise<UpcomingReminderListDto> {
+    return this.plan(userId, timeZone, {
+      now: since,
+      windowDays: (until.getTime() - since.getTime()) / DAY_MS,
+      limit: Infinity,
+    });
+  }
+
+  private async plan(
+    userId: string,
+    timeZone: string,
+    { now, windowDays, limit }: { now: Date; windowDays: number; limit?: number },
+  ): Promise<UpcomingReminderListDto> {
     const memberships = await this.prisma.membership.findMany({
       where: { userId, remindersMuted: false },
       include: { household: { select: { name: true } } },
@@ -149,7 +165,7 @@ export class RemindersService {
     // window: up to seven days early, and a date-only item's time can sit a
     // day past its stored midnight.
     const from = new Date(now.getTime() - 2 * DAY_MS);
-    const through = new Date(now.getTime() + (2 * REMINDER_WINDOW_DAYS + 2) * DAY_MS);
+    const through = new Date(now.getTime() + (windowDays + REMINDER_WINDOW_DAYS + 2) * DAY_MS);
     const mine = { OR: [{ assignees: { some: { userId } } }, { assignees: { none: {} }, createdBy: userId }] };
     const [tasks, events, rules] = await Promise.all([
       this.prisma.task.findMany({
@@ -224,7 +240,7 @@ export class RemindersService {
           startsOn: calendarDate(rule.startsOn),
           endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn), count: rule.count,
           lunar: lunarAnchorOf(rule),
-        }, { from: walkFrom, horizon: addDays(today, 2 * REMINDER_WINDOW_DAYS + 1) });
+        }, { from: walkFrom, horizon: addDays(today, Math.ceil(windowDays) + REMINDER_WINDOW_DAYS + 1) });
         for (const occurrence of occurrences) {
           const occurrenceDate = formatIsoDate(occurrence);
           if (existing.has(`${rule.id}:${occurrenceDate}`)) continue;
@@ -253,7 +269,7 @@ export class RemindersService {
         return { ...candidate, minutesBefore, alarm: choice.alarm ?? null };
       }),
       settings ?? DEFAULT_REMINDER_SETTINGS,
-      { now, timeZone },
+      { now, timeZone, windowDays, ...(limit === undefined ? {} : { limit }) },
     );
     return {
       reminders: planned.map(reminder => ({

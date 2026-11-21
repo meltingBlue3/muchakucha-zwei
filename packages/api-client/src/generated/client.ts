@@ -65,6 +65,8 @@ import type {
   ReminderSettingsDto,
   UpdateReminderSettingsDto,
   UpcomingReminderListDto,
+  RegisterReminderPushDto,
+  ReminderPushStatusDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -852,6 +854,14 @@ export class ApiClient {
 
   async listUpcomingReminders(accessToken: string, timeZone: string, signal?: AbortSignal): Promise<UpcomingReminderListDto> {
     return this.authenticated<UpcomingReminderListDto>('GET', `/api/v1/users/me/reminders?timeZone=${encodeURIComponent(timeZone)}`, accessToken, undefined, signal);
+  }
+
+  async registerReminderPush(accessToken: string, body: RegisterReminderPushDto, signal?: AbortSignal): Promise<ReminderPushStatusDto> {
+    return this.authenticated<ReminderPushStatusDto>('PUT', '/api/v1/users/me/reminder-push', accessToken, body, signal);
+  }
+
+  async unregisterReminderPush(accessToken: string, signal?: AbortSignal): Promise<void> {
+    return this.authenticated<void>('DELETE', '/api/v1/users/me/reminder-push', accessToken, undefined, signal);
   }
 
   async setTaskReminder(accessToken: string, householdId: string, taskId: string, body: ReminderChoiceDto, signal?: AbortSignal): Promise<ReminderChoiceDto> {
