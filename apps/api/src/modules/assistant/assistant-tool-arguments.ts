@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, MaxLength, Min } from 'class-validator';
 import { CreateEventDto } from '../events/dto/create-event.dto.js';
 import { UpdateEventDto } from '../events/dto/update-event.dto.js';
 import { CreateTaskDto, TASK_PRIORITIES, TASK_STATUSES } from '../tasks/dto/create-task.dto.js';
@@ -87,6 +87,25 @@ export class FindLunarDatesArguments {
 
   @IsOptional() @IsInt() @Min(1) @Max(10)
   count?: number;
+}
+
+export class JapaneseHolidaysArguments {
+  @IsOptional() @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  startDate?: string;
+
+  @IsOptional() @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  afterDate?: string;
+
+  @IsOptional() @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  endDate?: string;
+}
+
+const JAPANESE_ERA_MAX_DATES = 31;
+
+export class JapaneseEraDatesArguments {
+  @IsArray() @ArrayNotEmpty() @ArrayMaxSize(JAPANESE_ERA_MAX_DATES)
+  @IsDateString({ strict: true }, { each: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/, { each: true })
+  dates!: string[];
 }
 
 export class IdArguments {
@@ -229,6 +248,12 @@ export const recurrenceProperty = { recurrence };
 export const eventListProperties = { ...listProperties, startDate: date, endDate: date, recurring: { type: 'boolean' } };
 export const seriesListProperties = { ...listProperties, birthdays: { type: 'boolean', description: 'Only birthday series.' } };
 export const lunarCalendarProperties = { startDate: date, endDate: date, notableOnly: { type: 'boolean' } };
+export const japaneseHolidaysProperties = {
+  startDate: { ...date, description: 'Inclusive first day for a date or range lookup.' },
+  afterDate: { ...date, description: 'Exclusive reference day when looking up the next holiday. Use with endDate and omit startDate.' },
+  endDate: { ...date, description: 'Inclusive last day. With startDate alone, checks one day.' },
+};
+export const japaneseEraDatesProperties = { dates: { type: 'array', items: date, minItems: 1, maxItems: JAPANESE_ERA_MAX_DATES } };
 export const findLunarDatesProperties = {
   month: { type: 'integer', minimum: 1, maximum: 12, description: 'Lunar month: 1 is 正月, 11 is 冬月, 12 is 腊月.' },
   day: { type: 'integer', minimum: 1, maximum: 30, description: 'Lunar day: 1 is 初一, 30 is 三十.' },

@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { formatEraYear, holidaysOf } from '@muchakucha/wareki';
 import { plainToInstance, type ClassConstructor } from 'class-transformer';
 import { isISO8601, validate } from 'class-validator';
 import { EventsService } from '../events/events.service.js';
@@ -17,9 +18,10 @@ import type { AssistantActor, AssistantToolActor, AssistantToolCall, AssistantTo
 import {
   CreateEventArguments, CreateLabelArguments, CreateNoteArguments, CreateTaskArguments,
   DeleteContentArguments, DeleteLabelArguments, DeleteOccurrenceArguments, FindLunarDatesArguments,
-  GetContentArguments, IdArguments, ListArguments, ListEventsArguments, ListSeriesArguments, ListTasksArguments, LunarCalendarArguments,
+  GetContentArguments, IdArguments, JapaneseEraDatesArguments, JapaneseHolidaysArguments,
+  ListArguments, ListEventsArguments, ListSeriesArguments, ListTasksArguments, LunarCalendarArguments,
   UpdateEventArguments, UpdateLabelArguments, UpdateNoteArguments, UpdateTaskArguments,
-  editProperties, eventListProperties, eventProperties, findLunarDatesProperties, getContentProperties, idProperties,
+  editProperties, eventListProperties, eventProperties, findLunarDatesProperties, getContentProperties, idProperties, japaneseEraDatesProperties, japaneseHolidaysProperties,
   labelProperties, labelSnapshotProperties, labelsProperty, listProperties, lunarCalendarProperties, noteProperties,
   occurrenceEditProperties, recurrenceProperty, seriesListProperties, taskListProperties, taskProperties,
 } from './assistant-tool-arguments.js';
@@ -47,6 +49,12 @@ const PAGE_PREVIEW_CHARACTERS = 1000;
 /** Days lunar_calendar returns in one call, and with notableOnly, where only festivals and terms come back. */
 const LUNAR_CALENDAR_DAYS = 62;
 const LUNAR_NOTABLE_DAYS = 400;
+const JAPANESE_HOLIDAY_RANGE_DAYS = 366;
+
+function japaneseEraDate(date: CalendarDate): string | null {
+  const year = formatEraYear(date);
+  return year === null ? null : `${year}${date.month}月${date.day}日`;
+}
 
 function invalid(field: string, code: string): never {
   throw new BadRequestException({
@@ -246,6 +254,7 @@ export class AssistantToolsService {
   ) {
     this.registerReadTools();
     this.registerLunarTools();
+    this.registerJapaneseCalendarTools();
     this.registerEventTools();
     this.registerTaskTools();
     this.registerNoteTools();
@@ -382,6 +391,37 @@ export class AssistantToolsService {
         });
         return paginate(series, args);
       });
+  }
+
+  private registerJapaneseCalendarTools(): void {
+    this.register('japanese_holidays', `List Japan's statutory holidays (国民の祝日), substitute holidays (振替休日), and days off between two holidays (国民の休日). Use for Japan's 春分の日 and 秋分の日. For an inclusive date range pass startDate and endDate, or just startDate to check one day. To find the next holiday use afterDate, the reference day itself (excluded), and endDate, an inclusive search limit. Returns holidays in date order, with daysAfterReferenceDate when using afterDate. Dates are Japanese calendar days. Covers up to ${JAPANESE_HOLIDAY_RANGE_DAYS} searched days, using the app calendar's rules from 1948 and projecting future dates under current rules.`,
+      JapaneseHolidaysArguments, japaneseHolidaysProperties, [], false, async (_actor, { startDate, afterDate, endDate }) => {
+        const from = afterDate ?? startDate;
+        if (from === undefined || (afterDate !== undefined && startDate !== undefined)) invalid('dateRange', 'start_or_after_date');
+        const through = endDate ?? startDate;
+        if (through === undefined) invalid('endDate', 'isDefined');
+        assertDateRange(from, through);
+        const fromTime = Date.parse(from);
+        const days = (Date.parse(through) - fromTime) / 86_400_000 + (afterDate === undefined ? 1 : 0);
+        if (days > JAPANESE_HOLIDAY_RANGE_DAYS) invalid('endDate', 'range_too_long');
+        const holidays = [];
+        const lastYear = Number(through.slice(0, 4));
+        for (let year = Number(from.slice(0, 4)); year <= lastYear; year += 1) {
+          for (const holiday of holidaysOf(year)) {
+            const date = formatIsoDate(holiday);
+            if (date < from || date > through || date === afterDate) continue;
+            holidays.push({
+              date, weekday: weekdayOf(date), name: holiday.name, eraDate: japaneseEraDate(holiday),
+              ...(afterDate === undefined ? {} : { daysAfterReferenceDate: (Date.parse(date) - fromTime) / 86_400_000 }),
+            });
+          }
+        }
+        return { ...(afterDate === undefined ? { startDate } : { afterDate }), endDate: through, holidays };
+      });
+    this.register('japanese_era_dates', 'Convert one or more Gregorian dates to Japanese era dates (和暦), using the app calendar’s era boundaries. A null eraDate means that the Gregorian date is before 1873, when Japan adopted the Gregorian calendar.',
+      JapaneseEraDatesArguments, japaneseEraDatesProperties, ['dates'], false, async (_actor, { dates }) => ({
+        dates: dates.map(date => ({ date, eraDate: japaneseEraDate(parseIsoDate(date)) })),
+      }));
   }
 
   private registerEventTools(): void {

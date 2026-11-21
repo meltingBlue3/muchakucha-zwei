@@ -87,7 +87,7 @@ describe('assistant tool boundary', () => {
     });
     expect(notes.list).not.toHaveBeenCalled();
     const definitions = tools.definitions();
-    expect(definitions).toHaveLength(24);
+    expect(definitions).toHaveLength(26);
     expect(definitions.filter(tool => tool.mutates)).toHaveLength(12);
     definitions[0]!.name = 'changed';
     expect(tools.definitions()[0]!.name).toBe('list_events');
@@ -290,6 +290,64 @@ describe('assistant tool boundary', () => {
     expect(prepared.arguments).toMatchObject({ startTime: '2026-10-06T16:00:00.000Z', endTime: '2026-10-08T15:59:59.000Z' });
     await tools.execute(actor, prepared);
     expect(events.create).toHaveBeenCalledWith(actor.userId, actor.householdId, expect.objectContaining({ startTime: '2026-10-06T16:00:00.000Z', endTime: '2026-10-08T15:59:59.000Z' }));
+  });
+});
+
+describe('Japanese holidays and era dates', () => {
+  test.each([
+    ['2022-03-20', '2022-03-21', '春分の日', '周一'],
+    ['2008-09-22', '2008-09-23', '秋分の日', '周二'],
+  ])('returns Japan’s holiday date when the Chinese solar term falls on %s', async (startDate, endDate, name, weekday) => {
+    const { tools } = fixtures();
+    await expect(tools.execute(actor, call('japanese_holidays', { startDate, endDate }))).resolves.toMatchObject({
+      holidays: [expect.objectContaining({ date: endDate, name, weekday })],
+    });
+  });
+
+  test('checks a single holiday or lists holidays in order across a year boundary', async () => {
+    const { tools } = fixtures();
+    await expect(tools.execute(actor, call('japanese_holidays', { startDate: '2026-09-22' }))).resolves.toEqual({
+      startDate: '2026-09-22', endDate: '2026-09-22',
+      holidays: [{ date: '2026-09-22', weekday: '周二', name: '国民の休日', eraDate: '令和8年9月22日' }],
+    });
+    await expect(tools.execute(actor, call('japanese_holidays', { startDate: '2026-11-21', endDate: '2027-01-01' }))).resolves.toMatchObject({
+      holidays: [{ date: '2026-11-23', name: '勤労感謝の日' }, { date: '2027-01-01', name: '元日' }],
+    });
+    await expect(tools.execute(actor, call('japanese_holidays', { afterDate: '2026-11-21', endDate: '2027-01-01' }))).resolves.toMatchObject({
+      afterDate: '2026-11-21',
+      holidays: [{ date: '2026-11-23', daysAfterReferenceDate: 2 }, { date: '2027-01-01', daysAfterReferenceDate: 41 }],
+    });
+    await expect(tools.execute(actor, call('japanese_holidays', { afterDate: '2026-11-23', endDate: '2027-01-01' }))).resolves.toMatchObject({
+      holidays: [{ date: '2027-01-01', daysAfterReferenceDate: 39 }],
+    });
+    await expect(tools.execute(actor, call('japanese_holidays', { startDate: '2027-03-20', endDate: '2027-03-22' }))).resolves.toMatchObject({
+      holidays: [{ date: '2027-03-21', name: '春分の日' }, { date: '2027-03-22', name: '振替休日' }],
+    });
+  });
+
+  test('uses the day of the era change and returns no era before Gregorian adoption', async () => {
+    const { tools } = fixtures();
+    await expect(tools.execute(actor, call('japanese_era_dates', { dates: ['1989-01-07', '1989-01-08', '2019-04-30', '2019-05-01', '1872-12-31'] }))).resolves.toEqual({
+      dates: [
+        { date: '1989-01-07', eraDate: '昭和64年1月7日' }, { date: '1989-01-08', eraDate: '平成元年1月8日' },
+        { date: '2019-04-30', eraDate: '平成31年4月30日' }, { date: '2019-05-01', eraDate: '令和元年5月1日' },
+        { date: '1872-12-31', eraDate: null },
+      ],
+    });
+  });
+
+  test.each([
+    ['japanese_holidays', { startDate: '2026-02-29' }],
+    ['japanese_holidays', { startDate: '2026-02-02', endDate: '2026-02-01' }],
+    ['japanese_holidays', { startDate: '2026-01-01', endDate: '2027-01-02' }],
+    ['japanese_holidays', { afterDate: '2026-11-21' }],
+    ['japanese_holidays', { startDate: '2026-11-21', afterDate: '2026-11-21', endDate: '2026-12-31' }],
+    ['japanese_era_dates', { dates: [] }],
+    ['japanese_era_dates', { dates: ['2026-02-29'] }],
+    ['japanese_era_dates', { dates: Array.from({ length: 32 }, () => '2026-01-01') }],
+  ])('rejects invalid or unbounded arguments for %s', async (name, args) => {
+    const { tools } = fixtures();
+    await expect(tools.execute(actor, call(name, args))).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED' } });
   });
 });
 
