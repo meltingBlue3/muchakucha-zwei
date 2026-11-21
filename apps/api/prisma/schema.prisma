@@ -105,6 +105,7 @@ model AuthSession {
   lastSeenAt     DateTime       @default(now()) @map("last_seen_at") @db.Timestamptz(3)
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   refreshTokens  RefreshToken[]
+  reminderPushDevice ReminderPushDevice?
 
   @@index([userId, revokedAt], map: "AuthSession_user_id_revoked_at_idx")
 }
@@ -364,6 +365,35 @@ model ReminderSettings {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, map: "reminder_settings_user_fkey")
 
   @@map("reminder_settings")
+}
+
+model ReminderPushDevice {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId   String   @unique @map("session_id") @db.Uuid
+  token       String   @unique @db.VarChar(512)
+  provider    String   @default("expo") @db.VarChar(4)
+  timeZone    String   @map("time_zone") @db.VarChar(100)
+  language    String   @db.Char(2)
+  localAlarms Boolean  @map("local_alarms")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  session     AuthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  deliveries  ReminderPushDelivery[]
+
+  @@map("reminder_push_devices")
+}
+
+model ReminderPushDelivery {
+  deviceId    String    @map("device_id") @db.Uuid
+  reminderKey String    @map("reminder_key") @db.VarChar(100)
+  fireAt      DateTime  @map("fire_at") @db.Timestamptz(3)
+  receiptId   String?   @map("receipt_id") @db.VarChar(100)
+  receiptAt   DateTime? @map("receipt_at") @db.Timestamptz(3)
+  device      ReminderPushDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@id([deviceId, reminderKey, fireAt])
+  @@index([fireAt])
+  @@index([receiptAt])
+  @@map("reminder_push_deliveries")
 }
 
 /// One person's own reminder for a single task or event, or for a whole

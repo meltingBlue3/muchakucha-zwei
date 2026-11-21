@@ -4,6 +4,7 @@ export { REMINDER_ID_PREFIX, type NotificationPermission, type ReminderNotificat
 
 /** Web and other platforms without local notifications schedule nothing. */
 export const remindersSupported = false;
+export const localAlarmsSupported = false;
 
 export async function refreshReminderChannels(): Promise<void> {}
 
@@ -21,6 +22,8 @@ export async function cancelReminder(_id: string): Promise<void> {}
 
 /** Signing out leaves no family content on the lock screen. */
 export async function cancelAllReminders(): Promise<void> {}
+
+export async function cancelLocalReminderNotifications(): Promise<void> {}
 
 export function onReminderOpened(_listener: (url: string) => void): () => void { return () => undefined; }
 

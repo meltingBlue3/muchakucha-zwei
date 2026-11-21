@@ -504,6 +504,18 @@ export interface UpcomingReminderListDto {
   reminders: UpcomingReminderDto[];
 }
 
+export interface RegisterReminderPushDto {
+  token: string;
+  provider?: 'expo' | 'fcm';
+  timeZone: string;
+  language: 'zh' | 'ja';
+  localAlarms: boolean;
+}
+
+export interface ReminderPushStatusDto {
+  active: boolean;
+}
+
 export type AssistantProtocol = 'openai-compatible' | 'anthropic' | 'qwen-asr';
 export interface CreateAssistantProviderDto {
   name: string;

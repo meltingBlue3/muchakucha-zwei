@@ -41,6 +41,7 @@ function permissionOf(status: Notifications.NotificationPermissionsStatus): Noti
 }
 
 export const remindersSupported = true;
+export const localAlarmsSupported = alarms.alarmsSupported;
 
 export async function notificationPermission(): Promise<NotificationPermission> {
   return permissionOf(await Notifications.getPermissionsAsync());
@@ -86,7 +87,11 @@ export async function cancelReminder(id: string): Promise<void> {
 }
 
 export async function cancelAllReminders(): Promise<void> {
-  await Promise.all([...(await notificationIds()).map(id => Notifications.cancelScheduledNotificationAsync(id)), alarms.cancelAllAlarms()]);
+  await Promise.all([cancelLocalReminderNotifications(), alarms.cancelAllAlarms()]);
+}
+
+export async function cancelLocalReminderNotifications(): Promise<void> {
+  await Promise.all((await notificationIds()).map(id => Notifications.cancelScheduledNotificationAsync(id)));
 }
 
 // A tap that launches the app can reach both the listener and the launch
@@ -97,7 +102,9 @@ function openedUrl(response: Notifications.NotificationResponse | null): string 
   const { identifier, content } = response.notification.request;
   const url: unknown = content.data?.url;
   const key = `${identifier}@${response.notification.date}`;
-  if (!identifier.startsWith(REMINDER_ID_PREFIX) || typeof url !== 'string' || opened.has(key)) return null;
+  if (typeof url !== 'string' || opened.has(key)) return null;
+  const remoteReminder = content.data?.reminderPush === true && /^\/households\/[a-f0-9-]+\/(today|(?:tasks|events)\/[a-f0-9-]+)$/i.test(url);
+  if (!identifier.startsWith(REMINDER_ID_PREFIX) && !remoteReminder) return null;
   opened.add(key);
   return url;
 }

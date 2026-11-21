@@ -8,9 +8,21 @@ import { ReminderSync, syncReminders } from '../reminder-sync';
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 
 const mockListUpcomingReminders = jest.fn();
+const mockRegisterReminderPush = jest.fn();
+const mockUnregisterReminderPush = jest.fn();
+const mockGetReminderPushToken = jest.fn();
 let mockToken: string | null = 'access-token';
+jest.mock('../../../platform/reminders/reminder-push', () => ({
+  getReminderPushToken: () => mockGetReminderPushToken(),
+  pushRegistrationEnabled: true,
+  reminderPushProvider: 'expo',
+}));
 jest.mock('../../auth/session-runtime', () => ({
-  sessionApiClient: { listUpcomingReminders: (...args: unknown[]) => mockListUpcomingReminders(...args) },
+  sessionApiClient: {
+    listUpcomingReminders: (...args: unknown[]) => mockListUpcomingReminders(...args),
+    registerReminderPush: (...args: unknown[]) => mockRegisterReminderPush(...args),
+    unregisterReminderPush: (...args: unknown[]) => mockUnregisterReminderPush(...args),
+  },
   sessionTransport: { getAccessToken: () => Promise.resolve(mockToken) },
 }));
 jest.mock('../../households/household-context', () => ({ useHouseholdContext: () => ({ households: [] }) }));
@@ -37,6 +49,9 @@ async function scheduled() {
 beforeEach(() => {
   mockToken = 'access-token';
   mockListUpcomingReminders.mockReset();
+  mockRegisterReminderPush.mockReset();
+  mockUnregisterReminderPush.mockReset().mockResolvedValue(undefined);
+  mockGetReminderPushToken.mockReset().mockResolvedValue(null);
 });
 
 test('schedules what the server lists and later drops what it no longer lists', async () => {
@@ -58,6 +73,31 @@ test('leaves notifications alone that are not reminders', async () => {
   expect((await Notifications.getAllScheduledNotificationsAsync()).map(request => request.identifier)).toEqual(['other']);
 });
 
+test('switches from local reminders to server push after successful registration', async () => {
+  const at = new Date(Date.now() + 3_600_000).toISOString();
+  mockListUpcomingReminders.mockResolvedValueOnce({ reminders: [upcoming('task:a', '交水费', at)] });
+  await syncReminders();
+  expect(await scheduled()).toHaveLength(1);
+
+  mockGetReminderPushToken.mockResolvedValue('ExpoPushToken[device]');
+  mockRegisterReminderPush.mockResolvedValue({ active: true });
+  await syncReminders();
+  expect(mockRegisterReminderPush).toHaveBeenCalledWith('access-token', {
+    token: 'ExpoPushToken[device]', provider: 'expo', timeZone: expect.any(String), language: 'zh', localAlarms: false,
+  });
+  expect(await scheduled()).toEqual([]);
+  expect(mockListUpcomingReminders).toHaveBeenCalledTimes(1);
+});
+
+test('continues local scheduling when the server has push disabled', async () => {
+  const at = new Date(Date.now() + 3_600_000).toISOString();
+  mockGetReminderPushToken.mockResolvedValue('ExpoPushToken[device]');
+  mockRegisterReminderPush.mockResolvedValue({ active: false });
+  mockListUpcomingReminders.mockResolvedValue({ reminders: [upcoming('task:a', '交水费', at)] });
+  await syncReminders();
+  expect(await scheduled()).toEqual([{ title: '交水费', date: at, url: '/households/h1/tasks/a' }]);
+});
+
 test('without permission or a session it neither asks the server nor schedules', async () => {
   notifications.__setPermission({ granted: false, status: 'denied', canAskAgain: true });
   await syncReminders();
@@ -65,6 +105,8 @@ test('without permission or a session it neither asks the server nor schedules',
   mockToken = null;
   await syncReminders();
   expect(mockListUpcomingReminders).not.toHaveBeenCalled();
+  expect(mockUnregisterReminderPush).toHaveBeenCalledTimes(1);
+  expect(mockUnregisterReminderPush).toHaveBeenCalledWith('access-token');
 });
 
 test('a failed request keeps the reminders already scheduled', async () => {

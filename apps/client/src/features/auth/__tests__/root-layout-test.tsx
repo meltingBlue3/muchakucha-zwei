@@ -2,6 +2,7 @@ import { render, waitFor } from '@testing-library/react-native';
 import { router, useGlobalSearchParams, usePathname } from 'expo-router';
 
 import RootLayout from '../../../../app/_layout';
+import { takeLaunchReminderUrl } from '../../../platform/reminders/reminder-notifications';
 import { sessionStateStore, sessionTransport, setSessionLostHandler } from '../session-runtime';
 
 jest.mock('expo-router', () => ({
@@ -26,7 +27,10 @@ jest.mock('../session-runtime', () => ({
   setSessionLostHandler: jest.fn(),
 }));
 
+jest.mock('../../../platform/reminders/reminder-notifications', () => ({ takeLaunchReminderUrl: jest.fn() }));
+
 beforeEach(() => {
+  jest.mocked(takeLaunchReminderUrl).mockResolvedValue(null);
   jest.mocked(usePathname).mockReturnValue('/login');
   jest.mocked(useGlobalSearchParams).mockReturnValue({});
   jest.mocked(sessionStateStore.get).mockReturnValue({ kind: 'booting' });
@@ -40,6 +44,16 @@ beforeEach(() => {
 });
 
 describe('root authentication routing', () => {
+  test('uses the tapped reminder as the first route after restoring a session', async () => {
+    const eventRoute = '/households/11111111-1111-4111-8111-111111111111/events/22222222-2222-4222-8222-222222222222';
+    jest.mocked(takeLaunchReminderUrl).mockResolvedValue(eventRoute);
+    jest.mocked(sessionTransport.restore).mockResolvedValue({ kind: 'authenticated', session: { accessToken: 'restored' } });
+
+    await render(<RootLayout />);
+
+    await waitFor(() => expect(router.replace).toHaveBeenLastCalledWith({ pathname: eventRoute, params: undefined }));
+  });
+
   test('preserves a cold-start login return query without an expired-session warning', async () => {
     jest.mocked(useGlobalSearchParams).mockReturnValue({ intended: '/profile' });
 

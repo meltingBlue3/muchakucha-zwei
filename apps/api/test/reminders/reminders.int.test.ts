@@ -1,12 +1,16 @@
 import { fixtureEditPayload } from '../../../../scripts/test-edit-version.js';
-import { randomUUID } from 'node:crypto';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { mkdtemp, rmdir, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { Client } from 'pg';
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createApplication } from '../../src/main.js';
 import { addDays, currentCalendarDateIn, formatIsoDate, localDateTimeToInstant } from '../../src/modules/recurrence/recurrence-date.js';
+import { ReminderPushService } from '../../src/modules/reminders/reminder-push.service.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
 const accessSecret = 'test-only-access-secret-that-is-longer-than-thirty-two-bytes';
@@ -16,10 +20,12 @@ const HOUR = 3_600_000;
 
 let app: NestFastifyApplication;
 let passwordHash: string;
+let credentialDirectory: string;
 
 interface ActorFixture {
   accessToken: string;
   userId: string;
+  sessionId: string;
 }
 
 interface Reply {
@@ -50,7 +56,7 @@ async function insertActor(username: string): Promise<ActorFixture> {
       [sessionId, userId],
     );
   });
-  return { userId, accessToken: await jwt.signAsync({ sub: userId, sid: sessionId }) };
+  return { userId, sessionId, accessToken: await jwt.signAsync({ sub: userId, sid: sessionId }) };
 }
 
 async function api(actor: ActorFixture, method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: unknown): Promise<Reply> {
@@ -104,12 +110,19 @@ function inHours(hours: number): Date {
 
 beforeAll(async () => {
   passwordHash = await argon2.hash('reminders-fixture-password', { type: argon2.argon2id, memoryCost: 19_456, timeCost: 2, parallelism: 1 });
+  credentialDirectory = await mkdtemp(join(tmpdir(), 'reminder-fcm-test-'));
+  const credentialPath = join(credentialDirectory, 'service-account.json');
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { format: 'pem', type: 'pkcs8' }, publicKeyEncoding: { format: 'pem', type: 'spki' } });
+  await writeFile(credentialPath, JSON.stringify({ type: 'service_account', project_id: 'reminder-test', client_email: 'fcm@reminder-test.iam.gserviceaccount.com', private_key: privateKey }));
   app = await createApplication({
     ...process.env,
     NODE_ENV: 'test',
     E2E_DISABLE_RATE_LIMITS: 'true',
     JWT_ACCESS_SECRET: accessSecret,
     DATABASE_URL: getTestDatabaseUrl(),
+    REMINDER_PUSH_ENABLED: 'true',
+    EXPO_PUSH_ACCESS_TOKEN: 'test-expo-push-access-token',
+    REMINDER_FCM_CREDENTIALS_FILE: credentialPath,
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -117,10 +130,144 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app?.close();
+  if (credentialDirectory) {
+    await unlink(join(credentialDirectory, 'service-account.json'));
+    await rmdir(credentialDirectory);
+  }
 });
 
 beforeEach(async () => {
   await resetDatabase();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+async function registerPush(actor: ActorFixture, token: string, localAlarms = false, provider?: 'fcm'): Promise<void> {
+  await withDatabase(client => client.query(
+    `INSERT INTO "RefreshToken" ("session_id", "token_hash", "expires_at") VALUES ($1, $2, NOW() + INTERVAL '1 day')`,
+    [actor.sessionId, actor.sessionId.replaceAll('-', '').padEnd(64, '0')],
+  ));
+  const response = await api(actor, 'PUT', '/api/v1/users/me/reminder-push', { token, provider, timeZone: SHANGHAI, language: 'ja', localAlarms });
+  expect(response.statusCode).toBe(200);
+  expect(response.json()).toEqual({ active: true });
+}
+
+describe('server reminder push', () => {
+  test('lets Google Play services display an Android reminder with a link to the edited event', async () => {
+    const owner = await insertActor('fcm-owner');
+    const member = await insertActor('fcm-member');
+    const householdId = await createHousehold(owner, '小林之家');
+    await addMember(householdId, member);
+    const token = 'android-device-token:'.padEnd(180, 'a');
+    await registerPush(member, token, false, 'fcm');
+
+    const initial = inHours(1);
+    const moved = inHours(2);
+    const event = await createEvent(owner, householdId, { title: '晚饭', startTime: initial.toISOString(), endTime: moved.toISOString() });
+    const eventUrl = `${eventsUrl(householdId)}/${event.id}`;
+    expect((await api(owner, 'PUT', eventUrl, { title: '家人晚饭', startTime: moved.toISOString(), endTime: inHours(3).toISOString() })).statusCode).toBe(200);
+
+    const send = vi.fn(async (url: string, _options: RequestInit) => url === 'https://oauth2.googleapis.com/token'
+      ? Response.json({ access_token: 'qa-oauth-token', expires_in: 3600 })
+      : Response.json({ name: 'projects/reminder-test/messages/1' }));
+    vi.stubGlobal('fetch', send);
+    const worker = app.get(ReminderPushService);
+    await worker.dispatch(new Date(initial.getTime() - 15 * 60_000));
+    expect(send).not.toHaveBeenCalled();
+    const fireAt = new Date(moved.getTime() - 15 * 60_000);
+    vi.spyOn(Date, 'now').mockReturnValue(fireAt.getTime());
+    await Promise.all([worker.dispatch(fireAt), worker.dispatch(fireAt)]);
+
+    expect(send.mock.calls.map(([url]) => url)).toEqual([
+      'https://oauth2.googleapis.com/token', 'https://fcm.googleapis.com/v1/projects/reminder-test/messages:send',
+    ]);
+    const [, options] = send.mock.calls[1]!;
+    expect(options.headers).toMatchObject({ Authorization: 'Bearer qa-oauth-token' });
+    expect(JSON.parse(String(options.body))).toMatchObject({ message: {
+      token,
+      notification: { title: '家人晚饭', body: expect.stringContaining('予定のリマインダー') },
+      android: { priority: 'HIGH', ttl: '120s', notification: { channel_id: 'event-reminders', proxy: 'ALLOW', default_sound: true } },
+      data: { body: JSON.stringify({ reminderPush: true, url: `/households/${householdId}/events/${event.id}` }) },
+    } });
+  });
+
+  test('uses a family member’s edited time and claims each device delivery once', async () => {
+    const owner = await insertActor('push-owner');
+    const member = await insertActor('push-member');
+    const outsider = await insertActor('push-outsider');
+    const secondDevice = await insertActor('push-logged-out');
+    const householdId = await createHousehold(owner, '小林之家');
+    await addMember(householdId, member);
+    await addMember(householdId, secondDevice);
+    await registerPush(member, 'ExpoPushToken[member]');
+    await registerPush(outsider, 'ExpoPushToken[outsider]');
+    await registerPush(secondDevice, 'ExpoPushToken[logged-out]');
+    expect((await api(secondDevice, 'POST', '/api/v1/auth/logout')).statusCode).toBe(204);
+
+    const start = inHours(1);
+    const moved = inHours(2);
+    const event = await createEvent(owner, householdId, { title: '晚饭', startTime: start.toISOString(), endTime: moved.toISOString() });
+    const eventUrl = `${eventsUrl(householdId)}/${event.id}`;
+    expect((await api(owner, 'PUT', eventUrl, {
+      title: '家人晚饭',
+      startTime: moved.toISOString(),
+      endTime: inHours(3).toISOString(),
+    })).statusCode).toBe(200);
+
+    const send = vi.fn(async (url: string, _options: RequestInit) =>
+      Response.json({ data: url.endsWith('/send') ? { status: 'ok', id: 'ticket-1' } : {} }));
+    vi.stubGlobal('fetch', send);
+    const worker = app.get(ReminderPushService);
+    await worker.dispatch(new Date(start.getTime() - 15 * 60_000));
+    expect(send).not.toHaveBeenCalled();
+    const fireAt = new Date(moved.getTime() - 15 * 60_000);
+    await Promise.all([worker.dispatch(fireAt), worker.dispatch(fireAt)]);
+    const requests = send.mock.calls.filter(([url]) => url.endsWith('/send'));
+    expect(requests).toHaveLength(1);
+    const [url, options] = requests[0]!;
+    expect(url).toMatch(/\/push\/send$/);
+    expect(options.headers).toMatchObject({ Authorization: 'Bearer test-expo-push-access-token' });
+    expect(JSON.parse(String(options.body))).toMatchObject({
+      to: 'ExpoPushToken[member]',
+      title: '家人晚饭',
+      body: expect.stringContaining('予定のリマインダー'),
+      channelId: 'event-reminders',
+      data: { reminderPush: true, url: `/households/${householdId}/events/${event.id}` },
+    });
+  });
+
+  test('keeps a capable device’s selected alarm local and retires an invalid push token', async () => {
+    const owner = await insertActor('push-alarm-owner');
+    const member = await insertActor('push-alarm-member');
+    const householdId = await createHousehold(owner, '小林之家');
+    await addMember(householdId, member);
+    await registerPush(owner, 'ExpoPushToken[alarm-device]', true);
+    await registerPush(member, 'ExpoPushToken[invalid-device]');
+    const start = inHours(1);
+    const event = await createEvent(owner, householdId, { title: '吃药', startTime: start.toISOString(), endTime: inHours(2).toISOString() });
+    const choice = { mode: 'before', minutesBefore: 0, alarm: true };
+    const choiceUrl = `${eventsUrl(householdId)}/${event.id}/my-reminder`;
+    expect((await api(owner, 'PUT', choiceUrl, choice)).statusCode).toBe(200);
+    expect((await api(member, 'PUT', choiceUrl, choice)).statusCode).toBe(200);
+    const send = vi.fn(async (url: string) => Response.json({
+      data: url.endsWith('/send')
+        ? { status: 'ok', id: 'ticket-1' }
+        : { 'ticket-1': { status: 'error', details: { error: 'DeviceNotRegistered' } } },
+    }));
+    vi.stubGlobal('fetch', send);
+    vi.spyOn(Date, 'now').mockReturnValue(start.getTime());
+
+    const worker = app.get(ReminderPushService);
+    await worker.dispatch(start);
+    expect(send.mock.calls.map(([url]) => url.split('/').at(-1))).toEqual(['send']);
+    await worker.dispatch(new Date(start.getTime() + 16 * 60_000));
+    expect(send.mock.calls.map(([url]) => url.split('/').at(-1))).toEqual(['send', 'getReceipts']);
+    const devices = await withDatabase(client => client.query('SELECT token FROM "reminder_push_devices"'));
+    expect(devices.rows).toEqual([{ token: 'ExpoPushToken[alarm-device]' }]);
+  });
 });
 
 describe('reminder settings', () => {
