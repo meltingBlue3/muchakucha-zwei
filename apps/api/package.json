@@ -30,10 +30,12 @@
     "argon2": "0.45.1",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
-    "pg": "8.22.0"
+    "pg": "8.22.0",
+    "web-push": "4.0.0"
   },
   "devDependencies": {
     "@types/pg": "8.20.0",
+    "@types/web-push": "3.6.4",
     "prisma": "7.9.1",
     "typescript": "5.9.3",
     "vitest": "4.1.10"

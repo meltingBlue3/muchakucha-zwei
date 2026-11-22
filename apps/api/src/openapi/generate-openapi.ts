@@ -525,7 +525,9 @@ export interface UpcomingReminderListDto {
 
 export interface RegisterReminderPushDto {
   token: string;
-  provider?: 'expo' | 'fcm';
+  provider?: 'expo' | 'fcm' | 'web';
+  /** Required when provider is web. */
+  keys?: { p256dh: string; auth: string };
   timeZone: string;
   language: 'zh' | 'ja';
   localAlarms: boolean;

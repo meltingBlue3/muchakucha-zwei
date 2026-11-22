@@ -183,6 +183,8 @@ export async function createApplication(
           'request.headers.cookie',
           '*.password',
           '*.token',
+          '*.p256dh',
+          '*.auth',
           '*.refreshToken',
           '*.pendingProof',
           '*.apiKey',

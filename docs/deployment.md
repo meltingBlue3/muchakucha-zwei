@@ -21,6 +21,8 @@
 
 ### API
 
+启用 Web Push 时，由维护者本人在服务器的 `/etc/muchakucha/api.env` 设置 `REMINDER_PUSH_ENABLED=true`、`REMINDER_WEB_PUSH_PUBLIC_KEY`、`REMINDER_WEB_PUSH_PRIVATE_KEY` 和 `REMINDER_WEB_PUSH_SUBJECT`。按下列步骤先完成 API 迁移和重启，再上传 Web 产物。密钥生成见 [开发指南](development.md#启用-web-push)。
+
 在服务器的 `/opt/muchakucha` 中执行：
 
 ```bash
@@ -37,12 +39,16 @@ systemctl restart muchakucha-api
 在开发机构建后上传。服务器内存有限，只安装 API 依赖，Web 保持本地构建：
 
 ```bash
-EXPO_PUBLIC_API_ORIGIN=https://47.117.148.16 pnpm --filter client exec expo export --platform web --clear
+EXPO_PUBLIC_API_ORIGIN=https://47.117.148.16 \
+EXPO_PUBLIC_REMINDER_WEB_PUSH_KEY="${REMINDER_WEB_PUSH_PUBLIC_KEY}" \
+pnpm --filter client exec expo export --platform web --clear
 grep -ohE "https?://(localhost|127\.0\.0\.1|47\.117\.148\.16)[:0-9]*" apps/client/dist/_expo/static/js/web/entry-*.js | sort -u
 rsync -az --delete apps/client/dist/ <server>:/var/www/muchakucha/
 ```
 
 `EXPO_PUBLIC_API_ORIGIN` 在 Metro 转换模块时写进代码，而 Metro 会缓存转换结果，不加 `--clear` 可能沿用上一次导出的地址，比如测试用的本机地址。`grep` 只应输出 `https://47.117.148.16` 一行；出现 `localhost` 或 `127.0.0.1` 时不要上传。`--clear` 会清空正在运行的 `expo start` 共用的缓存，导出前先停掉本机的开发服务器。
+
+在本地构建命令中传入与 API 匹配的 VAPID 公钥。迁到正式域名时，在新站点接受订阅前清理旧来源的 Web 登记（`provider = 'web'`）。用户在新地址重新允许通知后，客户端会登记新的订阅。
 
 ## 首次配置
 

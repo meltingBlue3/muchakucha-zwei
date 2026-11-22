@@ -23,6 +23,6 @@ Web 用户在日本，使用 Chrome、Edge 和 Safari（含 iOS 主屏应用）�
 ## 后果
 
 - 服务端会向用户提交的订阅地址发请求，所以只接受已知推送服务的主机。这份白名单是 SSRF 防线，不能当成多余的校验去掉。
-- 浏览器完全退出时收不到；iOS 和 iPadOS 上只有添加到主屏幕后才能订阅。
+- 浏览器退出后的送达取决于浏览器和系统。macOS Safari 可在退出后接收；iOS 和 iPadOS 上只有添加到主屏幕后才能订阅。[Apple WWDC：Meet Web Push for Safari](https://developer.apple.com/videos/play/wwdc2022/10098/?time=576)
 - 订阅和通知权限都绑定站点来源。迁到正式域名后，用户要在新地址重新允许通知，旧地址的 Web 登记要清掉。
 - 更换 VAPID 密钥会让现有订阅失效，推送服务会返回 403。客户端每次同步时比对公钥，不一致就重新订阅。

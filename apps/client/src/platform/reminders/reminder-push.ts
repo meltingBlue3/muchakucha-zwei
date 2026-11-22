@@ -1,4 +1,6 @@
-export const pushRegistrationEnabled = false;
-export const reminderPushProvider = 'expo';
+import type { ReminderPushProvider, ReminderPushToken } from './reminder-types';
 
-export async function getReminderPushToken(_onTokenReady: () => void): Promise<string | null> { return null; }
+export const pushRegistrationEnabled = false;
+export const reminderPushProvider: ReminderPushProvider = 'expo';
+
+export async function getReminderPushToken(_onTokenReady: () => void): Promise<ReminderPushToken | null> { return null; }

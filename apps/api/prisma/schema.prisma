@@ -384,8 +384,10 @@ model ReminderSettings {
 model ReminderPushDevice {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   sessionId   String   @unique @map("session_id") @db.Uuid
-  token       String   @unique @db.VarChar(512)
+  token       String   @unique @db.VarChar(1024)
   provider    String   @default("expo") @db.VarChar(4)
+  p256dh      String?  @db.VarChar(87)
+  auth        String?  @db.VarChar(22)
   timeZone    String   @map("time_zone") @db.VarChar(100)
   language    String   @db.Char(2)
   localAlarms Boolean  @map("local_alarms")

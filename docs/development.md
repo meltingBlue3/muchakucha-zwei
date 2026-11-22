@@ -94,11 +94,12 @@ EXPO_PUBLIC_API_ORIGIN=http://<开发机局域网 IP>:3100 pnpm --filter client 
 
 ## 提醒与闹铃
 
-提醒设置按个人保存，同一账户跨设备同步。iOS 通过 Expo Push 转交 APNs。启用直连 FCM 的 Google Play Android 由 API 直接投递，允许 Google Play 服务在应用进程结束时显示通知。服务端到期时按最新内容计算，家人改期、取消或修改分配后，收件人无需打开 App。其他设备继续在本机排程，厂商通道后续适配。
+提醒设置按个人保存，同一账户跨设备同步。iOS 通过 Expo Push 转交 APNs。启用直连 FCM 的 Google Play Android 由 API 直接投递，允许 Google Play 服务在应用进程结束时显示通知。Web 经浏览器的 Web Push 服务接收普通提醒。服务端到期时按最新内容计算，家人改期、取消或修改分配后，收件人无需打开 App。未启用推送的手机继续在本机排程，厂商通道后续适配。
 
 - 任务提醒负责人，没有负责人时提醒创建者；日程提醒全体家庭成员。无截止日期、已完成的任务和已取消的日程均不提醒。
 - 「默认」跟随个人设置；重复内容的单独提醒作用于整个重复安排。只改提醒不修改内容版本，也不弹出内容修改范围选择。
-- 本机排程覆盖未来 7 天、最多 60 条。Android 的响铃闹铃继续使用本机排程，其他设备上的改动会在本机下次同步后生效。Web 仅管理设置。
+- 本机排程覆盖未来 7 天、最多 60 条。Android 的响铃闹铃继续使用本机排程，其他设备上的改动会在本机下次同步后生效。
+- Web 需要 HTTPS 或 localhost。退出浏览器后能否收到提醒取决于浏览器和系统。iPhone 和 iPad 须在 Safari 添加到主屏幕，并从主屏幕打开后开启通知。
 - 推送按每台设备最后登记的时区和语言发送，15 秒扫描一次，只处理最近两分钟到期的提醒。设备离线或平台投递失败时可能错过。通知包含标题、时间和打开事项所需的路径。
 - 锁屏显示、后台弹出和厂商省电限制需在系统设置中确认，应用无法完整读取这些开关。普通通知、闹铃、重启与冷启动的待验收项见 [路线图](roadmap.md#待验收)。
 
@@ -108,6 +109,14 @@ EXPO_PUBLIC_API_ORIGIN=http://<开发机局域网 IP>:3100 pnpm --filter client 
 2. API 应用数据库迁移并设置 `REMINDER_PUSH_ENABLED=true`。Android 直连需要启用 Firebase Cloud Messaging API，并把 `REMINDER_FCM_CREDENTIALS_FILE` 指向仓库外的同一 Firebase 项目服务账号 JSON 文件。账号需要 Cloud Messaging 发送权限。API 需要访问 `oauth2.googleapis.com` 与 `fcm.googleapis.com`，设备上的 Google Play 服务需要连接 FCM。[FCM 服务端授权](https://firebase.google.com/docs/cloud-messaging/auth-server) · [通知委托显示](https://firebase.google.com/docs/cloud-messaging/android-message-priority#notification_delegation_with_google_play_services)
 3. 在目标 EAS 构建环境设置 `EXPO_PUBLIC_REMINDER_PUSH_ENABLED=true`，Google Play 版同时设置 `EXPO_PUBLIC_REMINDER_FCM_ENABLED=true` 后构建新包。连接本地 Metro 的开发包也需要在运行 Metro 时设置相应变量。安装后登录并开启通知权限，App 会自动登记。
 4. Expo 路径需要服务端和设备访问 `exp.host`。启用了 Expo 增强推送安全的服务端设置 `EXPO_PUSH_ACCESS_TOKEN`。使用旧版 Expo 路径的 Android 包需要在 EAS 保留 FCM v1 凭证。
+
+### 启用 Web Push
+
+1. 用 `pnpm --filter api exec web-push generate-vapid-keys` 生成一对 VAPID 密钥，并将私钥保存在仓库外。
+2. API 应用数据库迁移，设置 `REMINDER_PUSH_ENABLED=true` 以及 `REMINDER_WEB_PUSH_PUBLIC_KEY`、`REMINDER_WEB_PUSH_PRIVATE_KEY` 和 `REMINDER_WEB_PUSH_SUBJECT`。主题填有效的 `mailto:` 或 `https:` 联系地址。开启服务端推送时，三项 Web Push 变量须一起配置，且公私钥必须匹配。
+3. 导出 Web 时传入环境变量 `EXPO_PUBLIC_REMINDER_WEB_PUSH_KEY`，值取 API 使用的公钥。用配置了公钥的静态产物登录并在「提醒」开启通知。
+
+测试现场生成密钥。本地运行或构建时从命令行传入环境变量。跑 mocked Playwright 的 Web Push 用例时，导出和跑测试的命令都传入 `EXPO_PUBLIC_REMINDER_WEB_PUSH_KEY`。
 
 服务端规则见 [API 手册](agent/api.md#personal-reminders)，本机对账与平台约束见 [客户端手册](agent/client.md#local-reminders)。
 

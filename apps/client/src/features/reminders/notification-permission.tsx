@@ -11,7 +11,7 @@ import { requestReminderSync } from './reminder-sync';
 export function useNotificationPermission(): { permission: NotificationPermission | null; error: string | null; enable(): Promise<void> } {
   const { t } = useTranslation('reminders');
   const [permission, setPermission] = useState<NotificationPermission | null>(device.remindersSupported ? null : 'unsupported');
-  const [error, setError] = useState<'permission.settingsError' | 'permission.enableError' | 'permission.alarmSettingsError' | null>(null);
+  const [error, setError] = useState<'permission.settingsError' | 'permission.enableError' | 'permission.webEnableError' | null>(null);
 
   const refresh = useCallback(async () => {
     try { setPermission(await device.notificationPermission()); } catch { setPermission('undetermined'); }
@@ -28,16 +28,15 @@ export function useNotificationPermission(): { permission: NotificationPermissio
     setError(null);
     try {
       if (permission === 'blocked') {
-        await device.openNotificationSettings();
+        if (device.webReminderSupport === null) await device.openNotificationSettings();
         return;
       }
       const next = await device.requestNotificationPermission();
       setPermission(next);
       if (next === 'granted') requestReminderSync(0);
     } catch {
-      setError(permission === 'blocked'
-        ? 'permission.settingsError'
-        : 'permission.enableError');
+      if (permission === 'blocked') setError('permission.settingsError');
+      else setError(device.webReminderSupport === null ? 'permission.enableError' : 'permission.webEnableError');
     }
   }, [permission]);
 
@@ -71,6 +70,7 @@ export function useAlarmLockScreen(): { canCover: boolean | null; error: string 
 /** The action that turns notifications on: ask, or send the person to the settings once the system stops asking. */
 export function EnableNotificationsButton({ permission, onPress }: { permission: NotificationPermission; onPress(): void }) {
   const { t } = useTranslation('reminders');
+  if (permission === 'blocked' && device.webReminderSupport !== null) return null;
   return (
     <Button size="compact" tone="secondary" onPress={onPress} label={permission === 'blocked' ? t('permission.openSettings') : t('permission.enable')} accessibilityLabel={permission === 'blocked' ? t('permission.openNotificationSettings') : t('permission.enableNotifications')} />
   );
@@ -81,10 +81,13 @@ export function NotificationPermissionNotice() {
   const { t } = useTranslation('reminders');
   const { permission, error, enable } = useNotificationPermission();
   if (permission === null || permission === 'granted' || permission === 'unsupported') return null;
+  if (permission === 'blocked' && device.webReminderSupport !== null) {
+    return <Text variant="bodySm">{t('permission.webBlocked')}</Text>;
+  }
   return (
     <Stack gap={3}>
       <Inline gap={3} style={{ alignItems: 'center' }}>
-        <Text variant="bodySm" style={{ flex: 1 }}>{t('permission.notice')}</Text>
+        <Text variant="bodySm" style={{ flex: 1 }}>{t(device.webReminderSupport === null ? 'permission.notice' : 'permission.webNotice')}</Text>
         <EnableNotificationsButton permission={permission} onPress={() => void enable()} />
       </Inline>
       {error !== null ? <Banner>{error}</Banner> : null}
