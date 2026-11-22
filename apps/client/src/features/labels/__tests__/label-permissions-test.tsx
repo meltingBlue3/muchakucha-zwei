@@ -134,7 +134,7 @@ describe('editing a label someone else has just changed', () => {
 
     await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
     await fireEvent.press(view.getByRole('menuitem', { name: '编辑标签 采购' }));
-    await fireEvent.changeText(view.getByLabelText('编辑标签名称'), '日用品');
+    await fireEvent.changeText(await view.findByLabelText('编辑标签名称'), '日用品');
     await fireEvent.press(view.getByRole('button', { name: '保存' }));
 
     await view.findByText('这个标签刚被改成了「买菜」。你填写的内容还在，再保存一次会覆盖这次修改。');
@@ -186,7 +186,7 @@ describe('how much each label is used', () => {
     await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
     await fireEvent.press(view.getByRole('menuitem', { name: '删除标签 采购' }));
 
-    expect(view.getByText('删除“采购”后，它会从 2 个日程和 1 个任务中移除，日程和任务本身会保留。')).toBeTruthy();
+    expect(await view.findByText('删除“采购”后，它会从 2 个日程和 1 个任务中移除，日程和任务本身会保留。')).toBeTruthy();
   });
 
   test('deleting an unused label says nothing else changes', async () => {
@@ -195,6 +195,6 @@ describe('how much each label is used', () => {
     await fireEvent.press(await view.findByLabelText('更多操作：标签 闲置'));
     await fireEvent.press(view.getByRole('menuitem', { name: '删除标签 闲置' }));
 
-    expect(view.getByText('“闲置”没有用在任何日程或任务上，删除后不影响其他内容。')).toBeTruthy();
+    expect(await view.findByText('“闲置”没有用在任何日程或任务上，删除后不影响其他内容。')).toBeTruthy();
   });
 });
