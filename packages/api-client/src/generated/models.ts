@@ -416,9 +416,12 @@ export interface CreateLabelDto {
   color: string;
 }
 
-export interface UpdateLabelDto {
+/** The name and colour read before editing are the label's version. Send both or neither. */
+export interface UpdateLabelRequestDto {
   name?: string;
   color?: string;
+  expectedName?: string;
+  expectedColor?: string;
 }
 
 export interface LabelResponseDto {

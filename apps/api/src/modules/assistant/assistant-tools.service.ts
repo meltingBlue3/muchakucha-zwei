@@ -425,8 +425,8 @@ export class AssistantToolsService {
   }
 
   private registerEventTools(): void {
-    this.register('create_event', 'Propose creating an event. Times must include UTC/offset. With allDay true, times are widened to whole local days in the user\'s time zone. Optional recurrence creates a series; do not infer missing times or recurrence scope.',
-      CreateEventArguments, { ...eventProperties, ...recurrenceProperty }, ['title', 'startTime', 'endTime'], true,
+    this.register('create_event', 'Propose creating an event. Times must include UTC/offset. With allDay true, times are widened to whole local days in the user\'s time zone. Optional recurrence creates a series; do not infer missing times or recurrence scope. Resolve label IDs through list_labels.',
+      CreateEventArguments, { ...eventProperties, ...recurrenceProperty, ...labelsProperty }, ['title', 'startTime', 'endTime'], true,
       (actor, args) => this.events.create(actor.userId, actor.householdId, args),
       async (actor, args) => {
         await this.household(actor);
@@ -450,8 +450,8 @@ export class AssistantToolsService {
   }
 
   private registerTaskTools(): void {
-    this.register('create_task', 'Propose creating a task. Resolve assignee user IDs through household_members. Optional recurrence creates a series.',
-      CreateTaskArguments, { ...taskProperties, ...recurrenceProperty }, ['title'], true,
+    this.register('create_task', 'Propose creating a task. Resolve assignee user IDs through household_members and label IDs through list_labels. Optional recurrence creates a series.',
+      CreateTaskArguments, { ...taskProperties, ...recurrenceProperty, ...labelsProperty }, ['title'], true,
       (actor, args) => this.tasks.create(actor.userId, actor.householdId, args),
       async (actor, args) => { await this.household(actor); validateDueDate(args.dueDate); }, normalizeDueDate);
     this.register('update_task', 'Propose updating this task occurrence only, including completion status, assignees or labels. Copy current task/rule versions from get_task. Empty arrays clear assignees/labels; empty dueDate clears the date. This does not change the series.',

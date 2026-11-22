@@ -22,7 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import { LabelsService } from './labels.service.js';
-import { CreateLabelDto, DeleteLabelQueryDto, LabelListResponseDto, LabelResponseDto, UpdateLabelDto } from './dto/create-label.dto.js';
+import { CreateLabelDto, DeleteLabelQueryDto, LabelListResponseDto, LabelResponseDto, UpdateLabelRequestDto } from './dto/create-label.dto.js';
 
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
@@ -68,9 +68,13 @@ export class LabelsController {
     @Req() request: AuthenticatedRequest,
     @Param('householdId', uuidParam) householdId: string,
     @Param('labelId', uuidParam) labelId: string,
-    @Body() input: UpdateLabelDto,
+    @Body() input: UpdateLabelRequestDto,
   ): Promise<LabelResponseDto> {
-    return this.labelsService.update(request.auth.sub, householdId, labelId, input);
+    const { expectedName, expectedColor, ...changes } = input;
+    const expected = expectedName === undefined || expectedColor === undefined
+      ? undefined
+      : { name: expectedName, color: expectedColor };
+    return this.labelsService.update(request.auth.sub, householdId, labelId, changes, expected);
   }
 
   @Delete(':labelId')

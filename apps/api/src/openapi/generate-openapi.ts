@@ -424,9 +424,12 @@ export interface CreateLabelDto {
   color: string;
 }
 
-export interface UpdateLabelDto {
+/** The name and colour read before editing are the label's version. Send both or neither. */
+export interface UpdateLabelRequestDto {
   name?: string;
   color?: string;
+  expectedName?: string;
+  expectedColor?: string;
 }
 
 export interface LabelResponseDto {
@@ -640,7 +643,7 @@ import type {
   NoteResponseDto,
   NoteListResponseDto,
   CreateLabelDto,
-  UpdateLabelDto,
+  UpdateLabelRequestDto,
   LabelResponseDto,
   LabelListResponseDto,
   RecurrenceRuleListItemDto,
@@ -1273,7 +1276,7 @@ export class ApiClient {
     accessToken: string,
     householdId: string,
     labelId: string,
-    body: UpdateLabelDto,
+    body: UpdateLabelRequestDto,
     signal?: AbortSignal,
   ): Promise<LabelResponseDto> {
     return this.authenticated<LabelResponseDto>(

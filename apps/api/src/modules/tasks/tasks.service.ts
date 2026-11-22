@@ -1,4 +1,5 @@
 import { lockTaskAssignments } from '../shared/task-assignment.js';
+import { labelsByName } from '../shared/labels-by-name.js';
 import { lockContent, replaceLabels } from '../shared/edit-version.js';
 import { readReminderChoice, readReminderChoices, writeReminderChoice } from '../shared/reminder-overrides.js';
 import type { ReminderChoiceDto } from '../reminders/dto/reminder.dto.js';
@@ -231,7 +232,7 @@ export class TasksService {
       await this.generateNewSeries(created.ruleId);
       const task = await this.prisma.task.findUniqueOrThrow({
         where: { id: created.taskId },
-          include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+          include: { labels: labelsByName, assignees: true, recurrenceRule: true },
       });
       return this.toResponse(task, await readReminderChoice(this.prisma, actorId, 'task', task));
     }
@@ -248,7 +249,7 @@ export class TasksService {
       }
       return tx.task.findUniqueOrThrow({
         where: { id: created.id },
-        include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+        include: { labels: labelsByName, assignees: true, recurrenceRule: true },
       });
     });
 
@@ -274,7 +275,7 @@ export class TasksService {
       this.prisma.task.findMany({
         where,
         orderBy: [{ priority: 'asc' }, { dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
-        include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+        include: { labels: labelsByName, assignees: true, recurrenceRule: true },
       }),
       // The monotonic watermark means an ended rule's watermark is frozen
       // in the past forever. Counting it into the household _min would
@@ -304,7 +305,7 @@ export class TasksService {
 
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
-      include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+      include: { labels: labelsByName, assignees: true, recurrenceRule: true },
     });
     if (task === null || task.householdId !== householdId) {
       throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found.' });
@@ -423,7 +424,7 @@ export class TasksService {
       }
       return tx.task.update({
         where: { id: taskId }, data: { ...data, updatedAt },
-          include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+          include: { labels: labelsByName, assignees: true, recurrenceRule: true },
       });
     });
 
@@ -431,7 +432,7 @@ export class TasksService {
     await this.generateNewSeries(updated.recurrenceRuleId!);
     const converted = await this.prisma.task.findUniqueOrThrow({
       where: { id: taskId },
-      include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+      include: { labels: labelsByName, assignees: true, recurrenceRule: true },
     });
     return this.toResponse(converted, await readReminderChoice(this.prisma, actorId, 'task', converted));
   }

@@ -42,6 +42,23 @@ export class UpdateLabelDto {
   color?: string;
 }
 
+/**
+ * The edit request also carries the name and colour read before editing, as
+ * a delete does. Kept off UpdateLabelDto: the assistant's arguments extend it
+ * and require both, which an inherited ValidateIf would let them skip.
+ */
+export class UpdateLabelRequestDto extends UpdateLabelDto {
+  @ApiPropertyOptional({ description: 'Name read before editing; with expectedColor, a changed label returns 409 EDIT_CONFLICT.' })
+  @ValidateIf((input: UpdateLabelRequestDto) => input.expectedName !== undefined || input.expectedColor !== undefined)
+  @IsString()
+  expectedName?: string;
+
+  @ApiPropertyOptional({ description: 'Colour read before editing; sent with expectedName.' })
+  @ValidateIf((input: UpdateLabelRequestDto) => input.expectedName !== undefined || input.expectedColor !== undefined)
+  @IsString()
+  expectedColor?: string;
+}
+
 export class LabelResponseDto {
   @ApiProperty()
   id!: string;

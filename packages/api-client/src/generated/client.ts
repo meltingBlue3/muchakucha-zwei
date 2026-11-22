@@ -54,7 +54,7 @@ import type {
   NoteResponseDto,
   NoteListResponseDto,
   CreateLabelDto,
-  UpdateLabelDto,
+  UpdateLabelRequestDto,
   LabelResponseDto,
   LabelListResponseDto,
   RecurrenceRuleListItemDto,
@@ -687,7 +687,7 @@ export class ApiClient {
     accessToken: string,
     householdId: string,
     labelId: string,
-    body: UpdateLabelDto,
+    body: UpdateLabelRequestDto,
     signal?: AbortSignal,
   ): Promise<LabelResponseDto> {
     return this.authenticated<LabelResponseDto>(

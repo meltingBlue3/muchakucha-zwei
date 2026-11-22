@@ -22,6 +22,11 @@ import { UnsavedSwitchDialog } from '../../../../../src/ui/unsaved-switch-dialog
 
 type LabelAction = { kind: 'create' } | { kind: 'edit' | 'delete'; label: LabelResponseDto };
 
+// The API accepts any hex colour, and the assistant may choose one outside the
+// presets or in lower case. Such a label still opens with its own colour chosen.
+const presetFor = (color: string) => labelColorPresets.find(preset => preset.toLowerCase() === color.toLowerCase());
+const formColor = (label: LabelResponseDto) => presetFor(label.color) ?? label.color;
+
 export default function LabelsIndexRoute() {
   const { t } = useTranslation(['labels', 'navigation', 'common', 'shared']);
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,12 +49,13 @@ export default function LabelsIndexRoute() {
   const [name, setName] = useState('');
   const [color, setColor] = useState(labelColorPresets[0]!);
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<'deleteError' | 'deleteChanged' | 'saveError' | null>(null);
+  const [actionError, setActionError] = useState<'deleteError' | 'deleteChanged' | 'editChanged' | 'saveError' | null>(null);
   const [nameError, setNameError] = useState<'nameRequired' | null>(null);
   const nameInput = useRef<TextInput>(null);
   const trigger = useRef(getRouteTrigger());
   const swatch = theme.controlSizes.touchTarget - theme.spacing[3];
   const previewName = name.trim() || t('name');
+  const swatches = action && action.kind !== 'create' && !presetFor(action.label.color) ? [action.label.color, ...labelColorPresets] : labelColorPresets;
 
   // Only the wide list names who created each label; the labels stand on their own if the names fail to load.
   const loadMembers = async (token: string, household: string) => {
@@ -85,25 +91,26 @@ export default function LabelsIndexRoute() {
     setActionError(null);
     setNameError(null);
     setName(next.kind === 'create' ? '' : next.label.name);
-    setColor(next.kind === 'create' ? labelColorPresets[0]! : next.label.color);
+    setColor(next.kind === 'create' ? labelColorPresets[0]! : formColor(next.label));
     setAction(next);
   };
   const open = (next: LabelAction) => {
     if (busy) return;
-    if (desktop && action && action.kind !== 'delete' && (name !== (action.kind === 'create' ? '' : action.label.name) || color !== (action.kind === 'create' ? labelColorPresets[0] : action.label.color))) { setPendingAction(next); return; }
+    if (desktop && action && action.kind !== 'delete' && (name !== (action.kind === 'create' ? '' : action.label.name) || color !== (action.kind === 'create' ? labelColorPresets[0] : formColor(action.label)))) { setPendingAction(next); return; }
     applyOpen(next);
   };
   const close = () => { if (!busy) { if (pendingAction) setPendingAction(null); else if (action?.kind === 'delete' && deletingFromPane) { setAction({ kind: 'edit', label: action.label }); setDeletingFromPane(false); } else setAction(null); } };
   // A label renamed or recoloured since the list loaded: show it as it is now and let the person confirm again.
-  const showChangedLabel = async (labelId: string) => {
+  // An edit keeps what was typed; only the version it is saved against moves on.
+  const showChangedLabel = async (labelId: string, kind: 'edit' | 'delete') => {
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null || !householdId) throw new Error('Session expired');
       const latest = (await sessionApiClient.listLabels(token, householdId)).labels;
       setLabels(latest);
       const current = latest.find(label => label.id === labelId);
-      if (current) { setAction({ kind: 'delete', label: current }); setActionError('deleteChanged'); } else setAction(null);
-    } catch { setActionError('deleteError'); }
+      if (current) { setAction({ kind, label: current }); setActionError(kind === 'delete' ? 'deleteChanged' : 'editChanged'); } else setAction(null);
+    } catch { setActionError(kind === 'delete' ? 'deleteError' : 'saveError'); }
   };
   const submit = async () => {
     if (!householdId || !action || !canManage || busy) return;
@@ -119,12 +126,16 @@ export default function LabelsIndexRoute() {
         const data = { name: name.trim(), color };
         const result = action.kind === 'create'
           ? await sessionApiClient.createLabel(token, householdId, data)
-          : await sessionApiClient.updateLabel(token, householdId, action.label.id, data);
+          : await sessionApiClient.updateLabel(token, householdId, action.label.id, { ...data, expectedName: action.label.name, expectedColor: action.label.color });
         setLabels(previous => action.kind === 'create' ? [...previous, result] : previous.map(label => label.id === result.id ? result : label));
       }
       setAction(null);
     } catch (caught: unknown) {
-      if (action.kind === 'delete' && caught instanceof ApiClientError && caught.status === 409) { await showChangedLabel(action.label.id); return; }
+      if (action.kind !== 'create' && caught instanceof ApiClientError && caught.status === 409) {
+        await showChangedLabel(action.label.id, action.kind);
+        if (action.kind === 'edit') requestAnimationFrame(() => nameInput.current?.focus());
+        return;
+      }
       setActionError(action.kind === 'delete' ? 'deleteError' : 'saveError');
       // The busy submit button gave up focus; put it back on the name, inside the form, so typing or Escape still reaches it.
       if (action.kind !== 'delete') requestAnimationFrame(() => nameInput.current?.focus());
@@ -171,12 +182,12 @@ export default function LabelsIndexRoute() {
     </View> : null}>
       <Stack gap={4}>
         {action.kind === 'delete' ? <Text>{t('deletePrompt', { name: action.label.name })}</Text> : <>
-          <TextField ref={nameInput} autoFocus={!desktop && focusFieldOnOpen} label={action.kind === 'create' ? t('name') : t('editName')} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameError(null); }} maxLength={30} disabled={busy} {...(nameError === null ? {} : { error: t(nameError) })} returnKeyType="done" onSubmitEditing={() => void submit()} />
+          <TextField ref={nameInput} autoFocus={!desktop && focusFieldOnOpen} label={action.kind === 'create' ? t('name') : t('editName')} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameError(null); }} maxLength={40} disabled={busy} {...(nameError === null ? {} : { error: t(nameError) })} returnKeyType="done" onSubmitEditing={() => void submit()} />
           <Stack gap={2}>
             <Text variant="label">{t('color')}</Text>
             <View accessibilityRole="radiogroup" accessibilityLabel={t('colorGroup')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] }}>
               {/* A wide pane shows each colour as a full swatch and rings the chosen one; a phone keeps small dots in outlined targets. */}
-              {labelColorPresets.map(preset => <Pressable key={preset} accessibilityRole="radio" accessibilityLabel={t('chooseColor', { color: preset })} accessibilityState={{ checked: color === preset, disabled: busy }} aria-checked={color === preset} disabled={busy} onPress={() => setColor(preset)} style={{ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, borderWidth: desktop ? theme.borderWidths.focus : theme.borderWidths.default, borderColor: color === preset ? theme.colors.ink : desktop ? theme.colors.transparent : theme.colors.separator }}>
+              {swatches.map(preset => <Pressable key={preset} accessibilityRole="radio" accessibilityLabel={t('chooseColor', { color: preset })} accessibilityState={{ checked: color === preset, disabled: busy }} aria-checked={color === preset} disabled={busy} onPress={() => setColor(preset)} style={{ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, borderWidth: desktop ? theme.borderWidths.focus : theme.borderWidths.default, borderColor: color === preset ? theme.colors.ink : desktop ? theme.colors.transparent : theme.colors.separator }}>
                 <View style={{ width: desktop ? swatch : theme.controlSizes.icon, height: desktop ? swatch : theme.controlSizes.icon, borderRadius: theme.borderRadii.full, backgroundColor: preset }} />
               </Pressable>)}
             </View>
@@ -190,7 +201,7 @@ export default function LabelsIndexRoute() {
             </Stack>
           </Stack> : null}
         </>}
-        {actionError ? <Text color="destructive" accessibilityRole="alert">{t(actionError)}</Text> : null}
+        {actionError ? <Text color="destructive" accessibilityRole="alert">{action.kind === 'create' ? t(actionError) : t(actionError, { name: action.label.name })}</Text> : null}
         {action.kind === 'delete' ? <ConfirmActions cancelLabel={t('cancelDelete')} confirmLabel={t('confirmDelete')} confirmAccessibilityLabel={t('confirmDeleteItem', { name: action.label.name })} destructive busy={busy} onCancel={close} onConfirm={() => void submit()} /> : !desktop ? <FormActions onCancel={close} onSubmit={() => void submit()} submitting={busy} submitLabel={action.kind === 'create' ? t('shared:create') : t('common:save')} /> : null}
       </Stack>
     </AppDialog> : null}
