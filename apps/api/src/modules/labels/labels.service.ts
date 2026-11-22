@@ -107,15 +107,49 @@ export class LabelsService {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
 
-    const labels = await this.prisma.label.findMany({
-      where: { householdId },
-      orderBy: { name: 'asc' },
-    });
+    const [labels, usage] = await Promise.all([
+      this.prisma.label.findMany({
+        where: { householdId },
+        orderBy: { name: 'asc' },
+      }),
+      this.usage(householdId),
+    ]);
 
     return {
-      labels: labels.map((l) => this.toResponse(l)),
+      labels: labels.map((l) => ({ ...this.toResponse(l), usage: usage.get(l.id) ?? { events: 0, tasks: 0 } })),
       total: labels.length,
     };
+  }
+
+  /**
+   * How many events and tasks carry each label. A recurring series is one item
+   * however many occurrences it has generated: occurrence rows count by their
+   * series, together with the series' own labels.
+   */
+  private async usage(householdId: string): Promise<Map<string, { events: number; tasks: number }>> {
+    const rows = await this.prisma.$queryRaw<Array<{ labelId: string; events: number; tasks: number }>>`
+      WITH items AS (
+        SELECT el.label_id, 'event' AS kind, COALESCE('rule:' || e.recurrence_rule_id::text, e.id::text) AS item
+        FROM event_labels el JOIN events e ON e.id = el.event_id
+        WHERE e.household_id = ${householdId}::uuid
+        UNION
+        SELECT tl.label_id, 'task', COALESCE('rule:' || t.recurrence_rule_id::text, t.id::text)
+        FROM task_labels tl JOIN tasks t ON t.id = tl.task_id
+        WHERE t.household_id = ${householdId}::uuid
+        UNION
+        SELECT rl.label_id,
+          CASE WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.recurrence_rule_id = r.id) THEN 'task' ELSE 'event' END,
+          'rule:' || r.id::text
+        FROM recurrence_rule_labels rl JOIN recurrence_rules r ON r.id = rl.rule_id
+        WHERE r.household_id = ${householdId}::uuid
+      )
+      SELECT label_id::text AS "labelId",
+        (count(*) FILTER (WHERE kind = 'event'))::int AS events,
+        (count(*) FILTER (WHERE kind = 'task'))::int AS tasks
+      FROM items
+      GROUP BY label_id
+    `;
+    return new Map(rows.map(({ labelId, events, tasks }) => [labelId, { events, tasks }]));
   }
 
   async update(

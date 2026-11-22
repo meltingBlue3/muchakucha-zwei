@@ -55,7 +55,7 @@ function fixtures(role: 'OWNER' | 'ADMIN' | 'MEMBER' = 'OWNER') {
     delete: vi.fn<NotesService['delete']>().mockResolvedValue(undefined),
   };
   const labels = {
-    list: vi.fn<LabelsService['list']>().mockResolvedValue({ labels: [label], total: 1 }),
+    list: vi.fn<LabelsService['list']>().mockResolvedValue({ labels: [{ ...label, usage: { events: 0, tasks: 0 } }], total: 1 }),
     create: vi.fn<LabelsService['create']>().mockResolvedValue(label),
     update: vi.fn<LabelsService['update']>().mockResolvedValue(label),
     delete: vi.fn<LabelsService['delete']>().mockResolvedValue(undefined),

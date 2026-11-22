@@ -354,6 +354,30 @@ describe('labels API contract', () => {
   });
 
   describe('label management', () => {
+    // Shown beside each label and before deleting one. A recurring series is
+    // one thing to the family, however many occurrences it has generated.
+    test('the list says how many events and tasks use each label, a series once', async () => {
+      const used = await createLabel(owner, householdId, '常用');
+      await createLabel(owner, householdId, '没用过');
+      await createEvent(owner, householdId, '一次性日程', [used]);
+      await createTask(owner, householdId, '任务一', [used]);
+      await createTask(owner, householdId, '任务二', [used]);
+      const today = formatIsoDate(currentCalendarDateIn('UTC'));
+      const series = await householdApi(owner, householdId, 'POST', '/events', {
+        title: '每天的日程',
+        startTime: `${today}T10:00:00.000Z`,
+        endTime: `${today}T11:00:00.000Z`,
+        recurrence: { freq: 'weekly', byWeekday: [0, 1, 2, 3, 4, 5, 6], startsOn: today, timezone: 'UTC' },
+        labelIds: [used],
+      });
+      expect(series.statusCode).toBe(201);
+
+      const labels = (await householdApi(member, householdId, 'GET', '/labels')).json().labels as Array<{ name: string; usage: unknown }>;
+
+      expect(labels.find((label) => label.name === '常用')!.usage).toEqual({ events: 2, tasks: 2 });
+      expect(labels.find((label) => label.name === '没用过')!.usage).toEqual({ events: 0, tasks: 0 });
+    });
+
     test('creates a label with a trimmed name', async () => {
       const response = await householdApi(admin, householdId, 'POST', '/labels', { name: '学校 ', color: '#3B82F6' });
 

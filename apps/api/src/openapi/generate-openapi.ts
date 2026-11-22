@@ -441,8 +441,18 @@ export interface LabelResponseDto {
   createdAt: string;
 }
 
+export interface LabelUsageDto {
+  events: number;
+  tasks: number;
+}
+
+/** A recurring series counts once in usage, however many occurrences it has. */
+export interface LabelListItemDto extends LabelResponseDto {
+  usage: LabelUsageDto;
+}
+
 export interface LabelListResponseDto {
-  labels: LabelResponseDto[];
+  labels: LabelListItemDto[];
   total: number;
 }
 

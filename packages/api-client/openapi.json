@@ -4853,13 +4853,68 @@
           "color"
         ]
       },
+      "LabelUsageDto": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "number"
+          },
+          "tasks": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "events",
+          "tasks"
+        ]
+      },
+      "LabelListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "householdId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "usage": {
+            "description": "Events and tasks carrying the label; a recurring series counts once.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LabelUsageDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "householdId",
+          "name",
+          "color",
+          "createdBy",
+          "createdAt",
+          "usage"
+        ]
+      },
       "LabelListResponseDto": {
         "type": "object",
         "properties": {
           "labels": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/LabelResponseDto"
+              "$ref": "#/components/schemas/LabelListItemDto"
             }
           },
           "total": {
