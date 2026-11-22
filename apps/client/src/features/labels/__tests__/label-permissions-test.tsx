@@ -154,7 +154,7 @@ describe('editing a label whose colour is not one of the presets', () => {
     await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
     await fireEvent.press(view.getByRole('menuitem', { name: '编辑标签 采购' }));
 
-    expect(view.getByRole('radio', { name: '选择颜色 #EF4444', checked: true })).toBeTruthy();
+    expect(await view.findByRole('radio', { name: '选择颜色 #EF4444', checked: true })).toBeTruthy();
     expect(view.getByRole('radio', { name: '选择颜色 #B5562F', checked: false })).toBeTruthy();
   });
 
@@ -164,7 +164,37 @@ describe('editing a label whose colour is not one of the presets', () => {
     await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
     await fireEvent.press(view.getByRole('menuitem', { name: '编辑标签 采购' }));
 
-    expect(view.getByRole('radio', { name: '选择颜色 #B5562F', checked: true })).toBeTruthy();
+    expect(await view.findByRole('radio', { name: '选择颜色 #B5562F', checked: true })).toBeTruthy();
     expect(view.queryByRole('radio', { name: '选择颜色 #b5562f' })).toBeNull();
+  });
+});
+
+describe('how much each label is used', () => {
+  const used = { id: 'label-1', name: '采购', color: '#B5562F', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 2, tasks: 1 } };
+  const unused = { id: 'label-2', name: '闲置', color: '#2C716C', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } };
+
+  test('each row says how many events and tasks carry the label', async () => {
+    const view = await renderAs('MEMBER', [used, unused]);
+
+    expect(await view.findByText('2 个日程 · 1 个任务')).toBeTruthy();
+    expect(view.getByText('未使用')).toBeTruthy();
+  });
+
+  test('deleting a used label says what it will be removed from', async () => {
+    const view = await renderAs('OWNER', [used, unused]);
+
+    await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
+    await fireEvent.press(view.getByRole('menuitem', { name: '删除标签 采购' }));
+
+    expect(view.getByText('删除“采购”后，它会从 2 个日程和 1 个任务中移除，日程和任务本身会保留。')).toBeTruthy();
+  });
+
+  test('deleting an unused label says nothing else changes', async () => {
+    const view = await renderAs('OWNER', [used, unused]);
+
+    await fireEvent.press(await view.findByLabelText('更多操作：标签 闲置'));
+    await fireEvent.press(view.getByRole('menuitem', { name: '删除标签 闲置' }));
+
+    expect(view.getByText('“闲置”没有用在任何日程或任务上，删除后不影响其他内容。')).toBeTruthy();
   });
 });

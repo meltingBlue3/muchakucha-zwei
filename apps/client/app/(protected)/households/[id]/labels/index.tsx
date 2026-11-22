@@ -5,7 +5,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
-import { ApiClientError, type GetHouseholdMemberDto, type LabelResponseDto } from '@muchakucha/api-client';
+import { ApiClientError, type GetHouseholdMemberDto, type LabelListItemDto, type LabelResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import { canManageLabels } from '../../../../../src/features/labels/label-permissions';
@@ -20,7 +20,7 @@ import { getRouteTrigger, rememberRouteTrigger } from '../../../../../src/platfo
 import { focusFieldOnOpen } from '../../../../../src/platform/keyboard/focus-on-open';
 import { UnsavedSwitchDialog } from '../../../../../src/ui/unsaved-switch-dialog';
 
-type LabelAction = { kind: 'create' } | { kind: 'edit' | 'delete'; label: LabelResponseDto };
+type LabelAction = { kind: 'create' } | { kind: 'edit' | 'delete'; label: LabelListItemDto };
 
 // The API accepts any hex colour, and the assistant may choose one outside the
 // presets or in lower case. Such a label still opens with its own colour chosen.
@@ -36,7 +36,7 @@ export default function LabelsIndexRoute() {
   const householdId = id ?? currentHouseholdId;
   const household = households.find(item => item.id === householdId);
   const canManage = canManageLabels(household?.role);
-  const [labels, setLabels] = useState<LabelResponseDto[]>([]);
+  const [labels, setLabels] = useState<LabelListItemDto[]>([]);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -56,6 +56,21 @@ export default function LabelsIndexRoute() {
   const swatch = theme.controlSizes.touchTarget - theme.spacing[3];
   const previewName = name.trim() || t('name');
   const swatches = action && action.kind !== 'create' && !presetFor(action.label.color) ? [action.label.color, ...labelColorPresets] : labelColorPresets;
+  // A series counts once. No usage at all means a server from before the
+  // count, so say nothing rather than claim the label is unused.
+  const usageParts = (label: LabelListItemDto) => label.usage ? [
+    label.usage.events > 0 ? t('usageEvents', { count: label.usage.events }) : null,
+    label.usage.tasks > 0 ? t('usageTasks', { count: label.usage.tasks }) : null,
+  ].filter((part): part is string => part !== null) : null;
+  const usageLine = (label: LabelListItemDto) => {
+    const parts = usageParts(label);
+    return parts === null ? null : parts.length > 0 ? parts.join(' · ') : t('unused');
+  };
+  const deletePrompt = (label: LabelListItemDto) => {
+    const parts = usageParts(label);
+    if (parts === null) return t('deletePrompt', { name: label.name });
+    return parts.length > 0 ? t('deletePromptUsed', { name: label.name, usage: parts.join(t('usageAnd')) }) : t('deletePromptUnused', { name: label.name });
+  };
 
   // Only the wide list names who created each label; the labels stand on their own if the names fail to load.
   const loadMembers = async (token: string, household: string) => {
@@ -127,7 +142,7 @@ export default function LabelsIndexRoute() {
         const result = action.kind === 'create'
           ? await sessionApiClient.createLabel(token, householdId, data)
           : await sessionApiClient.updateLabel(token, householdId, action.label.id, { ...data, expectedName: action.label.name, expectedColor: action.label.color });
-        setLabels(previous => action.kind === 'create' ? [...previous, result] : previous.map(label => label.id === result.id ? result : label));
+        setLabels(previous => action.kind === 'create' ? [...previous, { ...result, usage: { events: 0, tasks: 0 } }] : previous.map(label => label.id === result.id ? { ...label, ...result } : label));
       }
       setAction(null);
     } catch (caught: unknown) {
@@ -150,6 +165,7 @@ export default function LabelsIndexRoute() {
       {!loading && !error && !labels.length ? <EmptyState message={canManage ? t('empty') : t('memberEmpty')} /> : null}
       <ListGroup flush>
         {labels.map(label => {
+          const usage = usageLine(label);
           const dot = <View style={{ width: desktop ? theme.spacing[2] + 2 : theme.spacing[3], height: desktop ? theme.spacing[2] + 2 : theme.spacing[3], borderRadius: theme.borderRadii.full, backgroundColor: label.color }} />;
           const menu = canManage ? <CardActionsMenu subject={t('subject', { name: label.name })} actions={[
             { kind: 'edit', accessibilityLabel: t('editItem', { name: label.name }), onPress: () => open({ kind: 'edit', label }) },
@@ -160,13 +176,16 @@ export default function LabelsIndexRoute() {
             const shown = action !== null && action.kind !== 'create' && action.label.id === label.id && (action.kind === 'edit' || deletingFromPane);
             return <ListRow key={label.id} accessibilityLabel={t('item', { name: label.name })} selected={shown} onPress={() => open({ kind: 'edit', label })}
               leading={<View style={{ width: theme.spacing[6], height: theme.layout.desktopControl, alignItems: 'center', justifyContent: 'center' }}>{dot}</View>}
-              trailing={<>{creator ? <Text variant="meta" numberOfLines={1} style={{ width: theme.spacing[10] * 3 }}>{t('creator', { name: creator })}</Text> : null}{menu}</>}>
+              trailing={<>{usage ? <Text variant="meta" numberOfLines={1} style={{ width: theme.spacing[10] * 4 }}>{usage}</Text> : null}{creator ? <Text variant="meta" numberOfLines={1} style={{ width: theme.spacing[10] * 3 }}>{t('creator', { name: creator })}</Text> : null}{menu}</>}>
               <Text variant="bodySm" color="ink" numberOfLines={1}>{label.name}</Text>
             </ListRow>;
           }
           return <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.controlSizes.touchTarget + theme.spacing[2], paddingLeft: theme.spacing[4], paddingRight: theme.spacing[2] }}>
             {dot}
-            <Text style={{ flex: 1 }} accessibilityLabel={t('item', { name: label.name })}>{label.name}</Text>
+            <View style={{ flex: 1 }}>
+              <Text accessibilityLabel={t('item', { name: label.name })}>{label.name}</Text>
+              {usage ? <Text variant="caption" color="inkMuted">{usage}</Text> : null}
+            </View>
             {menu}
           </View>;
         })}
@@ -181,7 +200,7 @@ export default function LabelsIndexRoute() {
       <Button label={action.kind === 'create' ? t('shared:create') : t('common:save')} size="compact" loading={busy} onPress={() => void submit()} />
     </View> : null}>
       <Stack gap={4}>
-        {action.kind === 'delete' ? <Text>{t('deletePrompt', { name: action.label.name })}</Text> : <>
+        {action.kind === 'delete' ? <Text>{deletePrompt(action.label)}</Text> : <>
           <TextField ref={nameInput} autoFocus={!desktop && focusFieldOnOpen} label={action.kind === 'create' ? t('name') : t('editName')} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameError(null); }} maxLength={40} disabled={busy} {...(nameError === null ? {} : { error: t(nameError) })} returnKeyType="done" onSubmitEditing={() => void submit()} />
           <Stack gap={2}>
             <Text variant="label">{t('color')}</Text>

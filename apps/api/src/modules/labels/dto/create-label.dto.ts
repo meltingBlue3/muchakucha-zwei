@@ -79,9 +79,22 @@ export class LabelResponseDto {
   createdAt!: string;
 }
 
+export class LabelUsageDto {
+  @ApiProperty()
+  events!: number;
+
+  @ApiProperty()
+  tasks!: number;
+}
+
+export class LabelListItemDto extends LabelResponseDto {
+  @ApiProperty({ type: () => LabelUsageDto, description: 'Events and tasks carrying the label; a recurring series counts once.' })
+  usage!: LabelUsageDto;
+}
+
 export class LabelListResponseDto {
-  @ApiProperty({ type: [LabelResponseDto] })
-  labels!: LabelResponseDto[];
+  @ApiProperty({ type: [LabelListItemDto] })
+  labels!: LabelListItemDto[];
 
   @ApiProperty()
   total!: number;
