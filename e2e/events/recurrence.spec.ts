@@ -385,9 +385,9 @@ test.describe('recurring event and task journeys', () => {
     await page.getByRole('menuitem', { name: `删除任务：${taskTitle}`, exact: true }).click();
     const deleteDialog = page.getByRole('dialog', { name: '删除任务' });
     await expect(deleteDialog).toBeVisible();
-    await expect(deleteDialog.getByRole('button', { name: '关闭删除任务' })).toBeFocused();
-    await deleteDialog.getByRole('radio', { name: '仅此一次' }).click();
-    await deleteDialog.getByRole('button', { name: '确认删除任务', exact: true }).click();
+    await expect(deleteDialog.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+    await deleteDialog.getByRole('radio', { name: '仅删除这一次' }).click();
+    await deleteDialog.getByRole('button', { name: '删除任务', exact: true }).click();
     await expect(deleteDialog).toHaveCount(0);
 
     const afterCancel = (await listTasks(account.accessToken, taskHouseholdId))

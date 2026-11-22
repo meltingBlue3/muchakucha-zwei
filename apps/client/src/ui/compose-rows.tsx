@@ -166,12 +166,13 @@ function OptionMark({ checked, disabled, multiple }: { checked: boolean; disable
 }
 
 /** A Material-style list option: radio for single choice, checkbox for multiple. */
-export function OptionRow({ label, detail, checked, disabled = false, multiple = false, leading, onPress }: {
+export function OptionRow({ label, detail, checked, disabled = false, multiple = false, highlightChecked = false, leading, onPress }: {
   label: string;
   detail?: string;
   checked: boolean;
   disabled?: boolean;
   multiple?: boolean;
+  highlightChecked?: boolean;
   /** Decoration after the mark, such as a color dot. */
   leading?: ReactNode;
   onPress(): void;
@@ -186,7 +187,7 @@ export function OptionRow({ label, detail, checked, disabled = false, multiple =
       disabled={disabled}
       onPress={onPress}
       {...(Platform.OS === 'web' ? { onKeyDown: moveFocus } : {})}
-      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], minHeight: dense ? theme.layout.desktopRowHeight : theme.controlSizes.touchTarget + theme.spacing[1], paddingHorizontal: theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[4], minHeight: dense ? theme.layout.desktopRowHeight : theme.controlSizes.touchTarget + theme.spacing[1], paddingHorizontal: theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed || (highlightChecked && checked) ? theme.colors.surfaceMuted : theme.colors.transparent })}
     >
       <OptionMark checked={checked} disabled={disabled} multiple={multiple} />
       {leading}

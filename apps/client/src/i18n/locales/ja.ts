@@ -626,8 +626,10 @@ export const ja: Catalog = {
         title: '変更を保存しますか？',
       },
       delete: {
-        body: '繰り返しの予定です。削除する範囲を選んでください。この操作は取り消せません。',
         title: 'この回を削除しますか？',
+        range: '削除する範囲',
+        thisOnly: 'この回のみ削除',
+        following: 'この回とそれ以降を削除',
       },
       'rule-change': {
         body: '繰り返しルールの変更は、この回とそれ以降のすべてに適用されます。',
@@ -836,17 +838,11 @@ export const ja: Catalog = {
       events: 'この予定を削除する権限がありません。',
       notes: 'このノートを削除する権限がありません。',
     },
-    confirm: {
-      tasks: 'タスクを削除する',
-      events: '予定を削除する',
-      notes: 'ノートを削除する',
-    },
     accessLost: '削除する権限がなくなりました。この画面を閉じて更新してください。',
     removed: 'この項目はすでに削除されています。この画面を閉じて更新してください。',
     changed: 'この項目は変更されたため、最新の内容を表示しています。それでも削除しますか？',
     failed: '削除できませんでした。接続を確認して、もう一度お試しください。',
-    question: '「{{title}}」を削除しますか？この操作は取り消せません。',
-    cancel: '削除をキャンセル',
+    warning: '削除すると元に戻せません。',
   },
   events: {
     create: '予定を作成',
@@ -1040,9 +1036,7 @@ export const ja: Catalog = {
     preview: 'プレビュー',
     sampleTask: 'タスクの例',
     sampleEvent: '予定の例',
-    cancelDelete: '削除をキャンセル',
-    confirmDelete: '削除する',
-    confirmDeleteItem: 'ラベル「{{name}}」の削除を確定',
+    confirmDeleteItem: 'ラベルを削除：{{name}}',
     picker: {
       loading: 'ラベルを読み込み中…',
       error: 'ラベルを読み込めませんでした。',
@@ -1136,7 +1130,6 @@ export const ja: Catalog = {
       running: 'アシスタントが処理中です。しばらくしてから更新し、削除してください。',
       offline: '接続が戻ってから削除してください。',
       keep: '残す',
-      confirmDelete: '削除',
       unavailable: 'この項目は削除されたか、利用できなくなりました。',
     },
     workspace: {

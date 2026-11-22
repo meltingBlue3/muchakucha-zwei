@@ -6,6 +6,7 @@ import type { AssistantProviderUsageDto } from '@muchakucha/api-client';
 import { sessionApiClient } from '../auth/session-runtime';
 import { HouseholdScreen } from '../households/household-screen';
 import { CardActionsMenu } from '../../ui/card-actions-menu';
+import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { PageIntro } from '../../ui/page-intro';
 import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 import { SettingsSection } from '../../ui/settings-section';
@@ -50,7 +51,7 @@ function AssistantProviders({ householdId, householdName, writable }: AssistantH
       {query.data?.providers.map(provider => <SettingsSection key={provider.id} title={provider.name} icon={<Settings color={theme.colors.inkMuted} size={theme.controlSizes.icon} />} detail={provider.ownedByMe ? t('models.owned') : t('models.shared')}
         action={provider.ownedByMe ? <CardActionsMenu subject={t('models.subject', { name: provider.name })} disabled={!writable} actions={[
           { kind: 'edit', accessibilityLabel: t('models.editName', { name: provider.name }), onPress: () => router.push(`${root}/providers/${encodeURIComponent(provider.id)}/edit`) },
-          { kind: 'delete', accessibilityLabel: t('models.deleteName', { name: provider.name }), onPress: () => router.push(`${root}/providers/${encodeURIComponent(provider.id)}/delete`) },
+          { kind: 'delete', accessibilityLabel: t('models.deleteName', { name: provider.name }), onPress: () => { rememberRouteTrigger(); router.push(`${root}/providers/${encodeURIComponent(provider.id)}/delete`); } },
         ]} /> : null}>
         <Stack gap={1}>
           <Text>{isTranscriptionProvider(provider) ? t('models.transcription') : t('models.chat')} · {provider.model}</Text>

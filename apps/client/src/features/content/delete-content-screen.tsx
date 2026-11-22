@@ -46,7 +46,7 @@ export function DeleteContentScreen({ resource }: { resource: DeletableResource 
   useEffect(() => { void load(); }, [load]);
 
   const loadErrorText = loadError === 'loadFailed' ? t(`loadFailed.${resource}`) : loadError === null ? null : t(loadError);
-  return <Window size="standard" title={t(`title.${resource}`)} busy={deletion.submitting !== null} onClose={close} exitAllowed={exitAllowed}>
+  return <Window size="standard" preferCancel title={t(`title.${resource}`)} busy={deletion.submitting !== null} onClose={close} exitAllowed={exitAllowed}>
     {loading ? <LoadingState label={t(`loading.${resource}`)} /> : deletion.target === null ? <LoadError message={loadErrorText ?? t(`missing.${resource}`)} onRetry={() => void load()} /> : !allowed ? <Text accessibilityRole="alert">{t(`denied.${resource}`)}</Text> : <Stack gap={4}>
       <DeleteContentQuestion resource={resource} deletion={deletion} onCancel={close} />
     </Stack>}

@@ -1,6 +1,6 @@
 import { ThemeProvider, createBox, createText, useTheme } from '@shopify/restyle';
 import type { PropsWithChildren, ReactElement, ReactNode } from 'react';
-import React, { forwardRef, useContext, useEffect, useId, useRef, useState } from 'react';
+import React, { createContext, forwardRef, useContext, useEffect, useId, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -280,6 +280,9 @@ export function FormActions({ onCancel, onSubmit, submitting, submitLabel, disab
   );
 }
 
+/** A confirmation window can start focus on its cancel button. */
+export const ConfirmCancelFocus = createContext<React.Ref<View> | null>(null);
+
 /**
  * The two answers to a confirmation: the safe choice first, the committing
  * choice second. Side by side when both labels fit, stacked otherwise, so
@@ -295,6 +298,7 @@ export function ConfirmActions({
   busy = false,
   destructive = false,
   confirmDisabled = false,
+  alignEnd = false,
 }: {
   cancelLabel?: string;
   cancelAccessibilityLabel?: string;
@@ -305,14 +309,17 @@ export function ConfirmActions({
   busy?: boolean;
   destructive?: boolean;
   confirmDisabled?: boolean;
+  alignEnd?: boolean;
 }) {
   // Each answer starts at its label's width and shares the rest, so the pair
   // wraps only when the labels themselves do not fit side by side.
-  const actionStyle = { flexGrow: 1 };
+  const actionStyle = alignEnd ? { maxWidth: '100%' as const } : { flexGrow: 1 };
   const { t } = useTranslation();
+  const cancelFocus = useContext(ConfirmCancelFocus);
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[3] }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: alignEnd ? 'flex-end' : 'flex-start', gap: theme.spacing[3] }}>
       <Button
+        ref={cancelFocus}
         label={cancelLabel ?? t('cancel')}
         {...(cancelAccessibilityLabel ? { accessibilityLabel: cancelAccessibilityLabel } : {})}
         tone="secondary"

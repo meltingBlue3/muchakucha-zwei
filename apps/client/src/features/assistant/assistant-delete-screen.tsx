@@ -1,5 +1,5 @@
 import { currentLanguage, useTranslation } from '../../i18n';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { sessionApiClient } from '../auth/session-runtime';
 import { AppShell } from '../../ui/household-components';
@@ -13,6 +13,7 @@ function DeleteAssistantItem({ householdId, writable, kind }: AssistantHousehold
   const router = useRouter();
   const { t } = useTranslation('assistant');
   const operation = useAssistantOperation();
+  const exitAllowed = useRef(false);
   const targetId = (kind === 'provider' ? providerId : conversationId) ?? '';
   const destination = kind === 'provider' ? `${assistantPath(householdId)}/providers` as const : assistantPath(householdId);
   const close = () => { if (router.canGoBack()) router.back(); else router.replace(destination); };
@@ -31,10 +32,13 @@ function DeleteAssistantItem({ householdId, writable, kind }: AssistantHousehold
     const result = await operation.run(token => kind === 'provider'
       ? sessionApiClient.deleteAssistantProvider(token, householdId, targetId)
       : sessionApiClient.deleteAssistantConversation(token, householdId, targetId));
-    if (result) router.replace(destination);
+    if (result) {
+      exitAllowed.current = true;
+      router.dismissTo(destination);
+    }
   };
   const title = kind === 'provider' ? t('delete.deleteModel') : t('delete.deleteConversation');
-  return <RouteWindow title={title} size="standard" busy={operation.busy} resource="settings" onClose={close} fallback={<AppShell title={t('assistant')}><Text>{t('delete.manage')}</Text></AppShell>}>
+  return <RouteWindow title={title} size="standard" preferCancel busy={operation.busy} resource="settings" onClose={close} exitAllowed={exitAllowed} fallback={<AppShell title={t('assistant')}><Text>{t('delete.manage')}</Text></AppShell>}>
     <Stack gap={4}>
       {operation.error ? <Banner>{operation.error}</Banner> : null}
       {query.error ? <LoadError message={query.error} retrying={query.loading} disabled={operation.busy} onRetry={() => { void query.reload(); }} /> : null}
@@ -45,7 +49,7 @@ function DeleteAssistantItem({ householdId, writable, kind }: AssistantHousehold
         {!query.data.allowed ? <Banner>{t('delete.creatorOnly')}</Banner> : null}
         {query.data.running ? <Banner>{t('delete.running')}</Banner> : null}
         {!writable ? <Banner>{t('delete.offline')}</Banner> : null}
-        <ConfirmActions cancelLabel={t('delete.keep')} confirmLabel={t('delete.confirmDelete')} destructive busy={operation.busy} confirmDisabled={!writable || !query.data.allowed || query.data.running || query.loading} onCancel={close} onConfirm={() => { void remove(); }} />
+        <ConfirmActions cancelLabel={t('delete.keep')} confirmLabel={title} destructive alignEnd busy={operation.busy} confirmDisabled={!writable || !query.data.allowed || query.data.running || query.loading} onCancel={close} onConfirm={() => { void remove(); }} />
       </> : !query.loading && !query.error ? <Text>{t('delete.unavailable')}</Text> : null}
     </Stack>
   </RouteWindow>;

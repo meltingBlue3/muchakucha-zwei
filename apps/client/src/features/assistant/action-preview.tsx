@@ -235,7 +235,7 @@ export function AssistantActionsPreview({ householdId, actions, busy, disabled =
       <Text variant="caption" style={{ flex: 1 }}>{batch ? t('preview.adjustBatch') : t('preview.adjustSingle')}</Text>
       <Button label={t('preview.adjust')} tone="secondary" size="compact" disabled={busy || disabled} onPress={onAdjust} />
     </Inline> : null}
-    <ConfirmActions cancelLabel={batch ? t('preview.cancelAll') : t('preview.cancel')} confirmLabel={batch ? t('preview.confirmBatch', { count: chosen.length }) : destructive ? t('preview.confirmDelete') : t('preview.confirm')} destructive={destructive} busy={busy}
+    <ConfirmActions cancelLabel={batch ? t('preview.cancelAll') : t('preview.cancel')} confirmLabel={batch ? t('preview.confirmBatch', { count: chosen.length }) : destructive ? t('preview.confirmDelete') : t('preview.confirm')} destructive={destructive} alignEnd={actions.some(action => action.name.startsWith('delete_'))} busy={busy}
       confirmDisabled={disabled || chosen.length === 0} onCancel={() => onDecide([])} onConfirm={() => onDecide(chosen.map(action => action.id))} />
   </Stack>;
 }

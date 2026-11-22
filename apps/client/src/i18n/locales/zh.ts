@@ -626,8 +626,10 @@ export const zh = {
         title: '保存这次改动？',
       },
       delete: {
-        body: '这是一个重复安排。选择要删除的范围，此操作不可撤销。',
         title: '删除这次重复？',
+        range: '删除范围',
+        thisOnly: '仅删除这一次',
+        following: '删除这一次及之后的重复',
       },
       'rule-change': {
         body: '重复规则的更改会影响之后的每一次，不能只改这一次。',
@@ -836,17 +838,11 @@ export const zh = {
       events: '你没有删除这条日程的权限。',
       notes: '你没有删除这条笔记的权限。',
     },
-    confirm: {
-      tasks: '确认删除任务',
-      events: '确认删除日程',
-      notes: '确认删除笔记',
-    },
     accessLost: '你已没有删除权限，请关闭窗口后刷新。',
     removed: '内容已不存在，请关闭窗口后刷新。',
     changed: '内容刚被修改过，这里已是最新内容。确认仍要删除吗？',
     failed: '删除失败，请检查网络后重试。',
-    question: '确定要删除「{{title}}」吗？此操作不可撤销。',
-    cancel: '取消删除',
+    warning: '删除后无法撤销。',
   },
   events: {
     create: '创建日程',
@@ -1040,8 +1036,6 @@ export const zh = {
     preview: '效果预览',
     sampleTask: '示例任务',
     sampleEvent: '示例日程',
-    cancelDelete: '取消删除',
-    confirmDelete: '确认删除',
     confirmDeleteItem: '确认删除标签 {{name}}',
     picker: {
       loading: '加载标签中…',
@@ -1136,7 +1130,6 @@ export const zh = {
       running: '助手仍在处理，请稍后刷新再删除。',
       offline: '请恢复连接后再删除。',
       keep: '保留',
-      confirmDelete: '删除',
       unavailable: '这项内容已删除或不再可用。',
     },
     workspace: {

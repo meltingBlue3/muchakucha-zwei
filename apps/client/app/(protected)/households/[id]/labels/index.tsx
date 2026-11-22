@@ -3,7 +3,7 @@ import { useDesktop } from '../../../../../src/ui/use-desktop';
 import { CardActionsMenu } from '../../../../../src/ui/card-actions-menu';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import { ApiClientError, type GetHouseholdMemberDto, type LabelListItemDto, type LabelResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
@@ -13,6 +13,7 @@ import { LabelColorChoices } from '../../../../../src/features/labels/label-colo
 import { HouseholdScreen } from '../../../../../src/features/households/household-screen';
 import { ListGroup, ListRow } from '../../../../../src/ui/list-group';
 import { AppDialog } from '../../../../../src/ui/app-dialog';
+import { FooterDestructiveAction } from '../../../../../src/ui/detail-fields';
 import { FloatingCreateButton } from '../../../../../src/ui/floating-create-button';
 import { PageIntro } from '../../../../../src/ui/page-intro';
 import { Button, ConfirmActions, EmptyState, FormActions, LoadError, LoadingState, Stack, Text, TextField } from '../../../../../src/ui/primitives';
@@ -21,7 +22,7 @@ import { getRouteTrigger, rememberRouteTrigger } from '../../../../../src/platfo
 import { focusFieldOnOpen } from '../../../../../src/platform/keyboard/focus-on-open';
 import { UnsavedSwitchDialog } from '../../../../../src/ui/unsaved-switch-dialog';
 
-type LabelAction = { kind: 'create' } | { kind: 'edit' | 'delete'; label: LabelListItemDto };
+type LabelAction = { kind: 'create' } | { kind: 'edit'; label: LabelListItemDto };
 
 // The API accepts any hex colour, and the assistant may choose one outside the
 // presets or in lower case. Such a label still opens with its own colour chosen.
@@ -44,16 +45,20 @@ export default function LabelsIndexRoute() {
   const loadedHousehold = useRef<string | null>(null);
   const requestGeneration = useRef(0);
   const [error, setError] = useState<'refreshError' | 'loadError' | null>(null);
-  const [deletingFromPane, setDeletingFromPane] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<LabelListItemDto | null>(null);
   const [pendingAction, setPendingAction] = useState<LabelAction | null>(null);
   const [action, setAction] = useState<LabelAction | null>(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState(labelColorPresets[0]!);
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<'deleteError' | 'deleteChanged' | 'editChanged' | 'saveError' | null>(null);
+  const [actionError, setActionError] = useState<'editChanged' | 'saveError' | null>(null);
+  const [deleteError, setDeleteError] = useState<'deleteError' | 'deleteChanged' | null>(null);
   const [nameError, setNameError] = useState<'nameRequired' | null>(null);
   const nameInput = useRef<TextInput>(null);
   const trigger = useRef(getRouteTrigger());
+  const deleteTrigger = useRef<View>(null);
+  const paneDeleteTrigger = useRef<View>(null);
+  const submitting = useRef(false);
   const previewName = name.trim() || t('name');
   const swatches = action && action.kind !== 'create' && !presetFor(action.label.color) ? [action.label.color, ...labelColorPresets] : labelColorPresets;
   // A series counts once. No usage at all means a server from before the
@@ -80,7 +85,7 @@ export default function LabelsIndexRoute() {
     if (!householdId) return;
     const request = ++requestGeneration.current;
     setError(null);
-    if (loadedHousehold.current !== householdId) { setLoading(true); setLabels([]); setAction(null); }
+    if (loadedHousehold.current !== householdId) { setLoading(true); setLabels([]); setAction(null); setDeleteTarget(null); }
     try {
       const token = await sessionTransport.getAccessToken();
       if (request !== requestGeneration.current) return;
@@ -102,7 +107,6 @@ export default function LabelsIndexRoute() {
   const applyOpen = (next: LabelAction) => {
     rememberRouteTrigger();
     trigger.current = getRouteTrigger();
-    setDeletingFromPane(false);
     setActionError(null);
     setNameError(null);
     setName(next.kind === 'create' ? '' : next.label.name);
@@ -111,53 +115,78 @@ export default function LabelsIndexRoute() {
   };
   const open = (next: LabelAction) => {
     if (busy) return;
-    if (desktop && action && action.kind !== 'delete' && (name !== (action.kind === 'create' ? '' : action.label.name) || color !== (action.kind === 'create' ? labelColorPresets[0] : formColor(action.label)))) { setPendingAction(next); return; }
+    if (desktop && action && (name !== (action.kind === 'create' ? '' : action.label.name) || color !== (action.kind === 'create' ? labelColorPresets[0] : formColor(action.label)))) { setPendingAction(next); return; }
     applyOpen(next);
   };
-  const close = () => { if (!busy) { if (pendingAction) setPendingAction(null); else if (action?.kind === 'delete' && deletingFromPane) { setAction({ kind: 'edit', label: action.label }); setDeletingFromPane(false); } else setAction(null); } };
+  const close = () => { if (!busy) setAction(null); };
+  const openDelete = (label: LabelListItemDto, source?: View | null) => {
+    if (busy) return;
+    if (!source) rememberRouteTrigger();
+    deleteTrigger.current = source ?? getRouteTrigger();
+    setDeleteError(null);
+    setDeleteTarget(label);
+  };
+  const closeDelete = () => { if (!submitting.current) setDeleteTarget(null); };
   // A label renamed or recoloured since the list loaded: show it as it is now and let the person confirm again.
   // An edit keeps what was typed; only the version it is saved against moves on.
-  const showChangedLabel = async (labelId: string, kind: 'edit' | 'delete') => {
-    try {
-      const token = await sessionTransport.getAccessToken();
-      if (token === null || !householdId) throw new Error('Session expired');
-      const latest = (await sessionApiClient.listLabels(token, householdId)).labels;
-      setLabels(latest);
-      const current = latest.find(label => label.id === labelId);
-      if (current) { setAction({ kind, label: current }); setActionError(kind === 'delete' ? 'deleteChanged' : 'editChanged'); } else setAction(null);
-    } catch { setActionError(kind === 'delete' ? 'deleteError' : 'saveError'); }
+  const readChangedLabel = async (token: string, household: string, labelId: string) => {
+    const latest = (await sessionApiClient.listLabels(token, household)).labels;
+    setLabels(latest);
+    return latest.find(label => label.id === labelId) ?? null;
   };
   const submit = async () => {
-    if (!householdId || !action || !canManage || busy) return;
-    if (action.kind !== 'delete' && !name.trim()) { setNameError('nameRequired'); nameInput.current?.focus(); return; }
+    if (!householdId || !action || !canManage || submitting.current) return;
+    if (!name.trim()) { setNameError('nameRequired'); nameInput.current?.focus(); return; }
+    submitting.current = true;
     setBusy(true); setActionError(null);
+    let token: string | null = null;
     try {
-      const token = await sessionTransport.getAccessToken();
+      token = await sessionTransport.getAccessToken();
       if (token === null) throw new Error('Session expired');
-      if (action.kind === 'delete') {
-        await sessionApiClient.deleteLabel(token, householdId, action.label.id, { expectedName: action.label.name, expectedColor: action.label.color });
-        setLabels(previous => previous.filter(label => label.id !== action.label.id));
-      } else {
-        const data = { name: name.trim(), color };
-        const result = action.kind === 'create'
-          ? await sessionApiClient.createLabel(token, householdId, data)
-          : await sessionApiClient.updateLabel(token, householdId, action.label.id, { ...data, expectedName: action.label.name, expectedColor: action.label.color });
-        setLabels(previous => action.kind === 'create' ? [...previous, { ...result, usage: { events: 0, tasks: 0 } }] : previous.map(label => label.id === result.id ? { ...label, ...result } : label));
-      }
+      const data = { name: name.trim(), color };
+      const result = action.kind === 'create'
+        ? await sessionApiClient.createLabel(token, householdId, data)
+        : await sessionApiClient.updateLabel(token, householdId, action.label.id, { ...data, expectedName: action.label.name, expectedColor: action.label.color });
+      setLabels(previous => action.kind === 'create' ? [...previous, { ...result, usage: { events: 0, tasks: 0 } }] : previous.map(label => label.id === result.id ? { ...label, ...result } : label));
       setAction(null);
     } catch (caught: unknown) {
-      if (action.kind !== 'create' && caught instanceof ApiClientError && caught.status === 409) {
-        await showChangedLabel(action.label.id, action.kind);
-        if (action.kind === 'edit') requestAnimationFrame(() => nameInput.current?.focus());
-        return;
+      setActionError('saveError');
+      if (action.kind === 'edit' && token !== null && caught instanceof ApiClientError && caught.status === 409) {
+        try {
+          const current = await readChangedLabel(token, householdId, action.label.id);
+          setAction(current ? { kind: 'edit', label: current } : null);
+          setActionError('editChanged');
+        } catch { /* Keep the save error if reloading also failed. */ }
       }
-      setActionError(action.kind === 'delete' ? 'deleteError' : 'saveError');
-      // The busy submit button gave up focus; put it back on the name, inside the form, so typing or Escape still reaches it.
-      if (action.kind !== 'delete') requestAnimationFrame(() => nameInput.current?.focus());
-    } finally { setBusy(false); }
+      requestAnimationFrame(() => nameInput.current?.focus());
+    } finally { submitting.current = false; setBusy(false); }
+  };
+  const submitDelete = async () => {
+    if (!householdId || !deleteTarget || !canManage || submitting.current) return;
+    submitting.current = true;
+    setBusy(true); setDeleteError(null);
+    let token: string | null = null;
+    const { id: labelId, name: expectedName, color: expectedColor } = deleteTarget;
+    try {
+      token = await sessionTransport.getAccessToken();
+      if (token === null) throw new Error('Session expired');
+      await sessionApiClient.deleteLabel(token, householdId, labelId, { expectedName, expectedColor });
+      setLabels(previous => previous.filter(label => label.id !== labelId));
+      setAction(previous => previous?.kind === 'edit' && previous.label.id === labelId ? null : previous);
+      setDeleteTarget(null);
+    } catch (caught: unknown) {
+      setDeleteError('deleteError');
+      if (token !== null && caught instanceof ApiClientError && caught.status === 409) {
+        try {
+          const current = await readChangedLabel(token, householdId, labelId);
+          setDeleteTarget(current);
+          setDeleteError('deleteChanged');
+        } catch { /* Keep the delete error if reloading also failed. */ }
+      }
+    } finally { submitting.current = false; setBusy(false); }
   };
 
-  return <><HouseholdScreen detailOpen={action !== null && (action.kind !== 'delete' || deletingFromPane)} active="labels" subpage accessibilityLabel={t('navigation:pages.labels')} width="reading" refreshing={refreshing} onRefresh={() => void refresh()} floatingAction={canManage ? <FloatingCreateButton label={t('create')} onPress={() => open({ kind: 'create' })} /> : undefined}>
+  return <><HouseholdScreen detailOpen={action !== null} active="labels" subpage accessibilityLabel={t('navigation:pages.labels')} width="reading" refreshing={refreshing} onRefresh={() => void refresh()} floatingAction={canManage ? <FloatingCreateButton label={t('create')} onPress={() => open({ kind: 'create' })} /> : undefined}>
     <Stack gap={5}>
       <PageIntro title={t('navigation:pages.labels')} subtitle={`${desktop && !loading && !error ? `${t('count', { count: labels.length })} · ` : ''}${canManage ? t('intro') : t('memberIntro')}`} />
       {loading ? <LoadingState label={t('loading')} /> : null}
@@ -169,11 +198,11 @@ export default function LabelsIndexRoute() {
           const dot = <View style={{ width: desktop ? theme.spacing[2] + 2 : theme.spacing[3], height: desktop ? theme.spacing[2] + 2 : theme.spacing[3], borderRadius: theme.borderRadii.full, backgroundColor: label.color }} />;
           const menu = canManage ? <CardActionsMenu subject={t('subject', { name: label.name })} actions={[
             { kind: 'edit', accessibilityLabel: t('editItem', { name: label.name }), onPress: () => open({ kind: 'edit', label }) },
-            { kind: 'delete', accessibilityLabel: t('deleteItem', { name: label.name }), onPress: () => open({ kind: 'delete', label }) },
+            { kind: 'delete', accessibilityLabel: t('deleteItem', { name: label.name }), onPress: () => openDelete(label) },
           ]} /> : null;
           if (desktop && canManage) {
             const creator = members.find(member => member.userId === label.createdBy)?.displayName;
-            const shown = action !== null && action.kind !== 'create' && action.label.id === label.id && (action.kind === 'edit' || deletingFromPane);
+            const shown = action?.kind === 'edit' && action.label.id === label.id;
             return <ListRow key={label.id} accessibilityLabel={t('item', { name: label.name })} selected={shown} onPress={() => open({ kind: 'edit', label })}
               leading={<View style={{ width: theme.spacing[6], height: theme.layout.desktopControl, alignItems: 'center', justifyContent: 'center' }}>{dot}</View>}
               trailing={<>{usage ? <Text variant="meta" numberOfLines={1} style={{ width: theme.spacing[10] * 4 }}>{usage}</Text> : null}{creator ? <Text variant="meta" numberOfLines={1} style={{ width: theme.spacing[10] * 3 }}>{t('creator', { name: creator })}</Text> : null}{menu}</>}>
@@ -192,15 +221,14 @@ export default function LabelsIndexRoute() {
       </ListGroup>
     </Stack>
   </HouseholdScreen>
-    {action && canManage ? <AppDialog title={action.kind === 'create' ? t('create') : action.kind === 'edit' ? t('edit') : t('delete')} size={desktop && action.kind !== 'delete' ? 'editor' : 'standard'} docked={desktop && (action.kind !== 'delete' || deletingFromPane)} busy={busy} onClose={close} trigger={trigger} footer={desktop && action.kind !== 'delete' ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
+    {action && canManage ? <AppDialog title={action.kind === 'create' ? t('create') : t('edit')} size={desktop ? 'editor' : 'standard'} docked={desktop} busy={busy} onClose={close} trigger={trigger} footer={desktop ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
       {/* Deleting is a quieter, separate choice at the far edge; the two answers to the form sit together on the right. */}
-      {action.kind === 'edit' ? <Pressable accessibilityRole="button" accessibilityLabel={t('delete')} disabled={busy} onPress={() => { setDeletingFromPane(true); setAction({ kind: 'delete', label: action.label }); }} style={({ pressed }) => ({ minHeight: theme.layout.desktopControl, justifyContent: 'center', paddingHorizontal: theme.spacing[2], marginLeft: -theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}><Text variant="label" color={busy ? 'inkMuted' : 'destructive'}>{t('delete')}</Text></Pressable> : null}
+      {action.kind === 'edit' ? <FooterDestructiveAction ref={paneDeleteTrigger} label={t('delete')} disabled={busy} onPress={() => openDelete(action.label, paneDeleteTrigger.current)} /> : null}
       <View style={{ flex: 1 }} />
       <Button label={t('common:cancel')} tone="secondary" size="compact" disabled={busy} onPress={close} />
       <Button label={action.kind === 'create' ? t('shared:create') : t('common:save')} size="compact" loading={busy} onPress={() => void submit()} />
     </View> : null}>
       <Stack gap={4}>
-        {action.kind === 'delete' ? <Text>{deletePrompt(action.label)}</Text> : <>
           <TextField ref={nameInput} autoFocus={!desktop && focusFieldOnOpen} label={action.kind === 'create' ? t('name') : t('editName')} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameError(null); }} maxLength={40} disabled={busy} {...(nameError === null ? {} : { error: t(nameError) })} returnKeyType="done" onSubmitEditing={() => void submit()} />
           <Stack gap={2}>
             <Text variant="label">{t('color')}</Text>
@@ -214,9 +242,15 @@ export default function LabelsIndexRoute() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[1], borderRadius: theme.borderRadii.sm, borderLeftWidth: theme.borderWidths.focus + 1, borderLeftColor: color, backgroundColor: labelTint(color) }}><Text variant="time">16:30</Text><Text variant="bodySm" color="ink">{t('sampleEvent')}</Text></View>
             </Stack>
           </Stack> : null}
-        </>}
         {actionError ? <Text color="destructive" accessibilityRole="alert">{action.kind === 'create' ? t(actionError) : t(actionError, { name: action.label.name })}</Text> : null}
-        {action.kind === 'delete' ? <ConfirmActions cancelLabel={t('cancelDelete')} confirmLabel={t('confirmDelete')} confirmAccessibilityLabel={t('confirmDeleteItem', { name: action.label.name })} destructive busy={busy} onCancel={close} onConfirm={() => void submit()} /> : !desktop ? <FormActions onCancel={close} onSubmit={() => void submit()} submitting={busy} submitLabel={action.kind === 'create' ? t('shared:create') : t('common:save')} /> : null}
+        {!desktop ? <FormActions onCancel={close} onSubmit={() => void submit()} submitting={busy} submitLabel={action.kind === 'create' ? t('shared:create') : t('common:save')} /> : null}
+      </Stack>
+    </AppDialog> : null}
+    {deleteTarget && canManage ? <AppDialog title={t('delete')} busy={busy} onClose={closeDelete} trigger={deleteTrigger} preferCancel>
+      <Stack gap={4}>
+        <Text>{deletePrompt(deleteTarget)}</Text>
+        {deleteError ? <Text color="destructive" accessibilityRole="alert">{t(deleteError, { name: deleteTarget.name })}</Text> : null}
+        <ConfirmActions confirmLabel={t('delete')} confirmAccessibilityLabel={t('confirmDeleteItem', { name: deleteTarget.name })} destructive alignEnd busy={busy} onCancel={closeDelete} onConfirm={() => void submitDelete()} />
       </Stack>
     </AppDialog> : null}
     {/* Labels keep no drafts, so switching away from unsaved changes loses them. */}

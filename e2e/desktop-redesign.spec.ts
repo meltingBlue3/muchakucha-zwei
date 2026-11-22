@@ -324,7 +324,7 @@ async function setupRecurrenceRules(page: Page) {
   return rules;
 }
 
-test('an event is deleted from its detail pane, and edit panes offer delete where the shortcut hint was', async ({ page }) => {
+test('an event is deleted from its detail pane, and edit panes offer delete where the shortcut hint was', async ({ page }, testInfo) => {
   await setup(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   const writes: string[] = [];
@@ -355,17 +355,24 @@ test('an event is deleted from its detail pane, and edit panes offer delete wher
   await expect.poll(() => writes).toContain(`PUT /api/v1/households/${householdId}/events/event-2`);
   await expect(detail.getByRole('heading', { name: '朵朵家长会', exact: true })).toBeVisible();
 
-  // The detail: 删除日程 asks inside the pane, and 取消删除 returns to the detail.
-  await detail.getByRole('button', { name: '删除日程', exact: true }).click();
-  const question = page.getByRole('region', { name: '删除日程', exact: true });
-  await expect(question.getByText('确定要删除「朵朵家长会」吗？此操作不可撤销。', { exact: true })).toBeVisible();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const deleteEvent = detail.getByRole('button', { name: '删除日程', exact: true });
+  await deleteEvent.click();
+  const question = page.getByRole('dialog', { name: '删除日程', exact: true });
+  await expect(question.getByText('朵朵家长会', { exact: true })).toBeVisible();
+  await expect(question.getByText('删除后无法撤销。', { exact: true })).toBeVisible();
+  const bounds = (await question.getByTestId('app-dialog-panel').boundingBox())!;
+  expect(Math.abs(bounds.x + bounds.width / 2 - 720)).toBeLessThan(2);
+  expect(Math.abs(bounds.y + bounds.height / 2 - 450)).toBeLessThan(2);
+  await expect(question.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('delete-event-1440.png') });
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await question.getByRole('button', { name: '取消删除', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(question).toHaveCount(0);
+  await expect(deleteEvent).toBeFocused();
   await expect(detail.getByRole('heading', { name: '朵朵家长会', exact: true })).toBeVisible();
   expect(writes.filter(write => write.startsWith('DELETE'))).toEqual([]);
-  await detail.getByRole('button', { name: '删除日程', exact: true }).click();
-  await question.getByRole('button', { name: '确认删除日程', exact: true }).click();
+  await deleteEvent.click();
+  await question.getByRole('button', { name: '删除日程', exact: true }).click();
   await expect(page).toHaveURL(`${base}/events`);
   await expect(page.getByRole('region')).toHaveCount(0);
   expect(writes).toContain(`DELETE /api/v1/households/${householdId}/events/event-2`);
@@ -376,8 +383,17 @@ test('an event is deleted from its detail pane, and edit panes offer delete wher
   await page.getByRole('region', { name: '任务详情', exact: true }).getByRole('button', { name: '编辑任务', exact: true }).click();
   const taskEdit = page.getByRole('region', { name: '编辑任务', exact: true });
   await expect(taskEdit.getByText(/Enter 保存/)).toHaveCount(0);
-  await taskEdit.getByRole('button', { name: '删除任务', exact: true }).click();
-  await page.getByRole('region', { name: '删除任务', exact: true }).getByRole('button', { name: '确认删除任务', exact: true }).click();
+  const taskTitle = taskEdit.getByRole('textbox', { name: '任务标题', exact: true });
+  await taskTitle.fill('未保存的任务标题');
+  const deleteTask = taskEdit.getByRole('button', { name: '删除任务', exact: true });
+  await deleteTask.click();
+  const taskQuestion = page.getByRole('dialog', { name: '删除任务', exact: true });
+  await expect(taskQuestion.getByText('交物业费 1', { exact: true })).toBeVisible();
+  await taskQuestion.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(taskTitle).toHaveValue('未保存的任务标题');
+  await expect(deleteTask).toBeFocused();
+  await deleteTask.click();
+  await taskQuestion.getByRole('button', { name: '删除任务', exact: true }).click();
   await expect(page).toHaveURL(`${base}/tasks`);
   await expect(page.getByRole('region')).toHaveCount(0);
   expect(writes).toContain(`DELETE /api/v1/households/${householdId}/tasks/${taskId(0)}`);
@@ -472,6 +488,13 @@ test('a rule opens for reading, and its editor gives way to another rule without
   await first.click();
   const detail = page.getByRole('region', { name: '重复安排详情', exact: true });
   await expect(detail.getByRole('heading', { name: '倒垃圾', exact: true })).toBeVisible();
+  const endRepeat = detail.getByRole('button', { name: '结束此重复', exact: true });
+  await endRepeat.click();
+  const endQuestion = page.getByRole('dialog', { name: '结束重复安排', exact: true });
+  await expect(endQuestion.getByText('倒垃圾', { exact: true })).toBeVisible();
+  await expect(endQuestion.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(endRepeat).toBeFocused();
   await detail.getByRole('button', { name: '编辑重复安排', exact: true }).click();
   const edit = page.getByRole('region', { name: '编辑重复安排', exact: true });
   const repeat = edit.getByRole('button', { name: /^重复规则，/ });
@@ -488,6 +511,15 @@ test('a rule opens for reading, and its editor gives way to another rule without
   await expect(question).toBeVisible();
   await question.getByRole('button', { name: '保留草稿并切换', exact: true }).click();
   await expect(detail.getByRole('heading', { name: '倒垃圾', exact: true })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const phoneDetail = page.getByRole('dialog', { name: '重复安排详情', exact: true });
+  const phoneTrigger = phoneDetail.getByRole('button', { name: '结束此重复', exact: true });
+  await phoneTrigger.click();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(endQuestion.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+  await endQuestion.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(phoneTrigger).toBeFocused();
 });
 
 test('editing a directly opened rule keeps its list visible and usable', async ({ page }) => {
@@ -660,8 +692,14 @@ test('labels are edited in the side pane beside a list that stays usable', async
   expect(remove.x + remove.width).toBeLessThan(cancel.x);
   expect(cancel.x + cancel.width).toBeLessThanOrEqual(save.x);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await pane.getByRole('button', { name: '删除标签', exact: true }).click();
-  await expect(page.getByText(/日程和任务本身会保留/)).toBeVisible();
+  await pane.getByLabel('编辑标签名称').fill('未保存的标签');
+  const deleteLabel = pane.getByRole('button', { name: '删除标签', exact: true });
+  await deleteLabel.click();
+  const deletion = page.getByRole('dialog', { name: '删除标签', exact: true });
+  await expect(deletion.getByText(/日程和任务本身会保留/)).toBeVisible();
+  await deletion.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(pane.getByLabel('编辑标签名称')).toHaveValue('未保存的标签');
+  await expect(deleteLabel).toBeFocused();
 });
 
 test('家人生日 is framed like the other family lists: create in the header, rows edge to edge', async ({ page }, testInfo) => {
