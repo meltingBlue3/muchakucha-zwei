@@ -816,14 +816,14 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     return (response.json() as { id: string }).id;
   }
 
-  // Relabels one occurrence the way its edit form does.
-  async function labelOccurrence(
+  // Edits one occurrence only, the way its edit form does.
+  async function editOccurrence(
     accessToken: string,
     householdId: string,
     taskId: string,
-    labelIds: string[],
+    changes: Record<string, unknown>,
   ): Promise<void> {
-    const response = await taskApi(accessToken, householdId, 'PUT', `/${taskId}`, { labelIds });
+    const response = await taskApi(accessToken, householdId, 'PUT', `/${taskId}`, changes);
     expect(response.statusCode).toBe(200);
   }
 
@@ -938,7 +938,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     expect(await occurrenceDatesFor('tasks', newRuleId)).toEqual([formatIsoDate(tomorrow)]);
   });
 
-  test('inherits assignees and labels from the earliest instance at or after the anchor', async () => {
+  test('keeps the series labels and inherits assignees from the earliest instance at or after the anchor', async () => {
     const owner = await insertActor('rule-edit-inherit-owner');
     const member = await insertActor('rule-edit-inherit-member');
     const householdId = await createHousehold(owner.accessToken);
@@ -946,12 +946,13 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
 
-    const nearLabelId = await createLabel(owner.accessToken, householdId, '锚点之后');
-    const farLabelId = await createLabel(owner.accessToken, householdId, '锚点之前');
+    const seriesLabelId = await createLabel(owner.accessToken, householdId, '系列');
+    const onceLabelId = await createLabel(owner.accessToken, householdId, '仅此次');
 
     const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
       title: 'Rule with assignees and labels',
       assigneeIds: [owner.userId, member.userId],
+      labelIds: [seriesLabelId],
       recurrence: weeklyAcross([today, tomorrow], today),
     });
     expect(created.statusCode).toBe(201);
@@ -959,11 +960,11 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
 
     const instances = await instancesFor('tasks', oldRuleId);
     expect(instances.map((row) => row.day)).toEqual([formatIsoDate(today), formatIsoDate(tomorrow)]);
-    // Distinct labels on either side of the anchor, so the assertion below
-    // pins WHICH instance was used as the inheritance source, not merely that
-    // some label was copied.
-    await labelOccurrence(owner.accessToken, householdId, instances[0]!.id, [farLabelId]);
-    await labelOccurrence(owner.accessToken, householdId, instances[1]!.id, [nearLabelId]);
+    // Distinct assignees on either side of the anchor pin WHICH instance the
+    // assignees are inherited from. Relabelling the very occurrence the
+    // successor replaces shows the labels come from the series instead.
+    await editOccurrence(owner.accessToken, householdId, instances[0]!.id, { assigneeIds: [owner.userId] });
+    await editOccurrence(owner.accessToken, householdId, instances[1]!.id, { assigneeIds: [member.userId], labelIds: [onceLabelId] });
 
     const response = await recurrenceRulesApi(
       owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
@@ -974,24 +975,24 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
 
     const seeded = await instancesFor('tasks', newRuleId);
     expect(seeded).toHaveLength(1);
-    expect(await taskAssigneeIds(seeded[0]!.id)).toEqual([owner.userId, member.userId].sort());
-    expect(await labelNamesFor('task_labels', 'task_id', seeded[0]!.id)).toEqual(['锚点之后']);
+    expect(await taskAssigneeIds(seeded[0]!.id)).toEqual([member.userId]);
+    expect(await labelNamesFor('task_labels', 'task_id', seeded[0]!.id)).toEqual(['系列']);
   });
 
   test('falls back to the latest instance before the anchor when none is at or after it', async () => {
     const owner = await insertActor('rule-edit-fallback-owner');
+    const member = await insertActor('rule-edit-fallback-member');
     const householdId = await createHousehold(owner.accessToken);
+    await addMemberViaDb(householdId, member);
     const today = currentCalendarDateIn('UTC');
     const tomorrow = addDays(today, 1);
-
-    const recentLabelId = await createLabel(owner.accessToken, householdId, '最近一次');
-    const oldestLabelId = await createLabel(owner.accessToken, householdId, '最早一次');
 
     // Weekly on TODAY's weekday only, starting a week ago: every row lands on
     // or before today, so nothing exists at or after tomorrow's anchor and
     // the fallback branch is the only way to find a source at all.
     const created = await taskApi(owner.accessToken, householdId, 'POST', '', {
       title: 'Rule with only past instances',
+      assigneeIds: [owner.userId],
       recurrence: weeklyAcross([today], addDays(today, -7)),
     });
     expect(created.statusCode).toBe(201);
@@ -1000,8 +1001,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     const instances = await instancesFor('tasks', oldRuleId);
     expect(instances.map((row) => row.day))
       .toEqual([formatIsoDate(addDays(today, -7)), formatIsoDate(today)]);
-    await labelOccurrence(owner.accessToken, householdId, instances[0]!.id, [oldestLabelId]);
-    await labelOccurrence(owner.accessToken, householdId, instances[1]!.id, [recentLabelId]);
+    await editOccurrence(owner.accessToken, householdId, instances[1]!.id, { assigneeIds: [member.userId] });
 
     const response = await recurrenceRulesApi(
       owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
@@ -1012,7 +1012,7 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
 
     const seeded = await instancesFor('tasks', newRuleId);
     expect(seeded).toHaveLength(1);
-    expect(await labelNamesFor('task_labels', 'task_id', seeded[0]!.id)).toEqual(['最近一次']);
+    expect(await taskAssigneeIds(seeded[0]!.id)).toEqual([member.userId]);
   });
 
   test('inherits the remaining count and clears the old rule\'s count atomically', async () => {

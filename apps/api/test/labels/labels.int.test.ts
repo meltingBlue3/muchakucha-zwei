@@ -7,6 +7,7 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { createApplication } from '../../src/main.js';
 import { addDays, currentCalendarDateIn, formatIsoDate } from '../../src/modules/recurrence/recurrence-date.js';
+import { RecurrenceMaterializerService } from '../../src/modules/recurrence/recurrence-materializer.service.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
 const accessSecret = 'test-only-access-secret-that-is-longer-than-thirty-two-bytes';
@@ -263,6 +264,92 @@ describe('labels API contract', () => {
       expect((await householdApi(member, householdId, 'GET', '/tasks')).json().total).toBe(0);
       expect((await householdApi(member, householdId, 'GET', '/events')).json().total).toBe(0);
       expect((await householdApi(member, householdId, 'GET', '/recurrence-rules')).json().total).toBe(0);
+    });
+  });
+
+  describe('series labels', () => {
+    // Generated occurrences take their labels from the series, as they take
+    // their title; relabelling one occurrence stays on that occurrence.
+    const todayInUtc = () => currentCalendarDateIn('UTC');
+    const weekdayOf = (date: ReturnType<typeof todayInUtc>) => new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay();
+    type Row = { recurrenceRuleId: string | null; occurrenceDate: string; labels: Array<{ name: string }> };
+    const seriesRows = (rows: Row[], ruleId: string) => rows
+      .filter((row) => row.recurrenceRuleId === ruleId)
+      .sort((a, b) => a.occurrenceDate.localeCompare(b.occurrenceDate))
+      .map((row) => ({ date: row.occurrenceDate, labels: row.labels.map((label) => label.name) }));
+
+    test.each(['events', 'tasks'] as const)('turning a one-time item in %s into a weekly series labels every occurrence', async (collection) => {
+      const labelId = await createLabel(owner, householdId, '运动');
+      const today = todayInUtc();
+      const week = Array.from({ length: 7 }, (_, offset) => formatIsoDate(addDays(today, offset)));
+      const once = collection === 'events'
+        ? { title: '健身', startTime: `${week[0]}T10:00:00.000Z`, endTime: `${week[0]}T11:00:00.000Z`, labelIds: [labelId] }
+        : { title: '倒垃圾', labelIds: [labelId] };
+      const created = await householdApi(owner, householdId, 'POST', `/${collection}`, once);
+      expect(created.statusCode).toBe(201);
+
+      const converted = await householdApi(owner, householdId, 'PUT', `/${collection}/${created.json().id}`, {
+        recurrence: { freq: 'weekly', byWeekday: [0, 1, 2, 3, 4, 5, 6], startsOn: week[0], timezone: 'UTC' },
+      });
+      expect(converted.statusCode).toBe(200);
+
+      const listed = await householdApi(owner, householdId, 'GET', collection === 'events' ? `/events?startDate=${week[0]}&endDate=${week[6]}` : '/tasks');
+      expect(seriesRows(listed.json()[collection], converted.json().recurrenceRuleId)).toEqual(
+        week.map((date) => ({ date, labels: ['运动'] })),
+      );
+    });
+
+    test('relabelling the first occurrence of an event series leaves later occurrences alone', async () => {
+      const seriesLabel = await createLabel(owner, householdId, '系列');
+      const onceLabel = await createLabel(owner, householdId, '仅此次');
+      const today = todayInUtc();
+      const first = formatIsoDate(today);
+      const created = await householdApi(owner, householdId, 'POST', '/events', {
+        title: '周会',
+        startTime: `${first}T10:00:00.000Z`,
+        endTime: `${first}T11:00:00.000Z`,
+        recurrence: { freq: 'weekly', byWeekday: [weekdayOf(today)], startsOn: first, timezone: 'UTC' },
+        labelIds: [seriesLabel],
+      });
+      expect(created.statusCode).toBe(201);
+      expect((await householdApi(owner, householdId, 'PUT', `/events/${created.json().id}`, { labelIds: [onceLabel] })).statusCode).toBe(200);
+
+      const last = formatIsoDate(addDays(today, 14));
+      const listed = await householdApi(owner, householdId, 'GET', `/events?expandRecurring=true&startDate=${first}&endDate=${last}`);
+      expect(listed.statusCode).toBe(200);
+      expect(seriesRows(listed.json().events, created.json().recurrenceRuleId)).toEqual([
+        { date: first, labels: ['仅此次'] },
+        { date: formatIsoDate(addDays(today, 7)), labels: ['系列'] },
+        { date: last, labels: ['系列'] },
+      ]);
+    });
+
+    test('relabelling the first occurrence of a task series leaves the next generated occurrence alone', async () => {
+      const seriesLabel = await createLabel(owner, householdId, '系列');
+      const onceLabel = await createLabel(owner, householdId, '仅此次');
+      const today = todayInUtc();
+      const first = formatIsoDate(addDays(today, -7));
+      const created = await householdApi(owner, householdId, 'POST', '/tasks', {
+        title: '倒垃圾',
+        recurrence: { freq: 'weekly', byWeekday: [weekdayOf(today)], startsOn: first, timezone: 'UTC' },
+        labelIds: [seriesLabel],
+      });
+      expect(created.statusCode).toBe(201);
+      const ruleId = created.json().recurrenceRuleId as string;
+      expect((await householdApi(owner, householdId, 'PUT', `/tasks/${created.json().id}`, { labelIds: [onceLabel] })).statusCode).toBe(200);
+
+      // The scheduler's next run, a week on: today's row is written after the edit.
+      await withDatabase(async (client) => {
+        await client.query(`DELETE FROM "tasks" WHERE "recurrence_rule_id" = $1 AND "occurrence_date" = $2::date`, [ruleId, formatIsoDate(today)]);
+        await client.query(`UPDATE "recurrence_rules" SET "materialized_through" = $2::date WHERE "id" = $1`, [ruleId, first]);
+      });
+      await app.get(RecurrenceMaterializerService).materializeRule(ruleId);
+
+      const listed = await householdApi(owner, householdId, 'GET', '/tasks');
+      expect(seriesRows(listed.json().tasks, ruleId)).toEqual([
+        { date: first, labels: ['仅此次'] },
+        { date: formatIsoDate(today), labels: ['系列'] },
+      ]);
     });
   });
 
