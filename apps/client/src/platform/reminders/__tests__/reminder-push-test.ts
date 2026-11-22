@@ -31,7 +31,7 @@ test('requests another sync when the first Expo token arrives after the local fa
     expect(requestSync).not.toHaveBeenCalled();
 
     deliverToken({ data: 'ExpoPushToken[device]' });
-    await expect(getReminderPushToken(requestSync)).resolves.toBe('ExpoPushToken[device]');
+    await expect(getReminderPushToken(requestSync)).resolves.toEqual({ token: 'ExpoPushToken[device]' });
     expect(requestSync).toHaveBeenCalledTimes(1);
   } finally {
     if (previousFlag === undefined) delete process.env.EXPO_PUBLIC_REMINDER_PUSH_ENABLED;
@@ -51,13 +51,13 @@ test('selects the Firebase token on Android and requests registration when the t
     await jest.isolateModulesAsync(async () => {
       const adapter = jest.requireActual<typeof import('../reminder-push.native')>('../reminder-push.native');
       expect(adapter.reminderPushProvider).toBe('fcm');
-      await expect(adapter.getReminderPushToken(requestSync)).resolves.toBe('android:original');
+      await expect(adapter.getReminderPushToken(requestSync)).resolves.toEqual({ token: 'android:original' });
 
       expect(mockAddPushTokenListener).toHaveBeenCalledTimes(1);
       const [notify] = mockAddPushTokenListener.mock.calls[0]!;
       notify({ data: 'android:rotated', type: 'android' });
       expect(requestSync).toHaveBeenCalledTimes(1);
-      await expect(adapter.getReminderPushToken(requestSync)).resolves.toBe('android:rotated');
+      await expect(adapter.getReminderPushToken(requestSync)).resolves.toEqual({ token: 'android:rotated' });
     });
   } finally {
     jest.dontMock('react-native');

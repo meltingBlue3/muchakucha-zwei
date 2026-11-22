@@ -1,14 +1,27 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsString, MaxLength, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsObject, IsString, MaxLength, ValidateIf, ValidateNested } from 'class-validator';
 
 const PUSH_LANGUAGES = ['zh', 'ja'] as const;
-const PUSH_PROVIDERS = ['expo', 'fcm'] as const;
+const PUSH_PROVIDERS = ['expo', 'fcm', 'web'] as const;
 export const EXPO_TOKEN_PATTERN = /^Expo(?:nent)?PushToken\[[\w-]+\]$/;
 export const FCM_TOKEN_PATTERN = /^[\w:.-]+$/;
 
+class WebPushKeysDto {
+  @ApiProperty({ description: 'The 65-byte subscription public key in unpadded base64url.', maxLength: 87 })
+  @IsString()
+  @MaxLength(87)
+  p256dh!: string;
+
+  @ApiProperty({ description: 'The 16-byte subscription authentication secret in unpadded base64url.', maxLength: 22 })
+  @IsString()
+  @MaxLength(22)
+  auth!: string;
+}
+
 export class RegisterReminderPushDto {
-  @ApiProperty({ maxLength: 512 })
-  @MaxLength(512)
+  @ApiProperty({ maxLength: 1024 })
+  @MaxLength(1024)
   @IsString()
   token!: string;
 
@@ -16,6 +29,13 @@ export class RegisterReminderPushDto {
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsIn(PUSH_PROVIDERS)
   provider?: (typeof PUSH_PROVIDERS)[number];
+
+  @ApiPropertyOptional({ type: WebPushKeysDto, description: 'Required when provider is web.' })
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsObject()
+  @ValidateNested()
+  @Type(() => WebPushKeysDto)
+  keys?: WebPushKeysDto;
 
   @ApiProperty({ example: 'Asia/Shanghai', maxLength: 100 })
   @IsString()

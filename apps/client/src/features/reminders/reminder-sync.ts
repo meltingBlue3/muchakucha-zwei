@@ -28,7 +28,7 @@ async function syncOnce(): Promise<void> {
   await device.refreshReminderChannels().catch(() => undefined);
   if (pushRegistrationEnabled && pushToken === null) await sessionApiClient.unregisterReminderPush(token);
   const push = pushToken === null ? false : (await sessionApiClient.registerReminderPush(token, {
-    token: pushToken,
+    ...pushToken,
     provider: reminderPushProvider,
     timeZone,
     language: currentLanguage(),

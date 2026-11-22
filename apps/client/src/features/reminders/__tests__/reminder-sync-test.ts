@@ -12,10 +12,11 @@ const mockRegisterReminderPush = jest.fn();
 const mockUnregisterReminderPush = jest.fn();
 const mockGetReminderPushToken = jest.fn();
 let mockToken: string | null = 'access-token';
+let mockPushProvider: 'expo' | 'web';
 jest.mock('../../../platform/reminders/reminder-push', () => ({
   getReminderPushToken: () => mockGetReminderPushToken(),
   pushRegistrationEnabled: true,
-  reminderPushProvider: 'expo',
+  get reminderPushProvider() { return mockPushProvider; },
 }));
 jest.mock('../../auth/session-runtime', () => ({
   sessionApiClient: {
@@ -48,6 +49,7 @@ async function scheduled() {
 
 beforeEach(() => {
   mockToken = 'access-token';
+  mockPushProvider = 'expo';
   mockListUpcomingReminders.mockReset();
   mockRegisterReminderPush.mockReset();
   mockUnregisterReminderPush.mockReset().mockResolvedValue(undefined);
@@ -79,7 +81,7 @@ test('switches from local reminders to server push after successful registration
   await syncReminders();
   expect(await scheduled()).toHaveLength(1);
 
-  mockGetReminderPushToken.mockResolvedValue('ExpoPushToken[device]');
+  mockGetReminderPushToken.mockResolvedValue({ token: 'ExpoPushToken[device]' });
   mockRegisterReminderPush.mockResolvedValue({ active: true });
   await syncReminders();
   expect(mockRegisterReminderPush).toHaveBeenCalledWith('access-token', {
@@ -89,9 +91,24 @@ test('switches from local reminders to server push after successful registration
   expect(mockListUpcomingReminders).toHaveBeenCalledTimes(1);
 });
 
+test('registers a Web endpoint with its subscription keys', async () => {
+  mockPushProvider = 'web';
+  const subscription = {
+    token: 'https://fcm.googleapis.com/fcm/send/mock',
+    keys: { p256dh: 'subscription-public-key', auth: 'subscription-auth-secret' },
+  };
+  mockGetReminderPushToken.mockResolvedValue(subscription);
+  mockRegisterReminderPush.mockResolvedValue({ active: true });
+  await syncReminders();
+  expect(mockRegisterReminderPush).toHaveBeenCalledWith('access-token', {
+    ...subscription, provider: 'web', timeZone: expect.any(String), language: 'zh', localAlarms: false,
+  });
+  expect(mockListUpcomingReminders).not.toHaveBeenCalled();
+});
+
 test('continues local scheduling when the server has push disabled', async () => {
   const at = new Date(Date.now() + 3_600_000).toISOString();
-  mockGetReminderPushToken.mockResolvedValue('ExpoPushToken[device]');
+  mockGetReminderPushToken.mockResolvedValue({ token: 'ExpoPushToken[device]' });
   mockRegisterReminderPush.mockResolvedValue({ active: false });
   mockListUpcomingReminders.mockResolvedValue({ reminders: [upcoming('task:a', '交水费', at)] });
   await syncReminders();

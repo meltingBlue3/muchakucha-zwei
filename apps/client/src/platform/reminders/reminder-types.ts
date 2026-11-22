@@ -2,6 +2,13 @@
  * Reminders scheduled on this device, including ringing Android alarms.
  */
 export type NotificationPermission = 'granted' | 'undetermined' | 'denied' | 'blocked' | 'unsupported';
+export type WebReminderSupport = 'supported' | 'unsupported' | 'requiresHomeScreen';
+export type ReminderPushProvider = 'expo' | 'fcm' | 'web';
+
+export interface ReminderPushToken {
+  token: string;
+  keys?: { p256dh: string; auth: string };
+}
 
 export interface ReminderNotification {
   /** Starts with `REMINDER_ID_PREFIX`; other notifications are left alone. */

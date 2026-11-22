@@ -14,12 +14,18 @@ import { useReminderSettings } from '../../src/features/reminders/reminder-setti
 import { minutesLabel, TIMED_REMINDER_MINUTES, type ReminderKind } from '../../src/features/reminders/reminder-rules';
 import { alarmsSupported } from '../../src/platform/reminders/reminder-alarm';
 import { backgroundReminderGuide } from '../../src/platform/reminders/background-reminder-guide';
-import { remindersSupported } from '../../src/platform/reminders/reminder-notifications';
+import { remindersSupported, webReminderSupport } from '../../src/platform/reminders/reminder-notifications';
 import { AppDialog } from '../../src/ui/app-dialog';
 import { OptionRow } from '../../src/ui/compose-rows';
 import { PageIntro } from '../../src/ui/page-intro';
 import { Banner, Button, LoadError, LoadingState, Stack, Text } from '../../src/ui/primitives';
 import { SettingsRows, SettingsSection, SwitchRow } from '../../src/ui/settings-section';
+
+const webFooter = {
+  supported: 'settings.webInfo',
+  unsupported: 'settings.webUnsupported',
+  requiresHomeScreen: 'settings.webRequiresHomeScreen',
+} as const;
 import { theme } from '../../src/ui/theme';
 
 type Choosing = 'task' | 'event' | 'time';
@@ -121,7 +127,11 @@ export default function RemindersRoute() {
               <View style={deviceRow}>
                 <View style={{ flex: 1 }}>
                   <Text>{t('settings.notifications')}</Text>
-                  <Text variant="meta">{permission === 'granted' ? t('settings.granted') : t('settings.notGranted')}</Text>
+                  <Text variant="meta">
+                    {permission === 'blocked' && webReminderSupport !== null
+                      ? t('permission.webBlocked')
+                      : t(permission === 'granted' ? 'settings.granted' : 'settings.notGranted')}
+                  </Text>
                 </View>
                 {permission === 'granted' ? <Text variant="bodySm">{t('settings.enabled')}</Text> : <EnableNotificationsButton permission={permission} onPress={() => void enable()} />}
               </View>
@@ -183,9 +193,7 @@ export default function RemindersRoute() {
         )}
 
         <Text variant="caption">
-          {remindersSupported
-            ? t('settings.nativeInfo')
-            : t('settings.webInfo')}
+          {t(webReminderSupport === null ? 'settings.nativeInfo' : webFooter[webReminderSupport])}
         </Text>
       </Stack>
 

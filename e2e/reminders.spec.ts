@@ -13,10 +13,11 @@ interface Writes {
   settings: unknown[];
   reminders: unknown[];
   tasks: unknown[];
+  pushSubscriptions: unknown[];
 }
 
 async function setup(page: Page): Promise<Writes> {
-  const writes: Writes = { settings: [], reminders: [], tasks: [] };
+  const writes: Writes = { settings: [], reminders: [], tasks: [], pushSubscriptions: [] };
   let settings = {
     taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false,
     households: [{ id: householdId, name: '小林之家', muted: false }, { id: parentsId, name: '爸妈家', muted: false }],
@@ -34,6 +35,14 @@ async function setup(page: Page): Promise<Writes> {
     const household = { id: householdId, name: '小林之家', role: 'OWNER', memberCount: 1, ownerMembershipId: 'member' };
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'mock-only' };
     else if (path.endsWith('/users/me')) body = { id: 'user', username: 'review', displayName: '小林' };
+    else if (path.endsWith('/users/me/reminder-push')) {
+      if (method === 'DELETE') {
+        await route.fulfill({ status: 204 });
+        return;
+      }
+      writes.pushSubscriptions.push(route.request().postDataJSON());
+      body = { active: true };
+    }
     else if (path.endsWith('/users/me/reminder-settings')) {
       if (method === 'PUT') {
         const next = route.request().postDataJSON() as { taskMinutesBefore: number | null; eventMinutesBefore: number | null; dateOnlyTime: string; alarm: boolean; mutedHouseholdIds: string[] };
@@ -63,9 +72,45 @@ async function setup(page: Page): Promise<Writes> {
   return writes;
 }
 
+type WebNotificationState = 'supported' | 'unsupported' | 'ios-tab' | 'blocked';
+
+async function mockWebNotifications(page: Page, state: WebNotificationState): Promise<void> {
+  await page.addInitScript((state) => {
+    const notification = {
+      permission: state === 'blocked' ? 'denied' : 'default',
+      requestPermission: async () => {
+        notification.permission = 'granted';
+        return notification.permission;
+      },
+    };
+    Object.defineProperty(window, 'Notification', { value: notification, configurable: true });
+    if (state === 'unsupported') {
+      Object.defineProperty(window, 'PushManager', { value: undefined, configurable: true });
+      return;
+    }
+    if (state === 'ios-tab') Object.defineProperty(navigator, 'standalone', { value: false });
+    let subscription: object | null = null;
+    Object.defineProperty(PushManager.prototype, 'getSubscription', { value: async () => subscription });
+    Object.defineProperty(PushManager.prototype, 'subscribe', {
+      value: async ({ applicationServerKey }: { applicationServerKey: Uint8Array }) => {
+        subscription = {
+          endpoint: 'https://fcm.googleapis.com/fcm/send/mock-web-subscription',
+          options: { applicationServerKey: applicationServerKey.buffer },
+          getKey: (name: PushEncryptionKeyName) => new Uint8Array(name === 'p256dh' ? 65 : 16).buffer,
+        };
+        return subscription;
+      },
+    });
+  }, state);
+}
+
+const webPushInfo = '提醒会推送到这个浏览器。浏览器退出后能否收到提醒，取决于浏览器和系统。';
+const unsupportedInfo = '这个浏览器不支持推送提醒，这里的设置在其他设备上生效。';
+
 for (const width of [320, 390, 1440]) {
   test(`the 提醒 page is reached from the account menu and saves each change at once at ${width}px`, async ({ page }, testInfo) => {
     const writes = await setup(page);
+    await mockWebNotifications(page, 'unsupported');
     await page.setViewportSize({ width, height: 900 });
     // From a household page, as a person finds it: nothing links to 个人中心 any more.
     await page.goto(`${base}/tasks`);
@@ -73,8 +118,7 @@ for (const width of [320, 390, 1440]) {
     await page.getByRole('menuitem', { name: '提醒', exact: true }).click();
     await expect(page).toHaveURL('/reminders');
     await expect(page.getByRole('heading', { name: '提醒', exact: true })).toBeVisible();
-    // A browser schedules nothing, and says so instead of offering notifications.
-    await expect(page.getByText('网页不会弹出提醒，这里的设置在手机 App 上生效。')).toBeVisible();
+    await expect(page.getByText(unsupportedInfo)).toBeVisible();
     await expect(page.getByRole('button', { name: '开启通知' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '分给我的任务，准时', exact: true })).toBeVisible();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
@@ -103,15 +147,68 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
+test.describe('Web Push reminder settings with a VAPID build', () => {
+  test.skip(!process.env.EXPO_PUBLIC_REMINDER_WEB_PUSH_KEY, 'Export and test with EXPO_PUBLIC_REMINDER_WEB_PUSH_KEY.');
+
+  test('offers notifications, registers a subscription, and opens a tapped reminder', async ({ page }, testInfo) => {
+    const writes = await setup(page);
+    await mockWebNotifications(page, 'supported');
+    await page.goto('/reminders');
+    await expect(page.getByText(webPushInfo)).toBeVisible();
+    const enable = page.getByRole('button', { name: '开启通知', exact: true });
+    await expect(enable).toBeVisible();
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.screenshot({ path: testInfo.outputPath(`web-push-${width}.png`), fullPage: true });
+    }
+    await enable.click();
+    await expect(page.getByText('已开启', { exact: true })).toBeVisible();
+    await expect.poll(() => writes.pushSubscriptions).toEqual([{
+      token: 'https://fcm.googleapis.com/fcm/send/mock-web-subscription',
+      keys: { p256dh: 'A'.repeat(87), auth: 'A'.repeat(22) },
+      provider: 'web', timeZone: expect.any(String), language: 'zh', localAlarms: false,
+    }]);
+
+    const taskUrl = `${base}/tasks/${taskId}`;
+    await page.evaluate((url) => {
+      navigator.serviceWorker.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'reminder-open', url },
+      }));
+    }, taskUrl);
+    await expect(page).toHaveURL(taskUrl);
+    await expect(page.getByRole('region', { name: '任务详情', exact: true })).toBeVisible();
+  });
+
+  test('shows the Home Screen instructions in an iOS Safari tab', async ({ page }) => {
+    await setup(page);
+    await mockWebNotifications(page, 'ios-tab');
+    await page.goto('/reminders');
+    await expect(page.getByText('在 iPhone 或 iPad 上，用 Safari 的「添加到主屏幕」，再从主屏幕打开，才能收到提醒。')).toBeVisible();
+    await expect(page.getByRole('button', { name: '开启通知' })).toHaveCount(0);
+  });
+
+  test('points blocked browsers to site permissions without a settings button', async ({ page }) => {
+    await setup(page);
+    await mockWebNotifications(page, 'blocked');
+    await page.goto('/reminders');
+    await expect(page.getByText('通知已被浏览器拦截，请在浏览器的网站设置里允许通知。')).toBeVisible();
+    await expect(page.getByRole('button', { name: '打开系统设置以开启通知' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '开启通知' })).toHaveCount(0);
+  });
+});
+
 test('Japanese reminder settings save a localized lead time', async ({ browser }) => {
   const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 320, height: 900 } });
   try {
     const page = await context.newPage();
     const writes = await setup(page);
+    await mockWebNotifications(page, 'unsupported');
     await page.goto(`${base}/tasks`);
     await page.getByRole('button', { name: 'マイページ', exact: true }).click();
     await page.getByRole('menuitem', { name: 'リマインダー', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'リマインダー', exact: true })).toBeVisible();
+    await expect(page.getByText('このブラウザはプッシュ通知に対応していません。ここでの設定はほかの端末で有効になります。')).toBeVisible();
     await page.getByRole('button', { name: '予定、開始15分前', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '予定', exact: true });
     await dialog.getByRole('radio', { name: '開始30分前', exact: true }).click();

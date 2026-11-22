@@ -5124,20 +5124,48 @@
           "reminders"
         ]
       },
+      "WebPushKeysDto": {
+        "type": "object",
+        "properties": {
+          "p256dh": {
+            "type": "string",
+            "description": "The 65-byte subscription public key in unpadded base64url.",
+            "maxLength": 87
+          },
+          "auth": {
+            "type": "string",
+            "description": "The 16-byte subscription authentication secret in unpadded base64url.",
+            "maxLength": 22
+          }
+        },
+        "required": [
+          "p256dh",
+          "auth"
+        ]
+      },
       "RegisterReminderPushDto": {
         "type": "object",
         "properties": {
           "token": {
             "type": "string",
-            "maxLength": 512
+            "maxLength": 1024
           },
           "provider": {
             "type": "string",
             "enum": [
               "expo",
-              "fcm"
+              "fcm",
+              "web"
             ],
             "default": "expo"
+          },
+          "keys": {
+            "description": "Required when provider is web.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebPushKeysDto"
+              }
+            ]
           },
           "timeZone": {
             "type": "string",

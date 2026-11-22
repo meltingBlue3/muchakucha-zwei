@@ -6,6 +6,8 @@ import type { UpcomingReminderDto } from './dto/reminder.dto.js';
 import { ExpoReminderPush, reminderPushMessage } from './expo-reminder-push.js';
 import type { FcmReminderPush } from './fcm-reminder-push.js';
 import { assertTimeZone, RemindersService } from './reminders.service.js';
+import { isBase64UrlKey, isWebPushEndpoint } from './web-push-subscription.js';
+import type { WebReminderPush } from './web-reminder-push.js';
 
 const TICK_MS = 15_000;
 const SEND_WINDOW_MS = 2 * 60_000;
@@ -34,22 +36,40 @@ export class ReminderPushService implements OnApplicationBootstrap, OnModuleDest
     private readonly enabled: boolean,
     private readonly testing: boolean,
     private readonly fcm: FcmReminderPush | undefined,
+    private readonly web: WebReminderPush | undefined,
   ) {}
 
   async register(sessionId: string, input: RegisterReminderPushDto): Promise<ReminderPushStatusDto> {
     const timeZone = assertTimeZone(input.timeZone);
     const provider = input.provider ?? 'expo';
-    const valid = provider === 'fcm' ? FCM_TOKEN_PATTERN.test(input.token) : input.token.length <= 128 && EXPO_TOKEN_PATTERN.test(input.token);
+    const { token, keys, language } = input;
+    let valid: boolean;
+    switch (provider) {
+      case 'web':
+        valid = isWebPushEndpoint(token) && keys !== undefined
+          && isBase64UrlKey(keys.p256dh, 65) && isBase64UrlKey(keys.auth, 16);
+        break;
+      case 'fcm':
+        valid = token.length <= 512 && FCM_TOKEN_PATTERN.test(token);
+        break;
+      case 'expo':
+        valid = token.length <= 128 && EXPO_TOKEN_PATTERN.test(token);
+        break;
+    }
     if (!valid) throw new BadRequestException({
       code: 'VALIDATION_FAILED',
       message: 'Request validation failed.',
       details: [{ field: 'token', codes: ['invalid_push_token'] }],
     });
-    if (!this.enabled || (provider === 'fcm' && this.fcm === undefined)) {
+    if (!this.enabled || (provider === 'web' && this.web === undefined) || (provider === 'fcm' && this.fcm === undefined)) {
       await this.unregister(sessionId);
       return { active: false };
     }
-    const values = { ...input, provider, timeZone };
+    const values = {
+      token, provider, timeZone, language, localAlarms: provider !== 'web' && input.localAlarms,
+      p256dh: provider === 'web' ? keys?.p256dh ?? null : null,
+      auth: provider === 'web' ? keys?.auth ?? null : null,
+    };
     await this.prisma.$transaction(async tx => {
       // A token can move to a new sign-in. A different token gets a new row,
       // so a late receipt for the old token can't remove its replacement.
@@ -116,29 +136,31 @@ export class ReminderPushService implements OnApplicationBootstrap, OnModuleDest
   }
 
   private async send(device: ReminderPushDevice, reminder: UpcomingReminderDto, fireAt: Date): Promise<void> {
-    const provider = device.provider === 'fcm' ? this.fcm : this.expo;
+    const provider = device.provider === 'web' ? this.web : device.provider === 'fcm' ? this.fcm : this.expo;
     if (provider === undefined) return;
     const expiresAt = fireAt.getTime() + SEND_WINDOW_MS;
     if (Date.now() >= expiresAt) return;
     const current = await this.prisma.reminderPushDevice.findFirst({
       where: { id: device.id, timeZone: device.timeZone, localAlarms: device.localAlarms, session: activeSession(new Date()) },
-      select: { language: true },
+      select: { language: true, p256dh: true, auth: true },
     });
     if (current === null) return;
+    const { p256dh, auth } = current;
     const key = { deviceId: device.id, reminderKey: reminder.key, fireAt };
     const claim = await this.prisma.reminderPushDelivery.createMany({ data: key, skipDuplicates: true });
     if (claim.count === 0) return;
 
     // Retry an explicit transient rejection while it is still due. A transport
     // failure leaves the claim in place because the provider might have accepted it.
-    const result = await provider.send(reminderPushMessage(reminder, { ...device, language: current.language }, expiresAt), expiresAt);
+    const message = reminderPushMessage(reminder, { ...device, language: current.language }, expiresAt);
+    const result = await provider.send(message, expiresAt, { p256dh, auth });
     if (typeof result === 'object') {
       await this.prisma.reminderPushDelivery.updateMany({
         where: key,
         data: { receiptId: result.receiptId, receiptAt: new Date(Date.now() + RECEIPT_DELAY_MS) },
       });
     } else if (result === 'invalid') {
-      await this.prisma.reminderPushDevice.deleteMany({ where: { id: device.id } });
+      await this.prisma.reminderPushDevice.deleteMany({ where: { id: device.id, p256dh, auth } });
     } else if (result === 'retry') {
       await this.prisma.reminderPushDelivery.deleteMany({ where: key });
     } else if (result === 'failed') {

@@ -1,10 +1,10 @@
-import type { NotificationPermission, ReminderNotification } from './reminder-types';
+import type { NotificationPermission, ReminderNotification, WebReminderSupport } from './reminder-types';
 
 export { REMINDER_ID_PREFIX, type NotificationPermission, type ReminderNotification } from './reminder-types';
 
-/** Web and other platforms without local notifications schedule nothing. */
 export const remindersSupported = false;
 export const localAlarmsSupported = false;
+export const webReminderSupport: WebReminderSupport | null = null;
 
 export async function refreshReminderChannels(): Promise<void> {}
 

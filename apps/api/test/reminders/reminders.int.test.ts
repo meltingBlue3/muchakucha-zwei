@@ -1,5 +1,5 @@
 import { fixtureEditPayload } from '../../../../scripts/test-edit-version.js';
-import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { Client } from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import { generateVAPIDKeys } from 'web-push';
 import { createApplication } from '../../src/main.js';
 import { addDays, currentCalendarDateIn, formatIsoDate, localDateTimeToInstant } from '../../src/modules/recurrence/recurrence-date.js';
 import { ReminderPushService } from '../../src/modules/reminders/reminder-push.service.js';
@@ -17,6 +18,17 @@ const accessSecret = 'test-only-access-secret-that-is-longer-than-thirty-two-byt
 const jwt = new JwtService({ secret: accessSecret, signOptions: { algorithm: 'HS256', expiresIn: 15 * 60 } });
 const SHANGHAI = 'Asia/Shanghai';
 const HOUR = 3_600_000;
+const pushRegistrationUrl = '/api/v1/users/me/reminder-push';
+const vapid = generateVAPIDKeys();
+const pushEndpoint = 'https://fcm.googleapis.com/fcm/send/web-reminder-test';
+const webRegistration = {
+  token: pushEndpoint,
+  provider: 'web',
+  keys: { p256dh: generateVAPIDKeys().publicKey, auth: randomBytes(16).toString('base64url') },
+  timeZone: SHANGHAI,
+  language: 'ja',
+  localAlarms: false,
+};
 
 let app: NestFastifyApplication;
 let passwordHash: string;
@@ -59,8 +71,8 @@ async function insertActor(username: string): Promise<ActorFixture> {
   return { userId, sessionId, accessToken: await jwt.signAsync({ sub: userId, sid: sessionId }) };
 }
 
-async function api(actor: ActorFixture, method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: unknown): Promise<Reply> {
-  const inject = app.getHttpAdapter().getInstance().inject.bind(app.getHttpAdapter().getInstance());
+async function api(actor: ActorFixture, method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: unknown, application = app): Promise<Reply> {
+  const inject = application.getHttpAdapter().getInstance().inject.bind(application.getHttpAdapter().getInstance());
   const body = await fixtureEditPayload(method, url, payload, async (readUrl) => (await inject({
     method: 'GET', url: readUrl, headers: { authorization: `Bearer ${actor.accessToken}` },
   })).json());
@@ -123,6 +135,9 @@ beforeAll(async () => {
     REMINDER_PUSH_ENABLED: 'true',
     EXPO_PUSH_ACCESS_TOKEN: 'test-expo-push-access-token',
     REMINDER_FCM_CREDENTIALS_FILE: credentialPath,
+    REMINDER_WEB_PUSH_PUBLIC_KEY: vapid.publicKey,
+    REMINDER_WEB_PUSH_PRIVATE_KEY: vapid.privateKey,
+    REMINDER_WEB_PUSH_SUBJECT: 'mailto:reminders@example.com',
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -145,17 +160,94 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function registerPush(actor: ActorFixture, token: string, localAlarms = false, provider?: 'fcm'): Promise<void> {
+async function activateSession(actor: ActorFixture): Promise<void> {
   await withDatabase(client => client.query(
     `INSERT INTO "RefreshToken" ("session_id", "token_hash", "expires_at") VALUES ($1, $2, NOW() + INTERVAL '1 day')`,
     [actor.sessionId, actor.sessionId.replaceAll('-', '').padEnd(64, '0')],
   ));
-  const response = await api(actor, 'PUT', '/api/v1/users/me/reminder-push', { token, provider, timeZone: SHANGHAI, language: 'ja', localAlarms });
+}
+
+async function registerPush(actor: ActorFixture, token: string, localAlarms = false, provider?: 'fcm'): Promise<void> {
+  await activateSession(actor);
+  const response = await api(actor, 'PUT', pushRegistrationUrl, { token, provider, timeZone: SHANGHAI, language: 'ja', localAlarms });
   expect(response.statusCode).toBe(200);
   expect(response.json()).toEqual({ active: true });
 }
 
 describe('server reminder push', () => {
+  test.each([
+    ['an unknown host', { token: 'https://example.com/push' }],
+    ['an HTTP endpoint', { token: 'http://fcm.googleapis.com/push' }],
+    ['an explicit port', { token: 'https://fcm.googleapis.com:443/push' }],
+    ['user information', { token: 'https://user@fcm.googleapis.com/push' }],
+    ['missing subscription keys', { keys: undefined }],
+    ['the wrong key length', { keys: { ...webRegistration.keys, auth: 'a2V5' } }],
+  ])('rejects Web registration with %s', async (_name, invalidFields) => {
+    const actor = await insertActor('web-invalid');
+    const response = await api(actor, 'PUT', pushRegistrationUrl, { ...webRegistration, ...invalidFields });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatchObject({
+      code: 'VALIDATION_FAILED', details: [{ field: 'token', codes: ['invalid_push_token'] }],
+    });
+  });
+
+  test('claims and encrypts a due Web reminder once, then retires an expired subscription', async () => {
+    const actor = await insertActor('web-owner');
+    const householdId = await createHousehold(actor, '小林之家');
+    await activateSession(actor);
+    const response = await api(actor, 'PUT', pushRegistrationUrl, webRegistration);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ active: true });
+
+    const start = inHours(1);
+    const next = inHours(2);
+    await createEvent(actor, householdId, { title: '晚饭', startTime: start.toISOString(), endTime: next.toISOString() });
+    await createEvent(actor, householdId, { title: '散步', startTime: next.toISOString(), endTime: inHours(3).toISOString() });
+    const send = vi.fn(async (_url: string, _options: RequestInit) => new Response(null, { status: 201 }));
+    vi.stubGlobal('fetch', send);
+    const worker = app.get(ReminderPushService);
+    const fireAt = new Date(start.getTime() - 15 * 60_000);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(fireAt.getTime());
+    await Promise.all([worker.dispatch(fireAt), worker.dispatch(fireAt)]);
+
+    expect(send).toHaveBeenCalledExactlyOnceWith(pushEndpoint, expect.objectContaining({
+      method: 'POST', redirect: 'error', signal: expect.any(AbortSignal), body: expect.any(Uint8Array),
+    }));
+    const headers = new Headers(send.mock.calls[0]![1].headers);
+    expect(headers.get('Content-Encoding')).toBe('aes128gcm');
+    expect(headers.get('TTL')).toBe('120');
+    expect(headers.get('Urgency')).toBe('high');
+    expect(headers.get('Authorization')).toMatch(new RegExp(`^vapid t=[\\w.-]+, k=${vapid.publicKey}$`));
+
+    send.mockResolvedValue(new Response(null, { status: 410 }));
+    const nextFireAt = new Date(next.getTime() - 15 * 60_000);
+    now.mockReturnValue(nextFireAt.getTime());
+    await worker.dispatch(nextFireAt);
+    expect(send).toHaveBeenCalledTimes(2);
+    const devices = await withDatabase(client => client.query('SELECT id FROM reminder_push_devices WHERE session_id = $1', [actor.sessionId]));
+    expect(devices.rows).toEqual([]);
+  });
+
+  test('clears a registration when Web Push is not configured', async () => {
+    const actor = await insertActor('web-unconfigured');
+    await registerPush(actor, 'ExpoPushToken[previous]');
+    const withoutWebPush = await createApplication({
+      ...process.env, NODE_ENV: 'test', JWT_ACCESS_SECRET: accessSecret, DATABASE_URL: getTestDatabaseUrl(),
+      REMINDER_PUSH_ENABLED: 'true', REMINDER_FCM_CREDENTIALS_FILE: undefined,
+      REMINDER_WEB_PUSH_PUBLIC_KEY: undefined, REMINDER_WEB_PUSH_PRIVATE_KEY: undefined, REMINDER_WEB_PUSH_SUBJECT: undefined,
+    });
+    try {
+      await withoutWebPush.init();
+      const response = await api(actor, 'PUT', pushRegistrationUrl, webRegistration, withoutWebPush);
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ active: false });
+      const devices = await withDatabase(client => client.query('SELECT id FROM reminder_push_devices WHERE session_id = $1', [actor.sessionId]));
+      expect(devices.rows).toEqual([]);
+    } finally {
+      await withoutWebPush.close();
+    }
+  });
+
   test('lets Google Play services display an Android reminder with a link to the edited event', async () => {
     const owner = await insertActor('fcm-owner');
     const member = await insertActor('fcm-member');

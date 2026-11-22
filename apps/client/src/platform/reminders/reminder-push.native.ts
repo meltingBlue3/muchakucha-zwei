@@ -1,6 +1,7 @@
 import { isRunningInExpoGo } from 'expo';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import type { ReminderPushToken } from './reminder-types';
 
 export const reminderPushProvider = Platform.OS === 'android' && process.env.EXPO_PUBLIC_REMINDER_FCM_ENABLED === 'true' ? 'fcm' : 'expo';
 const TOKEN_KEY = reminderPushProvider === 'fcm' ? 'muchakucha.reminder-fcm.v1' : 'muchakucha.reminder-push.v1';
@@ -32,7 +33,7 @@ async function readFcmToken(onTokenReady: () => void): Promise<string> {
   return data;
 }
 
-export async function getReminderPushToken(onTokenReady: () => void): Promise<string | null> {
+export async function getReminderPushToken(onTokenReady: () => void): Promise<ReminderPushToken | null> {
   if (!pushRegistrationEnabled) return null;
   if (registration === undefined) {
     const fetchToken = reminderPushProvider === 'fcm' ? readFcmToken(onTokenReady) : registerWithExpo();
@@ -52,11 +53,11 @@ export async function getReminderPushToken(onTokenReady: () => void): Promise<st
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const fresh = await Promise.race([pending, new Promise<null>(resolve => { timeout = setTimeout(() => resolve(null), 5_000); })]);
-    if (fresh !== null) return fresh;
+    if (fresh !== null) return { token: fresh };
     const cached = await SecureStore.getItemAsync(TOKEN_KEY).catch(() => null);
     // A first registration may finish after local reminders have taken over.
     void pending.then(token => { if (token !== null && token !== cached) onTokenReady(); });
-    return cached;
+    return cached === null ? null : { token: cached };
   } finally {
     clearTimeout(timeout);
   }

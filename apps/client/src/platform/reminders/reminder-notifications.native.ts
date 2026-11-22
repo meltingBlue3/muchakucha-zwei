@@ -42,6 +42,7 @@ function permissionOf(status: Notifications.NotificationPermissionsStatus): Noti
 
 export const remindersSupported = true;
 export const localAlarmsSupported = alarms.alarmsSupported;
+export const webReminderSupport = null;
 
 export async function notificationPermission(): Promise<NotificationPermission> {
   return permissionOf(await Notifications.getPermissionsAsync());
