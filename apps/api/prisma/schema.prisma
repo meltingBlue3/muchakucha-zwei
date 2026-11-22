@@ -217,6 +217,8 @@ model RecurrenceRule {
   creator   User      @relation("CreatedRecurrenceRules", fields: [createdBy], references: [id], onDelete: Cascade)
   events    Event[]
   tasks     Task[]
+  // The series' labels, part of its template like templateTitle.
+  labels    RecurrenceRuleLabel[]
   reminderOverrides ReminderOverride[]
 
   @@index([householdId], map: "RecurrenceRule_household_idx")
@@ -252,6 +254,7 @@ model Label {
   creator     User           @relation(fields: [createdBy], references: [id], onDelete: Cascade)
   eventLabels EventLabel[]
   taskLabels  TaskLabel[]
+  ruleLabels  RecurrenceRuleLabel[]
 
   @@unique([householdId, name], map: "Label_household_name_key")
   @@map("labels")
@@ -277,6 +280,17 @@ model TaskLabel {
 
   @@id([taskId, labelId])
   @@map("task_labels")
+}
+
+model RecurrenceRuleLabel {
+  ruleId  String @map("rule_id") @db.Uuid
+  labelId String @map("label_id") @db.Uuid
+
+  rule  RecurrenceRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  label Label          @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([ruleId, labelId])
+  @@map("recurrence_rule_labels")
 }
 
 model TaskAssignee {

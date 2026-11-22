@@ -18,6 +18,7 @@ import { recurringEventEnd } from './recurring-event-end.js';
 
 export { RECURRENCE_MAX_INSTANCES_PER_RUN } from './recurrence-date.js';
 import { RECURRENCE_LOCK_NAMESPACE } from './recurrence-lock.js';
+import { seriesLabelIds } from '../shared/series-labels.js';
 export { RECURRENCE_LOCK_NAMESPACE } from './recurrence-lock.js';
 
 // The lookahead window is per-frequency, not a single fixed number of
@@ -153,7 +154,7 @@ export class RecurrenceMaterializerService {
             endsOn: rule.endsOn === null ? null : calendarDate(rule.endsOn), count: rule.count,
             lunar: lunarAnchorOf(rule),
           }, { from: cursor, horizon });
-          await this.materializeEventOccurrences(tx, rule, template, occurrences);
+          await this.materializeEventOccurrences(tx, rule, occurrences);
           if (occurrences.length < RECURRENCE_MAX_INSTANCES_PER_RUN) break;
           cursor = addDays(occurrences[occurrences.length - 1]!, 1);
         }
@@ -212,7 +213,7 @@ export class RecurrenceMaterializerService {
 
       const created = taskTemplate !== null
         ? await this.materializeTaskOccurrences(tx, rule, taskTemplate, occurrences)
-        : await this.materializeEventOccurrences(tx, rule, eventTemplate!, occurrences);
+        : await this.materializeEventOccurrences(tx, rule, occurrences);
 
       // Never claim coverage past what this run actually wrote — a truncated
       // run must leave the remainder due so the next tick picks it up.
@@ -265,7 +266,7 @@ export class RecurrenceMaterializerService {
     // Fanning out over every instance of the series re-inserted assignees and
     // labels a user had deliberately removed from an individual occurrence.
     if (created.length > 0) {
-      await this.materializeTaskAssociations(tx, template.id, created.map(({ id }) => id));
+      await this.materializeTaskAssociations(tx, template.id, rule.id, created.map(({ id }) => id));
     }
     return created.length;
   }
@@ -273,7 +274,6 @@ export class RecurrenceMaterializerService {
   private async materializeEventOccurrences(
     tx: TransactionClient,
     rule: Awaited<ReturnType<TransactionClient['recurrenceRule']['findUnique']>> & {},
-    template: NonNullable<Awaited<ReturnType<TransactionClient['event']['findFirst']>>>,
     occurrences: CalendarDate[],
   ): Promise<number> {
     const time = localTime(rule.startTimeLocal);
@@ -297,22 +297,25 @@ export class RecurrenceMaterializerService {
       skipDuplicates: true,
     });
     // Same rule as tasks: label fan-out is limited to rows written by this run,
-    // so a label removed from one occurrence stays removed.
+    // so a label removed from one occurrence stays removed. The labels are the
+    // series' own, never an instance's: relabelling one occurrence stays on it.
     if (created.length === 0) return 0;
-    const labels = await tx.eventLabel.findMany({ where: { eventId: template.id }, select: { labelId: true } });
+    const labels = await seriesLabelIds(tx, rule.id);
     if (labels.length > 0) {
       await tx.eventLabel.createMany({
-        data: created.flatMap(({ id }) => labels.map(({ labelId }) => ({ eventId: id, labelId }))),
+        data: created.flatMap(({ id }) => labels.map((labelId) => ({ eventId: id, labelId }))),
         skipDuplicates: true,
       });
     }
     return created.length;
   }
 
-  private async materializeTaskAssociations(tx: TransactionClient, templateTaskId: string, newTaskIds: string[]): Promise<void> {
+  // Assignees still come from the template row: the rule has no assignee
+  // template. Labels are the series' own, as for events.
+  private async materializeTaskAssociations(tx: TransactionClient, templateTaskId: string, ruleId: string, newTaskIds: string[]): Promise<void> {
     const [assignees, labels] = await Promise.all([
       tx.taskAssignee.findMany({ where: { taskId: templateTaskId }, select: { userId: true } }),
-      tx.taskLabel.findMany({ where: { taskId: templateTaskId }, select: { labelId: true } }),
+      seriesLabelIds(tx, ruleId),
     ]);
     if (assignees.length > 0) {
       await tx.taskAssignee.createMany({
@@ -322,7 +325,7 @@ export class RecurrenceMaterializerService {
     }
     if (labels.length > 0) {
       await tx.taskLabel.createMany({
-        data: newTaskIds.flatMap((taskId) => labels.map(({ labelId }) => ({ taskId, labelId }))),
+        data: newTaskIds.flatMap((taskId) => labels.map((labelId) => ({ taskId, labelId }))),
         skipDuplicates: true,
       });
     }

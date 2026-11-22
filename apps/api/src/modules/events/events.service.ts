@@ -1,5 +1,6 @@
 import { lockContent, replaceLabels } from '../shared/edit-version.js';
 import { labelsByName } from '../shared/labels-by-name.js';
+import { rowLabelIds, setSeriesLabels } from '../shared/series-labels.js';
 import { readReminderChoice, readReminderChoices, writeReminderChoice } from '../shared/reminder-overrides.js';
 import type { ReminderChoiceDto } from '../reminders/dto/reminder.dto.js';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -302,9 +303,10 @@ export class EventsService {
             occurrenceDate: plan.occurrenceDate,
           },
         });
-        // generateNewSeries copies the seed's labels to the occurrences it
-        // writes, so they must be on the seed before the first generation.
+        // The first occurrence carries the labels itself; generateNewSeries
+        // gives the occurrences it writes the series' own labels.
         await replaceLabels(tx, 'event', householdId, template.id, input.labelIds);
+        await setSeriesLabels(tx, rule.id, input.labelIds ?? []);
         if (input.myReminder !== undefined) {
           await writeReminderChoice(tx, actorId, 'event', { id: template.id, recurrenceRuleId: rule.id }, input.myReminder);
         }
@@ -517,6 +519,8 @@ export class EventsService {
             createdBy: event.createdBy,
           },
         });
+        // The series starts with the labels this row now carries.
+        await setSeriesLabels(tx, rule.id, await rowLabelIds(tx, 'event', eventId));
         // Everyone's reminder on a recurring occurrence lives on its series.
         await tx.reminderOverride.updateMany({ where: { eventId }, data: { eventId: null, recurrenceRuleId: rule.id } });
         Object.assign(data, {

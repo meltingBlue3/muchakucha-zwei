@@ -24,6 +24,7 @@ import type {
   UpdateSeriesDto,
 } from './dto/recurrence.dto.js';
 import { resolveSeriesMarks, seriesMarksResponse } from './series-marks.js';
+import { seriesLabelIds, setSeriesLabels } from '../shared/series-labels.js';
 
 type TransactionClient = Prisma.TransactionClient;
 type RecurrenceKind = 'event' | 'task';
@@ -423,6 +424,9 @@ export class RecurrenceService {
         },
       });
       await copyRuleReminders(tx, occurrence.rule.id, createdRule.id);
+      // Like the template fields above, the successor's labels default to the
+      // occurrence this edit was made from.
+      await setSeriesLabels(tx, createdRule.id, nextLabelIds);
 
       if (kind === 'task') {
         const template = taskSource!;
@@ -518,13 +522,13 @@ export class RecurrenceService {
    *    has no future occurrence at all, so the rule detail screen has no
    *    occurrenceId to hand the occurrence-level path.
    * 2. The successor's template comes from the rule's own `template_*`
-   *    columns, never from an instance row. A rule-level edit has no
-   *    "the one you selected", and instances are independently renameable:
+   *    columns and labels, never from an instance row. A rule-level edit has
+   *    no "the one you selected", and instances are independently editable:
    *    reading a template off an instance would leak a single
    *    occurrence's edit into every future occurrence of the successor.
-   * 3. Assignees and labels still come from the rule's nearest instance: the
-   *    rule carries no assignee/label template columns. This is the
-   *    documented Path B fallback, not an oversight.
+   * 3. Assignees still come from the rule's nearest instance: the rule
+   *    carries no assignee template. This is the documented Path B
+   *    fallback, not an oversight.
    *
    * The entire split is one interactive transaction. A half-applied
    * split — old rule terminated, successor never created — silently ends a
@@ -663,9 +667,12 @@ export class RecurrenceService {
         },
       });
       await copyRuleReminders(tx, rule.id, createdRule.id);
+      // The successor keeps the series' labels, like its other template fields.
+      const labelIds = await seriesLabelIds(tx, rule.id);
+      await setSeriesLabels(tx, createdRule.id, labelIds);
 
-      // Path B fallback for the two things the rule has no template column
-      // for. Prefer the earliest instance at or after the anchor (the very
+      // Path B fallback for assignees, which the rule has no template for.
+      // Prefer the earliest instance at or after the anchor (the very
       // occurrence the successor replaces); fall back to the latest before it
       // for a rule whose future rows are all outside the generation window.
       // Read BEFORE the delete below — the preferred source is exactly what
@@ -674,22 +681,11 @@ export class RecurrenceService {
         ? (await tx.task.findFirst({
           where: { recurrenceRuleId: ruleId, occurrenceDate: { gte: anchor } },
           orderBy: { occurrenceDate: 'asc' },
-          include: { assignees: true, labels: true },
+          include: { assignees: true },
         })) ?? (await tx.task.findFirst({
           where: { recurrenceRuleId: ruleId, occurrenceDate: { lt: anchor } },
           orderBy: { occurrenceDate: 'desc' },
-          include: { assignees: true, labels: true },
-        }))
-        : null;
-      const eventSource = kind === 'event'
-        ? (await tx.event.findFirst({
-          where: { recurrenceRuleId: ruleId, occurrenceDate: { gte: anchor } },
-          orderBy: { occurrenceDate: 'asc' },
-          include: { labels: true },
-        })) ?? (await tx.event.findFirst({
-          where: { recurrenceRuleId: ruleId, occurrenceDate: { lt: anchor } },
-          orderBy: { occurrenceDate: 'desc' },
-          include: { labels: true },
+          include: { assignees: true },
         }))
         : null;
 
@@ -708,7 +704,7 @@ export class RecurrenceService {
       }
 
       // The successor MUST carry a seed instance row. The materializer
-      // derives a rule's kind and copies its assignees/labels from the rule's
+      // derives a rule's kind and copies its assignees from the rule's
       // earliest instance — with no seed the successor is an untyped rule
       // that can never generate anything, and the rule list cannot show its
       // kind. Its position is the successor's first occurrence from the
@@ -731,7 +727,7 @@ export class RecurrenceService {
             priority: createdRule.templatePriority,
             dueDate: seedInstant,
             assignees: { create: (taskSource?.assignees ?? []).map(({ userId }) => ({ userId })) },
-            labels: { create: (taskSource?.labels ?? []).map(({ labelId }) => ({ labelId })) },
+            labels: { create: labelIds.map((labelId) => ({ labelId })) },
           },
         });
       } else {
@@ -747,7 +743,7 @@ export class RecurrenceService {
             endTime: recurringEventEnd(firstOccurrence, seedInstant, createdRule),
             allDay: createdRule.templateAllDay,
             location: createdRule.templateLocation,
-            labels: { create: (eventSource?.labels ?? []).map(({ labelId }) => ({ labelId })) },
+            labels: { create: labelIds.map((labelId) => ({ labelId })) },
           },
         });
       }

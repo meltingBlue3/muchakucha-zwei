@@ -39,6 +39,7 @@ Every household-scoped handler resolves the caller's membership first. A caller 
 - Time points are `timestamptz` in UTC. Calendar dates and recurrence time zones are distinct concepts and stay distinct in the schema, the DTO, and the client.
 - Prisma models stay inside the API. Controllers return DTOs; `src/generated/prisma/` is generated output.
 - A yearly rule may repeat on a lunar month and day (`recurrence.lunar`). The anchor is part of how the rule repeats, so a request without it repeats on Gregorian dates; the first occurrence is the first lunar date on or after `startsOn`. `occasion` (`birthday`) and `birthYear` describe the series instead: an edit that omits them keeps the rule's, and `null` clears them. [series-marks.ts](../../apps/api/src/modules/recurrence/series-marks.ts) resolves both, and database CHECKs enforce the same combinations.
+- A series' labels belong to its rule (`recurrence_rule_labels`), like its `template_*` fields: generated occurrences copy them, an edit to one occurrence relabels that row only, and a series edit writes the successor rule's labels. Assignees have no rule template yet and still come from an instance row.
 - Refresh credentials are stored as hashes only (`RefreshToken.tokenHash`). Invitations are account-bound inbox records: every list/response checks the authenticated recipient; an invitation ID alone grants no access.
 
 ## Assistant
