@@ -6,6 +6,7 @@ import * as argon2 from 'argon2';
 import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { createApplication } from '../../src/main.js';
+import { addDays, currentCalendarDateIn, formatIsoDate } from '../../src/modules/recurrence/recurrence-date.js';
 import { getTestDatabaseUrl, resetDatabase } from '../reset-database.js';
 
 const accessSecret = 'test-only-access-secret-that-is-longer-than-thirty-two-bytes';
@@ -131,20 +132,24 @@ async function createLabel(actor: ActorFixture, householdId: string, name: strin
   return (response.json() as { id: string }).id;
 }
 
-async function createTask(actor: ActorFixture, householdId: string, title: string): Promise<string> {
-  const response = await householdApi(actor, householdId, 'POST', '/tasks', { title });
+function taskBody(title: string): Record<string, unknown> {
+  return { title };
+}
+
+function eventBody(title: string): Record<string, unknown> {
+  const start = new Date(Date.now() + 86_400_000);
+  const end = new Date(start.getTime() + 3_600_000);
+  return { title, startTime: start.toISOString(), endTime: end.toISOString() };
+}
+
+async function createTask(actor: ActorFixture, householdId: string, title: string, labelIds?: string[]): Promise<string> {
+  const response = await householdApi(actor, householdId, 'POST', '/tasks', { ...taskBody(title), ...(labelIds ? { labelIds } : {}) });
   expect(response.statusCode).toBe(201);
   return (response.json() as { id: string }).id;
 }
 
-async function createEvent(actor: ActorFixture, householdId: string, title: string): Promise<string> {
-  const start = new Date(Date.now() + 86_400_000);
-  const end = new Date(start.getTime() + 3_600_000);
-  const response = await householdApi(actor, householdId, 'POST', '/events', {
-    title,
-    startTime: start.toISOString(),
-    endTime: end.toISOString(),
-  });
+async function createEvent(actor: ActorFixture, householdId: string, title: string, labelIds?: string[]): Promise<string> {
+  const response = await householdApi(actor, householdId, 'POST', '/events', { ...eventBody(title), ...(labelIds ? { labelIds } : {}) });
   expect(response.statusCode).toBe(201);
   return (response.json() as { id: string }).id;
 }
@@ -176,22 +181,89 @@ describe('labels API contract', () => {
 
   test('malformed path ids are rejected with 400 rather than a driver-level 500', async () => {
     const labelId = await createLabel(owner, householdId, '路径检查');
-    const taskId = await createTask(owner, householdId, '路径任务');
-    const eventId = await createEvent(owner, householdId, '路径日程');
-    const cases: Array<[method: 'PUT' | 'POST' | 'DELETE', path: string, payload?: unknown]> = [
+    const cases: Array<[method: 'PUT' | 'DELETE', path: string, payload?: unknown]> = [
       ['PUT', '/households/not-a-uuid/labels/' + labelId, { name: '不应保存' }],
       ['PUT', `/households/${householdId}/labels/not-a-uuid`, { name: '不应保存' }],
       ['DELETE', `/households/${householdId}/labels/not-a-uuid`],
-      ['POST', `/households/${householdId}/tasks/not-a-uuid/labels`, { labelIds: [labelId] }],
-      ['DELETE', `/households/${householdId}/tasks/${taskId}/labels/not-a-uuid`],
-      ['POST', `/households/${householdId}/events/not-a-uuid/labels`, { labelIds: [labelId] }],
-      ['DELETE', `/households/${householdId}/events/${eventId}/labels/not-a-uuid`],
     ];
     for (const [method, path, payload] of cases) {
       const response = await request(owner.accessToken, method, path, payload);
       expect({ method, path, status: response.statusCode }).toEqual({ method, path, status: 400 });
     }
     expect(await labelNamesOf(owner, householdId, '/labels')).toEqual(['路径检查']);
+  });
+
+  describe('labels chosen while creating content', () => {
+    // A new series generates its first week inside the request that saves it,
+    // so labels chosen on the form have to arrive with that same request.
+    const everyDay = [0, 1, 2, 3, 4, 5, 6];
+    const firstWeek = () => {
+      const today = currentCalendarDateIn('UTC');
+      return Array.from({ length: 7 }, (_, offset) => formatIsoDate(addDays(today, offset)));
+    };
+
+    test('a new weekly event series carries its labels on every occurrence saved with it', async () => {
+      const labelId = await createLabel(owner, householdId, '运动');
+      const week = firstWeek();
+      const created = await householdApi(member, householdId, 'POST', '/events', {
+        title: '健身',
+        startTime: `${week[0]}T10:00:00.000Z`,
+        endTime: `${week[0]}T11:00:00.000Z`,
+        recurrence: { freq: 'weekly', byWeekday: everyDay, startsOn: week[0], timezone: 'UTC' },
+        labelIds: [labelId],
+      });
+      expect(created.statusCode).toBe(201);
+
+      const listed = await householdApi(member, householdId, 'GET', `/events?startDate=${week[0]}&endDate=${week[6]}`);
+      expect(listed.statusCode).toBe(200);
+      const series = (listed.json().events as Array<{ recurrenceRuleId: string | null; occurrenceDate: string; labels: Array<{ name: string }> }>)
+        .filter((event) => event.recurrenceRuleId === created.json().recurrenceRuleId);
+      expect(series.map((event) => ({ date: event.occurrenceDate, labels: event.labels.map((label) => label.name) })))
+        .toEqual(week.map((date) => ({ date, labels: ['运动'] })));
+    });
+
+    test('a new weekly task series carries its labels on every occurrence saved with it', async () => {
+      const labelId = await createLabel(owner, householdId, '家务');
+      const week = firstWeek();
+      const created = await householdApi(member, householdId, 'POST', '/tasks', {
+        title: '倒垃圾',
+        recurrence: { freq: 'weekly', byWeekday: everyDay, startsOn: week[0], timezone: 'UTC' },
+        labelIds: [labelId],
+      });
+      expect(created.statusCode).toBe(201);
+
+      const listed = await householdApi(member, householdId, 'GET', '/tasks');
+      expect(listed.statusCode).toBe(200);
+      const series = (listed.json().tasks as Array<{ recurrenceRuleId: string | null; occurrenceDate: string; labels: Array<{ name: string }> }>)
+        .filter((task) => task.recurrenceRuleId === created.json().recurrenceRuleId)
+        .sort((a, b) => a.occurrenceDate.localeCompare(b.occurrenceDate));
+      expect(series.map((task) => ({ date: task.occurrenceDate, labels: task.labels.map((label) => label.name) })))
+        .toEqual(week.map((date) => ({ date, labels: ['家务'] })));
+    });
+
+    test('a label from another household refuses the whole create and saves nothing', async () => {
+      const otherHouseholdId = await createHousehold(outsider.accessToken, '别人家');
+      const foreignLabelId = await createLabel(outsider, otherHouseholdId, '别人的标签');
+      const week = firstWeek();
+      const attempts: Array<[path: '/tasks' | '/events', payload: Record<string, unknown>]> = [
+        ['/tasks', { title: '一次性任务', labelIds: [foreignLabelId] }],
+        ['/events', {
+          title: '重复日程',
+          startTime: `${week[0]}T10:00:00.000Z`,
+          endTime: `${week[0]}T11:00:00.000Z`,
+          recurrence: { freq: 'weekly', byWeekday: everyDay, startsOn: week[0], timezone: 'UTC' },
+          labelIds: [foreignLabelId],
+        }],
+      ];
+      for (const [path, payload] of attempts) {
+        const response = await householdApi(member, householdId, 'POST', path, payload);
+        expect({ path, status: response.statusCode, field: response.json().error?.details?.[0]?.field })
+          .toEqual({ path, status: 400, field: 'labelIds' });
+      }
+      expect((await householdApi(member, householdId, 'GET', '/tasks')).json().total).toBe(0);
+      expect((await householdApi(member, householdId, 'GET', '/events')).json().total).toBe(0);
+      expect((await householdApi(member, householdId, 'GET', '/recurrence-rules')).json().total).toBe(0);
+    });
   });
 
   describe('label management', () => {
@@ -308,10 +380,8 @@ describe('labels API contract', () => {
     test('deleting a label detaches it from tagged tasks and events', async () => {
       const labelId = await createLabel(owner, householdId, '临时');
       const keepId = await createLabel(owner, householdId, '保留');
-      const taskId = await createTask(owner, householdId, '带标签的任务');
-      const eventId = await createEvent(owner, householdId, '带标签的活动');
-      await householdApi(owner, householdId, 'POST', `/tasks/${taskId}/labels`, { labelIds: [labelId, keepId] });
-      await householdApi(owner, householdId, 'POST', `/events/${eventId}/labels`, { labelIds: [labelId, keepId] });
+      const taskId = await createTask(owner, householdId, '带标签的任务', [labelId, keepId]);
+      const eventId = await createEvent(owner, householdId, '带标签的活动', [labelId, keepId]);
 
       const response = await householdApi(owner, householdId, 'DELETE', `/labels/${labelId}`);
 
@@ -368,10 +438,11 @@ describe('labels API contract', () => {
     });
   });
 
+  // Labels reach an item only through its create and edit requests.
   describe.each([
-    ['tasks', createTask, 'TASK_NOT_FOUND'],
-    ['events', createEvent, 'EVENT_NOT_FOUND'],
-  ] as const)('tagging %s', (collection, createEntity, notFoundCode) => {
+    ['tasks', createTask, taskBody],
+    ['events', createEvent, eventBody],
+  ] as const)('labelling %s', (collection, createEntity, body) => {
     let schoolId: string;
     let sportId: string;
     let medicalId: string;
@@ -382,12 +453,10 @@ describe('labels API contract', () => {
       medicalId = await createLabel(owner, householdId, '医疗', '#EF4444');
     });
 
-    test('members can tag, and the label set replaces the previous one', async () => {
-      const entityId = await createEntity(owner, householdId, '要打标签');
+    test('members label on create, and an edit replaces or clears the set', async () => {
+      const entityId = await createEntity(member, householdId, '要打标签', [schoolId, sportId]);
       const path = `/${collection}/${entityId}`;
 
-      const first = await householdApi(member, householdId, 'POST', `${path}/labels`, { labelIds: [schoolId, sportId] });
-      expect(first.statusCode).toBe(204);
       const tagged = await householdApi(member, householdId, 'GET', path);
       expect(tagged.json().labels).toEqual(
         expect.arrayContaining([
@@ -397,101 +466,42 @@ describe('labels API contract', () => {
       );
       expect(tagged.json().labels).toHaveLength(2);
 
-      const replaced = await householdApi(member, householdId, 'POST', `${path}/labels`, { labelIds: [sportId, medicalId] });
-      expect(replaced.statusCode).toBe(204);
+      const replaced = await householdApi(member, householdId, 'PUT', path, { labelIds: [sportId, medicalId] });
+      expect(replaced.statusCode).toBe(200);
       expect(await labelNamesOf(member, householdId, path)).toEqual(['医疗', '运动']);
 
-      const cleared = await householdApi(member, householdId, 'POST', `${path}/labels`, { labelIds: [] });
-      expect(cleared.statusCode).toBe(204);
+      const cleared = await householdApi(member, householdId, 'PUT', path, { labelIds: [] });
+      expect(cleared.statusCode).toBe(200);
       expect(await labelNamesOf(member, householdId, path)).toEqual([]);
     });
 
-    test('tagging is idempotent', async () => {
-      const entityId = await createEntity(owner, householdId, '重复打标签');
-      const path = `/${collection}/${entityId}`;
+    test('a label id sent twice is stored once', async () => {
+      const entityId = await createEntity(owner, householdId, '重复打标签', [schoolId, schoolId]);
 
-      await householdApi(owner, householdId, 'POST', `${path}/labels`, { labelIds: [schoolId] });
-      const again = await householdApi(owner, householdId, 'POST', `${path}/labels`, { labelIds: [schoolId] });
-
-      expect(again.statusCode).toBe(204);
-      expect(await labelNamesOf(owner, householdId, path)).toEqual(['学校']);
+      expect(await labelNamesOf(owner, householdId, `/${collection}/${entityId}`)).toEqual(['学校']);
     });
 
-    test('untag removes one label and is a no-op when it is not attached', async () => {
-      const entityId = await createEntity(owner, householdId, '取消标签');
+    test('an edit with a label from another household keeps the existing labels', async () => {
+      const entityId = await createEntity(owner, householdId, '混入外部标签', [schoolId]);
       const path = `/${collection}/${entityId}`;
-      await householdApi(owner, householdId, 'POST', `${path}/labels`, { labelIds: [schoolId, sportId] });
-
-      const removed = await householdApi(member, householdId, 'DELETE', `${path}/labels/${schoolId}`);
-      expect(removed.statusCode).toBe(204);
-      expect(await labelNamesOf(owner, householdId, path)).toEqual(['运动']);
-
-      const again = await householdApi(member, householdId, 'DELETE', `${path}/labels/${schoolId}`);
-      expect(again.statusCode).toBe(204);
-      expect(await labelNamesOf(owner, householdId, path)).toEqual(['运动']);
-    });
-
-    test('rejects labels from another household without changing existing tags', async () => {
-      const entityId = await createEntity(owner, householdId, '混入外部标签');
-      const path = `/${collection}/${entityId}`;
-      await householdApi(owner, householdId, 'POST', `${path}/labels`, { labelIds: [schoolId] });
       const otherHouseholdId = await createHousehold(outsider.accessToken, '别人的家');
       const foreignLabelId = await createLabel(outsider, otherHouseholdId, '外部');
 
-      const response = await householdApi(owner, householdId, 'POST', `${path}/labels`, {
-        labelIds: [sportId, foreignLabelId],
-      });
+      const response = await householdApi(owner, householdId, 'PUT', path, { labelIds: [sportId, foreignLabelId] });
 
       expect(response.statusCode).toBe(400);
       expect(response.json().error.code).toBe('VALIDATION_FAILED');
       expect(await labelNamesOf(owner, householdId, path)).toEqual(['学校']);
     });
 
-    test('rejects unknown, malformed, and non-array label ids', async () => {
-      const entityId = await createEntity(owner, householdId, '无效标签');
-      const path = `/${collection}/${entityId}`;
-
-      const unknown = await householdApi(owner, householdId, 'POST', `${path}/labels`, { labelIds: [randomUUID()] });
-      expect(unknown.statusCode).toBe(400);
-
-      const malformed = await householdApi(owner, householdId, 'POST', `${path}/labels`, { labelIds: ['not-a-uuid'] });
-      expect(malformed.statusCode).toBe(400);
-      expect(malformed.json().error.code).toBe('VALIDATION_FAILED');
-
-      const notArray = await householdApi(owner, householdId, 'POST', `${path}/labels`, { labelIds: schoolId });
-      expect(notArray.statusCode).toBe(400);
-      expect(notArray.json().error.code).toBe('VALIDATION_FAILED');
-    });
-
-    test(`returns ${notFoundCode} for unknown or cross-household ${collection}`, async () => {
-      const otherHouseholdId = await createHousehold(owner.accessToken, '第二个家');
-      const foreignEntityId = await createEntity(owner, otherHouseholdId, '别的家的');
-
-      const responses = await Promise.all([
-        householdApi(owner, householdId, 'POST', `/${collection}/${randomUUID()}/labels`, { labelIds: [schoolId] }),
-        householdApi(owner, householdId, 'POST', `/${collection}/${foreignEntityId}/labels`, { labelIds: [schoolId] }),
-        householdApi(owner, householdId, 'DELETE', `/${collection}/${foreignEntityId}/labels/${schoolId}`),
-      ]);
-
-      for (const response of responses) {
-        expect(response.statusCode).toBe(404);
-        expect(response.json().error.code).toBe(notFoundCode);
+    test('a create with unknown, malformed, or non-array label ids is refused and saves nothing', async () => {
+      const attempts = [[randomUUID()], ['not-a-uuid'], schoolId];
+      for (const labelIds of attempts) {
+        const response = await householdApi(owner, householdId, 'POST', `/${collection}`, { ...body('无效标签'), labelIds });
+        expect({ labelIds, status: response.statusCode, code: response.json().error?.code })
+          .toEqual({ labelIds, status: 400, code: 'VALIDATION_FAILED' });
       }
-    });
-
-    test('non-members cannot tag or untag', async () => {
-      const entityId = await createEntity(owner, householdId, '外人不可改');
-      const path = `/${collection}/${entityId}`;
-      await householdApi(owner, householdId, 'POST', `${path}/labels`, { labelIds: [schoolId] });
-
-      const tag = await householdApi(outsider, householdId, 'POST', `${path}/labels`, { labelIds: [sportId] });
-      const untag = await householdApi(outsider, householdId, 'DELETE', `${path}/labels/${schoolId}`);
-
-      expect(tag.statusCode).toBe(404);
-      expect(tag.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
-      expect(untag.statusCode).toBe(404);
-      expect(untag.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
-      expect(await labelNamesOf(owner, householdId, path)).toEqual(['学校']);
+      expect((await householdApi(owner, householdId, 'GET', `/${collection}`)).json().total).toBe(0);
     });
   });
 });

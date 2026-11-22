@@ -2,49 +2,40 @@ import { useTranslation } from '../../i18n';
 import { ApiClientError } from '@muchakucha/api-client';
 import { hasRecurrenceFieldErrors } from '../recurrence/recurrence-options';
 import { useRef, useState } from 'react';
-import { useWorkspaceState } from '../../ui/workspace-state';
 
-/** The created ID survives navigation, so retry only repeats the failed label step. */
-export function useCreateWithLabels<T>({ key, create, tag, onComplete }: {
-  key: string;
-  create(data: T): Promise<{ id: string }>;
-  tag(id: string, labelIds: string[]): Promise<unknown>;
+/**
+ * Labels go in the create request itself: a new series copies them to the
+ * occurrences generated while it is saved, which a later labelling call misses.
+ */
+export function useCreateWithLabels<T extends { labelIds?: string[] }>({ create, onComplete }: {
+  create(data: T): Promise<unknown>;
   onComplete(): void;
 }) {
   const { t } = useTranslation('households');
-  const [created, setCreated] = useWorkspaceState<{ id: string; labelIds: string[] } | null>(key, null);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<'createNetworkError' | 'createValidationError' | 'createPermissionError' | 'createRetryError' | 'createLabelsError' | null>(null);
+  const [error, setError] = useState<'createNetworkError' | 'createValidationError' | 'createPermissionError' | 'createRetryError' | null>(null);
   const inFlight = useRef(false);
-  const run = async (data?: T, labelIds: string[] = []) => {
+  const submit = async (data: T, labelIds: string[]) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setPending(true);
     setError(null);
-    let record = created;
     try {
-      if (record === null) {
-        if (data === undefined) return;
-        const result = await create(data);
-        record = { id: result.id, labelIds: [...labelIds] };
-        setCreated(record);
-      }
-      if (record.labelIds.length > 0) await tag(record.id, record.labelIds);
+      await create({ ...data, labelIds });
       onComplete();
     } catch (failure) {
-      // Nothing was created and the repeat settings were refused: let the form
-      // show which field, instead of a generic network message.
-      if (record === null && hasRecurrenceFieldErrors(failure)) throw failure;
+      // The repeat settings were refused: let the form show which field,
+      // instead of a generic network message.
+      if (hasRecurrenceFieldErrors(failure)) throw failure;
       // A server answer is not a network problem; only a request that never got one is.
-      const createFailure = !(failure instanceof ApiClientError) ? 'createNetworkError'
+      setError(!(failure instanceof ApiClientError) ? 'createNetworkError'
         : failure.status === 400 ? 'createValidationError'
           : failure.status === 403 ? 'createPermissionError'
-            : 'createRetryError';
-      setError(record === null ? createFailure : 'createLabelsError');
+            : 'createRetryError');
     } finally {
       inFlight.current = false;
       setPending(false);
     }
   };
-  return { created, pending, error: error === null ? null : t(error), submit: (data: T, labels: string[]) => run(data, labels), retry: () => run() };
+  return { pending, error: error === null ? null : t(error), submit };
 }

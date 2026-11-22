@@ -3,7 +3,6 @@ import { notifyContentChanged } from '../../../../../src/features/content/conten
 import { useRef } from 'react';
 import { EventWindow, useEventWindowClose } from '../../../../../src/features/events/event-window';
 import { toDateIso } from '../../../../../src/features/events/calendar-utils';
-import { DraftNotice } from '../../../../../src/ui/draft-notice';
 import { useCreateWithLabels } from '../../../../../src/features/households/use-create-with-labels';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams } from 'expo-router';
@@ -12,7 +11,7 @@ import { HouseholdContextNote } from '../../../../../src/ui/household-components
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { EventForm } from '../../../../../src/features/events/event-form';
-import { Banner, LoadError, Stack } from '../../../../../src/ui/primitives';
+import { Banner, Stack } from '../../../../../src/ui/primitives';
 import type { CreateEventDto } from '@muchakucha/api-client';
 
 export default function CreateEventRoute() {
@@ -27,17 +26,11 @@ export default function CreateEventRoute() {
   const [selectedDate] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, toDateIso(new Date()));
   const [selectedLabelIds, setSelectedLabelIds] = useWorkspaceState<string[]>(draftPrefix + 'labels', []);
 
-  const { submit, retry, created, pending: isSubmitting, error: error } = useCreateWithLabels<CreateEventDto>({
-    key: draftPrefix + 'created',
+  const { submit, pending: isSubmitting, error: error } = useCreateWithLabels<CreateEventDto>({
     create: async (data) => {
       const token = sessionTransport.getAccessToken();
       if (token === null) throw new Error('Session expired');
       return sessionApiClient.createEvent(token, id!, data);
-    },
-    tag: async (resourceId, labelIds) => {
-      const token = sessionTransport.getAccessToken();
-      if (token === null) throw new Error('Session expired');
-      return sessionApiClient.tagEvent(token, id!, resourceId, { labelIds });
     },
     onComplete: () => {
       workspace.clear(draftPrefix);
@@ -53,8 +46,8 @@ export default function CreateEventRoute() {
 
         <Stack gap={4}>
           <HouseholdContextNote householdName={householdName} />
-          {error !== null && created === null ? <Banner>{error}</Banner> : null}
-          {created !== null ? <Stack gap={4}><DraftNotice /><LoadError title={t('created')} message={error ?? t('tasks:labelsUnsaved')} retryLabel={t('tasks:retryLabels')} retrying={isSubmitting} onRetry={() => void retry()} /></Stack> : <EventForm
+          {error !== null ? <Banner>{error}</Banner> : null}
+          <EventForm
             draftKey={draftPrefix + 'form'}
             defaultDate={selectedDate ?? toDateIso(new Date())}
             onSubmit={handleSubmit}
@@ -64,7 +57,7 @@ export default function CreateEventRoute() {
             householdId={id}
             selectedLabelIds={selectedLabelIds}
             onLabelChange={setSelectedLabelIds}
-          />}
+          />
         </Stack>
 
     </EventWindow>

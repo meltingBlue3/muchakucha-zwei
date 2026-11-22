@@ -1,9 +1,8 @@
-import { lockContent } from '../shared/edit-version.js';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { isUniqueConflict } from '../shared/unique-conflict.js';
-import type { CreateLabelDto, LabelResponseDto, LabelListResponseDto, TagEntitiesDto } from './dto/create-label.dto.js';
+import type { CreateLabelDto, LabelResponseDto, LabelListResponseDto } from './dto/create-label.dto.js';
 import type { UpdateLabelDto } from './dto/create-label.dto.js';
 
 const NAME_MIN = 1;
@@ -204,147 +203,6 @@ export class LabelsService {
     if (expected && (current.name !== expected.name || current.color !== expected.color)) {
       throw new ConflictException({ code: 'EDIT_CONFLICT', message: 'Label has changed. Read it again before saving.' });
     }
-  }
-
-  // ---- Tag / Untag ----
-
-  async tagEvent(
-    actorId: string,
-    householdId: string,
-    eventId: string,
-    input: TagEntitiesDto,
-  ): Promise<void> {
-    const role = await this.resolveActorRole(actorId, householdId);
-    if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
-
-    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
-    if (event === null || event.householdId !== householdId) {
-      throw new NotFoundException({ code: 'EVENT_NOT_FOUND', message: 'Event not found.' });
-    }
-
-    // Verify all labels belong to the same household.
-    const labels = await this.prisma.label.findMany({
-      where: { id: { in: input.labelIds }, householdId },
-    });
-    if (labels.length !== input.labelIds.length) {
-      throw new BadRequestException({
-        code: 'VALIDATION_FAILED',
-        message: 'Request validation failed.',
-        details: [{ field: 'labelIds', codes: ['invalid'], message: 'One or more labels do not belong to this household.' }],
-      });
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      const updatedAt = await lockContent(tx, 'event', householdId, eventId);
-      await Promise.all([
-        // Remove labels that are no longer selected
-        tx.eventLabel.deleteMany({
-          where: {
-            eventId,
-            labelId: { notIn: input.labelIds },
-          },
-        }),
-        // Upsert the currently selected labels
-        ...input.labelIds.map((labelId) =>
-          tx.eventLabel.upsert({
-            where: { eventId_labelId: { eventId, labelId } },
-            create: { eventId, labelId },
-            update: {},
-          }),
-        ),
-      ]);
-      await tx.event.update({ where: { id: eventId }, data: { updatedAt } });
-    });
-  }
-
-  async untagEvent(
-    actorId: string,
-    householdId: string,
-    eventId: string,
-    labelId: string,
-  ): Promise<void> {
-    const role = await this.resolveActorRole(actorId, householdId);
-    if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
-
-    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
-    if (event === null || event.householdId !== householdId) {
-      throw new NotFoundException({ code: 'EVENT_NOT_FOUND', message: 'Event not found.' });
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      const updatedAt = await lockContent(tx, 'event', householdId, eventId);
-      await tx.eventLabel.deleteMany({ where: { eventId, labelId } });
-      await tx.event.update({ where: { id: eventId }, data: { updatedAt } });
-    });
-  }
-
-  async tagTask(
-    actorId: string,
-    householdId: string,
-    taskId: string,
-    input: TagEntitiesDto,
-  ): Promise<void> {
-    const role = await this.resolveActorRole(actorId, householdId);
-    if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
-
-    const task = await this.prisma.task.findUnique({ where: { id: taskId } });
-    if (task === null || task.householdId !== householdId) {
-      throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found.' });
-    }
-
-    const labels = await this.prisma.label.findMany({
-      where: { id: { in: input.labelIds }, householdId },
-    });
-    if (labels.length !== input.labelIds.length) {
-      throw new BadRequestException({
-        code: 'VALIDATION_FAILED',
-        message: 'Request validation failed.',
-        details: [{ field: 'labelIds', codes: ['invalid'], message: 'One or more labels do not belong to this household.' }],
-      });
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      const updatedAt = await lockContent(tx, 'task', householdId, taskId);
-      await Promise.all([
-        // Remove labels that are no longer selected
-        tx.taskLabel.deleteMany({
-          where: {
-            taskId,
-            labelId: { notIn: input.labelIds },
-          },
-        }),
-        // Upsert the currently selected labels
-        ...input.labelIds.map((labelId) =>
-          tx.taskLabel.upsert({
-            where: { taskId_labelId: { taskId, labelId } },
-            create: { taskId, labelId },
-            update: {},
-          }),
-        ),
-      ]);
-      await tx.task.update({ where: { id: taskId }, data: { updatedAt } });
-    });
-  }
-
-  async untagTask(
-    actorId: string,
-    householdId: string,
-    taskId: string,
-    labelId: string,
-  ): Promise<void> {
-    const role = await this.resolveActorRole(actorId, householdId);
-    if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
-
-    const task = await this.prisma.task.findUnique({ where: { id: taskId } });
-    if (task === null || task.householdId !== householdId) {
-      throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found.' });
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      const updatedAt = await lockContent(tx, 'task', householdId, taskId);
-      await tx.taskLabel.deleteMany({ where: { taskId, labelId } });
-      await tx.task.update({ where: { id: taskId }, data: { updatedAt } });
-    });
   }
 
   private toResponse(row: LabelRow): LabelResponseDto {

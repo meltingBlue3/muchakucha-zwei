@@ -57,7 +57,6 @@ import type {
   UpdateLabelDto,
   LabelResponseDto,
   LabelListResponseDto,
-  TagEntitiesDto,
   RecurrenceRuleListItemDto,
   RecurrenceRuleListResponseDto,
   UpdateRecurrenceRuleDto,
@@ -710,72 +709,6 @@ export class ApiClient {
     return this.authenticated<void>(
       'DELETE',
       withQuery(`/api/v1/households/${encodeURIComponent(householdId)}/labels/${encodeURIComponent(labelId)}`, version),
-      accessToken,
-      undefined,
-      signal,
-    );
-  }
-
-  // ---- Tag / Untag ----
-
-  async tagEvent(
-    accessToken: string,
-    householdId: string,
-    eventId: string,
-    body: TagEntitiesDto,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    return this.authenticated<void>(
-      'POST',
-      `/api/v1/households/${encodeURIComponent(householdId)}/events/${encodeURIComponent(eventId)}/labels`,
-      accessToken,
-      body,
-      signal,
-    );
-  }
-
-  async untagEvent(
-    accessToken: string,
-    householdId: string,
-    eventId: string,
-    labelId: string,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    return this.authenticated<void>(
-      'DELETE',
-      `/api/v1/households/${encodeURIComponent(householdId)}/events/${encodeURIComponent(eventId)}/labels/${encodeURIComponent(labelId)}`,
-      accessToken,
-      undefined,
-      signal,
-    );
-  }
-
-  async tagTask(
-    accessToken: string,
-    householdId: string,
-    taskId: string,
-    body: TagEntitiesDto,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    return this.authenticated<void>(
-      'POST',
-      `/api/v1/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}/labels`,
-      accessToken,
-      body,
-      signal,
-    );
-  }
-
-  async untagTask(
-    accessToken: string,
-    householdId: string,
-    taskId: string,
-    labelId: string,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    return this.authenticated<void>(
-      'DELETE',
-      `/api/v1/households/${encodeURIComponent(householdId)}/tasks/${encodeURIComponent(taskId)}/labels/${encodeURIComponent(labelId)}`,
       accessToken,
       undefined,
       signal,

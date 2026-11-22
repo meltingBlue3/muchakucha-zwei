@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { LabelsController, EventLabelsController, TaskLabelsController } from './labels.controller.js';
+import { LabelsController } from './labels.controller.js';
 import { LabelsService } from './labels.service.js';
 
 @Module({
-  controllers: [LabelsController, EventLabelsController, TaskLabelsController],
+  controllers: [LabelsController],
   providers: [LabelsService],
   exports: [LabelsService],
 })

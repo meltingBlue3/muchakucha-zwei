@@ -41,6 +41,12 @@ export class CreateTaskDto {
   @IsUUID('4', { each: true })
   assigneeIds?: string[];
 
+  @ApiPropertyOptional({ description: '本家庭的标签；重复任务的每一次都带上这些标签', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  labelIds?: string[];
+
   @ApiPropertyOptional({ description: '截止日期' })
   @IsOptional()
   @IsString()

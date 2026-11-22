@@ -337,9 +337,9 @@ describe('per-rule lookahead generation window', () => {
     });
     expect(response.statusCode).toBe(201);
     const body = response.json() as { id: string; recurrence: { id: string } | null };
-    // The seed row's id is what the client immediately uses for tagTask —
-    // this must remain populated regardless of how far the lookahead window
-    // trails behind the seed row's occurrence date.
+    // The response describes the seed row; its id must remain populated
+    // regardless of how far the lookahead window trails behind the seed
+    // row's occurrence date.
     expect(typeof body.id).toBe('string');
     expect(body.id.length).toBeGreaterThan(0);
     expect(typeof body.recurrence?.id).toBe('string');

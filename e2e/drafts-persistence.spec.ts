@@ -216,7 +216,7 @@ test('offline refresh retains drafts; confirmed household access loss removes on
 });
 
 
-test('retrying labels after restart uses the already-created task', async ({ page, request }) => {
+test('a failed create keeps the draft and its label after restart, and the retry saves one labelled task', async ({ page, request }) => {
   const account = await prepareAccount('partial', '标签重试用户');
   const household = await createHousehold(account.accessToken, '标签重试家庭');
   const labelResult = await request.post(`${API_ORIGIN}/api/v1/households/${household.id}/labels`, {
@@ -229,14 +229,17 @@ test('retrying labels after restart uses the already-created task', async ({ pag
   await page.getByRole('button', { name: '创建任务', exact: true }).click();
   await page.getByLabel('任务标题').fill('只创建一次');
   await page.getByLabel('选择标签 重启重试', { exact: true }).click();
-  const labeling = new RegExp(`/households/${household.id}/tasks/[^/]+/labels$`);
-  await page.route(labeling, (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAVAILABLE' } }) }));
+  const creating = `${API_ORIGIN}/api/v1/households/${household.id}/tasks`;
+  await page.route(creating, (route) => route.request().method() === 'POST'
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAVAILABLE' } }) })
+    : route.continue());
   await page.getByRole('button', { name: '创建', exact: true }).click();
-  await expect(page.getByRole('button', { name: '重试保存标签', exact: true })).toBeVisible();
+  await expect(page.getByText('创建失败，请稍后重试。', { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('button', { name: '重试保存标签', exact: true })).toBeVisible();
-  await page.unroute(labeling);
-  await page.getByRole('button', { name: '重试保存标签', exact: true }).click();
+  await expect(page.getByLabel('任务标题')).toHaveValue('只创建一次');
+  await expect(page.getByLabel('取消选择标签 重启重试', { exact: true })).toBeVisible();
+  await page.unroute(creating);
+  await page.getByRole('button', { name: '创建', exact: true }).click();
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), draftKey(account.userId))).toBeNull();
   const tasksResult = await request.get(`${API_ORIGIN}/api/v1/households/${household.id}/tasks`, { headers: { authorization: `Bearer ${account.accessToken}` } });
   const tasks = (await tasksResult.json()).tasks;
