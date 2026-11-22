@@ -1,7 +1,6 @@
 import { useTranslation } from '../../../../../src/i18n';
 import { notifyContentChanged } from '../../../../../src/features/content/content-changes';
 import { TaskWindow, useTaskWindowClose } from '../../../../../src/features/tasks/task-window';
-import { DraftNotice } from '../../../../../src/ui/draft-notice';
 import { useCreateWithLabels } from '../../../../../src/features/households/use-create-with-labels';
 import { useWorkspaceStore, useWorkspaceState } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -16,7 +15,7 @@ import {
   AppShell,
   HouseholdContextNote,
 } from '../../../../../src/ui/household-components';
-import { Banner, LoadError, LoadingState, Stack } from '../../../../../src/ui/primitives';
+import { Banner, LoadingState, Stack } from '../../../../../src/ui/primitives';
 import type { CreateTaskDto } from '@muchakucha/api-client';
 
 export default function CreateTaskRoute() {
@@ -64,17 +63,11 @@ export default function CreateTaskRoute() {
     void fetchMembers();
   }, [householdId]);
 
-  const { submit, retry, created, pending: submitting, error: submitError } = useCreateWithLabels<CreateTaskDto>({
-    key: draftPrefix + 'created',
+  const { submit, pending: submitting, error: submitError } = useCreateWithLabels<CreateTaskDto>({
     create: async (data) => {
       const token = sessionTransport.getAccessToken();
       if (token === null) throw new Error('Session expired');
       return sessionApiClient.createTask(token, id!, data);
-    },
-    tag: async (resourceId, labelIds) => {
-      const token = sessionTransport.getAccessToken();
-      if (token === null) throw new Error('Session expired');
-      return sessionApiClient.tagTask(token, id!, resourceId, { labelIds });
     },
     onComplete: () => {
       workspace.clear(draftPrefix);
@@ -103,9 +96,7 @@ export default function CreateTaskRoute() {
       <Stack gap={4}>
         <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
 
-        {created !== null ? (
-          <Stack gap={4}><DraftNotice /><LoadError title={t('created')} message={submitError ?? t('labelsUnsaved')} retryLabel={t('retryLabels')} retrying={submitting} onRetry={() => void retry()} /></Stack>
-        ) : loading ? (
+        {loading ? (
           <LoadingState label={t('households:settings.loadingMembers')} />
         ) : (
           <Stack gap={4}>

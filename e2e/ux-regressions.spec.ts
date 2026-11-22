@@ -23,7 +23,6 @@ async function dialogAppearance(page: Page) {
 
 async function setup(page: Page) {
   const requests: { path: string; method: string; data: unknown }[] = [];
-  let labelAttempts = 0;
   const task = { id: taskId, householdId: a, title: '检查任务', status: 'pending', priority: 'medium', dueDate: null, description: null, assigneeIds: [], labels: [], createdBy: 'user', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), recurrenceRuleId: null, recurrence: null, occurrenceDate: null };
   await page.addInitScript((id) => localStorage.setItem('muchakucha:currentHouseholdId', id), b);
   await page.route('**/api/v1/**', async (route) => {
@@ -37,10 +36,7 @@ async function setup(page: Page) {
     else if (path.endsWith('/users/me/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, households: [] };
     else if (path === '/api/v1/households') body = [household(a), household(b)];
     else if (path.endsWith('/invitations/inbox')) body = { invitations: [{ id: 'invite', householdName: '家庭 A', inviterDisplayName: '家人', expiresAt: '2099-01-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' }] };
-    else if (/\/(tasks|events)\/.+\/labels$/.test(path) && method === 'POST') {
-      labelAttempts++;
-      status = labelAttempts === 1 ? 503 : 200;
-    } else if (path.endsWith('/labels')) body = { labels: [{ id: 'label', name: '家务', color: '#277A72' }] };
+    else if (path.endsWith('/labels')) body = { labels: [{ id: 'label', name: '家务', color: '#277A72' }] };
     else if (path.endsWith('/tasks/' + taskId) && method === 'PUT') { status = 403; body = { error: { code: 'FORBIDDEN' } }; }
     else if (path.endsWith('/tasks')) body = method === 'POST' ? task : { tasks: [task] };
     else if (path.endsWith('/events')) body = method === 'POST' ? { id: taskId } : { events: [] };
@@ -270,7 +266,7 @@ test('task filters and calendar month survive tab switches', async ({ page }) =>
 });
 
 for (const kind of ['tasks', 'events'] as const) {
-  test(`${kind} creation retries labels without creating duplicates`, async ({ page }) => {
+  test(`${kind} creation sends its labels in the one create request`, async ({ page }) => {
     const requests = await setup(page);
     await page.goto(`/households/${a}/${kind}`);
     await page.getByLabel(kind === 'tasks' ? '创建任务' : '创建日程', { exact: true }).click();
@@ -281,11 +277,10 @@ for (const kind of ['tasks', 'events'] as const) {
     await expect(createWindow.getByRole('button', { name: /当前家庭/ })).toHaveCount(0);
     await page.getByLabel('选择标签 家务', { exact: true }).click();
     await page.getByLabel('创建', { exact: true }).filter({ visible: true }).last().click();
-    await expect(page.getByText('内容已创建，但标签未保存。重试只会保存标签，不会重复创建。')).toBeVisible();
-    await page.getByRole('button', { name: '重试保存标签' }).click();
     await expect(page).toHaveURL(new RegExp(`/households/${a}/${kind}$`));
-    expect(requests.filter((r) => r.method === 'POST' && r.path.endsWith('/' + kind))).toHaveLength(1);
-    expect(requests.filter((r) => r.method === 'POST' && r.path.endsWith('/labels'))).toHaveLength(2);
+    const creates = requests.filter((r) => r.method === 'POST' && r.path.endsWith('/' + kind));
+    expect(creates.map((r) => JSON.parse(String(r.data)).labelIds)).toEqual([['label']]);
+    expect(requests.filter((r) => r.method === 'POST' && r.path.endsWith('/labels'))).toHaveLength(0);
   });
 }
 

@@ -249,7 +249,6 @@ export const zh = {
     createValidationError: '创建失败，请检查填写的内容后重试。',
     createPermissionError: '你没有权限在这个家庭创建内容。',
     createRetryError: '创建失败，请稍后重试。',
-    createLabelsError: '内容已创建，但标签未保存。重试只会保存标签，不会重复创建。',
     loading: '正在加载家庭',
     loadingList: '正在加载家庭列表',
     opening: '正在为你打开家庭空间…',
@@ -426,9 +425,6 @@ export const zh = {
     missingOnSave: '任务不存在或已被删除。',
     saveRetry: '保存失败，请重试。',
     saveConnection: '保存失败，请检查网络连接后重试。',
-    created: '任务已创建',
-    labelsUnsaved: '内容已创建，标签尚未保存。',
-    retryLabels: '重试保存标签',
     all: '全部',
     allPriorities: '全部优先级',
     groups: {
@@ -854,7 +850,6 @@ export const zh = {
   },
   events: {
     create: '创建日程',
-    created: '日程已创建',
     edit: '编辑日程',
     detail: '日程详情',
     loading: '正在加载日程',

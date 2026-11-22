@@ -816,19 +816,15 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     return (response.json() as { id: string }).id;
   }
 
-  async function tagTask(
+  // Relabels one occurrence the way its edit form does.
+  async function labelOccurrence(
     accessToken: string,
     householdId: string,
     taskId: string,
     labelIds: string[],
   ): Promise<void> {
-    const response = await (app.getHttpAdapter().getInstance() as any).inject({
-      method: 'POST',
-      url: `/api/v1/households/${householdId}/tasks/${taskId}/labels`,
-      headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
-      payload: { labelIds },
-    });
-    expect(response.statusCode).toBeLessThan(300);
+    const response = await taskApi(accessToken, householdId, 'PUT', `/${taskId}`, { labelIds });
+    expect(response.statusCode).toBe(200);
   }
 
   test('splits at tomorrow: history survives, the future moves to the successor', async () => {
@@ -966,8 +962,8 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     // Distinct labels on either side of the anchor, so the assertion below
     // pins WHICH instance was used as the inheritance source, not merely that
     // some label was copied.
-    await tagTask(owner.accessToken, householdId, instances[0]!.id, [farLabelId]);
-    await tagTask(owner.accessToken, householdId, instances[1]!.id, [nearLabelId]);
+    await labelOccurrence(owner.accessToken, householdId, instances[0]!.id, [farLabelId]);
+    await labelOccurrence(owner.accessToken, householdId, instances[1]!.id, [nearLabelId]);
 
     const response = await recurrenceRulesApi(
       owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,
@@ -1004,8 +1000,8 @@ describe('PUT /households/:householdId/recurrence-rules/:ruleId', () => {
     const instances = await instancesFor('tasks', oldRuleId);
     expect(instances.map((row) => row.day))
       .toEqual([formatIsoDate(addDays(today, -7)), formatIsoDate(today)]);
-    await tagTask(owner.accessToken, householdId, instances[0]!.id, [oldestLabelId]);
-    await tagTask(owner.accessToken, householdId, instances[1]!.id, [recentLabelId]);
+    await labelOccurrence(owner.accessToken, householdId, instances[0]!.id, [oldestLabelId]);
+    await labelOccurrence(owner.accessToken, householdId, instances[1]!.id, [recentLabelId]);
 
     const response = await recurrenceRulesApi(
       owner.accessToken, householdId, 'PUT', `/${oldRuleId}`,

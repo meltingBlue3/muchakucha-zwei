@@ -205,8 +205,7 @@ export class TasksService {
         // event-owned by which relation has an existing row, so a rule with
         // zero rows could never generate again; assignees/labels are copied
         // from this row as the fan-out template, so there would be nothing
-        // to copy from; and POST's response contract returns this row's id,
-        // which the client uses to attach labels immediately after create.
+        // to copy from; and POST's response contract returns this row.
         const task = await tx.task.create({
           data: {
             householdId,
@@ -221,6 +220,9 @@ export class TasksService {
             assignees: { create: assigneeIds.map((userId) => ({ userId })) },
           },
         });
+        // generateNewSeries copies the seed's labels to the occurrences it
+        // writes, so they must be on the seed before the first generation.
+        await replaceLabels(tx, 'task', householdId, task.id, input.labelIds);
         if (input.myReminder !== undefined) {
           await writeReminderChoice(tx, actorId, 'task', { id: task.id, recurrenceRuleId: rule.id }, input.myReminder);
         }
@@ -239,12 +241,15 @@ export class TasksService {
       await this.validateAssigneeIds(tx, householdId, assigneeIds);
       const created = await tx.task.create({
         data: { householdId, title: trimmedTitle, description: input.description?.trim() || null, status: input.status ?? 'pending', priority: input.priority ?? 'medium', dueDate, createdBy: actorId, assignees: { create: assigneeIds.map((userId) => ({ userId })) } },
-        include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
       });
+      await replaceLabels(tx, 'task', householdId, created.id, input.labelIds);
       if (input.myReminder !== undefined) {
         await writeReminderChoice(tx, actorId, 'task', created, input.myReminder);
       }
-      return created;
+      return tx.task.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { labels: { include: { label: true } }, assignees: true, recurrenceRule: true },
+      });
     });
 
     return this.toResponse(task, await readReminderChoice(this.prisma, actorId, 'task', task));

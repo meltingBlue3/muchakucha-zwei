@@ -2275,190 +2275,6 @@
         ]
       }
     },
-    "/api/v1/households/{householdId}/events/{eventId}/labels": {
-      "post": {
-        "operationId": "tagEvent",
-        "parameters": [
-          {
-            "name": "householdId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "eventId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TagEntitiesDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "events"
-        ]
-      }
-    },
-    "/api/v1/households/{householdId}/events/{eventId}/labels/{labelId}": {
-      "delete": {
-        "operationId": "untagEvent",
-        "parameters": [
-          {
-            "name": "householdId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "eventId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "labelId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "events"
-        ]
-      }
-    },
-    "/api/v1/households/{householdId}/tasks/{taskId}/labels": {
-      "post": {
-        "operationId": "tagTask",
-        "parameters": [
-          {
-            "name": "householdId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "taskId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TagEntitiesDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "tasks"
-        ]
-      }
-    },
-    "/api/v1/households/{householdId}/tasks/{taskId}/labels/{labelId}": {
-      "delete": {
-        "operationId": "untagTask",
-        "parameters": [
-          {
-            "name": "householdId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "taskId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "labelId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "",
-        "tags": [
-          "tasks"
-        ]
-      }
-    },
     "/api/v1/users/me/reminder-settings": {
       "get": {
         "operationId": "getReminderSettings",
@@ -4338,6 +4154,13 @@
               }
             ]
           },
+          "labelIds": {
+            "description": "本家庭的标签；重复日程的每一次都带上这些标签",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "myReminder": {
             "description": "创建者自己的提醒；省略即跟随个人设置",
             "allOf": [
@@ -4683,6 +4506,13 @@
           },
           "assigneeIds": {
             "description": "负责人成员 ID 列表（每个 ID 必须是当前家庭成员）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "labelIds": {
+            "description": "本家庭的标签；重复任务的每一次都带上这些标签",
             "type": "array",
             "items": {
               "type": "string"
@@ -5056,21 +4886,6 @@
             "pattern": "^#[0-9A-Fa-f]{6}$"
           }
         }
-      },
-      "TagEntitiesDto": {
-        "type": "object",
-        "properties": {
-          "labelIds": {
-            "description": "Label IDs to apply",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "labelIds"
-        ]
       },
       "ReminderSettingsHouseholdDto": {
         "type": "object",

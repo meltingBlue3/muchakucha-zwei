@@ -249,7 +249,6 @@ export const ja: Catalog = {
     createValidationError: '作成できませんでした。入力内容を確認して、もう一度お試しください。',
     createPermissionError: 'この家族で項目を作成する権限がありません。',
     createRetryError: '作成できませんでした。しばらくしてからお試しください。',
-    createLabelsError: '項目は作成済みですが、ラベルを保存できませんでした。再試行するとラベルだけが保存されます。',
     loading: '家族を読み込み中',
     loadingList: '家族の一覧を読み込み中',
     opening: '家族のページを開いています…',
@@ -426,9 +425,6 @@ export const ja: Catalog = {
     missingOnSave: 'タスクが見つからないか、削除されています。',
     saveRetry: '保存できませんでした。もう一度お試しください。',
     saveConnection: '保存できませんでした。接続を確認して、もう一度お試しください。',
-    created: 'タスクを作成しました',
-    labelsUnsaved: '項目は作成済みです。ラベルはまだ保存されていません。',
-    retryLabels: 'ラベルの保存を再試行',
     all: 'すべて',
     allPriorities: 'すべての優先度',
     groups: {
@@ -854,7 +850,6 @@ export const ja: Catalog = {
   },
   events: {
     create: '予定を作成',
-    created: '予定を作成しました',
     edit: '予定を編集',
     detail: '予定の詳細',
     loading: '予定を読み込み中',

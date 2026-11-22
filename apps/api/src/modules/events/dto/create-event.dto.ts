@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { LabelResponseDto } from '../../labels/dto/create-label.dto.js';
 import { RecurrenceDto, RecurrenceResponseDto } from '../../recurrence/dto/recurrence.dto.js';
 import { ReminderChoiceDto } from '../../reminders/dto/reminder.dto.js';
@@ -41,6 +41,12 @@ export class CreateEventDto {
   @ValidateNested()
   @Type(() => RecurrenceDto)
   recurrence?: RecurrenceDto;
+
+  @ApiPropertyOptional({ description: '本家庭的标签；重复日程的每一次都带上这些标签', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  labelIds?: string[];
 
   @ApiPropertyOptional({ description: '创建者自己的提醒；省略即跟随个人设置', type: () => ReminderChoiceDto })
   @IsOptional()

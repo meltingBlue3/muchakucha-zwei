@@ -1,32 +1,22 @@
 import { ApiClientError } from '@muchakucha/api-client';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { useState } from 'react';
 import { Button, MuchakuchaThemeProvider, Text } from '../../../ui/primitives';
-import { WorkspaceStateProvider } from '../../../ui/workspace-state';
 import { useCreateWithLabels } from '../use-create-with-labels';
 
-test('label retry after leaving and reopening never creates a second resource', async () => {
-  const create = jest.fn(async (_data: string) => ({ id: 'created-once' }));
-  const tag = jest.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined);
+type Draft = { title: string; labelIds?: string[] };
+
+test('the chosen labels travel with the one create request', async () => {
+  const create = jest.fn(async (_data: Draft) => ({ id: 'created' }));
   const complete = jest.fn();
   function Editor() {
-    const flow = useCreateWithLabels({ key: 'draft:family:task:new:created', create, tag, onComplete: complete });
-    return <>{flow.error ? <Text>{flow.error}</Text> : null}<Button label={flow.created ? '重试标签' : '创建'} onPress={() => void (flow.created ? flow.retry() : flow.submit('title', ['label-a']))} loading={flow.pending} /></>;
+    const flow = useCreateWithLabels<Draft>({ create, onComplete: complete });
+    return <Button label="创建" onPress={() => void flow.submit({ title: '倒垃圾' }, ['label-a', 'label-b'])} loading={flow.pending} />;
   }
-  function Demo() {
-    const [open, setOpen] = useState(true);
-    return <><Button label="切换编辑器" onPress={() => setOpen((value) => !value)} />{open ? <Editor /> : null}</>;
-  }
-  const view = await render(<MuchakuchaThemeProvider><WorkspaceStateProvider><Demo /></WorkspaceStateProvider></MuchakuchaThemeProvider>);
+  const view = await render(<MuchakuchaThemeProvider><Editor /></MuchakuchaThemeProvider>);
   await fireEvent.press(view.getByRole('button', { name: '创建' }));
-  await view.findByText('内容已创建，但标签未保存。重试只会保存标签，不会重复创建。');
-  await fireEvent.press(view.getByRole('button', { name: '切换编辑器' }));
-  await fireEvent.press(view.getByRole('button', { name: '切换编辑器' }));
-  await fireEvent.press(view.getByRole('button', { name: '重试标签' }));
   await waitFor(() => expect(complete).toHaveBeenCalledTimes(1));
   expect(create).toHaveBeenCalledTimes(1);
-  expect(tag).toHaveBeenCalledTimes(2);
-  expect(tag).toHaveBeenLastCalledWith('created-once', ['label-a']);
+  expect(create).toHaveBeenCalledWith({ title: '倒垃圾', labelIds: ['label-a', 'label-b'] });
 });
 
 test('a refused repeat rule goes back to the form; other failures stay a generic message', async () => {
@@ -34,10 +24,10 @@ test('a refused repeat rule goes back to the form; other failures stay a generic
   const create = jest.fn().mockRejectedValueOnce(refused).mockRejectedValueOnce(new Error('offline'));
   const outcomes: unknown[] = [];
   function Editor() {
-    const flow = useCreateWithLabels<string>({ key: 'draft:family:event:new:created', create, tag: jest.fn(), onComplete: jest.fn() });
-    return <>{flow.error ? <Text>{flow.error}</Text> : null}<Button label="创建" onPress={() => { flow.submit('title', []).then(() => outcomes.push('ok'), (failure: unknown) => outcomes.push(failure)); }} /></>;
+    const flow = useCreateWithLabels<Draft>({ create, onComplete: jest.fn() });
+    return <>{flow.error ? <Text>{flow.error}</Text> : null}<Button label="创建" onPress={() => { flow.submit({ title: 'title' }, []).then(() => outcomes.push('ok'), (failure: unknown) => outcomes.push(failure)); }} /></>;
   }
-  const view = await render(<MuchakuchaThemeProvider><WorkspaceStateProvider><Editor /></WorkspaceStateProvider></MuchakuchaThemeProvider>);
+  const view = await render(<MuchakuchaThemeProvider><Editor /></MuchakuchaThemeProvider>);
   await fireEvent.press(view.getByRole('button', { name: '创建' }));
   await waitFor(() => expect(outcomes).toEqual([refused]));
   expect(view.queryByText('创建失败，请检查网络后重试。')).toBeNull();
@@ -53,10 +43,10 @@ test.each([
 ])('a server answer is not reported as a network problem (%#)', async (failure, message) => {
   const create = jest.fn().mockRejectedValue(failure);
   function Editor() {
-    const flow = useCreateWithLabels<string>({ key: 'draft:family:task:new:created', create, tag: jest.fn(), onComplete: jest.fn() });
-    return <>{flow.error ? <Text>{flow.error}</Text> : null}<Button label="创建" onPress={() => void flow.submit('title', [])} /></>;
+    const flow = useCreateWithLabels<Draft>({ create, onComplete: jest.fn() });
+    return <>{flow.error ? <Text>{flow.error}</Text> : null}<Button label="创建" onPress={() => void flow.submit({ title: 'title' }, [])} /></>;
   }
-  const view = await render(<MuchakuchaThemeProvider><WorkspaceStateProvider><Editor /></WorkspaceStateProvider></MuchakuchaThemeProvider>);
+  const view = await render(<MuchakuchaThemeProvider><Editor /></MuchakuchaThemeProvider>);
   await fireEvent.press(view.getByRole('button', { name: '创建' }));
   await view.findByText(message);
 });

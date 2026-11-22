@@ -286,8 +286,7 @@ export class EventsService {
         // event-owned by which relation has an existing row, so a rule with
         // zero rows could never generate again; labels are copied from this
         // row as the fan-out template, so there would be nothing to copy
-        // from; and POST's response contract returns this row's id, which
-        // the client uses to attach labels immediately after create.
+        // from; and POST's response contract returns this row.
         const template = await tx.event.create({
           data: {
             householdId,
@@ -302,6 +301,9 @@ export class EventsService {
             occurrenceDate: plan.occurrenceDate,
           },
         });
+        // generateNewSeries copies the seed's labels to the occurrences it
+        // writes, so they must be on the seed before the first generation.
+        await replaceLabels(tx, 'event', householdId, template.id, input.labelIds);
         if (input.myReminder !== undefined) {
           await writeReminderChoice(tx, actorId, 'event', { id: template.id, recurrenceRuleId: rule.id }, input.myReminder);
         }
@@ -328,12 +330,15 @@ export class EventsService {
           location: input.location?.trim() || null,
           createdBy: actorId,
         },
-        include: { labels: { include: { label: true } }, recurrenceRule: true },
       });
+      await replaceLabels(tx, 'event', householdId, created.id, input.labelIds);
       if (input.myReminder !== undefined) {
         await writeReminderChoice(tx, actorId, 'event', created, input.myReminder);
       }
-      return created;
+      return tx.event.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { labels: { include: { label: true } }, recurrenceRule: true },
+      });
     });
 
     return this.toResponse(event, await readReminderChoice(this.prisma, actorId, 'event', event));

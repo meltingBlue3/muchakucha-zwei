@@ -22,7 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import { LabelsService } from './labels.service.js';
-import { CreateLabelDto, DeleteLabelQueryDto, LabelListResponseDto, LabelResponseDto, TagEntitiesDto, UpdateLabelDto } from './dto/create-label.dto.js';
+import { CreateLabelDto, DeleteLabelQueryDto, LabelListResponseDto, LabelResponseDto, UpdateLabelDto } from './dto/create-label.dto.js';
 
 interface AuthenticatedRequest {
   auth: AccessTokenClaims;
@@ -87,75 +87,5 @@ export class LabelsController {
       ? undefined
       : { name: query.expectedName, color: query.expectedColor };
     await this.labelsService.delete(request.auth.sub, householdId, labelId, expected);
-  }
-}
-
-// ---- Tag / Untag sub-controllers on events and tasks ----
-
-@ApiTags('events')
-@ApiBearerAuth()
-@UseGuards(AccessTokenGuard)
-@Controller('households/:householdId/events/:eventId/labels')
-export class EventLabelsController {
-  constructor(private readonly labelsService: LabelsService) {}
-
-  @Post()
-  @HttpCode(204)
-  @ApiOperation({ operationId: 'tagEvent' })
-  @ApiNoContentResponse()
-  async tag(
-    @Req() request: AuthenticatedRequest,
-    @Param('householdId', uuidParam) householdId: string,
-    @Param('eventId', uuidParam) eventId: string,
-    @Body() input: TagEntitiesDto,
-  ): Promise<void> {
-    await this.labelsService.tagEvent(request.auth.sub, householdId, eventId, input);
-  }
-
-  @Delete(':labelId')
-  @HttpCode(204)
-  @ApiOperation({ operationId: 'untagEvent' })
-  @ApiNoContentResponse()
-  async untag(
-    @Req() request: AuthenticatedRequest,
-    @Param('householdId', uuidParam) householdId: string,
-    @Param('eventId', uuidParam) eventId: string,
-    @Param('labelId', uuidParam) labelId: string,
-  ): Promise<void> {
-    await this.labelsService.untagEvent(request.auth.sub, householdId, eventId, labelId);
-  }
-}
-
-@ApiTags('tasks')
-@ApiBearerAuth()
-@UseGuards(AccessTokenGuard)
-@Controller('households/:householdId/tasks/:taskId/labels')
-export class TaskLabelsController {
-  constructor(private readonly labelsService: LabelsService) {}
-
-  @Post()
-  @HttpCode(204)
-  @ApiOperation({ operationId: 'tagTask' })
-  @ApiNoContentResponse()
-  async tag(
-    @Req() request: AuthenticatedRequest,
-    @Param('householdId', uuidParam) householdId: string,
-    @Param('taskId', uuidParam) taskId: string,
-    @Body() input: TagEntitiesDto,
-  ): Promise<void> {
-    await this.labelsService.tagTask(request.auth.sub, householdId, taskId, input);
-  }
-
-  @Delete(':labelId')
-  @HttpCode(204)
-  @ApiOperation({ operationId: 'untagTask' })
-  @ApiNoContentResponse()
-  async untag(
-    @Req() request: AuthenticatedRequest,
-    @Param('householdId', uuidParam) householdId: string,
-    @Param('taskId', uuidParam) taskId: string,
-    @Param('labelId', uuidParam) labelId: string,
-  ): Promise<void> {
-    await this.labelsService.untagTask(request.auth.sub, householdId, taskId, labelId);
   }
 }

@@ -969,13 +969,10 @@ describe('series scope operations', () => {
 
     const series = await createDailySeries(owner, householdId, 'Labelled series');
     const split = series.tasks[3]!;
-    const tagged = await (app.getHttpAdapter().getInstance() as any).inject({
-      method: 'POST',
-      url: `/api/v1/households/${householdId}/tasks/${split.id}/labels`,
-      headers: { authorization: `Bearer ${owner.accessToken}`, 'content-type': 'application/json' },
-      payload: { labelIds: [keptLabelId, droppedLabelId] },
+    const tagged = await taskItemApi(owner.accessToken, householdId, 'PUT', `/${split.id}`, {
+      labelIds: [keptLabelId, droppedLabelId],
     });
-    expect(tagged.statusCode).toBeLessThan(300);
+    expect(tagged.statusCode).toBe(200);
 
     // A label from outside the household must never be attachable this way.
     // Checked first: a successful split replaces the occurrence row entirely.

@@ -170,6 +170,7 @@ export interface CreateEventDto {
   allDay?: boolean;
   location?: string;
   recurrence?: RecurrenceDto;
+  labelIds?: string[];
   myReminder?: ReminderChoiceDto;
 }
 
@@ -337,6 +338,7 @@ export interface CreateTaskDto {
   status?: string;
   priority?: string;
   assigneeIds?: string[];
+  labelIds?: string[];
   dueDate?: string;
   recurrence?: RecurrenceDto;
   myReminder?: ReminderChoiceDto;
@@ -431,10 +433,6 @@ export interface LabelResponseDto {
 export interface LabelListResponseDto {
   labels: LabelResponseDto[];
   total: number;
-}
-
-export interface TagEntitiesDto {
-  labelIds: string[];
 }
 
 /** qwen-asr transcribes voice input; the other protocols drive conversations. */

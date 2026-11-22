@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import { IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
 
 export class CreateLabelDto {
   @ApiProperty({ description: 'Label name', minLength: 1, maxLength: 40 })
@@ -68,11 +68,4 @@ export class LabelListResponseDto {
 
   @ApiProperty()
   total!: number;
-}
-
-export class TagEntitiesDto {
-  @ApiProperty({ description: 'Label IDs to apply', type: [String] })
-  @IsArray()
-  @IsUUID('4', { each: true })
-  labelIds!: string[];
 }

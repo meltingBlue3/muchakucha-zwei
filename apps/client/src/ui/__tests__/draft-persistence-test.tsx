@@ -87,13 +87,6 @@ test('network uncertainty and account changes do not erase retained drafts', () 
   expect(open('bob').get(a)).toBe('bob');
 });
 
-test('a partially created resource and its labels survive restart for safe retry', () => {
-  const { open } = disk();
-  const key = 'draft:family-a:tasks:new:created';
-  open('alice').set(key, { id: 'already-created', labelIds: ['label'] });
-  expect(open('alice').get(key)).toEqual({ id: 'already-created', labelIds: ['label'] });
-});
-
 test('corrupt storage and quota failures preserve editable memory and surface persistence failure', () => {
   const { open, storage, values } = disk();
   values.set('alice', '{');
