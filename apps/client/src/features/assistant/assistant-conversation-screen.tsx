@@ -117,6 +117,7 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
       </> : null}
     </Stack>;
   const pending = conversation?.pendingActions ?? [];
+  const hasPendingDelete = pending.some(action => action.name.startsWith('delete_'));
   const lone = pending.length === 1 ? pending[0] : undefined;
   const preview = pending.length && conversation ? <AssistantActionsPreview key={`${conversation.id}:${conversation.version}`} householdId={householdId} actions={pending} busy={operation.busy || !writable || conversation.state === 'running'} disabled={!provider || !writable || query.loading || query.error !== null}
     onDecide={approvedIds => { void decide(approvedIds); }} onAdjust={() => { void decide([]).then(success => { if (success) setDraft(current => ({ value: i18n.t('assistant:conversation.adjust'), revision: (current?.revision ?? 0) + 1 })); }); }} /> : null;
@@ -131,7 +132,7 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
           <Heading variant="label" level={2}>{t('conversation.pending')}</Heading>
           <View style={{ minWidth: theme.spacing[4] + 2, height: theme.spacing[4] + 2, paddingHorizontal: theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: theme.colors.ink, alignItems: 'center', justifyContent: 'center' }}><Text variant="caption" color="surface" style={{ fontFamily: theme.fontFamilies.numericStrong, lineHeight: theme.spacing[4] + 2 }}>{pending.length}</Text></View>
         </View> : null}
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing[4] }}>{preview}</ScrollView>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: theme.spacing[4] }}>{hasPendingDelete ? previewLink : preview}</ScrollView>
       </View> : null}
     {...(conversation && conversation.state !== 'running' && writable ? { onDelete: () => router.push(`${assistantPath(householdId)}/conversations/${encodeURIComponent(conversationId)}/delete`) } : {})}>
     <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}>
@@ -142,7 +143,7 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
         voiceInput={{ householdId, providerId: transcriptionProvider(query.data?.providers ?? [])?.id ?? null }}
         modelControl={<AssistantModelPicker householdId={householdId} providers={chatProviders(query.data?.providers ?? [])} selectedId={conversation.providerId} busy={operation.busy || !writable || pending.length > 0 || conversation.state === 'running'} newConversation onSelect={id => { void start(id); }} />} /> : <ScrollView contentContainerStyle={{ padding: theme.spacing[5] }}>{feedback}</ScrollView>}
     </View>
-    {!inspector && previewOpen && preview ? <AppDialog title={t('conversation.preview')} size="sheet" trigger={trigger} busy={operation.busy} onClose={() => setPreviewOpen(false)}>{operation.error ? <Banner>{t('conversation.syncError', { error: operation.error })}</Banner> : null}{preview}</AppDialog> : null}
+    {(!inspector || hasPendingDelete) && previewOpen && preview ? <AppDialog title={t('conversation.preview')} size={hasPendingDelete ? 'standard' : 'sheet'} preferCancel={hasPendingDelete} trigger={trigger} busy={operation.busy} onClose={() => setPreviewOpen(false)}>{operation.error ? <Banner>{t('conversation.syncError', { error: operation.error })}</Banner> : null}{preview}</AppDialog> : null}
   </AssistantWorkspace>;
 }
 

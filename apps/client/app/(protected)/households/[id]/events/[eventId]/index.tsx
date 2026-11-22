@@ -1,6 +1,6 @@
 import { useTranslation } from '../../../../../../src/i18n';
 import { EventWindow, useEventWindowClose } from '../../../../../../src/features/events/event-window';
-import { DeleteContentQuestion, useContentDeletion } from '../../../../../../src/features/content/content-deletion';
+import { contentDeleteConfirmation, useContentDeletion } from '../../../../../../src/features/content/content-deletion';
 import { useCanDeleteContent } from '../../../../../../src/features/content/use-content-delete';
 import { rememberRouteTrigger } from '../../../../../../src/platform/overlays/route-trigger';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -84,12 +84,6 @@ export default function EventDetailRoute() {
     </Stack></EventWindow>;
   }
 
-  if (deletion.target !== null) {
-    return <EventWindow title={t('deleteContent:title.events')} busy={deletion.submitting !== null} onClose={deletion.cancel} onBackStep={deletion.cancel} exitAllowed={exitAllowed}>
-      <DeleteContentQuestion resource="events" deletion={deletion} onCancel={deletion.cancel} />
-    </EventWindow>;
-  }
-
   const recurrence = recurrenceInputFromResponse(event.recurrence);
   const recurrenceSummary =
     recurrence === null
@@ -98,9 +92,11 @@ export default function EventDetailRoute() {
   const cancelled = event.cancelledAt != null;
 
   const when = formatDateRange(event.startTime, event.endTime, event.allDay, { weekday: true });
+  const deleteTitle = t('deleteContent:title.events');
   return (
-    <EventWindow event={event} title={t('detail')} headerActions={<DetailEditButton accessibilityLabel={t('edit')} onPress={handleEdit} />} exitAllowed={exitAllowed}
-      {...(desktop && canDelete(event) ? { footer: <View style={{ flexDirection: 'row', alignItems: 'center' }}><FooterDestructiveAction label={t('deleteContent:title.events')} onPress={() => deletion.open(event)} /></View> } : {})}>
+    <EventWindow event={event} title={t('detail')} headerActions={<DetailEditButton accessibilityLabel={t('edit')} onPress={handleEdit} />} exitAllowed={exitAllowed} busy={deletion.submitting !== null}
+      centeredConfirmation={contentDeleteConfirmation('events', deletion, deleteTitle)}
+      {...(desktop && canDelete(event) ? { footer: <View style={{ flexDirection: 'row', alignItems: 'center' }}><FooterDestructiveAction ref={deletion.trigger} label={deleteTitle} onPress={() => deletion.open(event)} /></View> } : {})}>
       <Stack gap={5}>
         <Stack gap={2}>
           <Heading level={2}>{event.title}</Heading>

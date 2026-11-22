@@ -42,7 +42,8 @@ describe('SeriesScopeContent', () => {
 
   test('deletion confirms with the destructive button', async () => {
     const view = await renderScope({ mode: 'delete' });
-    expect(view.getByText('这是一个重复安排。选择要删除的范围，此操作不可撤销。')).toBeTruthy();
+    expect(view.getByText('删除后无法撤销。')).toBeTruthy();
+    expect(view.getByRole('radio', { name: '仅删除这一次' }).props.accessibilityState.checked).toBe(true);
     const confirm = view.getByRole('button', { name: '删除' });
     expect(StyleSheet.flatten(confirm.props.style).backgroundColor).toBe(theme.colors.destructive);
   });

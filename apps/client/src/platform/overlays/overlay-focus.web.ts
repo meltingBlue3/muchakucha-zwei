@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import type { View } from 'react-native';
 import type { OverlayFocusOptions } from './overlay-focus.types';
 
 // Open overlays in stacking order; only the top one handles keys, so a window
@@ -7,12 +8,14 @@ const openOverlays: object[] = [];
 
 const selector = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"]):not([aria-disabled="true"])';
 
+export function focusOverlayControl(control: View | null) {
+  (control as unknown as HTMLElement | null)?.focus();
+}
+
 export function useOverlayFocus({ mode, panel, initial, trigger, onClose }: OverlayFocusOptions) {
   const close = useRef(onClose);
   useEffect(() => { close.current = onClose; }, [onClose]);
-  const focusInitial = useCallback(() => {
-    (initial.current as unknown as HTMLElement | null)?.focus();
-  }, [initial]);
+  const focusInitial = useCallback(() => focusOverlayControl(initial.current), [initial]);
 
   useEffect(() => {
     if (mode === 'closed') return;
@@ -57,7 +60,7 @@ export function useOverlayFocus({ mode, panel, initial, trigger, onClose }: Over
       cancelAnimationFrame(frame);
       openOverlays.splice(openOverlays.indexOf(token), 1);
       document.removeEventListener('keydown', onKeyDown, true);
-      (trigger.current as unknown as HTMLElement | null)?.focus();
+      focusOverlayControl(trigger.current);
     };
   }, [mode, panel, trigger, focusInitial]);
   return focusInitial;

@@ -5,7 +5,7 @@ import { useHouseholdContext } from '../../../../../../src/features/households/h
 import { HouseholdContextNote } from '../../../../../../src/ui/household-components';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
 import { EventWindow, useEventWindowClose } from '../../../../../../src/features/events/event-window';
-import { DeleteContentQuestion, useContentDeletion } from '../../../../../../src/features/content/content-deletion';
+import { contentDeleteConfirmation, useContentDeletion } from '../../../../../../src/features/content/content-deletion';
 import { useCanDeleteContent } from '../../../../../../src/features/content/use-content-delete';
 import { FooterDestructiveAction } from '../../../../../../src/ui/detail-fields';
 import { useDesktop } from '../../../../../../src/ui/use-desktop';
@@ -210,17 +210,17 @@ export default function EditEventRoute() {
   }, [eventId, fetchEvent, id, pendingSeriesAction, router, selectedLabelIds, workspace, draftPrefix, conflict, exitEdit]);
 
   const handleCancel = () => {
-    if (deletion.target) deletion.cancel();
-    else if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
+    if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
     else exitEdit();
   };
-  const asking = deletion.target !== null || pendingSeriesAction !== null;
+  const asking = pendingSeriesAction !== null;
+  const deleteTitle = t('deleteContent:title.events');
 
   return (
-    <EventWindow draftPrefix={draftPrefix} size={asking ? 'standard' : 'editor'} title={deletion.target ? t('deleteContent:title.events') : pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : t('edit')} busy={isSubmitting || seriesSubmitting !== null || deletion.submitting !== null} onClose={handleCancel} onBackStep={asking ? handleCancel : undefined} exitAllowed={exitAllowed}
-      {...(desktop && event !== null && !asking && canDelete(event) ? { footerStart: <FooterDestructiveAction label={t('deleteContent:title.events')} disabled={isSubmitting} onPress={() => deletion.open(event)} /> } : {})}>
-      {deletion.target ? <DeleteContentQuestion resource="events" deletion={deletion} onCancel={handleCancel} />
-        : pendingSeriesAction ? <SeriesScopeContent mode={pendingSeriesAction.mode} error={seriesError === null ? null : t(seriesError)} submitting={seriesSubmitting} onClose={handleCancel} onSelect={scope => void handleSeriesSelect(scope)} />
+    <EventWindow draftPrefix={draftPrefix} size={asking ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : t('edit')} busy={isSubmitting || seriesSubmitting !== null || deletion.submitting !== null} onClose={handleCancel} onBackStep={asking ? handleCancel : undefined} exitAllowed={exitAllowed}
+      centeredConfirmation={contentDeleteConfirmation('events', deletion, deleteTitle)}
+      {...(desktop && event !== null && !asking && canDelete(event) ? { footerStart: <FooterDestructiveAction ref={deletion.trigger} label={deleteTitle} disabled={isSubmitting} onPress={() => deletion.open(event)} /> } : {})}>
+      {pendingSeriesAction ? <SeriesScopeContent mode={pendingSeriesAction.mode} error={seriesError === null ? null : t(seriesError)} submitting={seriesSubmitting} onClose={handleCancel} onSelect={scope => void handleSeriesSelect(scope)} />
         : loading ? <LoadingState label={t('loading')} /> : event === null ? <Stack gap={3}>
           <LoadError message={t(error ?? 'notFound')} onRetry={() => void fetchEvent()} />
         </Stack> : <Stack gap={4}>

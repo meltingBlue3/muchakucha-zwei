@@ -13,6 +13,7 @@ import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import Trash2 from 'lucide-react-native/icons/trash-2';
 import { HouseholdScreen } from '../households/household-screen';
 import { AppDialog } from '../../ui/app-dialog';
+import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { Button, Heading, IconButton, Inline, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
 import { formatDate, formatDateTime, toDateValue, toTimeValue } from '../../ui/date-values';
@@ -100,7 +101,10 @@ export function AssistantWorkspace({ householdId, householdName, title, conversa
         <View>
           <MenuRow label={t('models.title')} icon={Settings} opensPage onPress={() => { setDialog(null); router.push(`${root}/providers`); }} />
           <MenuRow label={t('workspace.refresh')} icon={RefreshCw} onPress={() => { setDialog(null); onRefresh(); }} />
-          {onDelete ? <MenuRow label={t('delete.deleteConversation')} icon={Trash2} destructive onPress={() => { setDialog(null); onDelete(); }} /> : null}
+          {onDelete ? <MenuRow label={t('delete.deleteConversation')} icon={Trash2} destructive onPress={() => {
+            setDialog(null);
+            requestAnimationFrame(() => { rememberRouteTrigger(); onDelete(); });
+          }} /> : null}
         </View>
         <Text variant="bodySm">{t('workspace.privacy')}</Text>
       </Stack>}

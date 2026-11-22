@@ -11,6 +11,7 @@ import { WindowStepContext, type RouteWindowStep, type WindowStepHost } from './
 
 export type { RouteWindowStep };
 import { getRouteTrigger } from '../platform/overlays/route-trigger';
+import { focusOverlayControl } from '../platform/overlays/overlay-focus';
 import { useDesktop } from './use-desktop';
 import { useWorkspaceStore } from './workspace-state';
 import { UnsavedSwitchDialog } from './unsaved-switch-dialog';
@@ -70,6 +71,8 @@ export function useEditWindowExit(resource: 'tasks' | 'events' | 'notes' | 'recu
 
 /** A route owns the URL; AppDialog owns presentation and focus. Previous
  * transparent routes stay mounted; only the focused route presents a pane or modal. */
+type CenteredConfirmation = RouteWindowStep & { trigger: RefObject<View | null> };
+
 export interface RouteWindowProps {
   /** Only editors own draft guards; a read-only detail may have a saved draft. */
   draftPrefix?: string;
@@ -83,6 +86,8 @@ export interface RouteWindowProps {
   /** On the desktop pane, a quiet line shown in the header instead of the title, such as when a note was updated. */
   headerNote?: string;
   step?: RouteWindowStep | null;
+  centeredConfirmation?: CenteredConfirmation | undefined;
+  preferCancel?: boolean;
   onClose?: () => void;
   onBackStep?: (() => void) | undefined;
   exitAllowed?: RefObject<boolean>;
@@ -93,7 +98,7 @@ export interface RouteWindowProps {
   fillContent?: boolean;
 }
 
-export function RouteWindow({ title, busy = false, children, footer, footerStart, headerActions, headerNote, step: routeStep, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor', draftPrefix, fillContent = false }: RouteWindowProps) {
+export function RouteWindow({ title, busy = false, children, footer, footerStart, headerActions, headerNote, step: routeStep, centeredConfirmation, preferCancel = false, onClose, onBackStep, exitAllowed, resource, fallback, size = 'editor', draftPrefix, fillContent = false }: RouteWindowProps) {
   const { t } = useTranslation('common');
   const focused = useIsFocused();
   const docked = (size === 'editor' || draftPrefix !== undefined) && DOCKED_RESOURCES.has(resource);
@@ -106,16 +111,24 @@ export function RouteWindow({ title, busy = false, children, footer, footerStart
     show: (owner, next) => setOwnedStep({ owner, step: next }),
     hide: owner => setOwnedStep(current => current?.owner === owner ? null : current),
   }), []);
-  const step = routeStep ?? ownedStep?.step ?? null;
+  const inlineConfirmation = pane ? undefined : centeredConfirmation;
+  const overlayConfirmation = pane ? centeredConfirmation : undefined;
+  const step = inlineConfirmation ?? routeStep ?? ownedStep?.step ?? null;
   const previousStep = useRef(step);
+  const previousConfirmationTrigger = useRef(inlineConfirmation?.trigger);
   useEffect(() => {
     const previous = previousStep.current;
+    const previousTrigger = previousConfirmationTrigger.current;
     previousStep.current = step;
+    previousConfirmationTrigger.current = inlineConfirmation?.trigger;
     if (!previous || step) return;
     // Wait until the window has restored its normal content and initial focus.
-    const frame = requestAnimationFrame(() => previous.onReturn?.());
+    const frame = requestAnimationFrame(() => {
+      previous.onReturn?.();
+      if (previousTrigger) focusOverlayControl(previousTrigger.current);
+    });
     return () => cancelAnimationFrame(frame);
-  }, [step]);
+  }, [step, inlineConfirmation?.trigger]);
   const [confirmation, setConfirmation] = useState<WindowConfirmationRequest | null>(null);
   const confirmationRef = useRef(confirmation);
   confirmationRef.current = confirmation;
@@ -133,11 +146,12 @@ export function RouteWindow({ title, busy = false, children, footer, footerStart
   const parentBackground = useContext(DialogBackground);
   const close = useCallback(() => {
     if (busy) return;
+    if (centeredConfirmation) { centeredConfirmation.onClose(); return; }
     if (confirmation) { setConfirmation(null); return; }
     if (step) { step.onClose(); return; }
     if (onClose) onClose();
     else dismiss();
-  }, [busy, confirmation, step, onClose, dismiss]);
+  }, [busy, centeredConfirmation, confirmation, step, onClose, dismiss]);
   useEffect(() => {
     navigation.setOptions({ gestureEnabled: !busy });
     return navigation.addListener('beforeRemove', event => {
@@ -146,28 +160,29 @@ export function RouteWindow({ title, busy = false, children, footer, footerStart
       const target = event.data.action.payload as { name?: string; params?: Record<string, unknown> } | undefined;
       const targetId = target?.params?.taskId ?? target?.params?.eventId ?? target?.params?.noteId ?? target?.params?.ruleId ?? (target?.name?.endsWith('/new') ? 'new' : undefined);
       const switchingItem = targetId !== undefined && targetId !== draftPrefix?.split(':')[3];
-      if (pane && draftPrefix && switchingItem && event.data.action.type === 'REPLACE' && workspace.hasDrafts(draftPrefix) && !busy && !step && !onBackStep) {
+      if (pane && draftPrefix && switchingItem && event.data.action.type === 'REPLACE' && workspace.hasDrafts(draftPrefix) && !busy && !centeredConfirmation && !step && !onBackStep) {
         event.preventDefault();
         if (!pendingSwitchRef.current) setPendingSwitch({ go: () => { confirmedSwitch.current = true; navigation.dispatch(event.data.action); } });
         return;
       }
-      if (busy || pendingSwitchRef.current || confirmationRef.current || step || onBackStep) {
+      if (busy || centeredConfirmation || pendingSwitchRef.current || confirmationRef.current || step || onBackStep) {
         event.preventDefault();
         if (!busy) {
-          if (pendingSwitchRef.current) setPendingSwitch(null);
+          if (centeredConfirmation) centeredConfirmation.onClose();
+          else if (pendingSwitchRef.current) setPendingSwitch(null);
           else if (confirmationRef.current) setConfirmation(null);
           else if (step) step.onClose();
           else onBackStep?.();
         }
       }
     });
-  }, [navigation, busy, confirmation, step, onBackStep, exitAllowed, pane, workspace, draftPrefix]);
+  }, [navigation, busy, centeredConfirmation, confirmation, step, onBackStep, exitAllowed, pane, workspace, draftPrefix]);
   return (
     <DialogBackground.Provider value={hasBackground ? parentBackground : background}>
       <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={backgroundInteractive ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
-      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked} reading={resource === 'notes' && overList} wide={besideToday} fillContent={fillContent && !step && !confirmation} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })} {...(footerStart === undefined || confirmation || step ? {} : { footerStart })}>
+      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked && !inlineConfirmation} preferCancel={preferCancel || inlineConfirmation !== undefined} reading={resource === 'notes' && overList} wide={besideToday} fillContent={fillContent && !step && !confirmation} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })} {...(footerStart === undefined || confirmation || step ? {} : { footerStart })}>
         <WindowConfirmation.Provider value={setConfirmation}>
           {confirmation ? <Stack gap={3}>
             <Text>{confirmation.message}</Text>
@@ -180,6 +195,9 @@ export function RouteWindow({ title, busy = false, children, footer, footerStart
             <WindowStepContext.Provider value={null}>{step?.content}</WindowStepContext.Provider>
           </>}
         </WindowConfirmation.Provider>
+      </AppDialog> : null}
+      {focused && overlayConfirmation ? <AppDialog title={overlayConfirmation.title} busy={busy} onClose={overlayConfirmation.onClose} trigger={overlayConfirmation.trigger} preferCancel>
+        {overlayConfirmation.content}
       </AppDialog> : null}
       {focused && pendingSwitch ? <UnsavedSwitchDialog onKeepEditing={() => setPendingSwitch(null)} onSwitch={() => { const request = pendingSwitch; pendingSwitchRef.current = null; setPendingSwitch(null); request.go(); }} /> : null}
     </DialogBackground.Provider>

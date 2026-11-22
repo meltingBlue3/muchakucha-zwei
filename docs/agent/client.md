@@ -6,7 +6,7 @@ Read this playbook for client routing, data loading, session handling, draft sta
 
 Expo Router maps `apps/client/app/` to the route tree. `(auth)` and `(protected)` are layout groups and do not appear in URLs; `[id]`, `[taskId]`, and siblings are path parameters. A route file owns orchestration — parameters, fetching, navigation, and page composition — and delegates domain rendering to `src/features/` and appearance to `src/ui/`.
 
-Standalone member-governance confirmations use routes, as in `members/[membershipId]/remove.tsx`, `ownership/transfer.tsx`, and `invitations/[invitationId]/revoke.tsx`. Editor steps and confirmations stay inside the existing `RouteWindow`; use its step/confirmation mechanism rather than adding another modal or route for each step.
+Standalone member-governance confirmations use routes, as in `members/[membershipId]/remove.tsx`, `ownership/transfer.tsx`, and `invitations/[invitationId]/revoke.tsx`. Use the existing `RouteWindow` for editor steps and confirmations. Deletion and ending a repeat use its centered confirmation option from inside an open window, or a standard-size window from a list route.
 
 Resource windows retain the background list, filters, selected date, and scroll position. Direct links reconstruct a base page and close to the resource list when there is no history. Shared window handling owns browser/system back, busy-state close suppression, and focus restoration; when a trigger disappears, restore a stable list entry point.
 

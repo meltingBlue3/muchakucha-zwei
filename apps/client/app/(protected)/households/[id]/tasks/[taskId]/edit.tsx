@@ -3,7 +3,7 @@ import { notifyContentChanged } from '../../../../../../src/features/content/con
 import { hasRecurrenceFieldErrors } from '../../../../../../src/features/recurrence/recurrence-options';
 import { useEditWindowExit } from '../../../../../../src/ui/route-window';
 import { TaskWindow, useTaskWindowClose } from '../../../../../../src/features/tasks/task-window';
-import { DeleteContentQuestion, useContentDeletion } from '../../../../../../src/features/content/content-deletion';
+import { contentDeleteConfirmation, useContentDeletion } from '../../../../../../src/features/content/content-deletion';
 import { useCanDeleteContent } from '../../../../../../src/features/content/use-content-delete';
 import { FooterDestructiveAction } from '../../../../../../src/ui/detail-fields';
 import { useDesktop } from '../../../../../../src/ui/use-desktop';
@@ -260,11 +260,11 @@ export default function EditTaskRoute() {
   }, [fetchTask, householdId, pendingSeriesAction, router, selectedLabelIds, taskId, workspace, draftPrefix, conflict, exitEdit]);
 
   const closeEdit = () => {
-    if (deletion.target) deletion.cancel();
-    else if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
+    if (pendingSeriesAction) { setPendingSeriesAction(null); setSeriesError(null); }
     else exitEdit();
   };
-  const asking = deletion.target !== null || pendingSeriesAction !== null;
+  const asking = pendingSeriesAction !== null;
+  const deleteTitle = t('deleteContent:title.tasks');
 
   if (viewState === 'accessChanged') {
     return (
@@ -280,13 +280,13 @@ export default function EditTaskRoute() {
   }
 
   return (
-    <TaskWindow draftPrefix={draftPrefix} size={asking ? 'standard' : 'editor'} title={deletion.target ? t('deleteContent:title.tasks') : pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : t('edit')} busy={submitting || seriesSubmitting !== null || deletion.submitting !== null} onClose={closeEdit} onBackStep={asking ? closeEdit : undefined} exitAllowed={exitAllowed}
-      {...(desktop && task !== null && !asking && canDelete(task) ? { footerStart: <FooterDestructiveAction label={t('deleteContent:title.tasks')} disabled={submitting} onPress={() => deletion.open(task)} /> } : {})}>
+    <TaskWindow draftPrefix={draftPrefix} size={asking ? 'standard' : 'editor'} title={pendingSeriesAction ? seriesScopeTitle(pendingSeriesAction.mode) : t('edit')} busy={submitting || seriesSubmitting !== null || deletion.submitting !== null} onClose={closeEdit} onBackStep={asking ? closeEdit : undefined} exitAllowed={exitAllowed}
+      centeredConfirmation={contentDeleteConfirmation('tasks', deletion, deleteTitle)}
+      {...(desktop && task !== null && !asking && canDelete(task) ? { footerStart: <FooterDestructiveAction ref={deletion.trigger} label={deleteTitle} disabled={submitting} onPress={() => deletion.open(task)} /> } : {})}>
       <Stack gap={4}>
         {asking ? null : <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />}
 
-        {deletion.target ? <DeleteContentQuestion resource="tasks" deletion={deletion} onCancel={closeEdit} />
-          : pendingSeriesAction ? <SeriesScopeContent
+        {pendingSeriesAction ? <SeriesScopeContent
           error={seriesError === null ? null : t(seriesError)} mode={pendingSeriesAction.mode} onClose={closeEdit}
           onSelect={scope => void handleSeriesSelect(scope)} submitting={seriesSubmitting}
         /> : loading ? <LoadingState label={t('loading')} /> : task !== null ? (

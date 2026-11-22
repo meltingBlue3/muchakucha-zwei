@@ -41,12 +41,12 @@ test('a delete refused because the note changed shows the latest note and confir
     <MuchakuchaThemeProvider><DeleteContentScreen resource="notes" /></MuchakuchaThemeProvider>
   </SafeAreaProvider>);
 
-  await fireEvent.press(await view.findByRole('button', { name: '确认删除笔记' }));
+  await fireEvent.press(await view.findByRole('button', { name: '删除笔记' }));
   expect(await view.findByText('内容刚被修改过，这里已是最新内容。确认仍要删除吗？')).toBeTruthy();
-  expect(view.getByText('确定要删除「买菜清单（已补充）」吗？此操作不可撤销。')).toBeTruthy();
+  expect(view.getByText('买菜清单（已补充）')).toBeTruthy();
   expect(mockApi.deleteNote).toHaveBeenLastCalledWith('access-token', 'household-1', 'note-1', { expectedUpdatedAt: '2026-11-14T01:00:00.000Z' });
 
-  await fireEvent.press(view.getByRole('button', { name: '确认删除笔记' }));
+  await fireEvent.press(view.getByRole('button', { name: '删除笔记' }));
   await waitFor(() => expect(mockClose).toHaveBeenCalled());
   expect(mockApi.deleteNote).toHaveBeenLastCalledWith('access-token', 'household-1', 'note-1', { expectedUpdatedAt: '2026-11-14T02:00:00.000Z' });
 });

@@ -250,7 +250,11 @@ function ruleListScreen(page: Page) {
 }
 
 function ruleDetailScreen(page: Page) {
-  return page.getByRole(windowRole(page), { name: /^(重复安排详情|编辑重复安排|确认保存重复安排|结束重复安排)$/ });
+  return page.getByRole(windowRole(page), { name: /^(重复安排详情|编辑重复安排|确认保存重复安排)$/ });
+}
+
+function endConfirmation(page: Page) {
+  return page.getByRole('dialog', { name: '结束重复安排', exact: true });
 }
 
 async function openRuleList(page: Page, householdId: string): Promise<void> {
@@ -392,12 +396,13 @@ test.describe('recurrence rule addendum journeys', () => {
       .find((rule) => rule.id === eventRuleId)?.nextOccurrenceDate).toBe(tomorrow);
 
     await endTrigger.click();
-    await expect(detail.getByText(END_CONFIRM_PROMPT, { exact: true })).toBeVisible();
+    const question = endConfirmation(page);
+    await expect(question.getByText(END_CONFIRM_PROMPT, { exact: true })).toBeVisible();
     // Still nothing: opening the confirm row is not the write (T-07-48).
     expect((await listRules(account.accessToken, householdId))
       .find((rule) => rule.id === eventRuleId)?.nextOccurrenceDate).toBe(tomorrow);
 
-    await detail.getByLabel(END_CONFIRM_ACTION).click();
+    await question.getByLabel(END_CONFIRM_ACTION).click();
     await expect(page).toHaveURL(new RegExp(`/households/${householdId}/recurrence-rules$`));
 
     // "结束" is not "删除" — the rule stays in the list and says so in
@@ -409,8 +414,8 @@ test.describe('recurrence rule addendum journeys', () => {
     await taskRow.click();
     await expect(detail).toBeVisible();
     await detail.getByLabel(END_ACTION).click();
-    await expect(detail.getByText(END_CONFIRM_PROMPT, { exact: true })).toBeVisible();
-    await detail.getByLabel(END_CONFIRM_ACTION).click();
+    await expect(question.getByText(END_CONFIRM_PROMPT, { exact: true })).toBeVisible();
+    await question.getByLabel(END_CONFIRM_ACTION).click();
     await expect(page).toHaveURL(new RegExp(`/households/${householdId}/recurrence-rules$`));
 
     // Both rules are now visibly ended. The API still includes today's date
@@ -450,8 +455,7 @@ test.describe('recurrence rule addendum journeys', () => {
     await expect(list.getByText(endedRowLine(page), { exact: true })).toBeVisible();
     await expectNoSeriousAxeViolations(page);
 
-    // The confirmation replaces the detail in the same window. Focus starts
-    // on close and cycles back through the confirmation and cancel actions.
+    // The centered confirmation starts on cancel and keeps focus in the dialog.
     await list.getByLabel(`任务重复安排：${activeTitle}，每天重复，永不结束`).click();
     await expect(detail).toBeVisible();
     await expectNoSeriousAxeViolations(page);
@@ -460,19 +464,16 @@ test.describe('recurrence rule addendum journeys', () => {
     await endTrigger.focus();
     await expect(endTrigger).toBeFocused();
     await endTrigger.click();
-    await expect(detail.getByText(END_CONFIRM_PROMPT, { exact: true })).toBeVisible();
-    if (wide(page)) {
-      // The side pane has no focus trap: the confirmation that replaces its content takes focus on its title.
-      await expect(detail.getByRole('heading', { name: '结束重复安排', exact: true })).toBeFocused();
-    } else {
-      await expect(detail.getByRole('button', { name: '关闭结束重复安排' })).toBeFocused();
-      await page.keyboard.press('Shift+Tab');
-      await expect(detail.getByLabel(END_CONFIRM_ACTION)).toBeFocused();
-      await page.keyboard.press('Shift+Tab');
-      await expect(detail.getByLabel('取消', { exact: true })).toBeFocused();
-    }
-    await detail.getByLabel('取消').click();
-    await expect(detail.getByText(END_CONFIRM_PROMPT, { exact: true })).toHaveCount(0);
+    const question = endConfirmation(page);
+    await expect(question.getByText(END_CONFIRM_PROMPT, { exact: true })).toBeVisible();
+    await expect(question.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(question.getByLabel(END_CONFIRM_ACTION)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(question.getByRole('button', { name: '关闭结束重复安排' })).toBeFocused();
+    await question.getByRole('button', { name: '取消', exact: true }).click();
+    await expect(question).toHaveCount(0);
+    await expect(endTrigger).toBeFocused();
 
     // The ended rule's detail says so in words, never by opacity alone, and
     // offers no way to edit or end it again.

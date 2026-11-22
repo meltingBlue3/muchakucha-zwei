@@ -15,7 +15,7 @@ export function seriesScopeTitle(mode: SeriesScopeMode): string { return i18n.t(
  * 仅此一次 or 此后所有, then confirm. A rule change can only apply from this
  * occurrence on, so 仅此一次 stays visible but unavailable, with the reason.
  */
-export function SeriesScopeContent({ mode, error, onClose, onSelect, submitting = null, confirmLabel }: {
+export function SeriesScopeContent({ mode, error, onClose, onSelect, submitting = null, confirmLabel, confirmDisabled = false }: {
   mode: SeriesScopeMode;
   error?: string | null;
   onClose(): void;
@@ -23,33 +23,41 @@ export function SeriesScopeContent({ mode, error, onClose, onSelect, submitting 
   submitting?: SeriesScope | null;
   /** Defaults to 删除 for deletion and 保存 otherwise. */
   confirmLabel?: string;
+  confirmDisabled?: boolean;
 }) {
-  const { t } = useTranslation(['recurrence', 'common']);
+  const { t } = useTranslation(['recurrence', 'common', 'deleteContent']);
   const [scope, setScope] = useState<SeriesScope>(mode === 'rule-change' ? 'this_and_following' : 'this_only');
   const busy = submitting !== null;
+  const deleting = mode === 'delete';
+  const rangeLabel = t(deleting ? 'scope.delete.range' : 'scope.range');
   return (
     <Stack gap={3}>
-      <Text>{t(`scope.${mode}.body`)}</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel={t('scope.range')}>
+      {deleting ? <Text variant="label">{rangeLabel}</Text> : <Text>{t(`scope.${mode}.body`)}</Text>}
+      <View accessibilityRole="radiogroup" accessibilityLabel={rangeLabel}>
         <OptionRow
-          label={t('scope.thisOnly')}
+          label={t(deleting ? 'scope.delete.thisOnly' : 'scope.thisOnly')}
           checked={scope === 'this_only'}
+          highlightChecked={deleting}
           disabled={busy || mode === 'rule-change'}
           {...(mode === 'rule-change' ? { detail: t('scope.ruleChangeDetail') } : {})}
           onPress={() => setScope('this_only')}
         />
         <OptionRow
-          label={t('scope.following')}
-          detail={t('scope.followingDetail')}
+          label={t(deleting ? 'scope.delete.following' : 'scope.following')}
+          {...(deleting ? {} : { detail: t('scope.followingDetail') })}
           checked={scope === 'this_and_following'}
+          highlightChecked={deleting}
           disabled={busy}
           onPress={() => setScope('this_and_following')}
         />
       </View>
+      {deleting ? <Text variant="bodySm" color="inkMuted">{t('deleteContent:warning')}</Text> : null}
       {error ? <Banner>{error}</Banner> : null}
       <ConfirmActions
-        confirmLabel={confirmLabel ?? (mode === 'delete' ? t('common:delete') : t('common:save'))}
-        destructive={mode === 'delete'}
+        confirmLabel={confirmLabel ?? (deleting ? t('common:delete') : t('common:save'))}
+        destructive={deleting}
+        alignEnd={deleting}
+        confirmDisabled={confirmDisabled}
         busy={busy}
         onCancel={onClose}
         onConfirm={() => onSelect(scope)}

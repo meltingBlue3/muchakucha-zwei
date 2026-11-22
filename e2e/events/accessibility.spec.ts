@@ -173,10 +173,11 @@ test.describe('event recurrence accessibility', () => {
     const dialog = page.getByRole('dialog', { name: '删除日程', exact: true });
     await expect(dialog).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: '删除日程', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(dialog.getByRole('button', { name: '关闭删除日程' })).toBeFocused();
-    // Focus wraps within the window: the last control is the scope step's confirm button.
-    await page.keyboard.press('Shift+Tab');
-    await expect(dialog.getByRole('button', { name: '确认删除日程', exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await expect(more).toBeFocused();

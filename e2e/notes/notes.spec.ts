@@ -139,12 +139,12 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   await page.getByRole('button', { name: '更多操作：笔记：暑假安排' }).click();
   await page.getByRole('menuitem', { name: '删除笔记：暑假安排' }).click();
   await expect(page.getByText('确定要删除「暑假安排」吗？此操作不可撤销。')).toBeVisible();
-  await page.getByRole('button', { name: '取消删除' }).click();
+  await page.getByRole('dialog', { name: '删除笔记', exact: true }).getByRole('button', { name: '取消', exact: true }).click();
   await expect(page.getByText('确定要删除「暑假安排」吗？此操作不可撤销。')).toBeHidden();
 
   await page.getByRole('button', { name: '更多操作：笔记：暑假安排' }).click();
   await page.getByRole('menuitem', { name: '删除笔记：暑假安排' }).click();
-  await page.getByRole('button', { name: '确认删除笔记' }).click();
+  await page.getByRole('dialog', { name: '删除笔记', exact: true }).getByRole('button', { name: '删除笔记', exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`${notesPath}$`));
   await expect(page.getByText('还没有笔记', { exact: true })).toBeVisible();

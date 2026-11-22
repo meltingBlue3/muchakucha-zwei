@@ -117,6 +117,11 @@ async function mockAssistant(page: Page, options: { empty?: boolean; voice?: boo
         status = 201;
       } else if (!selected) { await fail(404, 'ASSISTANT_CONVERSATION_NOT_FOUND'); return; }
       else if (parts.length === 7 && method === 'GET') body = selected;
+      else if (parts.length === 7 && method === 'DELETE') {
+        family.conversations = family.conversations.filter(item => item.id !== selected.id);
+        await route.fulfill({ status: 204 });
+        return;
+      }
       else if (parts[7] === 'messages' && method === 'POST') {
         if (input.expectedVersion !== selected.version) { await fail(409, 'EDIT_CONFLICT'); return; }
         if (state.nextSend === 'fail') { state.nextSend = 'normal'; await fail(502, 'ASSISTANT_PROVIDER_UNAVAILABLE'); return; }
@@ -522,18 +527,46 @@ test('assistant proposals show readable targets and only explicit confirmation c
   await expect(page.getByText('创建任务成功：准备周末野餐。', { exact: true })).toBeVisible();
   expect(state.businessWrites).toBe(1);
   expect(state.families.get(householdId)!.tasks).toMatchObject([{ title: '准备周末野餐', assigneeIds: [userId] }]);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await send(page, '删除家庭旅行清单笔记');
-  await openProposal(page);
-  await expect(page.getByRole('heading', { name: '请确认：删除笔记', exact: true })).toBeVisible();
+  const inspector = page.getByTestId('assistant-inspector');
+  await expect(inspector.getByRole('button', { name: '确认删除', exact: true })).toHaveCount(0);
+  await inspector.getByRole('button', { name: '查看待确认操作', exact: true }).click();
+  const deletion = page.getByRole('dialog', { name: '操作预览', exact: true });
+  await expect(deletion.getByRole('heading', { name: '请确认：删除笔记', exact: true })).toBeVisible();
+  await expect(deletion.getByRole('button', { name: '取消操作', exact: true })).toBeFocused();
   await expect(page.getByText('家庭旅行清单', { exact: true })).toBeVisible();
   await expect(page.getByText('野餐垫、水和水果。', { exact: true })).toBeVisible();
   await expect(page.getByText(noteId, { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '确认删除', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: '取消操作', exact: true }).click();
+  await deletion.getByRole('button', { name: '取消操作', exact: true }).click();
   await expect(page.getByRole('heading', { name: '请确认：删除笔记', exact: true })).toHaveCount(0);
   expect(state.businessWrites).toBe(1);
   expect(state.families.get(householdId)!.notes).toMatchObject([{ id: noteId, body: '野餐垫、水和水果。' }]);
   expect(state.decisions.map(item => item.approve)).toEqual([false, true, false]);
+});
+
+test('deleting an assistant conversation confirms in a window and returns to the conversation list', async ({ page }) => {
+  const state = await mockAssistant(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openExistingConversation(page);
+  const options = page.getByRole('button', { name: '助手选项', exact: true });
+  const deleteMenuItem = page.getByRole('dialog', { name: '助手选项', exact: true }).getByRole('button', { name: '删除对话', exact: true });
+  await options.click();
+  await deleteMenuItem.click();
+  const dialog = page.getByRole('dialog', { name: '删除对话', exact: true });
+  const keep = dialog.getByRole('button', { name: '保留', exact: true });
+  await expect(keep).toBeFocused();
+  await keep.click();
+  await expect(options).toBeFocused();
+  expect(state.families.get(householdId)!.conversations).toHaveLength(1);
+
+  await options.click();
+  await deleteMenuItem.click();
+  await dialog.getByRole('button', { name: '删除对话', exact: true }).click();
+  await expect(page).toHaveURL(`${base}/assistant`);
+  await expect(page.getByRole('button', { name: '打开对话：周末准备清单', exact: true })).toHaveCount(0);
+  expect(state.families.get(householdId)!.conversations).toHaveLength(0);
 });
 
 test.describe('Japanese interface', () => {

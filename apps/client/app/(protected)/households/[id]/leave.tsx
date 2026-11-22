@@ -91,13 +91,13 @@ export default function LeaveHouseholdMembershipPage() {
     }
   }
 
-  return <HouseholdActionWindow title={t('governance.confirmLeave')} busy={busy} onClose={close} exitAllowed={exitAllowed}>
+  return <HouseholdActionWindow title={t('governance.confirmLeave')} busy={busy} onClose={close} exitAllowed={exitAllowed} preferCancel={lastMember}>
     {roster === 'loading' ? <LoadingState label={t('settings.loadingMembers')} />
       : roster === 'failed' ? <LoadError message={t('settings.loadMembersFailed')} onRetry={() => void loadRoster()} retryAccessibilityLabel={t('settings.retryMembers')} />
         : <Stack gap={4}>
           {error ? <Banner title={t('governance.leaveFailed')}>{t(error)}</Banner> : mustTransfer ? <Banner>{t('governance.transferRequired')}</Banner> : null}
           <Text>{lastMember ? t('governance.leaveLastMemberDetail', { householdName }) : t('governance.leaveMemberDetail', { householdName })}</Text>
-          <ConfirmActions cancelLabel={t('governance.cancelLeave')} confirmLabel={lastMember ? t('governance.confirmLeaveAndDelete') : t('governance.confirmLeave')} destructive busy={busy} confirmDisabled={mustTransfer} onCancel={close} onConfirm={() => void leave()} />
+          <ConfirmActions cancelLabel={t('governance.cancelLeave')} confirmLabel={lastMember ? t('governance.confirmLeaveAndDelete') : t('governance.confirmLeave')} destructive alignEnd={lastMember} busy={busy} confirmDisabled={mustTransfer} onCancel={close} onConfirm={() => void leave()} />
         </Stack>}
   </HouseholdActionWindow>;
 }

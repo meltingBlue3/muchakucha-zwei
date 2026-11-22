@@ -1,4 +1,4 @@
-import { createContext, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { DialogBackdrop } from './dialog-backdrop';
 import { Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,7 +6,7 @@ import X from 'lucide-react-native/icons/x';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
 import { useTranslation } from '../i18n';
-import { Button, Heading, Inline, Text } from './primitives';
+import { Button, ConfirmCancelFocus, Heading, Inline, Text } from './primitives';
 
 /** Kept for screen readers and focus, out of sight. */
 const visuallyHidden = { position: 'absolute' as const, width: 1, height: 1, overflow: 'hidden' as const, opacity: 0 };
@@ -27,7 +27,7 @@ function webDialogName(title: string): object {
   return Platform.OS === 'web' ? { 'aria-label': title } : {};
 }
 
-export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, footerStart, headerActions, headerNote, reading = false, anchored = false, wide = false, fillContent = false }: {
+export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, footerStart, headerActions, headerNote, reading = false, anchored = false, wide = false, fillContent = false, preferCancel = false }: {
   title: string;
   busy: boolean;
   onClose(): void;
@@ -36,8 +36,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   size?: 'standard' | 'editor' | 'sheet';
   /**
    * Desktop web presents a nonmodal resource pane below the workspace header.
-   * Its steps and confirmations stay there. Native wide windows retain their
-   * existing docked modal presentation.
+   * Native wide windows use the docked modal presentation.
    */
   docked?: boolean;
   footer?: ReactNode;
@@ -55,9 +54,17 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   wide?: boolean;
   /** The content fills the viewport and handles its own scrolling. */
   fillContent?: boolean;
+  preferCancel?: boolean;
 }) {
   const panel = useRef<View>(null);
   const initial = useRef<View>(null);
+  const cancel = useRef<View>(null);
+  const [cancelReady, setCancelReady] = useState(false);
+  const registerCancel = useCallback((control: View | null) => {
+    cancel.current = control;
+    setCancelReady(control !== null);
+  }, []);
+  const initialFocus = useMemo(() => ({ get current() { return cancel.current ?? initial.current; } }), []);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const side = docked && width >= theme.layout.navigationBreakpoint;
@@ -71,15 +78,18 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   const bottomSheet = size === 'sheet' && width < theme.layout.editorSheetBreakpoint;
   const [sheetAction, setSheetAction] = useState<SheetAction | null>(null);
   const close = useCallback(() => { if (!busy) onClose(); }, [busy, onClose]);
-  const focus = useOverlayFocus({ mode: popover ? 'closed' : pane ? 'pane' : 'dialog', panel, initial, trigger, onClose: close });
+  const focus = useOverlayFocus({ mode: popover ? 'closed' : pane ? 'pane' : 'dialog', panel, initial: initialFocus, trigger, onClose: close });
   const previousTitle = useRef(title);
+  const confirmationBusy = preferCancel && busy;
+  // Let the focus outline extend beyond the scroll content without being clipped.
+  const focusInset = preferCancel && Platform.OS === 'web' ? theme.focus.width + theme.focus.offset : 0;
   // A dialog can replace its content with a confirmation step. Focus its safe
   // close action again; the element that opened that step may no longer exist.
   useEffect(() => {
     const changed = previousTitle.current !== title;
     previousTitle.current = title;
-    if ((!pane && !popover) || (pane && changed)) focus();
-  }, [title, focus, pane, popover]);
+    if ((!pane && !popover && !confirmationBusy) || (pane && changed)) focus();
+  }, [title, focus, pane, popover, cancelReady, confirmationBusy]);
   const commandKey = useCommandKeyLabel();
   const { t } = useTranslation();
   const entrance = usePaneEntrance(pane);
@@ -171,12 +181,18 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
                 keyboardShouldPersistTaps="handled"
                 scrollEnabled={!fillContent}
                 scrollsChildToFocus={!fillContent}
-                style={side || fillContent ? { flex: 1 } : { flexShrink: 1 }}
+                style={[
+                  side || fillContent ? { flex: 1 } : { flexShrink: 1 },
+                  focusInset ? { marginHorizontal: -focusInset } : undefined,
+                ]}
                 contentContainerStyle={[
                   sheet ? { paddingHorizontal: theme.spacing[3], paddingBottom: fillContent ? 0 : theme.spacing[6] } : undefined,
                   fillContent ? { flex: 1 } : undefined,
+                  focusInset ? { paddingHorizontal: focusInset, paddingBottom: focusInset } : undefined,
                 ]}
-              >{children}</ScrollView>
+              >
+                <ConfirmCancelFocus.Provider value={preferCancel ? registerCancel : null}>{children}</ConfirmCancelFocus.Provider>
+              </ScrollView>
             </SheetActionSlot.Provider>
             {footer ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], ...(sheet ? { paddingHorizontal: theme.spacing[3] } : {}) }}>{footer}</View> : null}
           </View>

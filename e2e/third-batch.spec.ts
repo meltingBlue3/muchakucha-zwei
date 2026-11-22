@@ -210,11 +210,11 @@ for (const role of ['OWNER', 'ADMIN', 'MEMBER']) {
     await expect(page).toHaveURL(`${base}/notes/${noteId}/delete`);
     await page.reload();
     await expect(page.getByRole('dialog', { name: '删除笔记', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '确认删除笔记', exact: true }).click();
+    await page.getByRole('button', { name: '删除笔记', exact: true }).click();
     await expect(page.getByText('删除失败，请检查网络后重试。')).toBeVisible();
     expect(deleted).toBe(false);
     fail = false;
-    await page.getByRole('button', { name: '确认删除笔记', exact: true }).click();
+    await page.getByRole('button', { name: '删除笔记', exact: true }).click();
     await expect(page).toHaveURL(`${base}/notes`);
     await expect(more).toHaveCount(0);
     expect(deleted).toBe(true);
@@ -224,8 +224,8 @@ for (const role of ['OWNER', 'ADMIN', 'MEMBER']) {
 // The deleted card cannot take focus back, so it falls to the page's create
 // button, whatever language its label is in.
 for (const [language, labels] of [
-  ['zh', { more: '更多操作：笔记：待删除笔记', delete: '删除笔记：待删除笔记', confirm: '确认删除笔记' }],
-  ['ja', { more: 'ノート：待删除笔记の操作メニュー', delete: 'ノートを削除：待删除笔记', confirm: 'ノートを削除する' }],
+  ['zh', { more: '更多操作：笔记：待删除笔记', delete: '删除笔记：待删除笔记', confirm: '删除笔记' }],
+  ['ja', { more: 'ノート：待删除笔记の操作メニュー', delete: 'ノートを削除：待删除笔记', confirm: 'ノートを削除' }],
 ] as const) {
   test.describe(`after deleting a note in ${language}`, () => {
     if (language === 'ja') test.use({ locale: 'ja-JP' });
@@ -270,6 +270,6 @@ test('member cannot delete another author note through the card or direct URL', 
   await page.keyboard.press('Escape');
   await page.goto(`${base}/notes/${noteId}/delete`);
   await expect(page.getByText('你没有删除这条笔记的权限。')).toBeVisible();
-  await expect(page.getByRole('button', { name: '确认删除笔记', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '删除笔记', exact: true })).toHaveCount(0);
   expect(writes).toBe(0);
 });

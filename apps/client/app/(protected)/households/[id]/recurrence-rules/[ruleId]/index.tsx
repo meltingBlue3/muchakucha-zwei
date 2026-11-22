@@ -49,7 +49,7 @@ function timeOf(rule: RecurrenceRuleListItemDto, allDay: string): string | null 
 /**
  * 重复安排详情: what the rule is and when it falls next, read before anything
  * is changed. 编辑 in the title bar opens the editor; 结束此重复 sits at the
- * foot and asks first, in the same window. An ended rule offers neither.
+ * foot and asks first in a centered confirmation window. An ended rule offers neither.
  */
 export default function RecurrenceRuleDetailRoute() {
   const { t } = useTranslation(['recurrence', 'auth', 'households', 'events']);
@@ -74,6 +74,8 @@ export default function RecurrenceRuleDetailRoute() {
   const [error, setError] = useState<'auth:errors.sessionExpired' | 'rule.loadError' | 'rule.notFound' | null>(null);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [ending, setEnding] = useState(false);
+  const submittingEnd = useRef(false);
+  const endTrigger = useRef<View>(null);
   const [endError, setEndError] = useState<'rule.endError' | 'rule.endForbidden' | null>(null);
 
   const householdId = id ?? currentHouseholdId;
@@ -109,7 +111,8 @@ export default function RecurrenceRuleDetailRoute() {
 
   // Only the confirm action writes; 结束此重复 merely opens the question.
   const handleConfirmEnd = useCallback(async () => {
-    if (householdId === undefined || householdId === '' || ruleId === undefined || ruleId === '') return;
+    if (householdId === undefined || householdId === '' || ruleId === undefined || ruleId === '' || submittingEnd.current) return;
+    submittingEnd.current = true;
     setEnding(true);
     setEndError(null);
     try {
@@ -127,6 +130,7 @@ export default function RecurrenceRuleDetailRoute() {
     } catch (caught: unknown) {
       setEndError(caught instanceof ApiClientError && caught.status === 403 ? 'rule.endForbidden' : 'rule.endError');
     } finally {
+      submittingEnd.current = false;
       setEnding(false);
     }
   }, [householdId, ruleId, dismiss]);
@@ -157,14 +161,15 @@ export default function RecurrenceRuleDetailRoute() {
   const formatted = rule === null ? null : formatRuleRow(rule, deviceTimeZone);
   const ended = formatted?.ended ?? false;
   const writable = rule !== null && !ended;
-  const close = () => {
-    if (endConfirmOpen) { setEndConfirmOpen(false); setEndError(null); } else dismiss();
+  const cancelEnd = () => {
+    if (submittingEnd.current) return;
+    setEndConfirmOpen(false);
+    setEndError(null);
   };
-  // A phone asks in a compact dialog; the wide pane keeps its place and asks inside it.
-  const size = endConfirmOpen && !desktop ? 'standard' : 'editor';
-  const footer = writable && !endConfirmOpen ? (
+  const footer = writable ? (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       <Pressable
+        ref={endTrigger}
         accessibilityRole="button"
         accessibilityLabel={t('rule.endAction')}
         disabled={ending}
@@ -179,21 +184,25 @@ export default function RecurrenceRuleDetailRoute() {
   return (
     <RouteWindow
       resource="recurrence-rules"
-      size={size}
-      title={endConfirmOpen ? t('rule.endTitle') : t('rule.detail')}
+      title={t('rule.detail')}
       busy={ending}
-      onClose={close}
-      onBackStep={endConfirmOpen ? close : undefined}
       exitAllowed={exitAllowed}
       fallback={<RecurrenceListScreen />}
+      centeredConfirmation={endConfirmOpen ? {
+        title: t('rule.endTitle'),
+        trigger: endTrigger,
+        onClose: cancelEnd,
+        content: <Stack gap={3}>
+          <Text variant="label">{rule?.title}</Text>
+          <Text>{t('rule.endPrompt')}</Text>
+          {endError ? <Banner>{t(endError)}</Banner> : null}
+          <ConfirmActions confirmLabel={t('rule.confirmEnd')} destructive alignEnd busy={ending} onCancel={cancelEnd} onConfirm={() => { void handleConfirmEnd(); }} />
+        </Stack>,
+      } : undefined}
       {...(footer ? { footer } : {})}
-      {...(writable && !endConfirmOpen ? { headerActions: <DetailEditButton accessibilityLabel={t('rule.edit')} disabled={ending} onPress={handleEdit} /> } : {})}
+      {...(writable ? { headerActions: <DetailEditButton accessibilityLabel={t('rule.edit')} disabled={ending} onPress={handleEdit} /> } : {})}
     >
-      {endConfirmOpen ? <Stack gap={3}>
-        <Text>{t('rule.endPrompt')}</Text>
-        {endError ? <Banner>{t(endError)}</Banner> : null}
-        <ConfirmActions confirmLabel={t('rule.confirmEnd')} destructive busy={ending} onCancel={close} onConfirm={() => { void handleConfirmEnd(); }} />
-      </Stack> : <Stack gap={desktop ? 4 : 5}>
+      <Stack gap={desktop ? 4 : 5}>
         {loading ? <LoadingState label={t('rule.loading')} /> : null}
         {error !== null ? <LoadError message={t(error)} onRetry={() => void fetchRule()} /> : null}
         {rule !== null && formatted !== null ? <>
@@ -205,7 +214,7 @@ export default function RecurrenceRuleDetailRoute() {
           <RuleFields rule={rule} summary={formatted.summary} notes={[formatted.clampNote, formatted.timeZoneNote]} ended={ended} todayIso={todayIso} />
           {ended ? <Text color="inkMuted">{t('rule.endedNote')}</Text> : <Upcoming rule={rule} todayIso={todayIso} />}
         </> : null}
-      </Stack>}
+      </Stack>
     </RouteWindow>
   );
 }

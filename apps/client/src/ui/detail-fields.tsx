@@ -25,9 +25,9 @@ export function DetailEditButton({ accessibilityLabel, onPress, disabled = false
  * opener — the confirmation that follows does the deleting. Its text lines up
  * with the pane's content.
  */
-export function FooterDestructiveAction({ label, accessibilityLabel = label, onPress, disabled = false }: { label: string; accessibilityLabel?: string; onPress(): void; disabled?: boolean }) {
+export function FooterDestructiveAction({ label, accessibilityLabel = label, onPress, disabled = false, ref }: { label: string; accessibilityLabel?: string; onPress(): void; disabled?: boolean; ref?: React.Ref<View> }) {
   const desktop = useDesktop();
-  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} disabled={disabled} accessibilityState={{ disabled }} onPress={onPress} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ minHeight: desktop ? theme.layout.desktopControl : theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed || hovered ? theme.colors.destructiveSoft : theme.colors.transparent })}>
+  return <Pressable ref={ref} accessibilityRole="button" accessibilityLabel={accessibilityLabel} disabled={disabled} accessibilityState={{ disabled }} onPress={onPress} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ minHeight: desktop ? theme.layout.desktopControl : theme.controlSizes.touchTarget, justifyContent: 'center', paddingHorizontal: theme.spacing[2], borderRadius: theme.borderRadii.md, backgroundColor: pressed || hovered ? theme.colors.destructiveSoft : theme.colors.transparent })}>
     <Text variant="label" color={disabled ? 'inkMuted' : 'destructive'}>{label}</Text>
   </Pressable>;
 }

@@ -273,19 +273,20 @@ test('card deletion confirms, removes the event, and returns to Today', async ({
   await more.click();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole('menuitem', { name: /^删除日程：/ }).click();
-  await page.getByRole('button', { name: '取消删除', exact: true }).click();
+  await page.getByRole('dialog', { name: '删除日程', exact: true }).getByRole('button', { name: '取消', exact: true }).click();
   await expect(more).toBeFocused();
   expect(events.has(eventId)).toBe(true);
   await more.click();
   await page.getByRole('menuitem', { name: /^删除日程：/ }).click();
-  await page.getByRole('button', { name: '确认删除日程', exact: true }).click();
+  await page.getByRole('dialog', { name: '删除日程', exact: true }).getByRole('button', { name: '删除日程', exact: true }).click();
   await expect(page).toHaveURL(`${base}/today`);
   await expect(page.getByRole('button', { name: /^日程：/ })).toHaveCount(0);
   expect(events.has(eventId)).toBe(false);
 });
 
-test('recurring card deletion submits the selected series scope', async ({ page }) => {
+test('recurring card deletion submits the selected series scope', async ({ page }, testInfo) => {
   await setup(page);
+  await page.setViewportSize({ width: 320, height: 700 });
   const recurring = { ...initialEvent, recurrenceRuleId: 'rule', recurrence: { frequency: 'daily', interval: 1 } };
   await page.route(`**/api/v1/households/${householdId}/events/${eventId}`, route => route.fulfill({ json: recurring }));
   let selectedScope: string | null = null;
@@ -296,10 +297,25 @@ test('recurring card deletion submits the selected series scope', async ({ page 
   await page.goto(`${base}/events`);
   await page.getByRole('button', { name: /^更多操作：日程：/ }).click();
   await page.getByRole('menuitem', { name: /^删除日程：/ }).click();
-  await expect(page.getByRole('radio', { name: '仅此一次', exact: true })).toBeChecked();
-  await page.getByRole('button', { name: '确认删除日程', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '删除日程', exact: true });
+  const panel = (await dialog.getByTestId('app-dialog-panel').boundingBox())!;
+  expect(panel.x).toBeGreaterThan(0);
+  expect(panel.x + panel.width).toBeLessThan(320);
+  expect(Math.abs(panel.x + panel.width / 2 - 160)).toBeLessThan(2);
+  expect(Math.abs(panel.y + panel.height / 2 - 350)).toBeLessThan(2);
+  await expect(dialog.getByText(initialEvent.title, { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('radio', { name: '仅删除这一次', exact: true })).toBeChecked();
+  await expect(dialog.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('delete-repeat-320.png') });
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: '删除日程', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: '关闭删除日程', exact: true })).toBeFocused();
+  await dialog.getByRole('radio', { name: '删除这一次及之后的重复', exact: true }).click();
+  expect(selectedScope).toBeNull();
+  await dialog.getByRole('button', { name: '删除日程', exact: true }).click();
   await expect(page).toHaveURL(`${base}/events`);
-  expect(selectedScope).toBe('this_only');
+  expect(selectedScope).toBe('this_and_following');
 });
 
 test('Today floating creation menu offers three destinations', async ({ page }) => {
