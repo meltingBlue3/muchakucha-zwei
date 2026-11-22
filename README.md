@@ -1,6 +1,6 @@
 # Muchakucha Zwei（ムチャクチャ 2号）
 
-Muchakucha Zwei 是一款移动优先的家庭协作应用，帮助家人共同管理日程、任务、笔记和标签。Android 与 iOS 为主要平台，Web 提供宽屏工作空间。
+Muchakucha Zwei 是一款家庭协作应用，帮助家人共同管理日程、任务、笔记和标签。Android、iOS 和 Web 同为一等平台，Web 在宽屏上提供多栏工作空间。
 
 ## 功能
 

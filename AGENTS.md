@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Muchakucha Zwei is a mobile-first family app for shared calendars, tasks, notes, and labels. Android and iOS are primary; Web is secondary. It is a fresh rebuild with no legacy code or data migration.
+Muchakucha Zwei is a family app for shared calendars, tasks, notes, and labels. Android, iOS, and Web are equally first-class platforms. It is a fresh rebuild with no legacy code or data migration.
 
 This file is the always-loaded entry point. Load a playbook when its row matches the request, and leave the rest unread.
 
