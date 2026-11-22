@@ -9,6 +9,7 @@ import { ApiClientError, type GetHouseholdMemberDto, type LabelListItemDto, type
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import { canManageLabels } from '../../../../../src/features/labels/label-permissions';
+import { LabelColorChoices } from '../../../../../src/features/labels/label-color-choices';
 import { HouseholdScreen } from '../../../../../src/features/households/household-screen';
 import { ListGroup, ListRow } from '../../../../../src/ui/list-group';
 import { AppDialog } from '../../../../../src/ui/app-dialog';
@@ -53,7 +54,6 @@ export default function LabelsIndexRoute() {
   const [nameError, setNameError] = useState<'nameRequired' | null>(null);
   const nameInput = useRef<TextInput>(null);
   const trigger = useRef(getRouteTrigger());
-  const swatch = theme.controlSizes.touchTarget - theme.spacing[3];
   const previewName = name.trim() || t('name');
   const swatches = action && action.kind !== 'create' && !presetFor(action.label.color) ? [action.label.color, ...labelColorPresets] : labelColorPresets;
   // A series counts once. No usage at all means a server from before the
@@ -204,12 +204,7 @@ export default function LabelsIndexRoute() {
           <TextField ref={nameInput} autoFocus={!desktop && focusFieldOnOpen} label={action.kind === 'create' ? t('name') : t('editName')} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameError(null); }} maxLength={40} disabled={busy} {...(nameError === null ? {} : { error: t(nameError) })} returnKeyType="done" onSubmitEditing={() => void submit()} />
           <Stack gap={2}>
             <Text variant="label">{t('color')}</Text>
-            <View accessibilityRole="radiogroup" accessibilityLabel={t('colorGroup')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] }}>
-              {/* A wide pane shows each colour as a full swatch and rings the chosen one; a phone keeps small dots in outlined targets. */}
-              {swatches.map(preset => <Pressable key={preset} accessibilityRole="radio" accessibilityLabel={t('chooseColor', { color: preset })} accessibilityState={{ checked: color === preset, disabled: busy }} aria-checked={color === preset} disabled={busy} onPress={() => setColor(preset)} style={{ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, borderWidth: desktop ? theme.borderWidths.focus : theme.borderWidths.default, borderColor: color === preset ? theme.colors.ink : desktop ? theme.colors.transparent : theme.colors.separator }}>
-                <View style={{ width: desktop ? swatch : theme.controlSizes.icon, height: desktop ? swatch : theme.controlSizes.icon, borderRadius: theme.borderRadii.full, backgroundColor: preset }} />
-              </Pressable>)}
-            </View>
+            <LabelColorChoices colors={swatches} value={color} onChange={setColor} disabled={busy} wide={desktop} />
           </Stack>
           {desktop ? <Stack gap={2}><Text variant="label">{t('preview')}</Text>
             {/* The label as it will appear: a chip, on a task row and on a calendar block. */}
