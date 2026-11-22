@@ -350,6 +350,25 @@ describe('labels API contract', () => {
       expect(current.statusCode).toBe(204);
     });
 
+    test('an edit sent with the name and colour it was read with fails once the label has changed', async () => {
+      const labelId = await createLabel(owner, householdId, '旧名');
+      expect((await householdApi(admin, householdId, 'PUT', `/labels/${labelId}`, { color: '#2C716C' })).statusCode).toBe(200);
+
+      const stale = await householdApi(owner, householdId, 'PUT', `/labels/${labelId}`, { name: '覆盖', expectedName: '旧名', expectedColor: '#EF4444' });
+      expect(stale.statusCode).toBe(409);
+      expect(stale.json().error.code).toBe('EDIT_CONFLICT');
+      expect((await householdApi(owner, householdId, 'GET', '/labels')).json().labels)
+        .toEqual([expect.objectContaining({ name: '旧名', color: '#2C716C' })]);
+
+      const half = await householdApi(owner, householdId, 'PUT', `/labels/${labelId}`, { name: '覆盖', expectedName: '旧名' });
+      expect(half.statusCode).toBe(400);
+      expect(half.json().error.details).toEqual([expect.objectContaining({ field: 'expectedColor' })]);
+
+      const current = await householdApi(owner, householdId, 'PUT', `/labels/${labelId}`, { name: '覆盖', expectedName: '旧名', expectedColor: '#2C716C' });
+      expect(current.statusCode).toBe(200);
+      expect(await labelNamesOf(owner, householdId, '/labels')).toEqual(['覆盖']);
+    });
+
     test('updates name and color independently', async () => {
       const labelId = await createLabel(owner, householdId, '旧名');
 
@@ -473,6 +492,20 @@ describe('labels API contract', () => {
       const cleared = await householdApi(member, householdId, 'PUT', path, { labelIds: [] });
       expect(cleared.statusCode).toBe(200);
       expect(await labelNamesOf(member, householdId, path)).toEqual([]);
+    });
+
+    // The calendar colours an item by its first label, so that order has to be
+    // one the family can predict: the household list's, not the click order.
+    test('an item lists its labels in the household order, whatever order they were chosen in', async () => {
+      const entityId = await createEntity(owner, householdId, '多个标签', [sportId, medicalId, schoolId]);
+
+      const household = (await householdApi(owner, householdId, 'GET', '/labels')).json().labels as Array<{ id: string }>;
+      const item = (await householdApi(owner, householdId, 'GET', `/${collection}/${entityId}`)).json().labels as Array<{ id: string }>;
+      const listed = (await householdApi(owner, householdId, 'GET', `/${collection}`)).json()[collection] as Array<{ id: string; labels: Array<{ id: string }> }>;
+
+      const order = household.map((label) => label.id);
+      expect(item.map((label) => label.id)).toEqual(order);
+      expect(listed.find((row) => row.id === entityId)!.labels.map((label) => label.id)).toEqual(order);
     });
 
     test('a label id sent twice is stored once', async () => {

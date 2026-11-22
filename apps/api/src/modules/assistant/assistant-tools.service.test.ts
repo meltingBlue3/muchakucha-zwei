@@ -114,6 +114,19 @@ describe('assistant tool boundary', () => {
     await expect(tools.execute(actor, call(name as string, args as Record<string, unknown>))).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED' } });
   });
 
+  test.each([
+    ['create_task', { title: '体检', labelIds: [recordId] }],
+    ['create_event', { title: '体检', startTime: '2026-10-04T09:00:00Z', endTime: '2026-10-04T10:00:00Z', labelIds: [recordId] }],
+  ] as const)('%s offers labels and saves them with the new item', async (name, args) => {
+    const { tools, tasks, events } = fixtures();
+    const definition = tools.definitions().find(tool => tool.name === name)!;
+    expect((definition.parameters as { properties: Record<string, unknown> }).properties).toHaveProperty('labelIds');
+
+    await tools.execute(actor, call(name, { ...args }));
+    expect((name === 'create_task' ? tasks : events).create)
+      .toHaveBeenCalledWith(actor.userId, actor.householdId, expect.objectContaining({ labelIds: [recordId] }));
+  });
+
   test('rejects unknown nested recurrence properties and unsupported series updates', async () => {
     const { tools, events, tasks } = fixtures();
     await expect(tools.execute(actor, call('create_task', {

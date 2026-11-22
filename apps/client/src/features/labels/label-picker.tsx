@@ -45,6 +45,14 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPi
     return () => { cancelled = true; };
   }, [householdId, attempt]);
 
+  // A draft can outlive a label someone deleted. It cannot be shown here to
+  // unselect, and saving it would be refused, so drop it once the list is known.
+  useEffect(() => {
+    if (loading || failed) return;
+    const known = selectedLabelIds.filter((id) => allLabels.some((label) => label.id === id));
+    if (known.length !== selectedLabelIds.length) onChange(known);
+  }, [allLabels, loading, failed, selectedLabelIds, onChange]);
+
   const handleToggle = useCallback(
     (label: LabelResponseDto) => {
       if (selectedLabelIds.includes(label.id)) {

@@ -1,4 +1,5 @@
 import { lockContent, replaceLabels } from '../shared/edit-version.js';
+import { labelsByName } from '../shared/labels-by-name.js';
 import { readReminderChoice, readReminderChoices, writeReminderChoice } from '../shared/reminder-overrides.js';
 import type { ReminderChoiceDto } from '../reminders/dto/reminder.dto.js';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -313,7 +314,7 @@ export class EventsService {
       await this.generateNewSeries(created.ruleId);
       const event = await this.prisma.event.findUniqueOrThrow({
         where: { id: created.eventId },
-        include: { labels: { include: { label: true } }, recurrenceRule: true },
+        include: { labels: labelsByName, recurrenceRule: true },
       });
       return this.toResponse(event, await readReminderChoice(this.prisma, actorId, 'event', event));
     }
@@ -337,7 +338,7 @@ export class EventsService {
       }
       return tx.event.findUniqueOrThrow({
         where: { id: created.id },
-        include: { labels: { include: { label: true } }, recurrenceRule: true },
+        include: { labels: labelsByName, recurrenceRule: true },
       });
     });
 
@@ -411,7 +412,7 @@ export class EventsService {
       this.prisma.event.findMany({
         where,
         orderBy: { startTime: 'asc' },
-        include: { labels: { include: { label: true } }, recurrenceRule: true },
+        include: { labels: labelsByName, recurrenceRule: true },
       }),
       // The monotonic watermark means an ended rule's watermark is frozen
       // in the past forever. Counting it into the household _min would
@@ -441,7 +442,7 @@ export class EventsService {
 
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      include: { labels: { include: { label: true } }, recurrenceRule: true },
+      include: { labels: labelsByName, recurrenceRule: true },
     });
     if (event === null || event.householdId !== householdId) {
       throw new NotFoundException({ code: 'EVENT_NOT_FOUND', message: 'Event not found.' });
@@ -527,7 +528,7 @@ export class EventsService {
       }
       return tx.event.update({
         where: { id: eventId }, data: { ...data, updatedAt },
-        include: { labels: { include: { label: true } }, recurrenceRule: true },
+        include: { labels: labelsByName, recurrenceRule: true },
       });
     });
 
@@ -535,7 +536,7 @@ export class EventsService {
     await this.generateNewSeries(updated.recurrenceRuleId!);
     const converted = await this.prisma.event.findUniqueOrThrow({
       where: { id: eventId },
-      include: { labels: { include: { label: true } }, recurrenceRule: true },
+      include: { labels: labelsByName, recurrenceRule: true },
     });
     return this.toResponse(converted, await readReminderChoice(this.prisma, actorId, 'event', converted));
   }

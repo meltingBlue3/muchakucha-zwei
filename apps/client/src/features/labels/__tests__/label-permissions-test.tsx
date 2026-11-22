@@ -1,4 +1,5 @@
-import { render, waitFor } from '@testing-library/react-native';
+import { ApiClientError } from '@muchakucha/api-client';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import LabelsIndexRoute from '../../../../app/(protected)/households/[id]/labels/index';
@@ -6,6 +7,7 @@ import { canManageLabels } from '../label-permissions';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 
 const mockListLabels = jest.fn();
+const mockUpdateLabel = jest.fn();
 const mockRole = { current: 'MEMBER' as 'OWNER' | 'ADMIN' | 'MEMBER' };
 
 jest.mock('expo-router', () => ({ usePathname: () => '/',
@@ -21,6 +23,7 @@ jest.mock('../../auth/session-runtime', () => ({
   sessionStateStore: jest.requireActual('../../auth/session-state').createSessionStateStore(),
   sessionApiClient: {
     listLabels: (...args: unknown[]) => mockListLabels(...args),
+    updateLabel: (...args: unknown[]) => mockUpdateLabel(...args),
   },
   sessionTransport: {
     getAccessToken: () => Promise.resolve('access-token'),
@@ -69,6 +72,7 @@ async function renderAs(actorRole: 'OWNER' | 'ADMIN' | 'MEMBER', labels = [
 
 beforeEach(() => {
   mockListLabels.mockReset();
+  mockUpdateLabel.mockReset();
 });
 
 describe('canManageLabels', () => {
@@ -115,5 +119,52 @@ describe('labels screen offers only the actions the API will accept', () => {
     await waitFor(() => expect(queryByText(/还没有标签/)).not.toBeNull());
     expect(queryByText(/使用上方表单创建标签/)).toBeNull();
     expect(queryByText(/所有者或管理员创建后/)).not.toBeNull();
+  });
+});
+
+describe('editing a label someone else has just changed', () => {
+  test('shows its current name, keeps what was typed, and saves against the new version', async () => {
+    const original = { id: 'label-1', householdId: 'household-1', name: '采购', color: '#B5562F', createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z' };
+    const renamed = { ...original, name: '买菜' };
+    mockUpdateLabel
+      .mockRejectedValueOnce(new ApiClientError(409, { error: { code: 'EDIT_CONFLICT' } }))
+      .mockResolvedValueOnce({ ...renamed, name: '日用品' });
+    const view = await renderAs('OWNER', [original]);
+    mockListLabels.mockResolvedValue({ labels: [renamed] });
+
+    await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
+    await fireEvent.press(view.getByRole('menuitem', { name: '编辑标签 采购' }));
+    await fireEvent.changeText(view.getByLabelText('编辑标签名称'), '日用品');
+    await fireEvent.press(view.getByRole('button', { name: '保存' }));
+
+    await view.findByText('这个标签刚被改成了「买菜」。你填写的内容还在，再保存一次会覆盖这次修改。');
+    expect(view.getByLabelText('编辑标签名称').props.value).toBe('日用品');
+    expect(mockUpdateLabel).toHaveBeenLastCalledWith('access-token', 'household-1', 'label-1', { name: '日用品', color: '#B5562F', expectedName: '采购', expectedColor: '#B5562F' });
+
+    await fireEvent.press(view.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(mockUpdateLabel).toHaveBeenCalledTimes(2));
+    expect(mockUpdateLabel).toHaveBeenLastCalledWith('access-token', 'household-1', 'label-1', { name: '日用品', color: '#B5562F', expectedName: '买菜', expectedColor: '#B5562F' });
+  });
+});
+
+describe('editing a label whose colour is not one of the presets', () => {
+  test('offers that colour, already chosen, beside the presets', async () => {
+    const view = await renderAs('OWNER', [{ id: 'label-1', name: '采购', color: '#EF4444', createdAt: '2026-11-01T00:00:00.000Z' }]);
+
+    await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
+    await fireEvent.press(view.getByRole('menuitem', { name: '编辑标签 采购' }));
+
+    expect(view.getByRole('radio', { name: '选择颜色 #EF4444', checked: true })).toBeTruthy();
+    expect(view.getByRole('radio', { name: '选择颜色 #B5562F', checked: false })).toBeTruthy();
+  });
+
+  test('matches a preset written in lower case', async () => {
+    const view = await renderAs('OWNER', [{ id: 'label-1', name: '采购', color: '#b5562f', createdAt: '2026-11-01T00:00:00.000Z' }]);
+
+    await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
+    await fireEvent.press(view.getByRole('menuitem', { name: '编辑标签 采购' }));
+
+    expect(view.getByRole('radio', { name: '选择颜色 #B5562F', checked: true })).toBeTruthy();
+    expect(view.queryByRole('radio', { name: '选择颜色 #b5562f' })).toBeNull();
   });
 });

@@ -2194,7 +2194,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateLabelDto"
+                "$ref": "#/components/schemas/UpdateLabelRequestDto"
               }
             }
           }
@@ -4871,7 +4871,7 @@
           "total"
         ]
       },
-      "UpdateLabelDto": {
+      "UpdateLabelRequestDto": {
         "type": "object",
         "properties": {
           "name": {
@@ -4884,6 +4884,14 @@
             "type": "string",
             "description": "Hex color (e.g. #EF4444)",
             "pattern": "^#[0-9A-Fa-f]{6}$"
+          },
+          "expectedName": {
+            "type": "string",
+            "description": "Name read before editing; with expectedColor, a changed label returns 409 EDIT_CONFLICT."
+          },
+          "expectedColor": {
+            "type": "string",
+            "description": "Colour read before editing; sent with expectedName."
           }
         }
       },

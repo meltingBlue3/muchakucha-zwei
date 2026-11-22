@@ -1011,6 +1011,7 @@ export const zh = {
     refreshError: '刷新失败，仍显示上次的标签。请重试。',
     deleteError: '删除失败，请检查网络或权限后重试。',
     deleteChanged: '这个标签刚被修改过，这里已是最新的名称和颜色。确认仍要删除吗？',
+    editChanged: '这个标签刚被改成了「{{name}}」。你填写的内容还在，再保存一次会覆盖这次修改。',
     saveError: '保存失败，请检查名称是否重复、网络或权限后重试。',
     create: '创建标签',
     edit: '编辑标签',
