@@ -11,7 +11,7 @@ This file is the always-loaded entry point. Load a playbook when its row matches
 - `packages/api-client/` — the generated OpenAPI contract and TypeScript client. Generated output only.
 - `packages/lunar/` — the Chinese lunar calendar, solar terms and festivals, shared as TypeScript source by the client and the API.
 - `packages/wareki/` — Japanese era years and public holidays, shared the same way; it takes the equinox days from `packages/lunar`.
-- `e2e/` — Playwright specs. `docs/` — design and agent playbooks. `scripts/` — contract-drift and test helpers.
+- `e2e/` — Playwright specs. `docs/` — design and agent playbooks; `docs/adr/` holds decision records, so read the matching one before reversing a decision. `scripts/` — contract-drift and test helpers.
 
 ## Start at the target
 
