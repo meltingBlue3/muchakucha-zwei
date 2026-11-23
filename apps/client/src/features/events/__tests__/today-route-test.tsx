@@ -175,8 +175,8 @@ test('on desktop loads the full visible month grid for the mini calendar and ref
     const octLate = event('月底聚餐', '2026-10-28T18:00:00', '2026-10-28T20:00:00');
     const novMid = event('十一月安排', '2026-11-18T09:00:00', '2026-11-18T10:00:00');
     mockListEvents.mockImplementation((_token: string, _id: string, start: string, end: string) => {
-      if (start === '2026-09-28' && end === '2026-11-01') return Promise.resolve({ events: [today, octLate] });
-      if (start === '2026-10-26' && end === '2026-12-06') return Promise.resolve({ events: [octLate, novMid] });
+      if (start === '2026-09-28' && end === '2026-11-02') return Promise.resolve({ events: [today, octLate] });
+      if (start === '2026-10-26' && end === '2026-12-07') return Promise.resolve({ events: [octLate, novMid] });
       return Promise.resolve({ events: start === '2026-10-11' ? [today] : [] });
     });
     mockListTasks.mockResolvedValue({
@@ -202,6 +202,8 @@ test('on desktop loads the full visible month grid for the mini calendar and ref
     // Switching to November loads November's grid without losing Today's timeline.
     await fireEvent.press(view.getByRole('button', { name: '下个月' }));
     expect(view.getByRole('button', { name: '2026年11月18日，1 项安排' })).toBeTruthy();
+    await fireEvent.press(view.getByRole('button', { name: '上个月' }));
+    expect(view.getByRole('button', { name: '2026年10月28日，2 项安排' })).toBeTruthy();
     expect(view.getByTestId('today-timeline')).toBeTruthy();
     await act(async () => { view.unmount(); });
   } finally {

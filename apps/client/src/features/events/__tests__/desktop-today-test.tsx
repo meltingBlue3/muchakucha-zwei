@@ -15,7 +15,7 @@ const pickUp: TaskResponseDto = { id: 'parcel', householdId: 'home', title: '取
 
 const renderToday = (events: EventResponseDto[], upcomingEvents: EventResponseDto[], props: Partial<ComponentProps<typeof DesktopToday>> = {}) => render(
   <MuchakuchaThemeProvider>
-    <DesktopToday detail={null} date="2026-11-10" nowMinutes={10 * 60 + 42} events={events} todayTasks={[]} overdue={[]} unscheduled={[]} upcoming={[]} upcomingEvents={upcomingEvents} renderTask={() => null} taskCompletion={() => ({ onToggleComplete: () => undefined, statusChanging: false, statusError: null })} onOpenEvent={() => undefined} onOpenTask={() => undefined} onSelectDate={() => undefined} onOpenCalendar={() => undefined} onOpenTasks={() => undefined} onCreateTask={() => undefined} {...props} />
+    <DesktopToday detail={null} date="2026-11-10" nowMinutes={10 * 60 + 42} events={events} todayTasks={[]} overdue={[]} unscheduled={[]} upcoming={[]} upcomingEvents={upcomingEvents} dayCounts={undefined} calendarMonth={new Date(2026, 10, 1)} calendarStatus="ready" onCalendarMonthChange={() => undefined} onCalendarRetry={() => undefined} renderTask={() => null} taskCompletion={() => ({ onToggleComplete: () => undefined, statusChanging: false, statusError: null })} onOpenEvent={() => undefined} onOpenTask={() => undefined} onSelectDate={() => undefined} onOpenCalendar={() => undefined} onOpenTasks={() => undefined} onCreateTask={() => undefined} {...props} />
   </MuchakuchaThemeProvider>,
 );
 
@@ -142,8 +142,6 @@ test('the mini calendar renders color-scaled superscript counts, hides zeros, an
 
     await fireEvent.press(view.getByRole('button', { name: '下个月' }));
     expect(onCalendarMonthChange).toHaveBeenCalledWith(2026, 11);
-    await fireEvent.press(view.getByRole('button', { name: '上个月' }));
-    expect(onCalendarMonthChange).toHaveBeenCalledWith(2026, 10);
   } finally {
     jest.useRealTimers();
   }
