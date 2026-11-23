@@ -275,6 +275,11 @@ test('desktop family switching is anchored and date controls fit their popover',
   const picker = page.getByRole('dialog', { name: '选择日期', exact: true });
   await expect(picker).toBeVisible();
   const pickerBox = (await picker.boundingBox())!;
+  const days = picker.getByRole('button', { name: /^\d{4}年\d{1,2}月\d{1,2}日/ });
+  const firstDay = (await days.nth(0).boundingBox())!;
+  const sameDayNextWeek = (await days.nth(7).boundingBox())!;
+  expect(firstDay.height).toBe(28);
+  expect(sameDayNextWeek.y - firstDay.y).toBe(32);
   for (const button of await picker.getByRole('button').all()) {
     const buttonBox = (await button.boundingBox())!;
     expect(buttonBox.x).toBeGreaterThanOrEqual(pickerBox.x);
@@ -878,51 +883,127 @@ for (const width of [320, 1440]) {
   });
 }
 
-test('today mini calendar displays color-scaled superscript item counts across months', async ({ page }, testInfo) => {
-  await setup(page);
-  const denseEvents = [
-    // Today (Nov 10): 2 events (+ 1 task from setup => 3 items -> medium ochre)
-    { id: 'e-span', householdId, title: '全家旅行', startTime: '2026-11-09T00:00:00+08:00', endTime: '2026-11-12T00:00:00+08:00', allDay: true, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null },
-    { id: 'e-today', householdId, title: '朵朵家长会', startTime: '2026-11-10T10:00:00+08:00', endTime: '2026-11-10T11:30:00+08:00', allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null },
-    // Nov 18: 5 events -> high vermilion
-    ...Array.from({ length: 5 }, (_, i) => ({ id: `e-high-${i}`, householdId, title: `忙碌事项 ${i + 1}`, startTime: `2026-11-18T${String(9 + i).padStart(2, '0')}:00:00+08:00`, endTime: `2026-11-18T${String(10 + i).padStart(2, '0')}:00:00+08:00`, allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null })),
-    // Nov 25: 8 events -> heavy crimson
-    ...Array.from({ length: 8 }, (_, i) => ({ id: `e-heavy-${i}`, householdId, title: `密集行程 ${i + 1}`, startTime: `2026-11-25T${String(8 + i).padStart(2, '0')}:00:00+08:00`, endTime: `2026-11-25T${String(9 + i).padStart(2, '0')}:00:00+08:00`, allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null })),
-  ];
-  const decEvents = [
-    { id: 'e-dec-1', householdId, title: '年末体检', startTime: '2026-12-15T09:00:00+08:00', endTime: '2026-12-15T11:00:00+08:00', allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null },
-  ];
-  await page.route(url => url.pathname.endsWith('/events'), route => {
-    const start = new URL(route.request().url()).searchParams.get('startDate');
-    const end = new URL(route.request().url()).searchParams.get('endDate');
-    if (start === '2026-11-30' && end === '2027-01-03') return route.fulfill({ json: { events: decEvents } });
-    return route.fulfill({ json: { events: denseEvents } });
+test.describe('today mini calendar in Asia/Shanghai', () => {
+  test.use({ timezoneId: 'Asia/Shanghai' });
+
+  test('today mini calendar displays color-scaled superscript item counts across months', async ({ page }, testInfo) => {
+    await setup(page);
+    const denseEvents = [
+      // Today (Nov 10): 2 events (+ 1 task from setup => 3 items -> medium ochre)
+      { id: 'e-span', householdId, title: '全家旅行', startTime: '2026-11-09T00:00:00+08:00', endTime: '2026-11-12T00:00:00+08:00', allDay: true, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null },
+      { id: 'e-today', householdId, title: '朵朵家长会', startTime: '2026-11-10T10:00:00+08:00', endTime: '2026-11-10T11:30:00+08:00', allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null },
+      // Nov 18: 5 events -> high vermilion
+      ...Array.from({ length: 5 }, (_, i) => ({ id: `e-high-${i}`, householdId, title: `忙碌事项 ${i + 1}`, startTime: `2026-11-18T${String(9 + i).padStart(2, '0')}:00:00+08:00`, endTime: `2026-11-18T${String(10 + i).padStart(2, '0')}:00:00+08:00`, allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null })),
+      // Nov 25: 8 events -> heavy crimson
+      ...Array.from({ length: 8 }, (_, i) => ({ id: `e-heavy-${i}`, householdId, title: `密集行程 ${i + 1}`, startTime: `2026-11-25T${String(8 + i).padStart(2, '0')}:00:00+08:00`, endTime: `2026-11-25T${String(9 + i).padStart(2, '0')}:00:00+08:00`, allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null })),
+    ];
+    const decEvents = [
+      { id: 'e-dec-1', householdId, title: '年末体检', startTime: '2026-12-15T09:00:00+08:00', endTime: '2026-12-15T11:00:00+08:00', allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null },
+    ];
+    await page.route(url => url.pathname.endsWith('/events'), route => {
+      const start = new URL(route.request().url()).searchParams.get('startDate');
+      const end = new URL(route.request().url()).searchParams.get('endDate');
+      if (start === '2026-11-30' && end === '2027-01-04') return route.fulfill({ json: { events: decEvents } });
+      return route.fulfill({ json: { events: denseEvents } });
+    });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${base}/today`);
+
+    // Verify low (Nov 8 = 1 task, Nov 9 = 1 spanning event), medium (Nov 10 today = 3), high (Nov 18 = 5), heavy (Nov 25 = 8), and empty (Nov 12 = 0).
+    const lowBtn = page.getByRole('button', { name: '2026年11月8日，1 项安排', exact: true });
+    const medBtn = page.getByRole('button', { name: '2026年11月10日，今天，3 项安排', exact: true });
+    const highBtn = page.getByRole('button', { name: '2026年11月18日，5 项安排', exact: true });
+    const heavyBtn = page.getByRole('button', { name: '2026年11月25日，8 项安排', exact: true });
+    const emptyBtn = page.getByRole('button', { name: '2026年11月12日', exact: true });
+    for (const btn of [lowBtn, medBtn, highBtn, heavyBtn, emptyBtn]) await expect(btn).toBeVisible();
+
+    // Check distinct computed colors across the 4 load tiers on the superscript badges.
+    const badgeColor = (btn: typeof lowBtn) => btn.locator('[aria-hidden="true"]').evaluate(el => getComputedStyle(el.firstElementChild as HTMLElement).color);
+    expect(await badgeColor(lowBtn)).toBe('rgb(47, 107, 79)');
+    expect(await badgeColor(medBtn)).toBe('rgb(149, 101, 17)');
+    expect(await badgeColor(highBtn)).toBe('rgb(194, 56, 28)');
+    expect(await badgeColor(heavyBtn)).toBe('rgb(139, 26, 58)');
+    await expect(emptyBtn.locator('[aria-hidden="true"]')).toHaveCount(0);
+
+    await page.screenshot({ path: testInfo.outputPath('today-mini-calendar-1440.png') });
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+    // Switching to December loads December's events without losing Today's timeline.
+    await page.getByRole('button', { name: '下个月', exact: true }).click();
+    const dec15 = page.getByRole('button', { name: '2026年12月15日，1 项安排', exact: true });
+    await expect(dec15).toBeVisible();
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await expect(dec15).toBeVisible();
+    await expect(page.getByTestId('today-timeline')).toBeVisible();
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByTestId('header-create').click();
+    await page.getByRole('menuitem', { name: '创建任务' }).click();
+    await expect(page.getByText('2026年12月', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: '关闭创建任务' }).click();
+    await expect(dec15).toBeVisible();
+
+    await page.getByTestId('header-create').click();
+    await page.getByRole('menuitem', { name: '创建日程' }).click();
+    await page.getByRole('button', { name: '上个月', exact: true }).click();
+    await expect(highBtn).toBeVisible();
   });
 
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`${base}/today`);
+  test('today mini calendar loads independently and retries a failed month without showing partial counts', async ({ page }) => {
+    await setup(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
 
-  // Verify low (Nov 8 = 1 task, Nov 9 = 1 spanning event), medium (Nov 10 today = 3), high (Nov 18 = 5), heavy (Nov 25 = 8), and empty (Nov 12 = 0).
-  const lowBtn = page.getByRole('button', { name: '2026年11月8日，1 项安排', exact: true });
-  const medBtn = page.getByRole('button', { name: '2026年11月10日，今天，3 项安排', exact: true });
-  const highBtn = page.getByRole('button', { name: '2026年11月18日，5 项安排', exact: true });
-  const heavyBtn = page.getByRole('button', { name: '2026年11月25日，8 项安排', exact: true });
-  const emptyBtn = page.getByRole('button', { name: '2026年11月12日', exact: true });
-  for (const btn of [lowBtn, medBtn, highBtn, heavyBtn, emptyBtn]) await expect(btn).toBeVisible();
+    // The default task fixture has a dated task on Nov 8. Add a second item on the same day.
+    const sameDayEvent = { id: 'nov-8', householdId, title: '周末安排', startTime: '2026-11-08T09:00:00+08:00', endTime: '2026-11-08T10:00:00+08:00', allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null };
+    let finishMonthRequest = () => {};
+    const monthPending = new Promise<void>(resolve => { finishMonthRequest = resolve; });
+    let attempts = 0;
+    await page.route(url => url.pathname.endsWith('/events'), async route => {
+      const start = new URL(route.request().url()).searchParams.get('startDate');
+      if (start !== '2026-10-26') return route.fallback();
+      attempts++;
+      if (attempts === 1) {
+        await monthPending;
+        return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE' } } });
+      }
+      return route.fulfill({ json: { events: [sameDayEvent] } });
+    });
 
-  // Check distinct computed colors across the 4 load tiers on the superscript badges.
-  const badgeColor = (btn: typeof lowBtn) => btn.locator('[aria-hidden="true"]').evaluate(el => getComputedStyle(el.firstElementChild as HTMLElement).color);
-  expect(await badgeColor(lowBtn)).toBe('rgb(47, 107, 79)');
-  expect(await badgeColor(medBtn)).toBe('rgb(149, 101, 17)');
-  expect(await badgeColor(highBtn)).toBe('rgb(194, 56, 28)');
-  expect(await badgeColor(heavyBtn)).toBe('rgb(139, 26, 58)');
-  await expect(emptyBtn.locator('[aria-hidden="true"]')).toHaveCount(0);
+    try {
+      await page.goto(`${base}/today`);
+      await expect(page.getByTestId('today-timeline')).toBeVisible();
+      await expect(page.getByRole('heading', { name: '待办', exact: true })).toBeVisible();
+      await expect(page.getByRole('progressbar', { name: '正在加载小日历计数' })).toBeVisible();
+      await expect(page.getByRole('button', { name: '2026年11月8日', exact: true })).toBeVisible();
+    } finally {
+      finishMonthRequest();
+    }
 
-  await page.screenshot({ path: testInfo.outputPath('today-mini-calendar-1440.png') });
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await expect(page.getByText('无法加载小日历计数，请重试。')).toBeVisible();
+    await expect(page.getByRole('button', { name: '2026年11月8日', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '重试加载小日历计数' }).click();
+    await expect(page.getByRole('button', { name: '2026年11月8日，2 项安排', exact: true })).toBeVisible();
+    await expect(page.getByText('无法加载小日历计数，请重试。')).toHaveCount(0);
+  });
+});
 
-  // Switching to December loads December's events without losing Today's timeline.
-  await page.getByRole('button', { name: '下个月', exact: true }).click();
-  await expect(page.getByRole('button', { name: '2026年12月15日，1 项安排', exact: true })).toBeVisible();
-  await expect(page.getByTestId('today-timeline')).toBeVisible();
+test.describe('today mini calendar in America/Los_Angeles', () => {
+  test.use({ timezoneId: 'America/Los_Angeles' });
+
+  test('today mini calendar counts late events on the final visible local day', async ({ page }) => {
+    await setup(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const lateEvent = { id: 'dec-6', householdId, title: '周日晚餐', startTime: '2026-12-07T02:00:00Z', endTime: '2026-12-07T03:00:00Z', allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null };
+    await page.route(url => url.pathname.endsWith('/events'), route => {
+      const params = new URL(route.request().url()).searchParams;
+      if (params.get('startDate') !== '2026-10-26') return route.fallback();
+      const end = params.get('endDate')!;
+      // The real list endpoint uses an exclusive upper bound at the next UTC midnight.
+      const events = Date.parse(lateEvent.startTime) < Date.parse(end) + 86_400_000 ? [lateEvent] : [];
+      return route.fulfill({ json: { events } });
+    });
+    await page.goto(`${base}/today`);
+    await expect(page.getByRole('button', { name: '2026年12月6日，1 项安排', exact: true })).toBeVisible();
+  });
 });

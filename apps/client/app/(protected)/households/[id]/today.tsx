@@ -4,13 +4,14 @@ import { useResourceNavigation } from '../../../../src/ui/use-resource-navigatio
 import { todayNotePaneWidth, useDesktop } from '../../../../src/ui/use-desktop';
 import { useSidebarRail } from '../../../../src/ui/sidebar-rail';
 import { countCalendarItemsByDate, DesktopToday } from '../../../../src/features/events/desktop-today';
+import { useTodayCalendar } from '../../../../src/features/events/use-today-calendar';
 import { useOpenWindowItem } from '../../../../src/ui/route-window';
 import { FloatingCreateButton } from '../../../../src/ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../../../../src/features/content/use-content-delete';
 import { rememberRouteTrigger } from '../../../../src/platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../../../src/ui/workspace-state';
 import { PageIntro } from '../../../../src/ui/page-intro';
-import { formatDate, formatWeekday, parseDateValue, toTimeValue } from '../../../../src/ui/date-values';
+import { formatDate, formatWeekday, toTimeValue } from '../../../../src/ui/date-values';
 import { GroupLabel, ListGroup, NowMarker } from '../../../../src/ui/list-group';
 import { useFocusEffect, useLocalSearchParams, useRouter, usePathname } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -24,7 +25,7 @@ import { useHouseholdContext } from '../../../../src/features/households/househo
 import { HouseholdScreen } from '../../../../src/features/households/household-screen';
 import { EventCard } from '../../../../src/features/events/event-card';
 import { TaskCard } from '../../../../src/features/tasks/task-card';
-import { toCalendarGridRangeIso, toDateIso } from '../../../../src/features/events/calendar-utils';
+import { toDateIso } from '../../../../src/features/events/calendar-utils';
 import { lunarDateOn, useLunarCalendar } from '../../../../src/features/lunar/lunar-calendar';
 import { holidayNameOn, useJapaneseCalendar } from '../../../../src/features/wareki/japanese-calendar';
 import { partitionTodayTasks } from '../../../../src/features/tasks/today-tasks';
@@ -56,14 +57,12 @@ export default function TodayRoute() {
   const { viewState, currentHouseholdId } = useHouseholdContext();
 
   const [upcomingEvents, setUpcomingEvents] = useState<EventResponseDto[]>([]);
-  const [calendarEvents, setCalendarEvents] = useState<EventResponseDto[]>([]);
   const [events, setEvents] = useState<EventResponseDto[]>([]);
   const [tasks, setTasks] = useState<TaskResponseDto[]>([]);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const loadedDay = useRef<string | null>(null);
   const requestGeneration = useRef(0);
-  const calendarRequestGeneration = useRef(0);
   const [error, setError] = useState<'auth:errors.sessionExpired' | 'loadError' | 'refreshError' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [, setCalendarDate] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, todayIso());
@@ -72,12 +71,6 @@ export default function TodayRoute() {
   const [allUnscheduled, setAllUnscheduled] = useWorkspaceState(`view:${id}:today:allUnscheduled`, false);
   const now = useMinuteClock();
   const currentDate = toDateIso(now.date);
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    const todayDate = parseDateValue(currentDate);
-    return { year: todayDate.getFullYear(), month: todayDate.getMonth() };
-  });
-  const calendarMonthRef = useRef(calendarMonth);
-  calendarMonthRef.current = calendarMonth;
   const lunarToday = useLunarCalendar() ? lunarDateOn(currentDate) : null;
   const holidayToday = useJapaneseCalendar() ? holidayNameOn(currentDate) : null;
   // The API pads its range for client time zones; only local dates belong here.
@@ -88,6 +81,9 @@ export default function TodayRoute() {
 
   const householdId = id ?? currentHouseholdId;
   const dayKey = `${householdId}:${currentDate}`;
+  const ready = !loading && loadedDay.current === dayKey;
+  const { month: calendarMonth, range: calendarRange, selectMonth, refresh: refreshCalendar, events: calendarEvents, status: calendarStatus } =
+    useTodayCalendar(householdId, currentDate, desktop && ready);
 
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -97,33 +93,10 @@ export default function TodayRoute() {
     return map;
   }, [members]);
 
-  const fetchCalendarEvents = useCallback(async (year: number, month: number, tokenOverride?: string) => {
-    if (!desktop || householdId === undefined || householdId === null || householdId === '') return;
-    const request = ++calendarRequestGeneration.current;
-    try {
-      const token = tokenOverride ?? await sessionTransport.getAccessToken();
-      if (request !== calendarRequestGeneration.current || token === null) return;
-      const { start, end } = toCalendarGridRangeIso(year, month);
-      const result = await sessionApiClient.listEvents(token, householdId, start, end, undefined, undefined, true);
-      if (request !== calendarRequestGeneration.current) return;
-      setCalendarEvents(result.events);
-    } catch {
-      // Keep the main Today panes usable if a background mini-calendar month fetch fails.
-    }
-  }, [desktop, householdId]);
-
-  const handleCalendarMonthChange = useCallback((year: number, month: number) => {
-    setCalendarMonth({ year, month });
-    void fetchCalendarEvents(year, month);
-  }, [fetchCalendarEvents]);
-
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === null || householdId === '') return;
     const request = ++requestGeneration.current;
-    if (loadedDay.current !== dayKey) {
-      setLoading(true);
-      setCalendarEvents([]);
-    }
+    if (loadedDay.current !== dayKey) setLoading(true);
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
@@ -143,7 +116,6 @@ export default function TodayRoute() {
         sessionApiClient.listTasks(token, householdId),
         sessionApiClient.getHousehold(token, householdId),
         desktop ? sessionApiClient.listEvents(token, householdId, toDateIso(nextDay), toDateIso(nextWeek), undefined, undefined, true) : Promise.resolve(null),
-        fetchCalendarEvents(calendarMonthRef.current.year, calendarMonthRef.current.month, token),
       ]);
 
       if (request !== requestGeneration.current) return;
@@ -159,7 +131,7 @@ export default function TodayRoute() {
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
-  }, [householdId, currentDate, dayKey, desktop, fetchCalendarEvents]);
+  }, [householdId, currentDate, dayKey, desktop]);
 
   const completion = useTaskCompletion(householdId ?? undefined, fetchData);
 
@@ -169,12 +141,8 @@ export default function TodayRoute() {
     [tasks, completion.undoTaskId, currentDate],
   );
   const day = useMemo(() => arrangeDay(todayEvents, todayTasks), [todayEvents, todayTasks]);
-  const calendarRange = useMemo(
-    () => toCalendarGridRangeIso(calendarMonth.year, calendarMonth.month),
-    [calendarMonth.year, calendarMonth.month],
-  );
   const dayCounts = useMemo(
-    () => countCalendarItemsByDate(calendarEvents, tasks, calendarRange),
+    () => calendarEvents === null ? undefined : countCalendarItemsByDate(calendarEvents, tasks, calendarRange),
     [calendarEvents, tasks, calendarRange],
   );
 
@@ -183,12 +151,14 @@ export default function TodayRoute() {
     : items.filter((task, index) => index < 3 || task.id === completion.undoTaskId);
 
   useContentChanges(householdId, fetchData);
+  useContentChanges(householdId, refreshCalendar);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    void refreshCalendar();
     await fetchData();
     setRefreshing(false);
-  }, [fetchData]);
+  }, [fetchData, refreshCalendar]);
 
   // Refetch whenever this screen regains focus (e.g. returning from a
   // task/event action elsewhere), not just on first mount — otherwise
@@ -200,7 +170,7 @@ export default function TodayRoute() {
   useFocusEffect(
     useCallback(() => {
       void fetchData();
-      return () => { requestGeneration.current++; calendarRequestGeneration.current++; };
+      return () => { requestGeneration.current++; };
     }, [fetchData]),
   );
 
@@ -247,7 +217,6 @@ export default function TodayRoute() {
   );
 
   const wide = width >= theme.layout.navigationBreakpoint;
-  const ready = !loading && loadedDay.current === dayKey;
   const nothingToday = todayEvents.length === 0 && todayTasks.length === 0;
   const upcomingCount = approachingTasks.length + otherUpcomingTasks.length;
   const nowIndex = day.timeline.findIndex(entry => entry.at > now.minutes);
@@ -354,7 +323,7 @@ export default function TodayRoute() {
         {error !== null ? <LoadError message={t(error)} onRetry={() => void fetchData()} retryAccessibilityLabel={t('retryLoad')} /> : null}
 
         {ready && viewState !== 'resolving' ? (
-          desktop ? <DesktopToday detail={detail} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} dayCounts={dayCounts} onCalendarMonthChange={handleCalendarMonthChange} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenTasks={() => router.push(`/households/${encodeURIComponent(householdId!)}/tasks`)} onCreateTask={create('tasks')} /> : wide && secondary
+          desktop ? <DesktopToday detail={detail} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} dayCounts={dayCounts} calendarMonth={calendarMonth} calendarStatus={calendarStatus} onCalendarMonthChange={selectMonth} onCalendarRetry={refreshCalendar} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenTasks={() => router.push(`/households/${encodeURIComponent(householdId!)}/tasks`)} onCreateTask={create('tasks')} /> : wide && secondary
             ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing[8] }}>
                 <View style={{ flex: 3, minWidth: 0 }}>{primary}</View>
                 <View style={{ flex: 2, minWidth: 0 }}>{secondary}</View>

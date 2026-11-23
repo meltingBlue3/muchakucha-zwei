@@ -5,7 +5,7 @@ import Check from 'lucide-react-native/icons/check';
 import type { EventResponseDto, TaskResponseDto } from '@muchakucha/api-client';
 import { insetFocusRing } from '../../platform/focus-ring/focus-ring';
 import { CalendarGrid } from '../../ui/picker-panels';
-import { Button, Heading, Stack, Text } from '../../ui/primitives';
+import { Button, Heading, LoadError, Spinner, Stack, Text } from '../../ui/primitives';
 import { GroupLabel, ListGroup, NowMarker } from '../../ui/list-group';
 import { labelTint, theme } from '../../ui/theme';
 import { useDesktopDensity } from '../../ui/use-desktop';
@@ -250,13 +250,16 @@ export function countCalendarItemsByDate(
   return counts;
 }
 
-export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, unscheduled, upcoming, upcomingEvents, dayCounts, onCalendarMonthChange, renderTask, taskCompletion, onOpenEvent, onOpenTask, onSelectDate, detail, onOpenCalendar, onOpenTasks, onCreateTask }: {
+export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, unscheduled, upcoming, upcomingEvents, dayCounts, calendarMonth, calendarStatus, onCalendarMonthChange, onCalendarRetry, renderTask, taskCompletion, onOpenEvent, onOpenTask, onSelectDate, detail, onOpenCalendar, onOpenTasks, onCreateTask }: {
   /** What the pane beside Today holds, if one is open. */
   detail: 'tasks' | 'events' | 'notes' | null;
   onOpenCalendar(): void; onOpenTasks(): void; onCreateTask(): void;
   upcomingEvents: EventResponseDto[];
-  dayCounts?: Readonly<Record<string, number>>;
-  onCalendarMonthChange?(year: number, month: number): void;
+  dayCounts: Readonly<Record<string, number>> | undefined;
+  calendarMonth: Date;
+  calendarStatus: 'loading' | 'ready' | 'error';
+  onCalendarMonthChange(year: number, month: number): void;
+  onCalendarRetry(): void;
   date: string; nowMinutes: number; events: EventResponseDto[]; todayTasks: TaskResponseDto[]; overdue: TaskResponseDto[]; unscheduled: TaskResponseDto[]; upcoming: TaskResponseDto[];
   renderTask(task: TaskResponseDto): ReactNode;
   /** The completion control's wiring for one task, the same the 待办 rows receive. */
@@ -288,7 +291,10 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
   const overlapsEvent = (due: number) => timed.some(event => minutes(event.startTime) < due + TASK_SPAN && eventEnd(event) > due);
   const nowShown = nowMinutes >= DAY_START && nowMinutes <= DAY_END;
   const next = <Stack gap={5}>
-    <CalendarGrid compact dayCounts={dayCounts} value={date} onSelect={onSelectDate} onMonthChange={onCalendarMonthChange} />
+    <CalendarGrid compact dayCounts={dayCounts} value={date} onSelect={onSelectDate} visibleMonth={calendarMonth} onMonthChange={onCalendarMonthChange} />
+    {calendarStatus === 'error' ? (
+      <LoadError message={t(dayCounts === undefined ? 'calendarLoadError' : 'calendarRefreshError')} onRetry={onCalendarRetry} retryAccessibilityLabel={t('retryCalendar')} />
+    ) : calendarStatus === 'loading' && dayCounts === undefined ? <Spinner label={t('loadingCalendar')} /> : null}
     <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4] }}>
       <Text accessibilityRole="header" aria-level={2} variant="label" style={{ marginBottom: theme.spacing[2] }}>{t('nextWeek')}</Text>
       <UpcomingDays date={date} events={upcomingEvents} tasks={upcoming} onOpenEvent={onOpenEvent} onOpenTask={task => { setOpenedFromUpcoming(true); onOpenTask(task); }} />

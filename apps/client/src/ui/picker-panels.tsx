@@ -42,32 +42,29 @@ export function CalendarGrid({
   onSelect,
   compact = false,
   dayCounts,
+  visibleMonth,
   onMonthChange,
 }: {
   value: string;
   onSelect(value: string): void;
   compact?: boolean;
   dayCounts?: Readonly<Record<string, number>> | undefined;
-  onMonthChange?: ((year: number, month: number) => void) | undefined;
+  visibleMonth?: Date;
+  onMonthChange?: (year: number, month: number) => void;
 }) {
   const { t } = useTranslation('picker');
   const dense = useDesktopDensity();
   const target = compact || dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget;
   const selected = parseDateValue(value);
-  const [month, setMonth] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
-  const monthChangeRef = useRef(onMonthChange);
-  monthChangeRef.current = onMonthChange;
-  const monthRef = useRef(month);
-  monthRef.current = month;
+  const [pickerMonth, setPickerMonth] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
   useEffect(() => {
-    const nextYear = selected.getFullYear();
-    const nextMonth = selected.getMonth();
-    if (monthRef.current.getFullYear() === nextYear && monthRef.current.getMonth() === nextMonth) return;
-    const next = new Date(nextYear, nextMonth, 1);
-    setMonth(next);
-    monthChangeRef.current?.(nextYear, nextMonth);
-    // Follow the selection only when the value itself changes.
-  }, [value]);
+    if (visibleMonth !== undefined) return;
+    const date = parseDateValue(value);
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    setPickerMonth(current => current.getFullYear() === year && current.getMonth() === month ? current : new Date(year, month, 1));
+  }, [value, visibleMonth]);
+  const month = visibleMonth ?? pickerMonth;
   const today = toDateValue(new Date());
   // A desktop month fills its weeks with the neighbouring months' days, as a wall calendar does.
   const outside = compact || dense;
@@ -83,8 +80,8 @@ export function CalendarGrid({
   }, [month, outside]);
   const shift = (delta: number) => {
     const next = new Date(month.getFullYear(), month.getMonth() + delta, 1);
-    setMonth(next);
-    onMonthChange?.(next.getFullYear(), next.getMonth());
+    if (visibleMonth === undefined) setPickerMonth(next);
+    else onMonthChange?.(next.getFullYear(), next.getMonth());
   };
   const monthLabel = formatYearMonth(month);
   const navButton = (label: string, delta: number, icon: React.ReactNode) => (
@@ -129,8 +126,9 @@ export function CalendarGrid({
                 {countLabel}
               </Text>
             ) : null;
+            const dayNumber = <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accentStrong' : otherMonth ? 'inkFaint' : 'ink'} style={dense || compact ? { fontSize: theme.typography.meta.fontSize + 0.5 } : undefined}>{day.getDate()}</Text>;
             return (
-              <View key={column} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', height: target }}>
+              <View key={column} style={{ flex: 1, alignItems: 'center', ...(compact ? { justifyContent: 'center', height: target } : {}) }}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={dayLabel}
@@ -146,9 +144,9 @@ export function CalendarGrid({
                     backgroundColor: isSelected ? (isToday ? theme.colors.accent : theme.colors.primary) : isToday ? theme.colors.accentSoft : pressed ? theme.colors.surfaceMuted : theme.colors.transparent,
                   })}
                 >
-                  <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accentStrong' : otherMonth ? 'inkFaint' : 'ink'} style={dense || compact ? { fontSize: theme.typography.meta.fontSize + 0.5 } : undefined}>{day.getDate()}</Text>
-                    {badge && !filled ? (
+                  {badge && !filled ? (
+                    <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+                      {dayNumber}
                       <View
                         pointerEvents="none"
                         importantForAccessibility="no-hide-descendants"
@@ -157,8 +155,8 @@ export function CalendarGrid({
                       >
                         {badge}
                       </View>
-                    ) : null}
-                  </View>
+                    </View>
+                  ) : dayNumber}
                   {badge && filled ? (
                     <View
                       pointerEvents="none"
