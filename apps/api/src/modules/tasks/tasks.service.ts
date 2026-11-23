@@ -25,7 +25,7 @@ import {
   firstOccurrence as firstOccurrenceOf,
 } from '../recurrence/recurrence-date.js';
 import { resolveSeriesMarks, seriesMarksResponse } from '../recurrence/series-marks.js';
-import { labelSystemKey } from '../labels/preset-labels.js';
+import { labelResponse, type LabelRow } from '../labels/starter-labels.js';
 
 const TITLE_MIN = 1;
 const TITLE_MAX = 200;
@@ -73,17 +73,7 @@ interface TaskRow {
     durationMinutes: number | null; lunarMonth: number | null; lunarDay: number | null; occasion: string | null;
     birthYear: number | null;
   } | null;
-  labels: Array<{
-    label: {
-      id: string;
-      householdId: string;
-      name: string;
-      color: string;
-      systemKey: string | null;
-      createdBy: string;
-      createdAt: Date;
-    };
-  }>;
+  labels: Array<{ label: LabelRow }>;
   assignees: Array<{ userId: string }>;
 }
 
@@ -592,15 +582,7 @@ export class TasksService {
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
-      labels: row.labels.map((tl) => ({
-        id: tl.label.id,
-        householdId: tl.label.householdId,
-        name: tl.label.name,
-        color: tl.label.color,
-        systemKey: labelSystemKey(tl.label.systemKey),
-        createdBy: tl.label.createdBy,
-        createdAt: tl.label.createdAt.toISOString(),
-      })),
+      labels: row.labels.map((tl) => labelResponse(tl.label)),
       myReminder,
     };
   }

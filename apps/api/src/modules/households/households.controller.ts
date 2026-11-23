@@ -4,7 +4,6 @@ import {
   Delete,
   ForbiddenException,
   Get,
-  Headers,
   HttpCode,
   NotFoundException,
   Param,
@@ -20,7 +19,6 @@ import {
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
-  ApiHeader,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiNoContentResponse,
@@ -31,7 +29,6 @@ import {
 import { Transform } from 'class-transformer';
 import { IsIn, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
-import { presetLabelLanguage } from '../labels/preset-labels.js';
 import {
   CreateHouseholdDto,
   CreateHouseholdResponseDto,
@@ -232,22 +229,16 @@ export class HouseholdsController {
   @UseGuards(AccessTokenGuard)
   @ApiBearerAuth()
   @ApiOperation({ operationId: 'createHousehold' })
-  @ApiHeader({ name: 'Accept-Language', required: false, description: 'Interface language (zh or ja) for starter labels.' })
   @ApiCreatedResponse({ type: CreateHouseholdResponseDto })
   @ApiBadRequestResponse({ description: 'Household name is invalid or the request is malformed.' })
   async createHousehold(
     @Req() request: AuthenticatedRequest,
     @Body() input: CreateHouseholdDto,
-    @Headers('accept-language') acceptLanguage?: string,
   ): Promise<CreateHouseholdResponseDto> {
     if (request.auth === undefined) {
       throw new Error('AccessTokenGuard did not attach verified session claims.');
     }
-    return this.householdsService.createHousehold(
-      request.auth.sub,
-      input.name,
-      presetLabelLanguage(acceptLanguage),
-    );
+    return this.householdsService.createHousehold(request.auth.sub, input.name);
   }
 
   @Get()

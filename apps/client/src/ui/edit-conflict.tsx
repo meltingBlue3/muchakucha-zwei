@@ -6,6 +6,7 @@ import { formatDate, formatDateTime } from './date-values';
 import { recurrenceInputFromResponse } from '../features/recurrence/recurrence-options';
 import { formatRecurrenceSummary } from '../features/recurrence/recurrence-summary';
 import { i18n, useTranslation } from '../i18n';
+import { labelName } from '../features/labels/label-name';
 
 const UNKNOWN_VERSION = '1970-01-01T00:00:00.000Z';
 interface Versioned { updatedAt?: string; recurrence?: { updatedAt?: string } | null }
@@ -110,7 +111,7 @@ export function summarizeLatest(value: Versioned): Array<[string, string]> {
     add(t('dueDate'), due ? formatDate(new Date(due)) : '');
   }
   if ('location' in data) add(t('location'), text('location') ?? '');
-  if (Array.isArray(data.labels)) add(t('labels'), data.labels.map((label: { name: string }) => label.name).join('、'));
+  if (Array.isArray(data.labels)) add(t('labels'), data.labels.map((label: Parameters<typeof labelName>[0]) => labelName(label)).join('、'));
   if (Array.isArray(data.assigneeNames)) add(i18n.t('shared:assignee'), data.assigneeNames.join('、'));
   const rule = (data.recurrence ?? ('freq' in data ? data : null)) as RecurrenceResponseDto | null;
   const recurrence = recurrenceInputFromResponse(rule);

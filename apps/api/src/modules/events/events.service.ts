@@ -18,7 +18,7 @@ import {
 } from '../recurrence/recurrence-date.js';
 import { recurringEventEnd } from '../recurrence/recurring-event-end.js';
 import { resolveSeriesMarks, seriesMarksResponse } from '../recurrence/series-marks.js';
-import { labelSystemKey } from '../labels/preset-labels.js';
+import { labelResponse, type LabelRow } from '../labels/starter-labels.js';
 
 const TITLE_MIN = 1;
 const TITLE_MAX = 200;
@@ -80,17 +80,7 @@ interface EventRow {
     occasion: string | null;
     birthYear: number | null;
   } | null;
-  labels: Array<{
-    label: {
-      id: string;
-      householdId: string;
-      name: string;
-      color: string;
-      systemKey: string | null;
-      createdBy: string;
-      createdAt: Date;
-    };
-  }>;
+  labels: Array<{ label: LabelRow }>;
 }
 
 interface ListFilters {
@@ -637,15 +627,7 @@ export class EventsService {
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
-      labels: row.labels.map((el) => ({
-        id: el.label.id,
-        householdId: el.label.householdId,
-        name: el.label.name,
-        color: el.label.color,
-        systemKey: labelSystemKey(el.label.systemKey),
-        createdBy: el.label.createdBy,
-        createdAt: el.label.createdAt.toISOString(),
-      })),
+      labels: row.labels.map((el) => labelResponse(el.label)),
       myReminder,
     };
   }

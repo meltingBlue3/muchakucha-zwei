@@ -13,6 +13,7 @@ import { formatDueDate } from '../tasks/task-utils';
 import { formatLunarAnchor } from '../lunar/lunar-recurrence';
 import { changedLines, suspiciousShrink, type ChangedLine } from './action-changes';
 import { useAssistantQuery } from './assistant-runtime';
+import { labelName } from '../labels/label-name';
 
 type PendingAction = AssistantConversationResponseDto['pendingActions'][number];
 type Target = {
@@ -86,7 +87,7 @@ export function assistantActionDetails(action: PendingAction, context: ActionPre
   );
   const target = verb === 'update' ? context.target : null;
   // The target's own labels name the ones an edit removes, even when the household list was not loaded.
-  const named = target?.labels ? { ...context, labels: { ...Object.fromEntries(target.labels.map(label => [label.id, label.name])), ...context.labels } } : context;
+  const named = target?.labels ? { ...context, labels: { ...Object.fromEntries(target.labels.map(label => [label.id, labelName(label)])), ...context.labels } } : context;
   const fields = Object.entries(action.arguments).filter(([key]) => !hiddenFields.has(key)).map(([key, value]): ActionField => {
     const field: ActionField = { label: fieldName(key), value: valueText(key, value, context) };
     if (!target) return field;
@@ -159,7 +160,7 @@ function ActionItem({ householdId, action, position, choice, busy, onReady }: {
         const result = await sessionApiClient.listLabels(token, householdId);
         const label = result.labels.find(item => item.id === targetId);
         if (!label) throw new Error('missing label');
-        return { title: label.name, color: label.color };
+        return { title: labelName(label), color: label.color };
       }
       throw new Error('unsupported target');
     };
@@ -169,7 +170,7 @@ function ActionItem({ householdId, action, position, choice, busy, onReady }: {
       // An edit also names the assignees it replaces.
       Array.isArray(action.arguments.assigneeIds) && (action.arguments.assigneeIds.length || verb === 'update') ? sessionApiClient.getHousehold(token, householdId) : Promise.resolve(null),
     ]);
-    return { target, labels: Object.fromEntries(labels?.labels.map(label => [label.id, label.name]) ?? []), members: Object.fromEntries(household?.members.map(member => [member.userId, member.displayName]) ?? []) };
+    return { target, labels: Object.fromEntries(labels?.labels.map(label => [label.id, labelName(label)]) ?? []), members: Object.fromEntries(household?.members.map(member => [member.userId, member.displayName]) ?? []) };
   }, [householdId, action]);
   const query = useAssistantQuery(load);
   const details = assistantActionDetails(action, query.data ?? { target: null, labels: {}, members: {} });

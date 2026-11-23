@@ -18,6 +18,7 @@ import { eventLastDate } from './desktop-month';
 import { lunarDescriptionOn } from '../lunar/lunar-calendar';
 import { holidayNameOn } from '../wareki/japanese-calendar';
 import { birthdayNote } from '../birthdays/birthday-dates';
+import { labelName } from '../labels/label-name';
 
 const dayDate = (iso: string) => new Date(`${iso}T12:00:00`);
 const minuteOf = (iso: string) => { const date = new Date(iso); return date.getHours() * 60 + date.getMinutes(); };
@@ -51,7 +52,7 @@ export function DayAgendaRow({ event, dateIso, selected, onPress, nameKey = 'car
   const when = allDay
     ? first === last ? t('allDay') : `${formatDate(dayDate(first))} – ${formatDate(dayDate(last))}`
     : `${toTimeValue(new Date(event.startTime))}–${toTimeValue(new Date(event.endTime))}`;
-  const detail = [when, birthdayNote(event), event.location, allDay ? event.labels?.[0]?.name : null].filter(Boolean).join(' · ');
+  const detail = [when, birthdayNote(event), event.location, allDay && event.labels?.[0] ? labelName(event.labels[0]) : null].filter(Boolean).join(' · ');
   const actions = [
     ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: t('editCard', { title: event.title }), onPress: onEdit }] : []),
     ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: t('deleteCard', { title: event.title }), onPress: onDelete }] : []),

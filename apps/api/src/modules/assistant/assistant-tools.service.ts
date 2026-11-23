@@ -116,10 +116,16 @@ async function parse<T extends object>(dto: ClassConstructor<T>, value: unknown,
   return result;
 }
 
+/** A row's own name, and for a starter label that keeps its default name, that name in every language. */
+function names(value: unknown): unknown[] {
+  const { name, localizedNames } = value as { name?: unknown; localizedNames?: unknown };
+  return [name, ...(typeof localizedNames === 'object' && localizedNames !== null ? Object.values(localizedNames) : [])];
+}
+
 function searchable(value: object): string {
   const row = value as Record<string, unknown>;
-  return [row.title, row.name, row.body, row.description, row.location, row.displayName, row.username,
-    ...(Array.isArray(row.labels) ? row.labels.map(label => (label as { name?: unknown }).name) : []),
+  return [row.title, ...names(row), row.body, row.description, row.location, row.displayName, row.username,
+    ...(Array.isArray(row.labels) ? row.labels.flatMap(names) : []),
   ].filter((text): text is string => typeof text === 'string').join('\n').normalize('NFKC').toLowerCase();
 }
 

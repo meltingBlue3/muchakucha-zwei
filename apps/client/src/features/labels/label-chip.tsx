@@ -5,6 +5,7 @@ import { useTheme } from '@shopify/restyle';
 import type { LabelResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
 import { Text } from '../../ui/primitives';
+import { labelName } from './label-name';
 
 /** A faint wash of the label's own color for the chip background. */
 function tint(hex: string): string {
@@ -32,9 +33,9 @@ export function LabelTags({ labels, max = 1 }: { labels: LabelResponseDto[]; max
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2], flexShrink: 1 }}>
       {labels.slice(0, max).map(label => (
-        <View key={label.id} accessible accessibilityRole="image" accessibilityLabel={t('item', { name: label.name })} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], flexShrink: 1 }}>
+        <View key={label.id} accessible accessibilityRole="image" accessibilityLabel={t('item', { name: labelName(label) })} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], flexShrink: 1 }}>
           <View style={{ width: dot, height: dot, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} />
-          <Text variant="meta" numberOfLines={1} style={{ flexShrink: 1 }}>{label.name}</Text>
+          <Text variant="meta" numberOfLines={1} style={{ flexShrink: 1 }}>{labelName(label)}</Text>
         </View>
       ))}
       {labels.length > max ? <Text variant="meta" color="inkFaint">+{labels.length - max}</Text> : null}
@@ -56,7 +57,7 @@ export function LabelChip({ label, small = false, selected, dense = false }: Lab
     const denseDot = activeTheme.spacing[1] + 2;
     return (
       <View
-        accessibilityLabel={t('item', { name: label.name })}
+        accessibilityLabel={t('item', { name: labelName(label) })}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -70,7 +71,7 @@ export function LabelChip({ label, small = false, selected, dense = false }: Lab
         }}
       >
         <View style={{ width: denseDot, height: denseDot, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} />
-        <Text variant="meta" color="ink" style={{ fontWeight: selected ? '600' : '400' }}>{label.name}</Text>
+        <Text variant="meta" color="ink" style={{ fontWeight: selected ? '600' : '400' }}>{labelName(label)}</Text>
         {selected ? <Check size={activeTheme.spacing[3]} color={activeTheme.colors.ink} strokeWidth={activeTheme.controlSizes.iconStroke} /> : null}
       </View>
     );
@@ -78,7 +79,7 @@ export function LabelChip({ label, small = false, selected, dense = false }: Lab
 
   return (
     <View
-      accessibilityLabel={t('item', { name: label.name })}
+      accessibilityLabel={t('item', { name: labelName(label) })}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -97,7 +98,7 @@ export function LabelChip({ label, small = false, selected, dense = false }: Lab
         <View style={{ width: dot, height: dot, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} />
       )}
       <Text variant={small ? 'caption' : 'bodySm'} color="ink">
-        {label.name}
+        {labelName(label)}
       </Text>
     </View>
   );

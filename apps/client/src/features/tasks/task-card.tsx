@@ -16,6 +16,7 @@ import { completionActionLabel } from './task-completion';
 import { useDesktopDensity } from '../../ui/use-desktop';
 import { useWindowDimensions } from 'react-native';
 import { HouseholdSeal, type HouseholdMark } from '../../ui/household-seal';
+import { labelName } from '../labels/label-name';
 
 interface TaskCardProps {
   table?: boolean;
@@ -101,7 +102,7 @@ export function TaskCard({
       </>}
       trailing={<>
         {dense && table ? <>
-          <View style={{ width: compactLabels ? activeTheme.spacing[6] : activeTheme.spacing[10] * 3, flexDirection: 'row', gap: activeTheme.spacing[1], overflow: 'hidden' }}>{labels.map(label => <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], flexShrink: 1 }}><View style={{ width: activeTheme.spacing[1] * 2, height: activeTheme.spacing[1] * 2, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} />{!compactLabels ? <Text variant="meta" numberOfLines={1}>{label.name}</Text> : null}</View>)}</View>
+          <View style={{ width: compactLabels ? activeTheme.spacing[6] : activeTheme.spacing[10] * 3, flexDirection: 'row', gap: activeTheme.spacing[1], overflow: 'hidden' }}>{labels.map(label => <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], flexShrink: 1 }}><View style={{ width: activeTheme.spacing[1] * 2, height: activeTheme.spacing[1] * 2, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} />{!compactLabels ? <Text variant="meta" numberOfLines={1}>{labelName(label)}</Text> : null}</View>)}</View>
           <Text variant="time" numberOfLines={1} color={overdue ? 'accent' : 'inkMuted'} style={{ width: activeTheme.spacing[10] * 2 + activeTheme.spacing[6], textAlign: 'right' }}>{closed ? cancelled ? t('status.cancelled') : t('status.completed') : dueLabel || (task.dueDate ? t('today') : '')}</Text>
         </> : null}
         <View style={dense ? { width: activeTheme.spacing[12], alignItems: 'center' } : undefined}><AvatarStack members={assignees} /></View>
@@ -145,7 +146,7 @@ export function TaskCard({
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[3], rowGap: activeTheme.spacing[1], marginTop: activeTheme.spacing[1] / 2 }}>
           {showDue ? <Text variant="time" color={overdue ? 'accent' : 'inkMuted'}>{dueLabel}</Text> : null}
           {task.status !== 'pending' ? <Text variant="meta" color={completed ? 'success' : task.status === 'in_progress' ? 'ink' : 'inkMuted'}>{cancelled ? t('status.cancelled') : statusLabel(task.status)}</Text> : null}
-          {labels.map(label => <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] }}><View style={{ width: activeTheme.spacing[1] * 2, height: activeTheme.spacing[1] * 2, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} /><Text variant="meta" numberOfLines={1}>{label.name}</Text></View>)}
+          {labels.map(label => <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] }}><View style={{ width: activeTheme.spacing[1] * 2, height: activeTheme.spacing[1] * 2, borderRadius: activeTheme.borderRadii.full, backgroundColor: label.color }} /><Text variant="meta" numberOfLines={1}>{labelName(label)}</Text></View>)}
         </View>
       ) : null}
     </ListRow>

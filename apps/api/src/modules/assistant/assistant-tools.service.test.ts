@@ -25,7 +25,7 @@ const task = {
   recurrenceRuleId: null, occurrenceDate: null, recurrence: null, labels: [],
   myReminder: { mode: 'default' as const, minutesBefore: null },
 };
-const label = { id: recordId, householdId: actor.householdId, name: '家务', color: '#EF4444', systemKey: null, createdBy: actor.userId, createdAt: version };
+const label = { id: recordId, householdId: actor.householdId, name: '家务', color: '#EF4444', systemKey: null, localizedNames: null, createdBy: actor.userId, createdAt: version };
 const series = {
   id: recordId, updatedAt: version, freq: 'yearly', interval: 1, byWeekday: [], startsOn: '2026-11-23', endsOn: null, count: null,
   timezone: 'Asia/Shanghai', startTimeLocal: '00:00', durationMinutes: 1440, lunar: null, occasion: null, birthYear: null,
