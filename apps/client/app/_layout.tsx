@@ -14,10 +14,12 @@ import { sessionStateStore, sessionTransport, setSessionLostHandler } from '../s
 import '../src/i18n';
 import { installFocusRing } from '../src/platform/focus-ring/focus-ring';
 import { takeLaunchReminderUrl } from '../src/platform/reminders/reminder-notifications';
+import { installScrollbars } from '../src/platform/scrollbars/scrollbars';
 import { AppStatusBar } from '../src/ui/app-status-bar';
 import { MuchakuchaThemeProvider } from '../src/ui/primitives';
 
 installFocusRing();
+installScrollbars();
 
 export default function RootLayout() {
   // Inter only supplies figures; a font that fails to load falls back to the system face.
