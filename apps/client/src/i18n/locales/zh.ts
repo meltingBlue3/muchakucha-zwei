@@ -1141,6 +1141,7 @@ export const zh = {
       recent: '最近对话 · 仅自己可见',
       empty: '你的对话会保存在这里。',
       open: '打开对话：{{title}}',
+      opening: '正在打开对话：{{title}}',
       today: '今天',
       earlier: '更早',
       private: '对话仅自己可见',

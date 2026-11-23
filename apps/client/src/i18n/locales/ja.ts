@@ -1141,6 +1141,7 @@ export const ja: Catalog = {
       recent: '最近の会話 · 自分だけに表示',
       empty: 'ここに会話が保存されます。',
       open: '会話を開く：{{title}}',
+      opening: '会話を開いています：{{title}}',
       today: '今日',
       earlier: '以前',
       private: '会話は自分だけに表示',

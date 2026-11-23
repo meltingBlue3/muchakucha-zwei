@@ -7,6 +7,8 @@ const userId = '33333333-3333-4333-8333-333333333333';
 const noteId = '44444444-4444-4444-8444-444444444444';
 const providerId = '55555555-5555-4555-8555-555555555555';
 const conversationId = '66666666-6666-4666-8666-666666666666';
+const shoppingConversationId = '77777777-7777-4777-8777-777777777777';
+const dinnerConversationId = '99999999-9999-4999-8999-999999999999';
 const asrProviderId = '88888888-8888-4888-8888-888888888888';
 const version = '2030-06-15T04:00:00.000Z';
 const base = `/households/${householdId}`;
@@ -59,6 +61,8 @@ async function mockAssistant(page: Page, options: { empty?: boolean; voice?: boo
     providerGate: null as Promise<void> | null, failProviderLoad: false,
     nextSend: 'normal' as 'normal' | 'fail' | 'lost-response',
     decisionGate: null as Promise<void> | null,
+    conversationGates: new Map<string, Promise<void>>(),
+    failedConversationLoads: new Set<string>(),
     transcriptions: [] as Array<Record<string, unknown>>,
     nextTranscription: 'normal' as 'normal' | 'fail',
   };
@@ -82,6 +86,7 @@ async function mockAssistant(page: Page, options: { empty?: boolean; voice?: boo
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'ui-only-token' };
     else if (path.endsWith('/users/me')) body = { id: userId, username: 'xiaolin', displayName: '小林' };
     else if (path.endsWith('/users/me/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, households: [] };
+    else if (path.endsWith('/users/me/reminder-push') && method === 'DELETE') { await route.fulfill({ status: 204 }); return; }
     else if (path.endsWith('/invitations/inbox')) body = { invitations: [] };
     else if (path === '/api/v1/households') body = [...families.keys()].map(household);
     else if (family && parts.length === 4) body = household(targetHouseholdId!);
@@ -116,7 +121,11 @@ async function mockAssistant(page: Page, options: { empty?: boolean; voice?: boo
         body = created;
         status = 201;
       } else if (!selected) { await fail(404, 'ASSISTANT_CONVERSATION_NOT_FOUND'); return; }
-      else if (parts.length === 7 && method === 'GET') body = selected;
+      else if (parts.length === 7 && method === 'GET') {
+        await state.conversationGates.get(selected.id);
+        if (state.failedConversationLoads.delete(selected.id)) { await fail(503, 'ASSISTANT_PROVIDER_UNAVAILABLE'); return; }
+        body = selected;
+      }
       else if (parts.length === 7 && method === 'DELETE') {
         family.conversations = family.conversations.filter(item => item.id !== selected.id);
         await route.fulfill({ status: 204 });
@@ -194,6 +203,114 @@ async function openExistingConversation(page: Page) {
 async function openHistory(page: Page) {
   if ((page.viewportSize()?.width ?? 390) < 1024) await page.getByRole('button', { name: '我的对话', exact: true }).click();
 }
+
+function addSwitchTargets(state: Awaited<ReturnType<typeof mockAssistant>>) {
+  const family = state.families.get(householdId)!;
+  family.conversations.push(
+    { ...family.conversations[0]!, id: shoppingConversationId, title: '下周采购', messages: [{ role: 'assistant', content: '记得购买面包。' }] },
+    { ...family.conversations[0]!, id: dinnerConversationId, title: '晚餐安排', messages: [{ role: 'assistant', content: '晚餐在家吃。' }] },
+  );
+}
+
+for (const width of [390, 1440]) {
+  test(`switching assistant conversations keeps the workspace visible until the target is ready at ${width}px`, async ({ page }) => {
+    const state = await mockAssistant(page);
+    addSwitchTargets(state);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.setViewportSize({ width, height: 900 });
+    await openExistingConversation(page);
+    await openHistory(page);
+
+    // Observe committed DOM changes, including an intermediate loading state too brief for a locator wait.
+    await page.evaluate(width => {
+      const root = document.documentElement;
+      const visible = (selector: string) => [...root.querySelectorAll(selector)].filter(element => element.getClientRects().length);
+      const observe = () => {
+        if (!visible('[data-testid="assistant-transcript"]').length
+          || !visible('textarea[aria-label="发送给助手"]').length
+          || (width === 1440 && !visible('[data-testid="assistant-history"] [aria-label^="打开对话："]').length)
+          || visible('[aria-label="正在加载对话"]').length) {
+          root.dataset.assistantLoadingSeen = 'true';
+        }
+      };
+      new MutationObserver(observe).observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'aria-label'] });
+    }, width);
+    const gate = deferred();
+    const target = `${base}/assistant/conversations/${shoppingConversationId}`;
+    const targetLoads = () => state.requests.filter(request => request.method === 'GET' && request.path === `/api/v1${target}`);
+    state.conversationGates.set(shoppingConversationId, gate.promise);
+    try {
+      await page.getByRole('button', { name: '打开对话：下周采购', exact: true }).click();
+      await expect.poll(() => targetLoads().length).toBe(1);
+      expect(new URL(page.url()).pathname).toBe(`${base}/assistant/conversations/${conversationId}`);
+      await expect(page.getByTestId('assistant-transcript').filter({ visible: true }).getByText('根据家庭旅行清单，记得带野餐垫和水。')).toBeVisible();
+      await expect(page.locator('textarea[aria-label="发送给助手"]:visible')).toHaveCount(1);
+      await expect(page.getByRole('button', { name: '打开对话：晚餐安排', exact: true })).toBeVisible();
+    } finally {
+      gate.release();
+    }
+    await expect(page).toHaveURL(target);
+    await expect(page.getByTestId('assistant-transcript').filter({ visible: true }).getByText('记得购买面包。')).toBeVisible();
+    await expect(page.getByLabel('发送给助手', { exact: true }).filter({ visible: true })).toBeEditable();
+    await expect(page.locator('html')).not.toHaveAttribute('data-assistant-loading-seen', 'true');
+    expect(targetLoads()).toHaveLength(1);
+  });
+}
+
+test('switching assistant conversations retries failures and opens only the latest selection', async ({ page }) => {
+  const state = await mockAssistant(page);
+  addSwitchTargets(state);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openExistingConversation(page);
+  const history = page.getByTestId('assistant-history').filter({ visible: true });
+  const shopping = history.getByRole('button', { name: '打开对话：下周采购', exact: true });
+  const dinner = history.getByRole('button', { name: '打开对话：晚餐安排', exact: true });
+
+  state.failedConversationLoads.add(shoppingConversationId);
+  await shopping.click();
+  await expect(history.getByRole('alert')).toBeVisible();
+  await expect(page).toHaveURL(`${base}/assistant/conversations/${conversationId}`);
+  await expect(page.getByLabel('发送给助手', { exact: true }).filter({ visible: true })).toBeEditable();
+
+  const gate = deferred();
+  state.conversationGates.set(shoppingConversationId, gate.promise);
+  try {
+    await history.getByRole('button', { name: '重试', exact: true }).click();
+    await expect.poll(() => state.requests.filter(request => request.method === 'GET' && request.path.endsWith(shoppingConversationId)).length).toBe(2);
+    await expect(shopping).toHaveAttribute('aria-busy', 'true');
+    const aborted = page.waitForEvent('requestfailed', { predicate: request => new URL(request.url()).pathname.endsWith(shoppingConversationId) });
+    await dinner.click();
+    await aborted;
+    await expect(page).toHaveURL(`${base}/assistant/conversations/${dinnerConversationId}`);
+    await expect(page.getByTestId('assistant-transcript').filter({ visible: true }).getByText('晚餐在家吃。')).toBeVisible();
+  } finally {
+    gate.release();
+  }
+  await expect(page).toHaveURL(`${base}/assistant/conversations/${dinnerConversationId}`);
+  await page.getByTestId('assistant-history').filter({ visible: true }).getByRole('button', { name: '打开对话：周末准备清单', exact: true }).click();
+  await expect(page).toHaveURL(`${base}/assistant/conversations/${conversationId}`);
+  await expect(page.getByTestId('assistant-transcript').filter({ visible: true }).getByText('根据家庭旅行清单，记得带野餐垫和水。')).toBeVisible();
+});
+
+test('leaving the assistant cancels a pending conversation switch', async ({ page }) => {
+  const state = await mockAssistant(page);
+  addSwitchTargets(state);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openExistingConversation(page);
+  const gate = deferred();
+  state.conversationGates.set(shoppingConversationId, gate.promise);
+  const shopping = page.getByTestId('assistant-history').filter({ visible: true }).getByRole('button', { name: '打开对话：下周采购', exact: true });
+  try {
+    await shopping.click();
+    await expect.poll(() => state.requests.some(request => request.method === 'GET' && request.path.endsWith(shoppingConversationId))).toBe(true);
+    const aborted = page.waitForEvent('requestfailed', { predicate: request => new URL(request.url()).pathname.endsWith(shoppingConversationId) });
+    await page.getByRole('tab', { name: '今日', exact: true }).click();
+    await aborted;
+  } finally {
+    gate.release();
+  }
+  await expect(page).toHaveURL(`${base}/today`);
+});
 
 async function openModelSettings(page: Page) {
   await page.getByRole('button', { name: '助手选项', exact: true }).click();
