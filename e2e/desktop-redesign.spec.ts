@@ -970,12 +970,15 @@ test.describe('today mini calendar in Asia/Shanghai', () => {
       return route.fulfill({ json: { events: [sameDayEvent] } });
     });
 
+    const nextWeekHeading = page.getByRole('heading', { name: '未来 7 天', exact: true });
+    let nextWeekYWhileLoading = 0;
     try {
       await page.goto(`${base}/today`);
       await expect(page.getByTestId('today-timeline')).toBeVisible();
       await expect(page.getByRole('heading', { name: '待办', exact: true })).toBeVisible();
       await expect(page.getByRole('progressbar', { name: '正在加载小日历计数' })).toBeVisible();
       await expect(page.getByRole('button', { name: '2026年11月8日', exact: true })).toBeVisible();
+      nextWeekYWhileLoading = (await nextWeekHeading.boundingBox())!.y;
     } finally {
       finishMonthRequest();
     }
@@ -985,6 +988,8 @@ test.describe('today mini calendar in Asia/Shanghai', () => {
     await page.getByRole('button', { name: '重试加载小日历计数' }).click();
     await expect(page.getByRole('button', { name: '2026年11月8日，2 项安排', exact: true })).toBeVisible();
     await expect(page.getByText('无法加载小日历计数，请重试。')).toHaveCount(0);
+    // Loading spinner lives inside the month header row, so the section below does not shift.
+    expect((await nextWeekHeading.boundingBox())!.y).toBe(nextWeekYWhileLoading);
   });
 });
 

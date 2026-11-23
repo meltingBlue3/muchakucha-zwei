@@ -66,7 +66,14 @@ export function useTodayCalendar(householdId: string | null | undefined, today: 
 
   const latestRefresh = useRef(refresh);
   latestRefresh.current = refresh;
-  useFocusEffect(useCallback(() => { void latestRefresh.current(); }, []));
+  const hasFocusedOnce = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (!hasFocusedOnce.current) {
+      hasFocusedOnce.current = true;
+      return;
+    }
+    void latestRefresh.current();
+  }, []));
 
   return { month, range, selectMonth, refresh, events: visibleResult?.events ?? null, status: visibleResult?.status ?? 'loading' };
 }

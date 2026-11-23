@@ -5,7 +5,7 @@ import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import CalendarDays from 'lucide-react-native/icons/calendar';
 import Pencil from 'lucide-react-native/icons/pencil';
-import { Button, Inline, Stack, Text, TextField } from './primitives';
+import { Button, Inline, Spinner, Stack, Text, TextField } from './primitives';
 import { theme } from './theme';
 import { daysSinceMonday, formatYearMonth, formatDayLabel, normalizeDateInput, normalizeTimeInput, parseDateValue, toDateValue, weekHeader } from './date-values';
 import { useTranslation } from '../i18n';
@@ -43,6 +43,7 @@ export function CalendarGrid({
   compact = false,
   dayCounts,
   visibleMonth,
+  loadingLabel,
   onMonthChange,
 }: {
   value: string;
@@ -50,6 +51,7 @@ export function CalendarGrid({
   compact?: boolean;
   dayCounts?: Readonly<Record<string, number>> | undefined;
   visibleMonth?: Date;
+  loadingLabel?: string | undefined;
   onMonthChange?: (year: number, month: number) => void;
 }) {
   const { t } = useTranslation('picker');
@@ -81,7 +83,7 @@ export function CalendarGrid({
   const shift = (delta: number) => {
     const next = new Date(month.getFullYear(), month.getMonth() + delta, 1);
     if (visibleMonth === undefined) setPickerMonth(next);
-    else onMonthChange?.(next.getFullYear(), next.getMonth());
+    onMonthChange?.(next.getFullYear(), next.getMonth());
   };
   const monthLabel = formatYearMonth(month);
   const navButton = (label: string, delta: number, icon: React.ReactNode) => (
@@ -92,7 +94,10 @@ export function CalendarGrid({
   return (
     <Stack gap={1}>
       <Inline>
-        <Text variant="label" accessibilityLiveRegion="polite" style={{ flex: 1 }}>{monthLabel}</Text>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
+          <Text variant="label" accessibilityLiveRegion="polite">{monthLabel}</Text>
+          {loadingLabel ? <Spinner label={loadingLabel} /> : null}
+        </View>
         {navButton(t('previousMonth'), -1, <ChevronLeft size={theme.controlSizes.icon} color={theme.colors.ink} />)}
         {navButton(t('nextMonth'), 1, <ChevronRight size={theme.controlSizes.icon} color={theme.colors.ink} />)}
       </Inline>
