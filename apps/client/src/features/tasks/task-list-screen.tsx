@@ -301,6 +301,7 @@ export default function TaskListScreen() {
             <StatusPanel
               action={null}
               body={generationBehindBody()}
+              focusHeading={false}
               heading={generationBehindHeading()}
               kind="offline"
             />
