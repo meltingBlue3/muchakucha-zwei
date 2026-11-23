@@ -26,16 +26,46 @@ export function PickerActions({ onCancel, onConfirm, confirmLabel, confirmDisabl
   );
 }
 
+export type DayCountTone = 'calendarLoadLow' | 'calendarLoadMedium' | 'calendarLoadHigh' | 'calendarLoadHeavy';
+
+/** Maps a day's combined event + task count to a progressive load color token. */
+export function dayCountTone(count: number): DayCountTone {
+  if (count >= 7) return 'calendarLoadHeavy';
+  if (count >= 5) return 'calendarLoadHigh';
+  if (count >= 3) return 'calendarLoadMedium';
+  return 'calendarLoadLow';
+}
+
 /** A Monday-first month grid. `value` is "YYYY-MM-DD". */
-export function CalendarGrid({ value, onSelect, compact = false, markedDates = [] }: { value: string; onSelect(value: string): void; compact?: boolean; markedDates?: string[] }) {
+export function CalendarGrid({
+  value,
+  onSelect,
+  compact = false,
+  dayCounts,
+  onMonthChange,
+}: {
+  value: string;
+  onSelect(value: string): void;
+  compact?: boolean;
+  dayCounts?: Readonly<Record<string, number>> | undefined;
+  onMonthChange?: ((year: number, month: number) => void) | undefined;
+}) {
   const { t } = useTranslation('picker');
   const dense = useDesktopDensity();
   const target = compact || dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget;
   const selected = parseDateValue(value);
   const [month, setMonth] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
+  const monthChangeRef = useRef(onMonthChange);
+  monthChangeRef.current = onMonthChange;
+  const monthRef = useRef(month);
+  monthRef.current = month;
   useEffect(() => {
-    setMonth(current => current.getFullYear() === selected.getFullYear() && current.getMonth() === selected.getMonth()
-      ? current : new Date(selected.getFullYear(), selected.getMonth(), 1));
+    const nextYear = selected.getFullYear();
+    const nextMonth = selected.getMonth();
+    if (monthRef.current.getFullYear() === nextYear && monthRef.current.getMonth() === nextMonth) return;
+    const next = new Date(nextYear, nextMonth, 1);
+    setMonth(next);
+    monthChangeRef.current?.(nextYear, nextMonth);
     // Follow the selection only when the value itself changes.
   }, [value]);
   const today = toDateValue(new Date());
@@ -51,7 +81,11 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
     while (cells.length % 7 !== 0) cells.push(outside ? new Date(month.getFullYear(), month.getMonth(), cells.length - leading + 1) : null);
     return Array.from({ length: cells.length / 7 }, (_, row) => cells.slice(row * 7, row * 7 + 7));
   }, [month, outside]);
-  const shift = (delta: number) => setMonth(current => new Date(current.getFullYear(), current.getMonth() + delta, 1));
+  const shift = (delta: number) => {
+    const next = new Date(month.getFullYear(), month.getMonth() + delta, 1);
+    setMonth(next);
+    onMonthChange?.(next.getFullYear(), next.getMonth());
+  };
   const monthLabel = formatYearMonth(month);
   const navButton = (label: string, delta: number, icon: React.ReactNode) => (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => shift(delta)} style={({ pressed }) => ({ width: target, height: target, borderRadius: theme.borderRadii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
@@ -76,11 +110,30 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
             const isSelected = dayValue === value;
             const isToday = dayValue === today;
             const otherMonth = day.getMonth() !== month.getMonth();
+            const count = dayCounts?.[dayValue] ?? 0;
+            const countLabel = count > 99 ? '99+' : String(count);
+            const filled = isSelected || isToday;
+            const baseLabel = isToday ? t('today', { date: formatDayLabel(day) }) : formatDayLabel(day);
+            const dayLabel = count > 0 ? t('dayItems', { label: baseLabel, count }) : baseLabel;
+            const badge = count > 0 ? (
+              <Text
+                variant="caption"
+                color={dayCountTone(count)}
+                style={{
+                  fontSize: theme.typography.dayCount.fontSize,
+                  lineHeight: theme.typography.dayCount.lineHeight,
+                  fontFamily: theme.fontFamilies.numericStrong,
+                  fontWeight: count >= 7 ? '700' : theme.typography.dayCount.fontWeight,
+                }}
+              >
+                {countLabel}
+              </Text>
+            ) : null;
             return (
-              <View key={column} style={{ flex: 1, alignItems: 'center' }}>
+              <View key={column} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', height: target }}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={isToday ? t('today', { date: formatDayLabel(day) }) : formatDayLabel(day)}
+                  accessibilityLabel={dayLabel}
                   accessibilityState={{ selected: isSelected }}
                   aria-pressed={isSelected}
                   onPress={() => onSelect(dayValue)}
@@ -93,7 +146,36 @@ export function CalendarGrid({ value, onSelect, compact = false, markedDates = [
                     backgroundColor: isSelected ? (isToday ? theme.colors.accent : theme.colors.primary) : isToday ? theme.colors.accentSoft : pressed ? theme.colors.surfaceMuted : theme.colors.transparent,
                   })}
                 >
-                  <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accentStrong' : otherMonth ? 'inkFaint' : 'ink'} style={dense || compact ? { fontSize: theme.typography.meta.fontSize + 0.5 } : undefined}>{day.getDate()}</Text>{markedDates.includes(dayValue) ? <View style={{ position: 'absolute', bottom: 0, width: theme.spacing[1], height: theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: isSelected ? theme.colors.surface : theme.colors.inkMuted }} /> : null}
+                  <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text variant="numeral" color={isSelected ? 'surface' : isToday ? 'accentStrong' : otherMonth ? 'inkFaint' : 'ink'} style={dense || compact ? { fontSize: theme.typography.meta.fontSize + 0.5 } : undefined}>{day.getDate()}</Text>
+                    {badge && !filled ? (
+                      <View
+                        pointerEvents="none"
+                        importantForAccessibility="no-hide-descendants"
+                        aria-hidden
+                        style={{ position: 'absolute', left: '100%', top: -(theme.spacing[1] - 1), marginLeft: 1 }}
+                      >
+                        {badge}
+                      </View>
+                    ) : null}
+                  </View>
+                  {badge && filled ? (
+                    <View
+                      pointerEvents="none"
+                      importantForAccessibility="no-hide-descendants"
+                      aria-hidden
+                      style={{
+                        position: 'absolute',
+                        top: -(theme.spacing[1] - 1),
+                        left: '78%',
+                        paddingHorizontal: theme.spacing[1] / 2,
+                        borderRadius: theme.borderRadii.full,
+                        backgroundColor: theme.colors.surface,
+                      }}
+                    >
+                      {badge}
+                    </View>
+                  ) : null}
                 </Pressable>
               </View>
             );

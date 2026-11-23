@@ -877,3 +877,52 @@ for (const width of [320, 1440]) {
     }
   });
 }
+
+test('today mini calendar displays color-scaled superscript item counts across months', async ({ page }, testInfo) => {
+  await setup(page);
+  const denseEvents = [
+    // Today (Nov 10): 2 events (+ 1 task from setup => 3 items -> medium ochre)
+    { id: 'e-span', householdId, title: '全家旅行', startTime: '2026-11-09T00:00:00+08:00', endTime: '2026-11-12T00:00:00+08:00', allDay: true, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null },
+    { id: 'e-today', householdId, title: '朵朵家长会', startTime: '2026-11-10T10:00:00+08:00', endTime: '2026-11-10T11:30:00+08:00', allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null },
+    // Nov 18: 5 events -> high vermilion
+    ...Array.from({ length: 5 }, (_, i) => ({ id: `e-high-${i}`, householdId, title: `忙碌事项 ${i + 1}`, startTime: `2026-11-18T${String(9 + i).padStart(2, '0')}:00:00+08:00`, endTime: `2026-11-18T${String(10 + i).padStart(2, '0')}:00:00+08:00`, allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null })),
+    // Nov 25: 8 events -> heavy crimson
+    ...Array.from({ length: 8 }, (_, i) => ({ id: `e-heavy-${i}`, householdId, title: `密集行程 ${i + 1}`, startTime: `2026-11-25T${String(8 + i).padStart(2, '0')}:00:00+08:00`, endTime: `2026-11-25T${String(9 + i).padStart(2, '0')}:00:00+08:00`, allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null })),
+  ];
+  const decEvents = [
+    { id: 'e-dec-1', householdId, title: '年末体检', startTime: '2026-12-15T09:00:00+08:00', endTime: '2026-12-15T11:00:00+08:00', allDay: false, labels: [], location: null, description: null, createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null },
+  ];
+  await page.route(url => url.pathname.endsWith('/events'), route => {
+    const start = new URL(route.request().url()).searchParams.get('startDate');
+    const end = new URL(route.request().url()).searchParams.get('endDate');
+    if (start === '2026-11-30' && end === '2027-01-03') return route.fulfill({ json: { events: decEvents } });
+    return route.fulfill({ json: { events: denseEvents } });
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/today`);
+
+  // Verify low (Nov 8 = 1 task, Nov 9 = 1 spanning event), medium (Nov 10 today = 3), high (Nov 18 = 5), heavy (Nov 25 = 8), and empty (Nov 12 = 0).
+  const lowBtn = page.getByRole('button', { name: '2026年11月8日，1 项安排', exact: true });
+  const medBtn = page.getByRole('button', { name: '2026年11月10日，今天，3 项安排', exact: true });
+  const highBtn = page.getByRole('button', { name: '2026年11月18日，5 项安排', exact: true });
+  const heavyBtn = page.getByRole('button', { name: '2026年11月25日，8 项安排', exact: true });
+  const emptyBtn = page.getByRole('button', { name: '2026年11月12日', exact: true });
+  for (const btn of [lowBtn, medBtn, highBtn, heavyBtn, emptyBtn]) await expect(btn).toBeVisible();
+
+  // Check distinct computed colors across the 4 load tiers on the superscript badges.
+  const badgeColor = (btn: typeof lowBtn) => btn.locator('[aria-hidden="true"]').evaluate(el => getComputedStyle(el.firstElementChild as HTMLElement).color);
+  expect(await badgeColor(lowBtn)).toBe('rgb(47, 107, 79)');
+  expect(await badgeColor(medBtn)).toBe('rgb(149, 101, 17)');
+  expect(await badgeColor(highBtn)).toBe('rgb(194, 56, 28)');
+  expect(await badgeColor(heavyBtn)).toBe('rgb(139, 26, 58)');
+  await expect(emptyBtn.locator('[aria-hidden="true"]')).toHaveCount(0);
+
+  await page.screenshot({ path: testInfo.outputPath('today-mini-calendar-1440.png') });
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  // Switching to December loads December's events without losing Today's timeline.
+  await page.getByRole('button', { name: '下个月', exact: true }).click();
+  await expect(page.getByRole('button', { name: '2026年12月15日，1 项安排', exact: true })).toBeVisible();
+  await expect(page.getByTestId('today-timeline')).toBeVisible();
+});

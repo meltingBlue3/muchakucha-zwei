@@ -1,7 +1,7 @@
 import type { PropsWithChildren } from 'react';
 import type { EventListResponseDto, EventResponseDto, TaskResponseDto } from '@muchakucha/api-client';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import { AppState } from 'react-native';
+import { AppState, Dimensions, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import TodayRoute from '../../../../app/(protected)/households/[id]/today';
@@ -164,4 +164,48 @@ test('a response started yesterday cannot overwrite the new day after arriving l
   await act(async () => { finishYesterday({ events: [yesterday], total: 1 }); });
   expect(view.getByText(today.title)).toBeTruthy();
   expect(view.queryByText(yesterday.title)).toBeNull();
+});
+
+test('on desktop loads the full visible month grid for the mini calendar and refetches when switching months', async () => {
+  const originalOS = Platform.OS;
+  const originalDims = Dimensions.get('window');
+  Object.defineProperty(Platform, 'OS', { value: 'web', configurable: true });
+  Dimensions.set({ window: { ...originalDims, width: 1440, height: 900 } });
+  try {
+    const octLate = event('月底聚餐', '2026-10-28T18:00:00', '2026-10-28T20:00:00');
+    const novMid = event('十一月安排', '2026-11-18T09:00:00', '2026-11-18T10:00:00');
+    mockListEvents.mockImplementation((_token: string, _id: string, start: string, end: string) => {
+      if (start === '2026-09-28' && end === '2026-11-01') return Promise.resolve({ events: [today, octLate] });
+      if (start === '2026-10-26' && end === '2026-12-06') return Promise.resolve({ events: [octLate, novMid] });
+      return Promise.resolve({ events: start === '2026-10-11' ? [today] : [] });
+    });
+    mockListTasks.mockResolvedValue({
+      tasks: [{
+        id: 't1', title: '月底缴费', householdId: 'household-1',
+        dueDate: new Date('2026-10-28T10:00:00').toISOString(),
+        status: 'pending', priority: 'medium', assigneeIds: [], labels: [], createdBy: 'user-1',
+        myReminder: { mode: 'default', minutesBefore: null },
+        createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
+      }],
+    });
+
+    const view = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 1440, height: 900 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}>
+        <MuchakuchaThemeProvider><TodayRoute /></MuchakuchaThemeProvider>
+      </SafeAreaProvider>,
+    );
+
+    // October 28 (> 7 days after Oct 11) combines the event + task = 2 items; Oct 11 has 1 event.
+    expect(view.getByRole('button', { name: '2026年10月11日，今天，1 项安排' })).toBeTruthy();
+    expect(view.getByRole('button', { name: '2026年10月28日，2 项安排' })).toBeTruthy();
+
+    // Switching to November loads November's grid without losing Today's timeline.
+    await fireEvent.press(view.getByRole('button', { name: '下个月' }));
+    expect(view.getByRole('button', { name: '2026年11月18日，1 项安排' })).toBeTruthy();
+    expect(view.getByTestId('today-timeline')).toBeTruthy();
+    await act(async () => { view.unmount(); });
+  } finally {
+    Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
+    Dimensions.set({ window: originalDims });
+  }
 });

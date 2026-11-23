@@ -72,4 +72,16 @@ describe('measured WCAG 2.2 AA palette contract', () => {
       expect(contrast(theme.colors.surface, color)).toBeGreaterThanOrEqual(4.5);
     }
   });
+
+  test('keeps every mini-calendar load count color readable on white and paper', () => {
+    for (const color of [
+      theme.colors.calendarLoadLow,
+      theme.colors.calendarLoadMedium,
+      theme.colors.calendarLoadHigh,
+      theme.colors.calendarLoadHeavy,
+    ]) {
+      expect(contrast(color, theme.colors.surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(color, theme.colors.canvas)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 });
