@@ -92,15 +92,25 @@ export type HouseholdTab = typeof destinations[number]['key'] | FamilyPage | 'mo
 
 export const householdPath = (householdId: string, page: string): `/households/${string}` => `/households/${encodeURIComponent(householdId)}/${page}`;
 
+/** 今日, 日历 and 任务: the pages the 总览 can show across households. */
+export const timePages = ['today', 'events', 'tasks'] as const;
+export type TimePage = typeof timePages[number];
+export const isTimePage = (page: string): page is TimePage => (timePages as readonly string[]).includes(page);
+export const overviewPath = (page: TimePage): `/overview/${TimePage}` => `/overview/${page}`;
+
 /**
  * Phones: a bottom tab bar of the five daily destinations. Wide screens: a
  * sidebar with the household switch on top (`header`), the destinations, the
  * family pages, any page-specific content (`children`, such as the assistant's
  * conversations) and the account at the bottom (`footer`).
  */
-export function HouseholdNavigation({ householdId, active, belowActive = false, children, header, footer, badges }: {
+export function HouseholdNavigation({ householdId, active, belowActive = false, children, header, footer, badges, timeScope = 'household', familyHeader }: {
   householdId: string;
   active: HouseholdTab;
+  /** `overview`: 今日, 日历 and 任务 lead to the 总览, the other pages to the current household. */
+  timeScope?: 'overview' | 'household';
+  /** Wide screens in the 总览: names the household whose pages follow (笔记, 助手, 家庭设置 …). */
+  familyHeader?: ReactNode;
   /** Desktop: numbers beside destinations, such as today's count and overdue tasks. */
   badges?: Partial<Record<HouseholdTab, NavBadge>>;
   /** The page sits below the selected destination (助手 › 模型配置), so selecting it again goes back up. */
@@ -117,8 +127,10 @@ export function HouseholdNavigation({ householdId, active, belowActive = false, 
   const { rail } = useSidebarRail();
   const badgeId = useId();
   const { t } = useTranslation('navigation');
+  const overview = timeScope === 'overview';
+  const pathOf = (key: string) => overview && isTimePage(key) ? overviewPath(key) : householdPath(householdId, key);
   const go = (key: string) => {
-    if (active !== key || belowActive) router.replace(householdPath(householdId, key));
+    if (active !== key || belowActive) router.replace(pathOf(key));
   };
 
   if (!wide) {
@@ -173,16 +185,30 @@ export function HouseholdNavigation({ householdId, active, belowActive = false, 
     );
   };
 
+  // In the 总览 the household's own pages sit apart, under the household's
+  // name, so it is clear the merged pages above are not theirs.
+  const merged = overview ? destinations.filter(({ key }) => isTimePage(key)) : destinations;
+  const ownPages = overview ? destinations.filter(({ key }) => !isTimePage(key)) : [];
   return (
     <View testID="global-sidebar" style={{ width: rail ? theme.layout.railWidth : theme.layout.navigationWidth, backgroundColor: theme.colors.canvas, paddingHorizontal: rail ? theme.spacing[2] : theme.spacing[3], paddingTop: theme.spacing[3], paddingBottom: theme.spacing[2] + 2, gap: theme.spacing[4] }}>
       {header}
-      <View accessibilityRole="tablist" accessibilityLabel={t('main')} style={{ gap: theme.spacing[1] / 2 }}>
-        {destinations.map(({ key, icon }) => item(key, icon, 'tab'))}
+      <View accessibilityRole="tablist" accessibilityLabel={overview ? t('overviewPages') : t('main')} style={{ gap: theme.spacing[1] / 2 }}>
+        {merged.map(({ key, icon }) => item(key, icon, 'tab'))}
       </View>
-      <View style={{ gap: theme.spacing[1] / 2 }}>
-        {!rail ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: desktop ? theme.spacing[2] + 2 : theme.spacing[3], marginTop: desktop ? theme.spacing[1] + 2 : 0, marginBottom: theme.spacing[1] + 2, fontWeight: '400' }}>{t('family')}</Text> : null}
-        {familyPages.map(({ key, icon }) => item(key, icon, 'link'))}
-      </View>
+      {overview ? (
+        <View style={{ gap: theme.spacing[1] / 2, borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[3] }}>
+          {!rail ? familyHeader : null}
+          <View accessibilityRole="tablist" accessibilityLabel={t('familyPages')} style={{ gap: theme.spacing[1] / 2 }}>
+            {ownPages.map(({ key, icon }) => item(key, icon, 'tab'))}
+          </View>
+          {familyPages.map(({ key, icon }) => item(key, icon, 'link'))}
+        </View>
+      ) : (
+        <View style={{ gap: theme.spacing[1] / 2 }}>
+          {!rail ? <Text variant="caption" color="inkFaint" style={{ paddingHorizontal: desktop ? theme.spacing[2] + 2 : theme.spacing[3], marginTop: desktop ? theme.spacing[1] + 2 : 0, marginBottom: theme.spacing[1] + 2, fontWeight: '400' }}>{t('family')}</Text> : null}
+          {familyPages.map(({ key, icon }) => item(key, icon, 'link'))}
+        </View>
+      )}
       {!desktop && children ? <View style={{ flex: 1, minHeight: 0 }}>{children}</View> : <View style={{ flex: 1 }} />}
       {footer}
     </View>

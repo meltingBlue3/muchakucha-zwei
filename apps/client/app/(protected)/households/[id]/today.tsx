@@ -30,6 +30,10 @@ import { lunarDateOn, useLunarCalendar } from '../../../../src/features/lunar/lu
 import { holidayNameOn, useJapaneseCalendar } from '../../../../src/features/wareki/japanese-calendar';
 import { partitionTodayTasks } from '../../../../src/features/tasks/today-tasks';
 import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../../../src/ui/primitives';
+import { useCurrentUser } from '../../../../src/features/auth/use-current-user';
+import { overviewHouseholds, useHouseholdMarks } from '../../../../src/features/households/household-marks';
+import { householdClashes, overviewTasks } from '../../../../src/features/overview/overview-items';
+import { NotIncludedNote, OthersHiddenNote, OverviewLegend } from '../../../../src/features/overview/overview-legend';
 import { theme } from '../../../../src/ui/theme';
 
 function todayIso(): string {
@@ -37,8 +41,18 @@ function todayIso(): string {
 }
 
 export default function TodayRoute() {
-  const { t } = useTranslation(['today', 'tasks', 'events', 'households', 'auth', 'navigation', 'notes']);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  return <TodayScreen />;
+}
+
+/**
+ * Today for one household, or with `overview` for every household in the
+ * 总览: there each row carries its household's seal, tasks are the person's
+ * own and the unassigned ones, and events that overlap across households say so.
+ */
+export function TodayScreen({ overview = false }: { overview?: boolean }) {
+  const { t } = useTranslation(['today', 'tasks', 'events', 'households', 'auth', 'navigation', 'notes', 'overview']);
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = overview ? undefined : params.id;
   const router = useRouter();
   const desktop = useDesktop();
   // What the pane beside Today holds decides which of Today's columns stay.
@@ -54,21 +68,27 @@ export default function TodayRoute() {
   const deleteEvent = useContentDelete('events');
   const editEvent = useContentEdit('events');
   const { width } = useWindowDimensions();
-  const { viewState, currentHouseholdId } = useHouseholdContext();
+  const { viewState, currentHouseholdId, households } = useHouseholdContext();
+  const user = useCurrentUser();
+  const marks = useHouseholdMarks();
+  const includedIds = useMemo(() => overviewHouseholds(households).map(h => h.id), [households]);
+  // Workspace view state is kept apart for the 总览, as for each household.
+  const viewKey = overview ? 'overview' : id;
 
   const [upcomingEvents, setUpcomingEvents] = useState<EventResponseDto[]>([]);
   const [events, setEvents] = useState<EventResponseDto[]>([]);
   const [tasks, setTasks] = useState<TaskResponseDto[]>([]);
-  const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
+  const [members, setMembers] = useState<Array<Pick<GetHouseholdMemberDto, 'userId' | 'displayName'>>>([]);
   const [loading, setLoading] = useState(true);
   const loadedDay = useRef<string | null>(null);
   const requestGeneration = useRef(0);
   const [error, setError] = useState<'auth:errors.sessionExpired' | 'loadError' | 'refreshError' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [, setCalendarDate] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, todayIso());
-  const [showUpcoming, setShowUpcoming] = useWorkspaceState(`view:${id}:today:upcoming`, false);
-  const [allOverdue, setAllOverdue] = useWorkspaceState(`view:${id}:today:allOverdue`, false);
-  const [allUnscheduled, setAllUnscheduled] = useWorkspaceState(`view:${id}:today:allUnscheduled`, false);
+  const [, setCalendarDate] = useWorkspaceState<string | null>(`view:${viewKey}:events:selectedDateIso`, todayIso());
+  const [showUpcoming, setShowUpcoming] = useWorkspaceState(`view:${viewKey}:today:upcoming`, false);
+  const [allOverdue, setAllOverdue] = useWorkspaceState(`view:${viewKey}:today:allOverdue`, false);
+  const [allUnscheduled, setAllUnscheduled] = useWorkspaceState(`view:${viewKey}:today:allUnscheduled`, false);
+  const [showAllTasks, setShowAllTasks] = useWorkspaceState(`view:${viewKey}:today:allAssignees`, false);
   const now = useMinuteClock();
   const currentDate = toDateIso(now.date);
   const lunarToday = useLunarCalendar() ? lunarDateOn(currentDate) : null;
@@ -80,10 +100,11 @@ export default function TodayRoute() {
   ), [events, currentDate]);
 
   const householdId = id ?? currentHouseholdId;
-  const dayKey = `${householdId}:${currentDate}`;
+  const dayKey = `${overview ? `overview:${includedIds.join(',')}` : householdId}:${currentDate}`;
   const ready = !loading && loadedDay.current === dayKey;
+  // In the 总览 the mini calendar counts every included household, as the page does.
   const { month: calendarMonth, range: calendarRange, selectMonth, refresh: refreshCalendar, events: calendarEvents, status: calendarStatus } =
-    useTodayCalendar(householdId, currentDate, desktop && viewState !== 'resolving');
+    useTodayCalendar(overview ? { overview: includedIds } : { householdId }, currentDate, desktop && viewState !== 'resolving');
 
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -110,6 +131,20 @@ export default function TodayRoute() {
       nextDay.setDate(nextDay.getDate() + 1);
       const nextWeek = new Date(`${currentDate}T12:00:00`);
       nextWeek.setDate(nextWeek.getDate() + 7);
+      if (overview) {
+        const [eventsResult, tasksResult, upcomingResult] = await Promise.all([
+          sessionApiClient.listOverviewEvents(token, currentDate, currentDate, true),
+          sessionApiClient.listOverviewTasks(token),
+          desktop ? sessionApiClient.listOverviewEvents(token, toDateIso(nextDay), toDateIso(nextWeek), true) : Promise.resolve(null),
+        ]);
+        if (request !== requestGeneration.current) return;
+        loadedDay.current = dayKey;
+        setEvents(eventsResult.events);
+        setUpcomingEvents(upcomingResult?.events.filter(event => toDateIso(new Date(event.startTime)) > currentDate) ?? []);
+        setMembers(tasksResult.members);
+        setTasks(tasksResult.tasks);
+        return;
+      }
       const [eventsResult, tasksResult, householdResult, upcomingResult] = await Promise.all([
         // Use the calendar query so events spanning into today are included.
         sessionApiClient.listEvents(token, householdId, currentDate, currentDate, undefined, undefined, true),
@@ -131,27 +166,40 @@ export default function TodayRoute() {
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
-  }, [householdId, currentDate, dayKey, desktop]);
+  }, [householdId, currentDate, dayKey, desktop, overview]);
 
   const completion = useTaskCompletion(householdId ?? undefined, fetchData);
 
+  // The 总览 lists the person's own tasks and unassigned ones unless they ask for all.
+  const { shown: listedTasks, othersOpen } = useMemo(
+    () => overview ? overviewTasks(tasks, user?.id ?? null, showAllTasks) : { shown: tasks, othersOpen: 0 },
+    [overview, tasks, user?.id, showAllTasks],
+  );
   const { overdueTasks, todayTasks, unscheduledTasks, approachingTasks, otherUpcomingTasks } = useMemo(
-    () => partitionTodayTasks(tasks, completion.undoTaskId),
+    () => partitionTodayTasks(listedTasks, completion.undoTaskId),
     // The partitions read the local clock even when the task data is unchanged.
-    [tasks, completion.undoTaskId, currentDate],
+    [listedTasks, completion.undoTaskId, currentDate],
   );
   const day = useMemo(() => arrangeDay(todayEvents, todayTasks), [todayEvents, todayTasks]);
+  const clashes = useMemo(() => overview ? householdClashes(todayEvents) : new Map<string, EventResponseDto>(), [overview, todayEvents]);
+  const markOf = useCallback((itemHousehold: string) => overview ? marks.get(itemHousehold) : undefined, [overview, marks]);
+  const clashOf = useCallback((event: EventResponseDto) => {
+    const earlier = clashes.get(event.id);
+    return earlier ? t('overview:clash', { household: marks.get(earlier.householdId)?.name ?? '', title: earlier.title }) : undefined;
+  }, [clashes, marks, t]);
+  const othersNote = overview ? <OthersHiddenNote count={othersOpen} showAll={showAllTasks} onToggle={() => setShowAllTasks(value => !value)} /> : null;
   const dayCounts = useMemo(
-    () => calendarEvents === null ? undefined : countCalendarItemsByDate(calendarEvents, tasks, calendarRange),
-    [calendarEvents, tasks, calendarRange],
+    () => calendarEvents === null ? undefined : countCalendarItemsByDate(calendarEvents, listedTasks, calendarRange),
+    [calendarEvents, listedTasks, calendarRange],
   );
 
   const previewTasks = (items: TaskResponseDto[], expanded: boolean) => expanded
     ? items
     : items.filter((task, index) => index < 3 || task.id === completion.undoTaskId);
 
-  useContentChanges(householdId, fetchData);
-  useContentChanges(householdId, refreshCalendar);
+  const changeScope = overview ? includedIds : householdId;
+  useContentChanges(changeScope, fetchData);
+  useContentChanges(changeScope, refreshCalendar);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -177,34 +225,39 @@ export default function TodayRoute() {
   const handleEventPress = useCallback(
     (event: EventResponseDto) => {
       rememberRouteTrigger();
+      // Each item opens in its own household, which in the 总览 may not be the current one.
       openResource(
-        `/households/${encodeURIComponent(householdId!)}/events/${encodeURIComponent(event.id)}`,
+        `/households/${encodeURIComponent(event.householdId)}/events/${encodeURIComponent(event.id)}`,
       );
     },
-    [router, householdId, openResource],
+    [openResource],
   );
 
   const handleTaskPress = useCallback(
     (task: TaskResponseDto) => {
       rememberRouteTrigger();
       openResource(
-        `/households/${encodeURIComponent(householdId!)}/tasks/${encodeURIComponent(task.id)}`,
+        `/households/${encodeURIComponent(task.householdId)}/tasks/${encodeURIComponent(task.id)}`,
       );
     },
-    [router, householdId, openResource],
+    [openResource],
   );
 
   const create = (kind: 'events' | 'tasks' | 'notes' | 'birthdays') => () => {
     if (kind === 'events') setCalendarDate(todayIso());
     rememberRouteTrigger();
-    openResource(`/households/${encodeURIComponent(householdId!)}/${kind}/new`);
+    // From the 总览 the form asks which household to save to, starting with the current one.
+    openResource(`/households/${encodeURIComponent(householdId!)}/${kind}/new${overview && kind !== 'birthdays' ? '?overview=1' : ''}`);
   };
+  const calendarPath = overview ? '/overview/events' as const : `/households/${encodeURIComponent(householdId ?? '')}/events` as const;
+  const tasksPath = overview ? '/overview/tasks' as const : `/households/${encodeURIComponent(householdId ?? '')}/tasks` as const;
 
   const taskRow = (task: TaskResponseDto, options: { time?: string; showDue?: boolean } = {}) => (
     <TaskCard
       key={task.id}
       task={task}
       assignees={(task.assigneeIds ?? []).map((uid) => ({ id: uid, name: memberNameMap.get(uid) ?? t('tasks:unknownMember') }))}
+      mark={markOf(task.householdId)}
       onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
       {...(options.time === undefined ? {} : { time: options.time })}
       showDue={options.showDue ?? true}
@@ -213,7 +266,7 @@ export default function TodayRoute() {
     />
   );
   const eventRow = (event: EventResponseDto, timeColumn: boolean) => (
-    <EventCard key={event.id} event={event} withinDay timeColumn={timeColumn} selected={event.id === openEventId} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />
+    <EventCard key={event.id} event={event} withinDay timeColumn={timeColumn} selected={event.id === openEventId} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} mark={markOf(event.householdId)} note={overview ? clashOf(event) : undefined} />
   );
 
   const wide = width >= theme.layout.navigationBreakpoint;
@@ -298,10 +351,11 @@ export default function TodayRoute() {
       {timelineGroup}
     </Stack>
   );
-  const secondary = unscheduledGroup || upcomingGroup ? <Stack gap={6}>{unscheduledGroup}{upcomingGroup}</Stack> : null;
+  const secondary = unscheduledGroup || upcomingGroup || othersNote ? <Stack gap={6}>{unscheduledGroup}{upcomingGroup}{othersNote}</Stack> : null;
 
   return (
     <HouseholdScreen
+      overview={overview}
       active="today"
       accessibilityLabel={t('main')}
       layout={desktop ? 'workspace' : 'document'}
@@ -317,13 +371,14 @@ export default function TodayRoute() {
       ]} />}
     >
       <Stack gap={desktop ? 0 : 6} style={desktop ? { flex: 1, minHeight: 0 } : undefined}>
-        <PageIntro title={desktop ? t('navigation:pages.today') : formatDate(now.date)} subtitle={summary} />
+        <PageIntro title={desktop ? t('navigation:pages.today') : formatDate(now.date)} subtitle={summary} {...(overview && desktop ? { action: <OverviewLegend /> } : {})} />
+        {overview && !desktop ? <OverviewLegend /> : null}
 
         {loading ? <LoadingState label={t('loading')} /> : null}
         {error !== null ? <LoadError message={t(error)} onRetry={() => { void fetchData(); void refreshCalendar(); }} retryAccessibilityLabel={t('retryLoad')} /> : null}
 
         {ready && viewState !== 'resolving' ? (
-          desktop ? <DesktopToday detail={detail} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} dayCounts={dayCounts} calendarMonth={calendarMonth} calendarStatus={calendarStatus} onCalendarMonthChange={selectMonth} onCalendarRetry={refreshCalendar} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenTasks={() => router.push(`/households/${encodeURIComponent(householdId!)}/tasks`)} onCreateTask={create('tasks')} /> : wide && secondary
+          desktop ? <DesktopToday detail={detail} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} dayCounts={dayCounts} calendarMonth={calendarMonth} calendarStatus={calendarStatus} onCalendarMonthChange={selectMonth} onCalendarRetry={refreshCalendar} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(calendarPath); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(calendarPath); }} onOpenTasks={() => router.push(tasksPath)} onCreateTask={create('tasks')} {...(overview ? { marks: { markOf, clashOf }, todoFooter: othersNote, upcomingFooter: <NotIncludedNote /> } : {})} /> : wide && secondary
             ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing[8] }}>
                 <View style={{ flex: 3, minWidth: 0 }}>{primary}</View>
                 <View style={{ flex: 2, minWidth: 0 }}>{secondary}</View>

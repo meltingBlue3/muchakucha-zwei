@@ -1,4 +1,7 @@
 import { useTranslation } from '../../i18n';
+import { useOverviewMarks } from '../overview/overview-marks-context';
+import { HouseholdSeal } from '../../ui/household-seal';
+import { ClashNote } from './event-card';
 import { useState, type ReactNode } from 'react';
 import { CardActionsMenu } from '../../ui/card-actions-menu';
 import { RowInteraction } from '../../ui/row-interaction';
@@ -38,7 +41,10 @@ export function DayAgendaRow({ event, dateIso, selected, onPress, nameKey = 'car
   const [hovered, setHovered] = useState(false);
   const { t } = useTranslation('events');
   const [focused, setFocused] = useState(false);
-  const color = event.labels?.[0]?.color ?? theme.colors.inkMuted;
+  const marks = useOverviewMarks();
+  const mark = marks?.markOf(event.householdId);
+  const clash = marks?.clashOf(event);
+  const color = mark?.color ?? event.labels?.[0]?.color ?? theme.colors.inkMuted;
   const allDay = coversDay(event, dateIso);
   const first = toDateIso(new Date(event.startTime));
   const last = eventLastDate(event);
@@ -56,7 +62,7 @@ export function DayAgendaRow({ event, dateIso, selected, onPress, nameKey = 'car
     <Pressable
       {...insetFocusRing}
       accessibilityRole="button"
-      accessibilityLabel={t(nameKey, { title: event.title })}
+      accessibilityLabel={[t(nameKey, { title: event.title }), mark?.name, clash].filter(Boolean).join('，')}
       {...(selected ? { 'aria-current': true } : {})}
       onPress={onPress}
       onFocus={() => setFocused(true)}
@@ -67,10 +73,12 @@ export function DayAgendaRow({ event, dateIso, selected, onPress, nameKey = 'car
       <View style={{ width: theme.borderWidths.focus + 1, borderRadius: theme.borderRadii.full, backgroundColor: color }} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] + 2 }}>
+          {mark ? <HouseholdSeal {...mark} size="sm" /> : null}
           <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1, fontWeight: selected ? '600' : '400' }}>{event.title}</Text>
           {event.recurrenceRuleId ? <RecurrenceBadge /> : null}
         </View>
         <Text variant="caption" color="inkMuted" numberOfLines={1} style={{ fontWeight: '400', fontFamily: theme.fontFamilies.numeric }}>{detail}</Text>
+        {clash ? <ClashNote text={clash} /> : null}
       </View>
     </Pressable>
     {actions.length ? <View style={{ paddingRight: theme.spacing[1] }}><CardActionsMenu subject={t('card', { title: event.title })} actions={actions} /></View> : null}

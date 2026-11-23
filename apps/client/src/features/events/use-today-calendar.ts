@@ -11,8 +11,17 @@ type CalendarResult = {
   events: EventResponseDto[] | null;
 };
 
-export function useTodayCalendar(householdId: string | null | undefined, today: string, enabled: boolean) {
-  const dayKey = [householdId, today].join(':');
+/** Whose events the grid counts: one household, or the households the 总览 includes. */
+export type TodayCalendarSource =
+  | { householdId: string | null | undefined }
+  | { overview: readonly string[] };
+
+export function useTodayCalendar(source: TodayCalendarSource, today: string, enabled: boolean) {
+  const householdId = 'householdId' in source ? source.householdId : null;
+  // Choosing other households for the 总览 reloads the counts but keeps the month.
+  const included = 'overview' in source ? source.overview.join(',') : null;
+  const scope = included === null ? householdId : 'overview';
+  const dayKey = [scope, today].join(':');
   const [selection, setSelection] = useState<{ dayKey: string; month: Date }>();
   const [result, setResult] = useState<CalendarResult>();
   const requestGeneration = useRef(0);
@@ -24,7 +33,7 @@ export function useTodayCalendar(householdId: string | null | undefined, today: 
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
   const range = useMemo(() => toCalendarGridRangeIso(year, monthIndex), [year, monthIndex]);
-  const key = [householdId, range.start, range.end].join(':');
+  const key = [scope, included, range.start, range.end].join(':');
   const visibleResult = result?.key === key ? result : undefined;
 
   const selectMonth = useCallback((year: number, month: number) => {
@@ -32,7 +41,7 @@ export function useTodayCalendar(householdId: string | null | undefined, today: 
   }, [dayKey]);
 
   const refresh = useCallback(async () => {
-    if (!enabled || !householdId) return;
+    if (!enabled || (!householdId && !included)) return;
     const request = ++requestGeneration.current;
     setResult(previous => ({ key, status: 'loading', events: previous?.key === key ? previous.events : null }));
     const fail = () => {
@@ -51,12 +60,14 @@ export function useTodayCalendar(householdId: string | null | undefined, today: 
       // the next date for evening events in time zones west of UTC.
       const end = parseDateValue(range.end);
       end.setDate(end.getDate() + 1);
-      const { events } = await sessionApiClient.listEvents(token, householdId, range.start, toDateIso(end), undefined, undefined, true);
+      const { events } = householdId
+        ? await sessionApiClient.listEvents(token, householdId, range.start, toDateIso(end), undefined, undefined, true)
+        : await sessionApiClient.listOverviewEvents(token, range.start, toDateIso(end), true);
       if (request === requestGeneration.current) setResult({ key, status: 'ready', events });
     } catch {
       fail();
     }
-  }, [enabled, householdId, key, range]);
+  }, [enabled, householdId, included, key, range]);
 
   // Opening a desktop detail can blur Today while leaving the grid usable.
   useEffect(() => {

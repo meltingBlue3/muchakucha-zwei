@@ -1,14 +1,18 @@
 import type { PropsWithChildren } from 'react';
-import type { EventListResponseDto, EventResponseDto, TaskResponseDto } from '@muchakucha/api-client';
+import type { CurrentUserDto, EventListResponseDto, EventResponseDto, ListMyHouseholdsItemDto, TaskResponseDto } from '@muchakucha/api-client';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { AppState, Dimensions, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import TodayRoute from '../../../../app/(protected)/households/[id]/today';
+import TodayRoute, { TodayScreen } from '../../../../app/(protected)/households/[id]/today';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 
 const mockListEvents = jest.fn();
 const mockListTasks = jest.fn();
+const mockListOverviewEvents = jest.fn();
+const mockListOverviewTasks = jest.fn();
+let mockHouseholds: ListMyHouseholdsItemDto[] = [];
+let mockUser: CurrentUserDto | null = null;
 
 jest.mock('expo-router', () => ({ usePathname: () => '/',
   useLocalSearchParams: () => ({ id: 'household-1' }),
@@ -25,6 +29,8 @@ jest.mock('../../auth/session-runtime', () => ({
   sessionApiClient: {
     listEvents: (...args: unknown[]) => mockListEvents(...args),
     listTasks: (...args: unknown[]) => mockListTasks(...args),
+    listOverviewEvents: (...args: unknown[]) => mockListOverviewEvents(...args),
+    listOverviewTasks: (...args: unknown[]) => mockListOverviewTasks(...args),
     getHousehold: () => Promise.resolve({ members: [] }),
   },
   sessionTransport: { getAccessToken: () => Promise.resolve('access-token') },
@@ -32,9 +38,11 @@ jest.mock('../../auth/session-runtime', () => ({
 
 jest.mock('../../households/household-context', () => ({
   useHouseholdContext: () => ({
-    viewState: 'ready', currentHouseholdId: 'household-1', households: [],
+    viewState: 'ready', currentHouseholdId: 'household-1', households: mockHouseholds,
   }),
 }));
+
+jest.mock('../../auth/use-current-user', () => ({ useCurrentUser: () => mockUser }));
 
 jest.mock('../../households/household-screen', () => ({
   HouseholdScreen: ({ children }: PropsWithChildren) => children,
@@ -61,6 +69,8 @@ function mount() {
 }
 
 beforeEach(() => {
+  mockHouseholds = [];
+  mockUser = null;
   jest.useFakeTimers();
   jest.setSystemTime(new Date('2026-10-11T08:00:00'));
   mockListEvents.mockReset().mockResolvedValue({ events: [yesterday, today] });
@@ -68,6 +78,28 @@ beforeEach(() => {
 });
 
 afterEach(() => jest.useRealTimers());
+
+function dueTask(id: string, dueDate: string, assigneeIds: string[], householdId = 'household-1'): TaskResponseDto {
+  return {
+    id, title: id, householdId, dueDate: new Date(dueDate).toISOString(),
+    status: 'pending', priority: 'medium', assigneeIds, labels: [], createdBy: 'user-1',
+    myReminder: { mode: 'default', minutesBefore: null },
+    createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
+  };
+}
+
+async function onDesktop(run: () => Promise<void>) {
+  const originalOS = Platform.OS;
+  const originalDims = Dimensions.get('window');
+  Object.defineProperty(Platform, 'OS', { value: 'web', configurable: true });
+  Dimensions.set({ window: { ...originalDims, width: 1440, height: 900 } });
+  try {
+    await run();
+  } finally {
+    Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
+    Dimensions.set({ window: originalDims });
+  }
+}
 
 // Invariant: Today contains only events that overlap the current local date,
 // even when the API returns a padded range or the mounted screen crosses midnight.
@@ -210,4 +242,36 @@ test('on desktop loads the full visible month grid for the mini calendar and ref
     Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
     Dimensions.set({ window: originalDims });
   }
+});
+
+test('in the 总览 the mini calendar counts every included household and only the tasks the page lists', async () => {
+  await onDesktop(async () => {
+    const household = (id: string, name: string, joinedAt: string): ListMyHouseholdsItemDto => ({
+      id, name, role: 'MEMBER', memberCount: 2, ownerMembershipId: `owner-${id}`, inOverview: true, joinedAt,
+    });
+    mockHouseholds = [household('household-1', '我们家', '2026-01-01T00:00:00Z'), household('household-2', '爸妈家', '2026-02-01T00:00:00Z')];
+    mockUser = { id: 'user-1', displayName: '林' } as CurrentUserDto;
+    const parents = { ...event('爸妈家聚餐', '2026-10-28T18:00:00', '2026-10-28T20:00:00'), householdId: 'household-2' };
+    mockListOverviewEvents.mockImplementation((_token: string, start: string, end: string) => {
+      if (start === '2026-09-28' && end === '2026-11-02') return Promise.resolve({ events: [today, parents] });
+      return Promise.resolve({ events: start === '2026-10-11' ? [today] : [] });
+    });
+    mockListOverviewTasks.mockResolvedValue({
+      tasks: [dueTask('我的缴费', '2026-10-28T10:00:00', ['user-1']), dueTask('妈妈的体检', '2026-10-28T09:00:00', ['user-2'], 'household-2')],
+      total: 2, materializedThrough: '2026-10-11T00:00:00Z', members: [],
+    });
+
+    const view = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 1440, height: 900 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}>
+        <MuchakuchaThemeProvider><TodayScreen overview /></MuchakuchaThemeProvider>
+      </SafeAreaProvider>,
+    );
+
+    // The other household's dinner and the person's own task; the task assigned to a family member stays out.
+    expect(view.getByRole('button', { name: '2026年10月28日，2 项安排' })).toBeTruthy();
+    expect(mockListEvents).not.toHaveBeenCalled();
+    await fireEvent.press(view.getByRole('button', { name: '显示全部' }));
+    expect(view.getByRole('button', { name: '2026年10月28日，3 项安排' })).toBeTruthy();
+    await act(async () => { view.unmount(); });
+  });
 });

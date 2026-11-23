@@ -13,7 +13,7 @@ import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { PageIntro } from '../../ui/page-intro';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { GroupLabel, ListGroup } from '../../ui/list-group';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { TaskResponseDto, GetHouseholdMemberDto } from '@muchakucha/api-client';
@@ -39,6 +39,10 @@ import { TaskCard } from './task-card';
 import { toDateValue } from '../../ui/date-values';
 import { useMinuteClock } from '../../ui/use-minute-clock';
 import { Button, EmptyState, LoadError, LoadingState, Stack, StatusPanel } from '../../ui/primitives';
+import { useCurrentUser } from '../auth/use-current-user';
+import { overviewHouseholds, useHouseholdMarks } from '../households/household-marks';
+import { overviewTasks } from '../overview/overview-items';
+import { OthersHiddenNote, OverviewLegend } from '../overview/overview-legend';
 
 type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
 type PriorityFilterKey = 'all' | 'low' | 'medium' | 'high' | 'urgent';
@@ -81,28 +85,42 @@ export function groupTasksByDue(tasks: TaskResponseDto[], status: FilterKey, tod
 }
 
 export default function TaskListScreen() {
-  const { t } = useTranslation(['tasks', 'shared', 'auth', 'navigation', 'editConflict', 'recurrence']);
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  return <TaskList />;
+}
+
+/**
+ * The task list of one household, or with `overview` of every household in
+ * the 总览: rows carry their household's seal, and the list keeps to the
+ * person's own and unassigned tasks unless they ask for all.
+ */
+export function TaskList({ overview = false }: { overview?: boolean }) {
+  const { t } = useTranslation(['tasks', 'shared', 'auth', 'navigation', 'editConflict', 'recurrence', 'overview']);
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = overview ? undefined : params.id;
+  const viewKey = overview ? 'overview' : id;
+  const user = useCurrentUser();
+  const marks = useHouseholdMarks();
   const desktop = useDesktop();
   const [query, setQuery] = useState('');
   const openResource = useResourceNavigation();
   const openTaskId = useOpenWindowItem('taskId');
   const deleteTask = useContentDelete('tasks');
   const editTask = useContentEdit('tasks');
-  const { currentHouseholdId } = useHouseholdContext();
+  const { currentHouseholdId, households } = useHouseholdContext();
+  const includedIds = useMemo(() => overviewHouseholds(households).map(h => h.id), [households]);
 
   const [tasks, setTasks] = useState<TaskResponseDto[]>([]);
   const [materializedThrough, setMaterializedThrough] = useState<string | null>(null);
-  const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
+  const [members, setMembers] = useState<Array<Pick<GetHouseholdMemberDto, 'userId' | 'displayName'>>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<'auth:errors.sessionExpired' | 'refreshError' | 'loadError' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useWorkspaceState<FilterKey>(`view:${id}:tasks:filter`, 'pending');
-  const [priorityFilter, setPriorityFilter] = useWorkspaceState<PriorityFilterKey>(`view:${id}:tasks:priorityFilter`, 'all');
-  const [assigneeFilter, setAssigneeFilter] = useWorkspaceState<string>(`view:${id}:tasks:assigneeFilter`, 'all');
-  const [labelFilter, setLabelFilter] = useWorkspaceState<string>(`view:${id}:tasks:labelFilter`, 'all');
-  const [recurringFilter, setRecurringFilter] = useWorkspaceState<RecurringFilterKey>(`view:${id}:tasks:recurringFilter`, 'all');
+  const [filter, setFilter] = useWorkspaceState<FilterKey>(`view:${viewKey}:tasks:filter`, 'pending');
+  const [priorityFilter, setPriorityFilter] = useWorkspaceState<PriorityFilterKey>(`view:${viewKey}:tasks:priorityFilter`, 'all');
+  const [assigneeFilter, setAssigneeFilter] = useWorkspaceState<string>(`view:${viewKey}:tasks:assigneeFilter`, 'all');
+  const [labelFilter, setLabelFilter] = useWorkspaceState<string>(`view:${viewKey}:tasks:labelFilter`, 'all');
+  const [recurringFilter, setRecurringFilter] = useWorkspaceState<RecurringFilterKey>(`view:${viewKey}:tasks:recurringFilter`, 'all');
+  const [showAllAssignees, setShowAllAssignees] = useWorkspaceState(`view:${viewKey}:tasks:allAssignees`, false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterTrigger = useRef<View>(null);
   const loadedHousehold = useRef<string | null>(null);
@@ -110,6 +128,7 @@ export default function TaskListScreen() {
   const todayIso = toDateValue(useMinuteClock().date);
 
   const householdId = id ?? currentHouseholdId;
+  const loadKey = overview ? `overview:${includedIds.join(',')}` : householdId;
 
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -131,12 +150,17 @@ export default function TaskListScreen() {
     }
     return [...seen.values()];
   }, [tasks]);
-  const householdLabels = useHouseholdLabels(householdId);
-  const availableLabels = useMemo(() => mergeLabels(householdLabels, seenLabels), [householdLabels, seenLabels]);
+  // The 总览 mixes households, whose labels are their own; it offers only the labels its tasks carry.
+  const householdLabels = useHouseholdLabels(overview ? null : householdId);
+  const availableLabels = useMemo(() => overview ? seenLabels : mergeLabels(householdLabels, seenLabels), [overview, householdLabels, seenLabels]);
+  const { shown: listedTasks, othersOpen } = useMemo(
+    () => overview ? overviewTasks(tasks, user?.id ?? null, showAllAssignees) : { shown: tasks, othersOpen: 0 },
+    [overview, tasks, user?.id, showAllAssignees],
+  );
 
   const filteredTasks = useMemo(() => {
     const search = parseSearchQuery(query);
-    let result = tasks.filter(task => search.matches(task.title));
+    let result = listedTasks.filter(task => search.matches(task.title));
     if (filter !== 'all') {
       result = result.filter((t) => t.status === filter);
     }
@@ -151,7 +175,7 @@ export default function TaskListScreen() {
     }
     result = applyRecurringFilter(result, recurringFilter);
     return result;
-  }, [tasks, query, filter, priorityFilter, assigneeFilter, labelFilter, recurringFilter]);
+  }, [listedTasks, query, filter, priorityFilter, assigneeFilter, labelFilter, recurringFilter]);
 
   // Status shows on the page itself, so the 筛选 count covers only what it hides.
   const activeFilterCount = [
@@ -180,7 +204,7 @@ export default function TaskListScreen() {
   const fetchData = useCallback(async () => {
     if (householdId === undefined || householdId === null || householdId === '') return;
     const request = ++requestGeneration.current;
-    if (loadedHousehold.current !== householdId) {
+    if (loadedHousehold.current !== loadKey) {
       setLoading(true); setTasks([]); setMembers([]); setMaterializedThrough(null);
     }
     setError(null);
@@ -191,23 +215,32 @@ export default function TaskListScreen() {
         setError('auth:errors.sessionExpired');
         return;
       }
+      if (overview) {
+        const result = await sessionApiClient.listOverviewTasks(token);
+        if (request !== requestGeneration.current) return;
+        loadedHousehold.current = loadKey;
+        setTasks(result.tasks);
+        setMaterializedThrough(result.materializedThrough ?? null);
+        setMembers(result.members);
+        return;
+      }
       const [tasksResult, householdResult] = await Promise.all([
         sessionApiClient.listTasks(token, householdId),
         sessionApiClient.getHousehold(token, householdId),
       ]);
       if (request !== requestGeneration.current) return;
-      loadedHousehold.current = householdId;
+      loadedHousehold.current = loadKey;
       setTasks(tasksResult.tasks);
       setMaterializedThrough(tasksResult.materializedThrough ?? null);
       setMembers(householdResult.members);
     } catch {
-      if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? 'refreshError' : 'loadError');
+      if (request === requestGeneration.current) setError(loadedHousehold.current === loadKey ? 'refreshError' : 'loadError');
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
-  }, [householdId]);
+  }, [householdId, overview, loadKey]);
 
-  useContentChanges(householdId, fetchData);
+  useContentChanges(overview ? includedIds : householdId, fetchData);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -228,22 +261,23 @@ export default function TaskListScreen() {
   const handleTaskPress = useCallback(
     (task: TaskResponseDto) => {
       rememberRouteTrigger();
+      // A task opens in its own household, which in the 总览 may not be the current one.
       openResource(
-        `/households/${encodeURIComponent(householdId!)}/tasks/${encodeURIComponent(task.id)}`,
+        `/households/${encodeURIComponent(task.householdId)}/tasks/${encodeURIComponent(task.id)}`,
       );
     },
-    [router, householdId, openResource],
+    [openResource],
   );
 
-  const completion = useTaskCompletion(householdId, fetchData);
+  const completion = useTaskCompletion(householdId ?? undefined, fetchData);
   // Leaving the page (a detail window, another tab) closes the undo notice.
   const { dismissUndo } = completion;
   useFocusEffect(useCallback(() => dismissUndo, [dismissUndo]));
 
   const handleCreateTask = useCallback(() => {
     rememberRouteTrigger();
-    openResource(`/households/${encodeURIComponent(householdId!)}/tasks/new`);
-  }, [router, householdId, openResource]);
+    openResource(`/households/${encodeURIComponent(householdId!)}/tasks/new${overview ? '?overview=1' : ''}`);
+  }, [householdId, openResource, overview]);
 
   const generationWindow = classifyGenerationWindow({
     materializedThrough,
@@ -259,6 +293,8 @@ export default function TaskListScreen() {
     labelFilter !== 'all' ? availableLabels.find(l => l.id === labelFilter)?.name ?? t('selectedLabel') : '',
     recurringFilter !== 'all' ? t('recurringOnly') : '',
   ].filter(Boolean).join(' · ') : undefined;
+  const openCount = listedTasks.filter(task => task.status !== 'completed' && task.status !== 'cancelled').length;
+  const countSummary = overview ? t(showAllAssignees ? 'overview:tasksSummaryAll' : 'overview:tasksSummary', { count: openCount }) : t('openCount', { count: openCount });
   const statusControl = <FilterOptions hideLabel label={t('statusField')} options={FILTERS.map(value => {
     const label = value === 'all' ? t('all') : statusLabel(value);
     return { value, label, name: t('filterOption', { label }) };
@@ -266,6 +302,7 @@ export default function TaskListScreen() {
 
   return (
     <HouseholdScreen
+      overview={overview}
       active="tasks"
       accessibilityLabel={t('main')}
       notice={completion.undoNotice}
@@ -277,10 +314,11 @@ export default function TaskListScreen() {
       <Stack gap={desktop ? 3 : 5}>
         <PageIntro
           title={t('navigation:pages.tasks')}
-          {...(filterSummary ? { subtitle: filterSummary } : desktop && !loading ? { subtitle: t('openCount', { count: tasks.filter(task => task.status !== 'completed' && task.status !== 'cancelled').length }) } : {})}
+          {...(filterSummary ? { subtitle: filterSummary } : (desktop || overview) && !loading ? { subtitle: countSummary } : {})}
           {...(desktop ? { controls: statusControl } : {})}
           action={<>{desktop ? <><SearchField label={t('search')} placeholder={t('search')} value={query} onChangeText={setQuery} /></> : null}<FilterButton ref={filterTrigger} label={t('filter')} count={activeFilterCount} onPress={() => setFiltersOpen(true)} /></>}
         />
+        {overview ? <OverviewLegend /> : null}
         {!desktop ? statusControl : null}
         {filtersOpen ? <AppDialog title={t('filter')} trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
           <Stack gap={5}>
@@ -334,6 +372,7 @@ export default function TaskListScreen() {
                   key={task.id}
                   task={task}
                   assignees={(task.assigneeIds ?? []).map((uid) => ({ id: uid, name: memberNameMap.get(uid) ?? t('unknownMember') }))}
+                  mark={overview ? marks.get(task.householdId) : undefined}
                   onPress={handleTaskPress} onEdit={editTask(task)} onDelete={deleteTask(task)}
                   selected={task.id === openTaskId}
                   {...completion.cardProps(task)}
@@ -342,6 +381,7 @@ export default function TaskListScreen() {
             </ListGroup>
           </View>
         ))}
+        {overview && !loading && error === null ? <OthersHiddenNote count={othersOpen} showAll={showAllAssignees} onToggle={() => setShowAllAssignees(value => !value)} /> : null}
       </Stack>
     </HouseholdScreen>
   );

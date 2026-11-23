@@ -260,7 +260,8 @@ test('desktop family switching is anchored and date controls fit their popover',
   const trigger = page.getByRole('button', { name: '当前家庭：林家小院，切换家庭' });
   await trigger.click();
   const switcher = page.getByRole('dialog', { name: '切换家庭', exact: true });
-  await expect(switcher.getByRole('button', { name: /父母的家/ })).toBeVisible();
+  // The 总览 row names its households too; the household row starts with its own name.
+  await expect(switcher.getByRole('button', { name: /^父母的家/ })).toBeVisible();
   await expect(switcher.getByRole('button', { name: '家庭设置', exact: true })).toHaveCount(0);
   const anchor = (await trigger.boundingBox())!;
   const box = (await switcher.boundingBox())!;

@@ -80,6 +80,17 @@ Web 宽度 ≥ 1024px 使用纸色侧栏与白色工作区：工作区外边距 
 - 宽屏文字：页眉标题用 `section`，详情栏标题用 `paneTitle`，清单标题用 `bodySm` 常规字重，组名用 `GroupLabel`，次要信息用 `meta`，日期与时间用 `time`。
 - 家庭切换从侧栏顶部向下展开，账户菜单从侧栏底部向上展开，都不加遮罩。独立确认居中显示，打开时焦点落在安全按钮上。
 - 今日的栏头带去处链接，如「在日历中查看」「全部任务」；待办栏底部可以再添一项；接下来一栏是小月历和未来 7 天。
+
+### 总览
+
+加入两个以上家庭的人有「总览」：今日、日历和任务把他选中的家庭合在一起显示。笔记、助手和家庭设置这些页面仍属于一个家庭。
+
+- 家庭切换菜单最上面是「总览」，下面是各个家庭；不在总览里的家庭注明「不在总览里」，菜单底部可以「调整总览里的家庭」。只有一个家庭时没有总览，界面不变。
+- 每个家庭有一枚方形小印章：家庭名的第一个字，描边和字用 `householdMarkColors` 里的一种颜色，按加入的先后分配。圆形是家人头像，圆点是标签，方形才是家庭；印章不用朱色。总览里的日程和任务在详情一行带印章，宽屏的日程条和月历小点改用家庭颜色。
+- 总览页眉（手机在标题下）列出总览里的家庭和「调整」。总览里的任务只列分给自己的和未分配的，清单底部写「另有 N 项分给家人」并可「显示全部」。宽屏今日的小月历同样只数总览里的家庭和清单列出的任务。
+- 两个家庭的日程时间重叠时，后开始的那条下面用墨色小字写「和某家的「某日程」时间重叠」，不用朱色，因为没有东西逾期。
+- 宽屏侧栏：总览时顶部切换显示「总览」，下面是今日、日历、任务；一条分隔线之后是当前家庭的名字和「换」，再列笔记、助手和家庭页面。手机底栏不变，笔记和助手打开当前家庭，页头写明是哪个家。
+- 在总览里新建时，窗口顶部的「保存到」可以选家庭，默认当前家庭；换家庭会清空负责人和标签，已写的内容留下。
 - 日历的月格铺到工作区底部；跨天日程画成横条，一格放不下时写「还有 N 项」。当日栏分全天和时间线两组。
 - 笔记清单按「最近 7 天」「更早」分组，每行是标题、日期和两行摘要；阅读区栏头写更新时间，右侧是带文字的「编辑」按钮。
 - 助手的对话列表注明对话仅自己可见，底部是模型配置入口；右栏放待确认的操作和查询依据。
@@ -117,12 +128,12 @@ Web 宽度 ≥ 1024px 使用纸色侧栏与白色工作区：工作区外边距 
 | 弹窗、路由窗口与步骤 | [AppDialog](../apps/client/src/ui/app-dialog.tsx)、[RouteWindow](../apps/client/src/ui/route-window.tsx)、[useWindowStep](../apps/client/src/ui/window-step.ts) |
 | 表单、确认与条目操作 | `FormActions`、`ConfirmActions`、`CardActionsMenu` |
 | 编辑行与详情字段 | [compose-rows.tsx](../apps/client/src/ui/compose-rows.tsx)、[DetailPanel / DetailField](../apps/client/src/ui/detail-fields.tsx) |
-| 个人提醒与家庭归属 | `ReminderField` / `ReminderDetailField`、`HouseholdContextNote` |
+| 个人提醒与家庭归属 | `ReminderField` / `ReminderDetailField`、`HouseholdContextNote`、`HouseholdSeal` / `SealStack` |
 | 加载、失败、空数据与撤销提示 | `LoadingState`、`LoadError`、`EmptyState`、[ActionNotice](../apps/client/src/ui/action-notice.tsx) |
 
 ### 弹窗与选择
 
-容器、遮罩、标题、关闭入口和焦点管理统一交给 `AppDialog`；路由窗口复用 `RouteWindow`。共同外观通过基础组件修改，并验证所有使用场景。新建与编辑窗口用 `HouseholdContextNote` 说明保存到哪个家庭。
+容器、遮罩、标题、关闭入口和焦点管理统一交给 `AppDialog`；路由窗口复用 `RouteWindow`。共同外观通过基础组件修改，并验证所有使用场景。新建与编辑窗口用 `HouseholdContextNote` 说明保存到哪个家庭；从总览打开的新建窗口改用 `HouseholdTargetField` 让人选择。
 
 | 类型 | 宽屏 | 窄屏 |
 | --- | --- | --- |

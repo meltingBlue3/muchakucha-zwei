@@ -17,6 +17,9 @@ import { useWorkspaceStore } from './workspace-state';
 import { UnsavedSwitchDialog } from './unsaved-switch-dialog';
 import { useTranslation } from '../i18n';
 
+/** 总览 pages show items of several households; any of their windows may open above them. */
+const isOverviewPage = (name: string) => name === 'overview/today' || name === 'overview/events' || name === 'overview/tasks';
+
 export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 'recurrence-rules' | 'birthdays' | 'households' | 'settings') {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { key } = useRoute();
@@ -27,12 +30,14 @@ export function useRouteWindowClose(resource: 'tasks' | 'events' | 'notes' | 're
   // A retained detail still owns its fallback list when the editor is focused.
   const routeIndex = state?.routes.findIndex(route => route.key === key) ?? -1;
   const previousRoutes = state?.routes.slice(0, Math.max(0, routeIndex)) ?? [];
-  const baseIndex = previousRoutes.reduce((found, route, index) => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id && !/\/(tasks|events|notes|recurrence-rules|birthdays)\/(new|\[)/.test(route.name) ? index : found, -1);
-  const household = previousRoutes.filter(route => route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id);
+  // A page of this household, or a 总览 page, which shows every household's items.
+  const behind = (route: { name: string; params?: object | undefined }) => isOverviewPage(route.name) || (route.name.startsWith('households/[id]/') && (route.params as { id?: string } | undefined)?.id === id);
+  const baseIndex = previousRoutes.reduce((found, route, index) => behind(route) && !/\/(tasks|events|notes|recurrence-rules|birthdays)\/(new|\[)/.test(route.name) ? index : found, -1);
+  const household = previousRoutes.filter(behind);
   const hasBackground = resource === 'households' ? previousRoutes.length > 0 : household.length > 0;
   /** The window opened over its own section's list, or drew that list itself for a direct link. */
   const top = household[household.length - 1];
-  const overList = !top || top.name.startsWith(`households/[id]/${resource}/`);
+  const overList = !top || top.name.startsWith(`households/[id]/${resource}/`) || top.name === `overview/${resource}`;
   const close = useCallback(() => {
     if (desktop && baseIndex >= 0) navigation.dispatch({ type: 'POP', payload: { count: routeIndex - baseIndex } });
     else if (hasBackground) router.back();
@@ -140,7 +145,7 @@ export function RouteWindow({ title, busy = false, children, footer, footerStart
   const { close: dismiss, hasBackground, overList, background: backgroundRoute } = useRouteWindowClose(resource);
   const backgroundInteractive = pane ? !hasBackground : focused;
   // Beside Today a note takes the room of 待办 and 接下来, which Today folds away for it.
-  const besideToday = resource === 'notes' && backgroundRoute === 'households/[id]/today';
+  const besideToday = resource === 'notes' && (backgroundRoute === 'households/[id]/today' || backgroundRoute === 'overview/today');
   const trigger = useRef(getRouteTrigger());
   const background = useRef<View>(null);
   const parentBackground = useContext(DialogBackground);

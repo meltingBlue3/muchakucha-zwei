@@ -44,7 +44,9 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
   const [lastAttempt, setLastAttempt] = useState<Attempt | null>(null);
 
   const write = useCallback(async (attempt: Attempt): Promise<void> => {
-    if (householdId === undefined || householdId === '') return;
+    // A task carries its household, so the 总览 completes each in its own.
+    const taskHousehold = attempt.task.householdId || householdId;
+    if (taskHousehold === undefined || taskHousehold === '') return;
     setFailure(null);
     setLastAttempt(attempt);
     setChangingTaskId(attempt.task.id);
@@ -54,12 +56,12 @@ export function useTaskCompletion(householdId: string | undefined, refresh: () =
         setFailure({ taskId: attempt.task.id, message: 'auth:errors.sessionExpired' });
         return;
       }
-      const saved = await sessionApiClient.updateTask(token, householdId, attempt.task.id, {
+      const saved = await sessionApiClient.updateTask(token, taskHousehold, attempt.task.id, {
         status: attempt.target,
         expectedUpdatedAt: attempt.task.updatedAt,
         ...(attempt.task.recurrence ? { expectedRuleUpdatedAt: attempt.task.recurrence.updatedAt } : {}),
       });
-      notifyContentChanged(householdId, refresh);
+      notifyContentChanged(taskHousehold, refresh);
       // Only a completion is undoable, and only until the next write.
       setUndoable(attempt.target === 'completed' ? { task: saved ?? attempt.task, previousStatus: attempt.previousStatus } : null);
       refresh();

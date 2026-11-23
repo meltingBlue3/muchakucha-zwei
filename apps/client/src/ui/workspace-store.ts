@@ -85,6 +85,24 @@ export function createWorkspaceState(storage?: DraftStorage) {
       for (const key of values.keys()) if (key.startsWith(prefix)) { values.delete(key); dirtyDrafts.delete(key); }
       persist(); emit();
     },
+    /**
+     * Carries the fields under `from` over to `to`, as when a new item's form
+     * changes which household it saves to. `carry` returns the value to keep
+     * for a field, or undefined to leave it behind (assignees and labels
+     * belong to the old household). Edited fields stay edited.
+     */
+    move(from: string, to: string, carry: (field: string, value: unknown) => unknown) {
+      for (const [key, value] of [...values.entries()]) {
+        if (!key.startsWith(from)) continue;
+        const kept = carry(key.slice(from.length), value);
+        if (kept !== undefined) {
+          values.set(to + key.slice(from.length), kept);
+          if (dirtyDrafts.has(key)) dirtyDrafts.add(to + key.slice(from.length));
+        }
+        values.delete(key); dirtyDrafts.delete(key);
+      }
+      persist(); emit();
+    },
     /** Whether anything under `prefix` was edited; an editor's own bookkeeping does not count. */
     hasDrafts: (prefix = 'draft:') => [...dirtyDrafts].some((key) => key.startsWith(prefix) && !isDraftRecord(key)),
     persistenceFailed: () => persistenceError,

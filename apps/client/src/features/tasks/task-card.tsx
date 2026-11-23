@@ -15,6 +15,7 @@ import { statusLabel, formatDueDate, isOverdue } from './task-utils';
 import { completionActionLabel } from './task-completion';
 import { useDesktopDensity } from '../../ui/use-desktop';
 import { useWindowDimensions } from 'react-native';
+import { HouseholdSeal, type HouseholdMark } from '../../ui/household-seal';
 
 interface TaskCardProps {
   table?: boolean;
@@ -35,6 +36,8 @@ interface TaskCardProps {
   showDue?: boolean;
   /** The row whose detail is open beside the list on a wide screen. */
   selected?: boolean;
+  /** In the 总览, the seal of the household the task belongs to. */
+  mark?: HouseholdMark | undefined;
 }
 
 /** A due date in a row: only the clock time when it is today, nothing for today without a time. */
@@ -61,6 +64,7 @@ export function TaskCard({
   showDue: showDueSetting = true,
   selected = false,
   table = false,
+  mark,
 }: TaskCardProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const activeTheme = useTheme<Theme>();
@@ -74,11 +78,12 @@ export function TaskCard({
   const dueLabel = dueText(task.dueDate ?? null);
   const showDue = showDueSetting && dueLabel !== '';
   const labels = task.labels ?? [];
-  const hasDetails = showDue || overdue || task.status !== 'pending' || (!closed && (task.priority === 'high' || task.priority === 'urgent')) || task.recurrenceRuleId != null || labels.length > 0;
+  const hasDetails = mark !== undefined || showDue || overdue || task.status !== 'pending' || (!closed && (task.priority === 'high' || task.priority === 'urgent')) || task.recurrenceRuleId != null || labels.length > 0;
+  const name = t(task.recurrenceRuleId == null ? 'card.title' : 'card.recurring', { title: task.title });
 
   return (
     <ListRow
-      accessibilityLabel={t(task.recurrenceRuleId == null ? 'card.title' : 'card.recurring', { title: task.title })}
+      accessibilityLabel={mark ? `${name}，${mark.name}` : name}
       onPress={() => onPress(task)}
       selected={selected}
       leading={<>
@@ -122,9 +127,10 @@ export function TaskCard({
         </View>
       ) : null}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}><Text variant={dense ? 'bodySm' : 'body'} numberOfLines={dense ? 1 : 2} color={closed ? 'inkFaint' : 'ink'} style={{ flexShrink: 1, textDecorationLine: closed ? 'line-through' : 'none' }}>{task.title}</Text>{dense && !closed && task.priority === 'urgent' ? <Chip tone="accent">{t('priority.urgent')}</Chip> : dense && !closed && task.priority === 'high' ? <Chip>{t('priority.high')}</Chip> : null}{dense && task.recurrenceRuleId ? <RecurrenceBadge /> : null}</View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[2] }}>{dense && mark ? <HouseholdSeal {...mark} size="sm" /> : null}<Text variant={dense ? 'bodySm' : 'body'} numberOfLines={dense ? 1 : 2} color={closed ? 'inkFaint' : 'ink'} style={{ flexShrink: 1, textDecorationLine: closed ? 'line-through' : 'none' }}>{task.title}</Text>{dense && !closed && task.priority === 'urgent' ? <Chip tone="accent">{t('priority.urgent')}</Chip> : dense && !closed && task.priority === 'high' ? <Chip>{t('priority.high')}</Chip> : null}{dense && task.recurrenceRuleId ? <RecurrenceBadge /> : null}</View>
       {hasDetails && !dense ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[2], rowGap: activeTheme.spacing[1], marginTop: activeTheme.spacing[1] / 2 }}>
+          {mark ? <HouseholdSeal {...mark} /> : null}
           {showDue ? <Text variant="time" color={overdue ? 'accent' : 'inkMuted'}>{dueLabel}</Text> : null}
           {overdue ? <Text variant="meta" color="accent">{t('overdue')}</Text> : null}
           {task.status !== 'pending' ? <Text variant="meta" color={completed ? 'success' : task.status === 'in_progress' ? 'ink' : 'inkMuted'}>{cancelled ? t('status.cancelled') : statusLabel(task.status)}</Text> : null}

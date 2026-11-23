@@ -66,6 +66,9 @@ import type {
   UpcomingReminderListDto,
   RegisterReminderPushDto,
   ReminderPushStatusDto,
+  UpdateOverviewHouseholdsDto,
+  OverviewHouseholdsDto,
+  OverviewTaskListResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -795,6 +798,29 @@ export class ApiClient {
 
   async unregisterReminderPush(accessToken: string, signal?: AbortSignal): Promise<void> {
     return this.authenticated<void>('DELETE', '/api/v1/users/me/reminder-push', accessToken, undefined, signal);
+  }
+
+  async updateOverviewHouseholds(accessToken: string, body: UpdateOverviewHouseholdsDto, signal?: AbortSignal): Promise<OverviewHouseholdsDto> {
+    return this.authenticated<OverviewHouseholdsDto>('PUT', '/api/v1/users/me/overview', accessToken, body, signal);
+  }
+
+  async listOverviewEvents(
+    accessToken: string,
+    startDate?: string,
+    endDate?: string,
+    expandRecurring?: boolean,
+    signal?: AbortSignal,
+  ): Promise<EventListResponseDto> {
+    const params = new URLSearchParams();
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    if (expandRecurring !== undefined) params.set('expandRecurring', String(expandRecurring));
+    const qs = params.toString();
+    return this.authenticated<EventListResponseDto>('GET', `/api/v1/users/me/overview/events${qs ? `?${qs}` : ''}`, accessToken, undefined, signal);
+  }
+
+  async listOverviewTasks(accessToken: string, signal?: AbortSignal): Promise<OverviewTaskListResponseDto> {
+    return this.authenticated<OverviewTaskListResponseDto>('GET', '/api/v1/users/me/overview/tasks', accessToken, undefined, signal);
   }
 
   async setTaskReminder(accessToken: string, householdId: string, taskId: string, body: ReminderChoiceDto, signal?: AbortSignal): Promise<ReminderChoiceDto> {

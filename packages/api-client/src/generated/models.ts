@@ -78,6 +78,10 @@ export interface ListMyHouseholdsItemDto {
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
   memberCount: number;
   ownerMembershipId: string;
+  /** Whether your 总览 shows this household. When none of your households is chosen, all of them count as chosen. */
+  inOverview: boolean;
+  /** When you joined, which keeps each household’s mark in the same order. */
+  joinedAt: string;
 }
 
 export interface GetHouseholdMemberDto {
@@ -489,6 +493,30 @@ export interface UpdateReminderSettingsDto {
   dateOnlyTime: string;
   alarm: boolean;
   mutedHouseholdIds: string[];
+}
+
+/** Which of your households the 总览 shows. At least one stays chosen. */
+export interface UpdateOverviewHouseholdsDto {
+  /** Households to show in the 总览; every one must be yours. */
+  householdIds: string[];
+}
+
+export interface OverviewHouseholdsDto {
+  householdIds: string[];
+}
+
+/** A member of one of the households in the 总览, so its tasks can name their assignees. */
+export interface OverviewMemberDto {
+  householdId: string;
+  userId: string;
+  displayName: string;
+}
+
+export interface OverviewTaskListResponseDto {
+  tasks: TaskResponseDto[];
+  total: number;
+  materializedThrough?: string | null;
+  members: OverviewMemberDto[];
 }
 
 export interface UpcomingReminderDto {

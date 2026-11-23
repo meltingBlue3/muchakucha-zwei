@@ -2275,6 +2275,125 @@
         ]
       }
     },
+    "/api/v1/users/me/overview": {
+      "put": {
+        "operationId": "updateOverviewHouseholds",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOverviewHouseholdsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewHouseholdsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "overview"
+        ]
+      }
+    },
+    "/api/v1/users/me/overview/events": {
+      "get": {
+        "operationId": "listOverviewEvents",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "ISO date string (inclusive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "ISO date string (inclusive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expandRecurring",
+            "required": false,
+            "in": "query",
+            "description": "Generate recurring events for a bounded calendar range (at most 366 days).",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "overview"
+        ]
+      }
+    },
+    "/api/v1/users/me/overview/tasks": {
+      "get": {
+        "operationId": "listOverviewTasks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewTaskListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "overview"
+        ]
+      }
+    },
     "/api/v1/users/me/reminder-settings": {
       "get": {
         "operationId": "getReminderSettings",
@@ -3564,6 +3683,14 @@
           "ownerMembershipId": {
             "type": "string",
             "format": "uuid"
+          },
+          "inOverview": {
+            "type": "boolean",
+            "description": "Whether your 总览 shows this household. When none of your households is chosen, all of them count as chosen."
+          },
+          "joinedAt": {
+            "type": "string",
+            "description": "When you joined, which keeps each household’s mark in the same order."
           }
         },
         "required": [
@@ -3571,7 +3698,9 @@
           "name",
           "role",
           "memberCount",
-          "ownerMembershipId"
+          "ownerMembershipId",
+          "inOverview",
+          "joinedAt"
         ]
       },
       "UpdateHouseholdDto": {
@@ -4949,6 +5078,85 @@
             "description": "Colour read before editing; sent with expectedName."
           }
         }
+      },
+      "UpdateOverviewHouseholdsDto": {
+        "type": "object",
+        "properties": {
+          "householdIds": {
+            "minItems": 1,
+            "description": "Households to show in the 总览; every one must be yours.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "householdIds"
+        ]
+      },
+      "OverviewHouseholdsDto": {
+        "type": "object",
+        "properties": {
+          "householdIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "householdIds"
+        ]
+      },
+      "OverviewMemberDto": {
+        "type": "object",
+        "properties": {
+          "householdId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "householdId",
+          "userId",
+          "displayName"
+        ]
+      },
+      "OverviewTaskListResponseDto": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskResponseDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "materializedThrough": {
+            "type": "object",
+            "nullable": true
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverviewMemberDto"
+            }
+          }
+        },
+        "required": [
+          "tasks",
+          "total",
+          "materializedThrough",
+          "members"
+        ]
       },
       "ReminderSettingsHouseholdDto": {
         "type": "object",

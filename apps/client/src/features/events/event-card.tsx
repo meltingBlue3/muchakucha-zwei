@@ -11,6 +11,19 @@ import { RecurrenceBadge } from '../recurrence/recurrence-badge';
 import { birthdayNote } from '../birthdays/birthday-dates';
 import { formatDateRange, formatTime, formatTimeRange, toDateIso } from './calendar-utils';
 import { useDesktop } from '../../ui/use-desktop';
+import { HouseholdSeal, type HouseholdMark } from '../../ui/household-seal';
+import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
+
+/** Says that an event overlaps another household's: quiet ink, not vermilion, since nothing is late. */
+export function ClashNote({ text }: { text: string }) {
+  const activeTheme = useTheme<Theme>();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1] + 2, marginTop: activeTheme.spacing[1] + 2 }}>
+      <TriangleAlert size={14} color={activeTheme.colors.inkMuted} strokeWidth={activeTheme.controlSizes.iconStroke} />
+      <Text variant="caption" color="inkMuted" style={{ flexShrink: 1 }}>{text}</Text>
+    </View>
+  );
+}
 
 interface EventCardProps {
   onEdit?: (() => void) | undefined;
@@ -23,10 +36,14 @@ interface EventCardProps {
   timeColumn?: boolean;
   /** Its window is open beside the list. */
   selected?: boolean;
+  /** In the 总览, the seal of the household the event belongs to. */
+  mark?: HouseholdMark | undefined;
+  /** A line under the details, such as a clash with another household's event. */
+  note?: string | undefined;
 }
 
 /** One event as a list row: start time, a bar in its label's color, then title and place. */
-export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false, timeColumn = false, selected = false }: EventCardProps) {
+export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false, timeColumn = false, selected = false, mark, note }: EventCardProps) {
   const { t } = useTranslation('events');
   const activeTheme = useTheme<Theme>();
   const desktop = useDesktop();
@@ -38,11 +55,12 @@ export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false,
   const showWhen = !(withinDay && event.allDay && toDateIso(new Date(event.startTime)) === toDateIso(new Date(event.endTime)));
   const birthday = birthdayNote(event);
   const subject = t('card', { title: event.title });
-  const name = birthday === null ? subject : t('cardBirthday', { name: subject, birthday });
+  const named = birthday === null ? subject : t('cardBirthday', { name: subject, birthday });
+  const name = mark ? `${named}，${mark.name}` : named;
 
   return (
     <ListRow
-      accessibilityLabel={event.recurrenceRuleId == null ? name : t('cardRecurring', { name })}
+      accessibilityLabel={[event.recurrenceRuleId == null ? name : t('cardRecurring', { name }), note].filter(Boolean).join('。')}
       onPress={() => onPress(event)}
       selected={selected}
       leading={desktop ? <View style={{ alignSelf: 'stretch', width: activeTheme.spacing[1], backgroundColor: labels[0]?.color ?? activeTheme.colors.inkFaint, marginVertical: activeTheme.spacing[2] }} /> : <>
@@ -58,13 +76,15 @@ export function EventCard({ event, onPress, onEdit, onDelete, withinDay = false,
       ]} />}
     >
       <Text variant={desktop ? 'bodySm' : 'body'} color="ink" numberOfLines={desktop ? 1 : 2}>{event.title}</Text>
-      {showWhen || place !== null || event.recurrenceRuleId != null || labels.length > 0 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[2], rowGap: activeTheme.spacing[1], marginTop: activeTheme.spacing[1] / 2 }}>
+      {mark || showWhen || place !== null || event.recurrenceRuleId != null || labels.length > 0 ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: activeTheme.spacing[2], rowGap: activeTheme.spacing[1], marginTop: activeTheme.spacing[1] / 2 }}>
+        {mark ? <HouseholdSeal {...mark} size={desktop ? 'sm' : 'md'} /> : null}
         {showWhen || desktop ? <Text variant="time">{desktop && event.allDay ? t('allDay') : when}</Text> : null}
         {place !== null ? <Text variant="meta" numberOfLines={1} style={{ flexShrink: 1 }}>{place}</Text> : null}
         {birthday !== null ? <Text variant="meta" numberOfLines={1}>{birthday}</Text> : null}
         {event.recurrenceRuleId != null ? <RecurrenceBadge /> : null}
         <LabelTags labels={labels} />
       </View> : null}
+      {note ? <ClashNote text={note} /> : null}
     </ListRow>
   );
 }

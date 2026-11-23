@@ -17,6 +17,8 @@ const alpha: ListMyHouseholdsItemDto = {
   role: 'MEMBER',
   memberCount: 2,
   ownerMembershipId: 'membership-owner-a',
+  inOverview: true,
+  joinedAt: '2026-01-01T00:00:00.000Z',
 };
 const beta: ListMyHouseholdsItemDto = {
   id: 'household-b',
@@ -24,6 +26,8 @@ const beta: ListMyHouseholdsItemDto = {
   role: 'ADMIN',
   memberCount: 3,
   ownerMembershipId: 'membership-owner-b',
+  inOverview: true,
+  joinedAt: '2026-02-01T00:00:00.000Z',
 };
 
 function createStore(): CurrentHouseholdStore & {
@@ -37,6 +41,8 @@ function createStore(): CurrentHouseholdStore & {
   };
   return {
     hydrate: jest.fn(async () => undefined),
+    getScope: () => null,
+    setScope: jest.fn(async () => undefined),
     getCurrentId: () => currentId,
     setCurrentId: jest.fn(async (id: string) => {
       currentId = id;
@@ -117,6 +123,22 @@ describe('HouseholdProvider recovery state machine', () => {
     expect(view.getByText(/^ready:/).props.children).toMatch(/Gamma/);
     expect(view.queryByText(/Beta/)).toBeNull();
     expect(api.listMyHouseholds).toHaveBeenCalledTimes(1);
+  });
+
+  test('a household list from an API without the overview fields counts every household as included', async () => {
+    const store = createStore();
+    const older = [alpha, beta].map(({ inOverview: _inOverview, joinedAt: _joinedAt, ...household }) => household);
+    const api = { listMyHouseholds: jest.fn().mockResolvedValue(older) } as unknown as HouseholdApi;
+    const Provider = createHouseholdProvider(api, () => 'access-token', store);
+    let context: HouseholdContextValue | undefined;
+    function Probe() { context = useHouseholdContext(); return <Text>{context.viewState}</Text>; }
+    const view = await render(<Provider><Probe /></Provider>);
+    await view.findByText('ready');
+    expect(context!.households.map(({ id, inOverview, joinedAt }) => ({ id, inOverview, joinedAt }))).toEqual([
+      { id: beta.id, inOverview: true, joinedAt: '' },
+      { id: alpha.id, inOverview: true, joinedAt: '' },
+    ]);
+    expect(context!.scope).toBe('overview');
   });
 
   test('hydrates before resolution and reaches accessChanged when a switch target disappeared', async () => {
