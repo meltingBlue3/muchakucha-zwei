@@ -44,6 +44,9 @@ export const theme = createTheme({
     destructivePressed: '#841515',
     destructiveSoft: '#FBE3E1',
     focusRing: '#C2381C',
+    /** Translucent ink, so a Web scrollbar reads the same on paper and white. */
+    scrollbarThumb: 'rgba(29,27,24,0.20)',
+    scrollbarThumbActive: 'rgba(29,27,24,0.36)',
     link: '#1D1B18',
     disabled: '#DDD9D1',
     transparent: 'transparent',
@@ -219,6 +222,12 @@ export const theme = createTheme({
   focus: {
     width: 2,
     offset: 2,
+  },
+  /** Web scrollbars that take layout width: the gutter, and the thumb drawn inside it. */
+  scrollbar: {
+    gutter: 10,
+    thumb: 4,
+    thumbActive: 6,
   },
   elevation: {
     softWeb: '0 1px 2px rgba(29,27,24,0.06), 0 8px 24px rgba(29,27,24,0.08)',
