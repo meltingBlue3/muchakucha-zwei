@@ -15,6 +15,7 @@ import { completionActionLabel } from '../tasks/task-completion';
 import { isOverdue } from '../tasks/task-utils';
 import type { TaskCardCompletionProps } from '../tasks/use-task-completion';
 import { toDateIso } from './calendar-utils';
+import { eventLastDate } from './desktop-month';
 
 const minutes = (iso: string) => { const date = new Date(iso); return date.getHours() * 60 + date.getMinutes(); };
 const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
@@ -216,11 +217,46 @@ function UpcomingDays({ date, events, tasks, onOpenEvent, onOpenTask }: { date: 
   );
 }
 
-export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, unscheduled, upcoming, upcomingEvents, renderTask, taskCompletion, onOpenEvent, onOpenTask, onSelectDate, detail, onOpenCalendar, onOpenTasks, onCreateTask }: {
+/**
+ * Counts non-cancelled events across every local day they span, plus active
+ * dated tasks (excluding completed and cancelled), bounded to `range`.
+ */
+export function countCalendarItemsByDate(
+  events: ReadonlyArray<Pick<EventResponseDto, 'startTime' | 'endTime' | 'cancelledAt'>>,
+  tasks: ReadonlyArray<Pick<TaskResponseDto, 'dueDate' | 'status'>>,
+  range: { start: string; end: string },
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const bump = (iso: string) => {
+    if (iso < range.start || iso > range.end) return;
+    counts[iso] = (counts[iso] ?? 0) + 1;
+  };
+  for (const event of events) {
+    if (event.cancelledAt) continue;
+    const eventStart = toDateIso(new Date(event.startTime));
+    const eventEnd = eventLastDate(event);
+    const first = eventStart > range.start ? eventStart : range.start;
+    const last = eventEnd < range.end ? eventEnd : range.end;
+    if (first > last) continue;
+    for (const day = new Date(`${first}T12:00:00`); toDateIso(day) <= last; day.setDate(day.getDate() + 1)) {
+      bump(toDateIso(day));
+    }
+  }
+  for (const task of tasks) {
+    if (task.status === 'completed' || task.status === 'cancelled') continue;
+    if (!task.dueDate) continue;
+    bump(toDateIso(new Date(task.dueDate)));
+  }
+  return counts;
+}
+
+export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, unscheduled, upcoming, upcomingEvents, dayCounts, onCalendarMonthChange, renderTask, taskCompletion, onOpenEvent, onOpenTask, onSelectDate, detail, onOpenCalendar, onOpenTasks, onCreateTask }: {
   /** What the pane beside Today holds, if one is open. */
   detail: 'tasks' | 'events' | 'notes' | null;
   onOpenCalendar(): void; onOpenTasks(): void; onCreateTask(): void;
   upcomingEvents: EventResponseDto[];
+  dayCounts?: Readonly<Record<string, number>>;
+  onCalendarMonthChange?(year: number, month: number): void;
   date: string; nowMinutes: number; events: EventResponseDto[]; todayTasks: TaskResponseDto[]; overdue: TaskResponseDto[]; unscheduled: TaskResponseDto[]; upcoming: TaskResponseDto[];
   renderTask(task: TaskResponseDto): ReactNode;
   /** The completion control's wiring for one task, the same the 待办 rows receive. */
@@ -251,9 +287,8 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
   const overlapsTask = (start: number, end: number) => scheduled.some(task => { const due = minutes(task.dueDate!); return due < end && due + TASK_SPAN > start; });
   const overlapsEvent = (due: number) => timed.some(event => minutes(event.startTime) < due + TASK_SPAN && eventEnd(event) > due);
   const nowShown = nowMinutes >= DAY_START && nowMinutes <= DAY_END;
-  const markedDates = [date, ...upcoming.flatMap(task => task.dueDate ? [toDateIso(new Date(task.dueDate))] : []), ...upcomingEvents.map(event => toDateIso(new Date(event.startTime)))];
   const next = <Stack gap={5}>
-    <CalendarGrid compact markedDates={markedDates} value={date} onSelect={onSelectDate} />
+    <CalendarGrid compact dayCounts={dayCounts} value={date} onSelect={onSelectDate} onMonthChange={onCalendarMonthChange} />
     <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4] }}>
       <Text accessibilityRole="header" aria-level={2} variant="label" style={{ marginBottom: theme.spacing[2] }}>{t('nextWeek')}</Text>
       <UpcomingDays date={date} events={upcomingEvents} tasks={upcoming} onOpenEvent={onOpenEvent} onOpenTask={task => { setOpenedFromUpcoming(true); onOpenTask(task); }} />

@@ -191,6 +191,7 @@ export const zh = {
     previousMonth: '上个月',
     nextMonth: '下个月',
     today: '{{date}}，今天',
+    dayItems: '{{label}}，{{count}} 项安排',
     invalidDate: '日期无效',
     showCalendar: '切换到日历',
     showKeyboard: '切换到键盘输入',

@@ -1,9 +1,13 @@
 import type { EventResponseDto, TaskResponseDto } from '@muchakucha/api-client';
 import { fireEvent, render, within } from '@testing-library/react-native';
 import type { ComponentProps } from 'react';
+import { StyleSheet } from 'react-native';
 import { formatDate } from '../../../ui/date-values';
+import { dayCountTone } from '../../../ui/picker-panels';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
-import { DesktopToday } from '../desktop-today';
+import { theme } from '../../../ui/theme';
+import { toCalendarGridRangeIso } from '../calendar-utils';
+import { countCalendarItemsByDate, DesktopToday } from '../desktop-today';
 
 const event = (id: string, title: string, startTime: string, endTime: string): EventResponseDto => ({ id, householdId: 'home', title, startTime, endTime, allDay: false, description: null, location: null, labels: [], createdBy: 'user', createdAt: startTime, updatedAt: startTime, recurrenceRuleId: null, recurrence: null, myReminder: { mode: 'default', minutesBefore: null, alarm: null }, cancelledAt: null });
 
@@ -56,4 +60,91 @@ test('a completion that failed on the timeline is reported on its marker with a 
   expect(timeline.getByText('状态没有更新成功，请重试。')).toBeTruthy();
   await fireEvent.press(timeline.getByRole('button', { name: '重试：取快递' }));
   expect(onRetryStatus).toHaveBeenCalled();
+});
+
+test('countCalendarItemsByDate sums spanning events and active dated tasks across the full visible month grid', () => {
+  const range = toCalendarGridRangeIso(2026, 10); // November 2026: 2026-10-26 .. 2026-12-06
+  expect(range).toEqual({ start: '2026-10-26', end: '2026-12-06' });
+
+  const counts = countCalendarItemsByDate(
+    [
+      // Multi-day all-day event ending at midnight of Nov 12 covers Nov 9, 10, 11 only.
+      { startTime: '2026-11-09T00:00:00', endTime: '2026-11-12T00:00:00', cancelledAt: null },
+      // Single-day timed event on Nov 10.
+      { startTime: '2026-11-10T10:00:00', endTime: '2026-11-10T11:30:00', cancelledAt: null },
+      // Event in visible leading week (Oct 28) and visible trailing week (Dec 3).
+      { startTime: '2026-10-28T09:00:00', endTime: '2026-10-28T10:00:00', cancelledAt: null },
+      { startTime: '2026-12-03T18:00:00', endTime: '2026-12-03T19:00:00', cancelledAt: null },
+      // Cancelled event is excluded.
+      { startTime: '2026-11-15T10:00:00', endTime: '2026-11-15T11:00:00', cancelledAt: '2026-11-01T00:00:00Z' },
+    ],
+    [
+      // Overdue pending task on Nov 8.
+      { dueDate: '2026-11-08T10:00:00', status: 'pending' },
+      // Active task on Nov 10.
+      { dueDate: '2026-11-10T12:30:00', status: 'in_progress' },
+      // Future task beyond 7 days (Nov 25).
+      { dueDate: '2026-11-25T00:00:00', status: 'pending' },
+      // Completed, cancelled, and undated tasks are excluded.
+      { dueDate: '2026-11-10T15:00:00', status: 'completed' },
+      { dueDate: '2026-11-11T15:00:00', status: 'cancelled' },
+      { dueDate: null, status: 'pending' },
+    ],
+    range,
+  );
+
+  expect(counts).toEqual({
+    '2026-10-28': 1,
+    '2026-11-08': 1,
+    '2026-11-09': 1,
+    '2026-11-10': 3,
+    '2026-11-11': 1,
+    '2026-11-25': 1,
+    '2026-12-03': 1,
+  });
+});
+
+test('the mini calendar renders color-scaled superscript counts, hides zeros, and notifies on month change', async () => {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date('2026-11-10T10:00:00'));
+  try {
+    const onCalendarMonthChange = jest.fn();
+    const view = await renderToday([], [], {
+      dayCounts: {
+        '2026-11-05': 2,
+        '2026-11-10': 0,
+        '2026-11-14': 4,
+        '2026-11-20': 6,
+        '2026-11-28': 9,
+        '2026-11-29': 120,
+      },
+      onCalendarMonthChange,
+    });
+
+    // Zero count on today produces no superscript and keeps the plain today label.
+    const todayCell = view.getByRole('button', { name: '2026年11月10日，今天' });
+    expect(within(todayCell).queryByText('0')).toBeNull();
+
+    // Non-zero days expose count in the accessible name and color the superscript by load tier.
+    const cases: Array<{ label: string; badge: string; count: number; color: string }> = [
+      { label: '2026年11月5日，2 项安排', badge: '2', count: 2, color: theme.colors.calendarLoadLow },
+      { label: '2026年11月14日，4 项安排', badge: '4', count: 4, color: theme.colors.calendarLoadMedium },
+      { label: '2026年11月20日，6 项安排', badge: '6', count: 6, color: theme.colors.calendarLoadHigh },
+      { label: '2026年11月28日，9 项安排', badge: '9', count: 9, color: theme.colors.calendarLoadHeavy },
+      { label: '2026年11月29日，120 项安排', badge: '99+', count: 120, color: theme.colors.calendarLoadHeavy },
+    ];
+    for (const item of cases) {
+      const cell = view.getByRole('button', { name: item.label });
+      const sup = within(cell).getByText(item.badge, { includeHiddenElements: true });
+      expect(StyleSheet.flatten(sup.props.style).color).toBe(item.color);
+      expect(theme.colors[dayCountTone(item.count)]).toBe(item.color);
+    }
+
+    await fireEvent.press(view.getByRole('button', { name: '下个月' }));
+    expect(onCalendarMonthChange).toHaveBeenCalledWith(2026, 11);
+    await fireEvent.press(view.getByRole('button', { name: '上个月' }));
+    expect(onCalendarMonthChange).toHaveBeenCalledWith(2026, 10);
+  } finally {
+    jest.useRealTimers();
+  }
 });

@@ -191,6 +191,7 @@ export const ja: Catalog = {
     previousMonth: '前の月',
     nextMonth: '次の月',
     today: '{{date}}、今日',
+    dayItems: '{{label}}、{{count}} 件の予定',
     invalidDate: '無効な日付',
     showCalendar: 'カレンダー入力に切り替える',
     showKeyboard: 'キーボード入力に切り替える',
