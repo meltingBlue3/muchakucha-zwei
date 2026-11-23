@@ -3,7 +3,8 @@ import { useContentChanges } from '../../../../src/features/content/content-chan
 import { useResourceNavigation } from '../../../../src/ui/use-resource-navigation';
 import { todayNotePaneWidth, useDesktop } from '../../../../src/ui/use-desktop';
 import { useSidebarRail } from '../../../../src/ui/sidebar-rail';
-import { DesktopToday } from '../../../../src/features/events/desktop-today';
+import { countCalendarItemsByDate, DesktopToday } from '../../../../src/features/events/desktop-today';
+import { useTodayCalendar } from '../../../../src/features/events/use-today-calendar';
 import { useOpenWindowItem } from '../../../../src/ui/route-window';
 import { FloatingCreateButton } from '../../../../src/ui/floating-create-button';
 import { useContentDelete, useContentEdit } from '../../../../src/features/content/use-content-delete';
@@ -100,6 +101,10 @@ export function TodayScreen({ overview = false }: { overview?: boolean }) {
 
   const householdId = id ?? currentHouseholdId;
   const dayKey = `${overview ? `overview:${includedIds.join(',')}` : householdId}:${currentDate}`;
+  const ready = !loading && loadedDay.current === dayKey;
+  // In the 总览 the mini calendar counts every included household, as the page does.
+  const { month: calendarMonth, range: calendarRange, selectMonth, refresh: refreshCalendar, events: calendarEvents, status: calendarStatus } =
+    useTodayCalendar(overview ? { overview: includedIds } : { householdId }, currentDate, desktop && viewState !== 'resolving');
 
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -183,18 +188,25 @@ export function TodayScreen({ overview = false }: { overview?: boolean }) {
     return earlier ? t('overview:clash', { household: marks.get(earlier.householdId)?.name ?? '', title: earlier.title }) : undefined;
   }, [clashes, marks, t]);
   const othersNote = overview ? <OthersHiddenNote count={othersOpen} showAll={showAllTasks} onToggle={() => setShowAllTasks(value => !value)} /> : null;
+  const dayCounts = useMemo(
+    () => calendarEvents === null ? undefined : countCalendarItemsByDate(calendarEvents, listedTasks, calendarRange),
+    [calendarEvents, listedTasks, calendarRange],
+  );
 
   const previewTasks = (items: TaskResponseDto[], expanded: boolean) => expanded
     ? items
     : items.filter((task, index) => index < 3 || task.id === completion.undoTaskId);
 
-  useContentChanges(overview ? includedIds : householdId, fetchData);
+  const changeScope = overview ? includedIds : householdId;
+  useContentChanges(changeScope, fetchData);
+  useContentChanges(changeScope, refreshCalendar);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    void refreshCalendar();
     await fetchData();
     setRefreshing(false);
-  }, [fetchData]);
+  }, [fetchData, refreshCalendar]);
 
   // Refetch whenever this screen regains focus (e.g. returning from a
   // task/event action elsewhere), not just on first mount — otherwise
@@ -258,7 +270,6 @@ export function TodayScreen({ overview = false }: { overview?: boolean }) {
   );
 
   const wide = width >= theme.layout.navigationBreakpoint;
-  const ready = !loading && loadedDay.current === dayKey;
   const nothingToday = todayEvents.length === 0 && todayTasks.length === 0;
   const upcomingCount = approachingTasks.length + otherUpcomingTasks.length;
   const nowIndex = day.timeline.findIndex(entry => entry.at > now.minutes);
@@ -364,10 +375,10 @@ export function TodayScreen({ overview = false }: { overview?: boolean }) {
         {overview && !desktop ? <OverviewLegend /> : null}
 
         {loading ? <LoadingState label={t('loading')} /> : null}
-        {error !== null ? <LoadError message={t(error)} onRetry={() => void fetchData()} retryAccessibilityLabel={t('retryLoad')} /> : null}
+        {error !== null ? <LoadError message={t(error)} onRetry={() => { void fetchData(); void refreshCalendar(); }} retryAccessibilityLabel={t('retryLoad')} /> : null}
 
         {ready && viewState !== 'resolving' ? (
-          desktop ? <DesktopToday detail={detail} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(calendarPath); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(calendarPath); }} onOpenTasks={() => router.push(tasksPath)} onCreateTask={create('tasks')} {...(overview ? { marks: { markOf, clashOf }, todoFooter: othersNote, upcomingFooter: <NotIncludedNote /> } : {})} /> : wide && secondary
+          desktop ? <DesktopToday detail={detail} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} dayCounts={dayCounts} calendarMonth={calendarMonth} calendarStatus={calendarStatus} onCalendarMonthChange={selectMonth} onCalendarRetry={refreshCalendar} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(calendarPath); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(calendarPath); }} onOpenTasks={() => router.push(tasksPath)} onCreateTask={create('tasks')} {...(overview ? { marks: { markOf, clashOf }, todoFooter: othersNote, upcomingFooter: <NotIncludedNote /> } : {})} /> : wide && secondary
             ? <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing[8] }}>
                 <View style={{ flex: 3, minWidth: 0 }}>{primary}</View>
                 <View style={{ flex: 2, minWidth: 0 }}>{secondary}</View>

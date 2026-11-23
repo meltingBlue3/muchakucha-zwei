@@ -43,6 +43,11 @@ export const theme = createTheme({
     destructive: '#A61B1B',
     destructivePressed: '#841515',
     destructiveSoft: '#FBE3E1',
+    /** Mini-calendar superscript load scale (1–2, 3–4, 5–6, 7+ items), all >= 4.5:1 on surface and canvas. */
+    calendarLoadLow: '#2F6B4F',
+    calendarLoadMedium: '#956511',
+    calendarLoadHigh: '#C2381C',
+    calendarLoadHeavy: '#8B1A3A',
     focusRing: '#C2381C',
     /** Translucent ink, so a Web scrollbar reads the same on paper and white. */
     scrollbarThumb: 'rgba(29,27,24,0.20)',
@@ -116,6 +121,8 @@ export const theme = createTheme({
     numeral: { fontSize: 15, fontWeight: '400' as const, lineHeight: 20 },
     /** The lunar day, solar term or festival under a date in a month grid. */
     lunarDay: { fontSize: 10, fontWeight: '400' as const, lineHeight: 13 },
+    /** Superscript item count in the top-right corner of a mini-calendar date. */
+    dayCount: { fontSize: 10, fontWeight: '600' as const, lineHeight: 11 },
   },
   textVariants: {
     defaults: {

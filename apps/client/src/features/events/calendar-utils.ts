@@ -75,6 +75,17 @@ export function toDateRangeIso(year: number, month: number): { start: string; en
   return { start, end };
 }
 
+/** Monday of the first week through Sunday of the last week displayed in a month grid. */
+export function toCalendarGridRangeIso(year: number, month: number): { start: string; end: string } {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const start = new Date(firstDay);
+  start.setDate(start.getDate() - daysSinceMonday(start));
+  const end = new Date(lastDay);
+  end.setDate(end.getDate() + (6 - daysSinceMonday(end)));
+  return { start: toDateIso(start), end: toDateIso(end) };
+}
+
 export function formatMonthLabel(year: number, month: number): string {
   return formatYearMonth(new Date(year, month, 1));
 }
