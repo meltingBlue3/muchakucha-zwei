@@ -19,6 +19,7 @@ import { useOverlayFocus } from '../../platform/overlays/overlay-focus';
 import { holdsCommandKey, useCommandKeyLabel } from '../../ui/command-key';
 import { formatDate, formatDateTime } from '../../ui/date-values';
 import { DialogBackdrop } from '../../ui/dialog-backdrop';
+import { parseSearchQuery, type SearchQuery } from './search-query';
 import { destinations, familyPages, householdPath } from '../../ui/household-navigation';
 import { Spinner, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
@@ -51,12 +52,10 @@ const accountPages = [
   { path: '/inbox', label: 'profile:links.inbox.label', icon: Inbox },
 ] as const;
 
-const normalize = (text: string) => text.normalize('NFKC').toLowerCase();
-
-/** 2 when the title holds the query, 1 when only another field does, 0 otherwise. */
-function score(query: string, title: string, ...rest: Array<string | null | undefined>): number {
-  if (normalize(title).includes(query)) return 2;
-  return rest.some(field => field && normalize(field).includes(query)) ? 1 : 0;
+/** 2 when the title holds the query, 1 when it needs another field too, 0 otherwise. */
+function score(search: SearchQuery, title: string, ...rest: Array<string | null | undefined>): number {
+  if (search.matches(title)) return 2;
+  return search.matches(title, ...rest) ? 1 : 0;
 }
 
 /** Best matches first, keeping each kind's own order among equals. */
@@ -179,14 +178,14 @@ export function CommandPalette({ householdId, trigger, onClose }: { householdId:
   }), [go, householdId, pathname, router]);
 
   const hits = useMemo((): Hit[] => {
-    const q = normalize(query.trim());
+    const q = parseSearchQuery(query);
     const pages: Hit[] = [
       ...destinations.map(({ key, icon }) => ({ id: `page:${key}`, group: t('pages'), title: t(`navigation:pages.${key}`), icon, open: () => go(() => { if (pathname !== householdPath(householdId, key)) router.replace(householdPath(householdId, key)); }) })),
       ...familyPages.map(({ key, icon }) => ({ id: `page:${key}`, group: t('pages'), title: t(`navigation:pages.${key}`), icon, open: () => go(() => { if (pathname !== householdPath(householdId, key)) router.push(householdPath(householdId, key)); }) })),
       ...accountPages.map(({ path, label, icon }) => ({ id: `page:${path}`, group: t('pages'), title: t(label), icon, open: () => go(() => { if (pathname !== path) router.push(path); }) })),
     ];
-    if (!q) return pages;
-    const matchedPages = pages.filter(page => normalize(page.title).includes(q));
+    if (q.blank) return pages;
+    const matchedPages = pages.filter(page => q.matches(page.title));
     if (!content) return matchedPages;
     const now = Date.now();
     const tasks = ranked(content.tasks, task => score(q, task.title, task.description)).map((task): Hit => ({

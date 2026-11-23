@@ -87,6 +87,12 @@ describe('searchNotesByTitle', () => {
     expect(searchNotesByTitle(decomposed, 'café').map((n) => n.id)).toEqual(['4']);
   });
 
+  test('matches regardless of width, kana script and spaces', () => {
+    const japanese = [note('6', 'ｺｰﾋｰ メーカー'), note('7', '買い物リスト')];
+    expect(searchNotesByTitle(japanese, 'こーひーめーかー').map((n) => n.id)).toEqual(['6']);
+    expect(searchNotesByTitle(japanese, '買い物　リスト').map((n) => n.id)).toEqual(['7']);
+  });
+
   test('no match yields an empty list rather than everything', () => {
     expect(searchNotesByTitle(notes, '不存在的标题')).toEqual([]);
   });
