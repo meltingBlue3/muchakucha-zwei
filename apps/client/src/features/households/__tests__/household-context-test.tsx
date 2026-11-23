@@ -125,6 +125,22 @@ describe('HouseholdProvider recovery state machine', () => {
     expect(api.listMyHouseholds).toHaveBeenCalledTimes(1);
   });
 
+  test('a household list from an API without the overview fields counts every household as included', async () => {
+    const store = createStore();
+    const older = [alpha, beta].map(({ inOverview: _inOverview, joinedAt: _joinedAt, ...household }) => household);
+    const api = { listMyHouseholds: jest.fn().mockResolvedValue(older) } as unknown as HouseholdApi;
+    const Provider = createHouseholdProvider(api, () => 'access-token', store);
+    let context: HouseholdContextValue | undefined;
+    function Probe() { context = useHouseholdContext(); return <Text>{context.viewState}</Text>; }
+    const view = await render(<Provider><Probe /></Provider>);
+    await view.findByText('ready');
+    expect(context!.households.map(({ id, inOverview, joinedAt }) => ({ id, inOverview, joinedAt }))).toEqual([
+      { id: beta.id, inOverview: true, joinedAt: '' },
+      { id: alpha.id, inOverview: true, joinedAt: '' },
+    ]);
+    expect(context!.scope).toBe('overview');
+  });
+
   test('hydrates before resolution and reaches accessChanged when a switch target disappeared', async () => {
     const store = createStore();
     const listMyHouseholds = jest
