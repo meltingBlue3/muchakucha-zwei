@@ -25,6 +25,7 @@ export default function HouseholdsIndexRoute() {
     accessChangedHouseholdName,
     switchHousehold,
     refreshHouseholds,
+    scope,
   } = useHouseholdContext();
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -35,11 +36,13 @@ export default function HouseholdsIndexRoute() {
 
   // When user already has a current household, jump straight to its detail
   // page — the list view is a transient entry point, not a destination.
+  // Someone with several households lands on the 总览 unless they last
+  // looked at one household.
   useEffect(() => {
     if (viewState === 'ready' && currentHouseholdId !== null) {
-      void router.replace(`/households/${encodeURIComponent(currentHouseholdId)}`);
+      void router.replace(scope === 'overview' ? '/overview/today' : `/households/${encodeURIComponent(currentHouseholdId)}`);
     }
-  }, [viewState, currentHouseholdId, router]);
+  }, [viewState, currentHouseholdId, router, scope]);
 
   const handleSwitch = useCallback(async (householdId: string) => {
     if (householdId === currentHouseholdId) {

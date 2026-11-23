@@ -20,7 +20,7 @@ import { formatDate } from '../../ui/date-values';
 import { useMinuteClock } from '../../ui/use-minute-clock';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { GroupLabel, ListGroup } from '../../ui/list-group';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import { useTheme } from '@shopify/restyle';
@@ -44,14 +44,29 @@ import {
 } from '../recurrence/recurring-filter';
 import { Button, EmptyState, LoadError, LoadingState, Stack } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
+import { overviewHouseholds, useHouseholdMarks } from '../households/household-marks';
+import { householdClashes } from '../overview/overview-items';
+import { OverviewLegend } from '../overview/overview-legend';
+import { OverviewMarksContext, type OverviewMarks } from '../overview/overview-marks-context';
 
 /** All-day events first, then by start time. */
 const byStart = (a: EventResponseDto, b: EventResponseDto) => Number(b.allDay) - Number(a.allDay) || a.startTime.localeCompare(b.startTime);
 
 export default function CalendarScreen() {
-  const { t } = useTranslation(['events', 'recurrence', 'tasks', 'navigation']);
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  return <CalendarView />;
+}
+
+/**
+ * The calendar of one household, or with `overview` of every household in
+ * the 总览: events take their household's color and seal, and an event that
+ * overlaps another household's says so.
+ */
+export function CalendarView({ overview = false }: { overview?: boolean }) {
+  const { t } = useTranslation(['events', 'recurrence', 'tasks', 'navigation', 'overview']);
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = overview ? undefined : params.id;
+  const viewKey = overview ? 'overview' : id;
+  const householdMarks = useHouseholdMarks();
   const desktop = useDesktop();
   const paneOpen = /\/events\/[^/]+(?:\/edit)?$/.test(usePathname());
   const openResource = useResourceNavigation();
@@ -65,22 +80,25 @@ export default function CalendarScreen() {
   const filterTrigger = useRef<View>(null);
   const loadedMonth = useRef('');
   const requestGeneration = useRef(0);
-  const { currentHouseholdId } = useHouseholdContext();
+  const { currentHouseholdId, households } = useHouseholdContext();
+  const includedIds = useMemo(() => overviewHouseholds(households).map(h => h.id), [households]);
+  // A string, so a household list rebuilt with the same members does not refetch.
+  const includedKey = includedIds.join(',');
 
   const lunar = useLunarCalendar();
   const japanese = useJapaneseCalendar();
   const clock = useMinuteClock();
   const today = clock.date;
   const todayIso = toDateIso(today);
-  const [year, setYear] = useWorkspaceState(`view:${id}:events:year`, today.getFullYear());
-  const [month, setMonth] = useWorkspaceState(`view:${id}:events:month`, today.getMonth());
-  const [selectedDateIso, setSelectedDateIso] = useWorkspaceState<string | null>(`view:${id}:events:selectedDateIso`, toDateIso(today));
+  const [year, setYear] = useWorkspaceState(`view:${viewKey}:events:year`, today.getFullYear());
+  const [month, setMonth] = useWorkspaceState(`view:${viewKey}:events:month`, today.getMonth());
+  const [selectedDateIso, setSelectedDateIso] = useWorkspaceState<string | null>(`view:${viewKey}:events:selectedDateIso`, toDateIso(today));
   const [events, setEvents] = useState<EventResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<'refreshError' | 'loadError' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [labelFilter, setLabelFilter] = useWorkspaceState<string>(`view:${id}:events:labelFilter`, 'all');
-  const [recurringFilter, setRecurringFilter] = useWorkspaceState<RecurringFilterKey>(`view:${id}:events:recurringFilter`, 'all');
+  const [labelFilter, setLabelFilter] = useWorkspaceState<string>(`view:${viewKey}:events:labelFilter`, 'all');
+  const [recurringFilter, setRecurringFilter] = useWorkspaceState<RecurringFilterKey>(`view:${viewKey}:events:recurringFilter`, 'all');
 
   const householdId = id ?? currentHouseholdId;
 
@@ -89,14 +107,16 @@ export default function CalendarScreen() {
     if (householdId === undefined || householdId === null || householdId === '') return;
 
     const request = ++requestGeneration.current;
-    const monthKey = `${householdId}:${year}:${month}`;
+    const monthKey = `${overview ? `overview:${includedKey}` : householdId}:${year}:${month}`;
     if (loadedMonth.current !== monthKey) { setLoading(true); setEvents([]); }
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) throw new Error('Session expired');
       const { start, end } = toDateRangeIso(year, month);
-      const result = await sessionApiClient.listEvents(token, householdId, start, end, undefined, undefined, true);
+      const result = overview
+        ? await sessionApiClient.listOverviewEvents(token, start, end, true)
+        : await sessionApiClient.listEvents(token, householdId, start, end, undefined, undefined, true);
       if (request !== requestGeneration.current) return;
       loadedMonth.current = monthKey;
       setEvents(result.events);
@@ -107,9 +127,9 @@ export default function CalendarScreen() {
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
-  }, [householdId, year, month]);
+  }, [householdId, year, month, overview, includedKey]);
 
-  useContentChanges(householdId, fetchEvents);
+  useContentChanges(overview ? includedIds : householdId, fetchEvents);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -139,8 +159,9 @@ export default function CalendarScreen() {
     }
     return [...seen.values()];
   }, [events]);
-  const householdLabels = useHouseholdLabels(householdId);
-  const availableLabels = useMemo(() => mergeLabels(householdLabels, seenLabels), [householdLabels, seenLabels]);
+  // The 总览 mixes households, whose labels are their own; it offers only the labels its events carry.
+  const householdLabels = useHouseholdLabels(overview ? null : householdId);
+  const availableLabels = useMemo(() => overview ? seenLabels : mergeLabels(householdLabels, seenLabels), [overview, householdLabels, seenLabels]);
 
   const filteredEvents = useMemo(() => applyRecurringFilter(events.filter(event =>
     labelFilter === 'all' || (event.labels ?? []).some(label => label.id === labelFilter),
@@ -168,11 +189,16 @@ export default function CalendarScreen() {
       const last = [toDateIso(new Date(event.endTime)), end].sort()[0]!;
       for (const day = new Date(`${first}T12:00:00`); toDateIso(day) <= last; day.setDate(day.getDate() + 1)) {
         const date = toDateIso(day);
-        byDate.set(date, [...(byDate.get(date) ?? []), { id: event.id, title: event.title, color: event.labels?.[0]?.color ?? activeTheme.colors.inkFaint }]);
+        byDate.set(date, [...(byDate.get(date) ?? []), { id: event.id, title: event.title, color: (overview ? householdMarks.get(event.householdId)?.color : undefined) ?? event.labels?.[0]?.color ?? activeTheme.colors.inkFaint }]);
       }
     }
     return byDate;
-  }, [filteredEvents, year, month, activeTheme]);
+  }, [filteredEvents, year, month, activeTheme, overview, householdMarks]);
+  const clashes = useMemo(() => overview ? householdClashes(filteredEvents) : new Map<string, EventResponseDto>(), [overview, filteredEvents]);
+  const overviewMarks = useMemo<OverviewMarks | null>(() => overview ? {
+    markOf: itemHousehold => householdMarks.get(itemHousehold),
+    clashOf: event => { const earlier = clashes.get(event.id); return earlier ? t('overview:clash', { household: householdMarks.get(earlier.householdId)?.name ?? '', title: earlier.title }) : undefined; },
+  } : null, [overview, householdMarks, clashes, t]);
   const selectedDateEvents = useMemo(() => filteredEvents.filter(event => selectedDateIso !== null &&
     selectedDateIso >= toDateIso(new Date(event.startTime)) && selectedDateIso <= toDateIso(new Date(event.endTime)),
   ).sort(byStart), [filteredEvents, selectedDateIso]);
@@ -195,19 +221,20 @@ export default function CalendarScreen() {
   const handleEventPress = useCallback(
     (event: EventResponseDto) => {
       rememberRouteTrigger();
+      // An event opens in its own household, which in the 总览 may not be the current one.
       openResource(
-        `/households/${encodeURIComponent(householdId!)}/events/${encodeURIComponent(event.id)}`,
+        `/households/${encodeURIComponent(event.householdId)}/events/${encodeURIComponent(event.id)}`,
       );
     },
-    [router, householdId, openResource],
+    [openResource],
   );
 
   const handleCreateEvent = useCallback(() => {
     rememberRouteTrigger();
-    openResource(`/households/${encodeURIComponent(householdId!)}/events/new`);
-  }, [router, householdId, openResource]);
+    openResource(`/households/${encodeURIComponent(householdId!)}/events/new${overview ? '?overview=1' : ''}`);
+  }, [householdId, openResource, overview]);
 
-  const [weekView, setWeekView] = useWorkspaceState(`view:${id}:events:weekView`, true);
+  const [weekView, setWeekView] = useWorkspaceState(`view:${viewKey}:events:weekView`, true);
   // Phones start on one week; a wide screen always has room for the month.
   const compactWeek = weekView && !wide;
   const moveSelection = (days: number) => {
@@ -218,7 +245,9 @@ export default function CalendarScreen() {
   const selectedIsToday = selectedDateIso === todayIso;
 
   return (
+    <OverviewMarksContext.Provider value={overviewMarks}>
     <HouseholdScreen
+      overview={overview}
       active="events"
       accessibilityLabel={t('calendar')}
       layout={desktop ? 'workspace' : 'document'}
@@ -240,6 +269,7 @@ export default function CalendarScreen() {
             <FilterButton ref={filterTrigger} label={t('filter')} count={activeFilterCount} onPress={() => setFiltersOpen(true)} />
           </>}
         />
+        {overview ? <View style={desktop ? { paddingHorizontal: activeTheme.spacing[5], paddingBottom: activeTheme.spacing[3] } : undefined}><OverviewLegend /></View> : null}
         {filtersOpen ? <AppDialog title={t('filter')} busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
           <Stack gap={5}>
             <FilterOptions label={t('recurrence:repeat')} options={RECURRING_FILTERS.map(value => ({ value, label: t(`recurrence:filter.${value}`), name: recurringFilterAccessibilityLabel(value) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />
@@ -285,12 +315,13 @@ export default function CalendarScreen() {
                 {...(filterSummary ? { action: <Button label={t('tasks:adjustFilter')} tone="secondary" onPress={() => setFiltersOpen(true)} /> } : {})}
               /> : null}
               <ListGroup>
-                {selectedDateEvents.map(event => <EventCard key={event.id} event={event} withinDay timeColumn selected={event.id === openEventId} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} />)}
+                {selectedDateEvents.map(event => <EventCard key={event.id} event={event} withinDay timeColumn selected={event.id === openEventId} onPress={handleEventPress} onEdit={editEvent(event)} onDelete={deleteEvent(event)} mark={overviewMarks?.markOf(event.householdId)} note={overviewMarks?.clashOf(event)} />)}
               </ListGroup>
             </Stack>
           </View>}
         </View>
       </Stack>
     </HouseholdScreen>
+    </OverviewMarksContext.Provider>
   );
 }

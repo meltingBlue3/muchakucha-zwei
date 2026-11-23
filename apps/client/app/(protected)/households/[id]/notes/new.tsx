@@ -4,6 +4,7 @@ import { useWorkspaceStore } from '../../../../../src/ui/workspace-state';
 import { useLocalSearchParams } from 'expo-router';
 import { useHouseholdContext } from '../../../../../src/features/households/household-context';
 import { HouseholdContextNote } from '../../../../../src/ui/household-components';
+import { HouseholdTargetField } from '../../../../../src/features/overview/household-target-field';
 import { useCallback, useRef, useState } from 'react';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
@@ -15,9 +16,11 @@ import type { CreateNoteDto } from '@muchakucha/api-client';
 
 export default function CreateNoteRoute() {
   const { t } = useTranslation(['notes', 'auth', 'shared']);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, overview } = useLocalSearchParams<{ id: string; overview?: string }>();
   const { households } = useHouseholdContext();
   const householdName = households.find(household => household.id === id)?.name ?? '';
+  // Opened from the 总览, the form asks which household to save to.
+  const chooseHousehold = overview === '1' && households.length > 1;
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:notes:new:`;
   const { close } = useNoteWindowClose();
@@ -52,7 +55,7 @@ export default function CreateNoteRoute() {
   return (
     <NoteWindow draftPrefix={draftPrefix} title={t('create')} busy={isSubmitting} exitAllowed={exitAllowed}>
       <Stack gap={4} style={noteEditorViewport}>
-        <HouseholdContextNote householdName={householdName} />
+        {chooseHousehold ? <HouseholdTargetField householdId={id} resource="notes" /> : <HouseholdContextNote householdName={householdName} />}
         {error !== null ? <Banner>{t(error)}</Banner> : null}
         <NoteForm
           draftKey={draftPrefix + 'form'}

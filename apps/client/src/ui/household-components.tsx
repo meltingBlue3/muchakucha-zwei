@@ -23,6 +23,8 @@ import Mail from 'lucide-react-native/icons/mail';
 import CircleArrowUp from 'lucide-react-native/icons/circle-arrow-up';
 import CircleArrowDown from 'lucide-react-native/icons/circle-arrow-down';
 import UserMinus from 'lucide-react-native/icons/user-minus';
+import SlidersHorizontal from 'lucide-react-native/icons/sliders-horizontal';
+import { HouseholdSeal, SealStack, type HouseholdMark } from './household-seal';
 
 import { usePathname, useRouter } from 'expo-router';
 import React, { forwardRef, useCallback, useRef, useState, type RefObject } from 'react';
@@ -282,17 +284,21 @@ interface HouseholdHeaderProps {
   onOpenSwitcher: () => void;
   /** `sidebar` is the larger form at the top of the wide-screen navigation. */
   placement?: 'bar' | 'sidebar';
+  /** The household's seal, or the stacked seals of the 总览, in place of the plain initial. */
+  seal?: React.ReactNode;
+  /** The menu's name when it shows the 总览 rather than one household. */
+  accessibilityLabel?: string;
 }
 
 /** The current household's name with a chevron; it opens the household menu. */
-export const HouseholdHeader = ({ householdName, onOpenSwitcher, placement = 'bar', trigger }: HouseholdHeaderProps) => {
+export const HouseholdHeader = ({ householdName, onOpenSwitcher, placement = 'bar', trigger, seal, accessibilityLabel }: HouseholdHeaderProps) => {
   const { t } = useTranslation('households');
   const desktop = useDesktop();
   const { rail } = useSidebarRail();
   return (
   <Pressable
     ref={trigger}
-    accessibilityLabel={t('current', { householdName })}
+    accessibilityLabel={accessibilityLabel ?? t('current', { householdName })}
     accessibilityRole="button"
     onPress={onOpenSwitcher}
     style={({ pressed }) => ({
@@ -310,7 +316,7 @@ export const HouseholdHeader = ({ householdName, onOpenSwitcher, placement = 'ba
       ...(desktop ? { gap: theme.spacing[2] + 2, borderRadius: theme.borderRadii.sm } : {}),
     })}
   >
-    {desktop ? <View style={{ width: theme.controlSizes.avatar, height: theme.controlSizes.avatar, backgroundColor: theme.colors.ink, borderRadius: theme.borderRadii.sm, alignItems: 'center', justifyContent: 'center' }}><Text variant="label" color="surface" style={{ fontSize: theme.typography.meta.fontSize }}>{householdName.slice(0, 1)}</Text></View> : null}
+    {seal !== undefined ? <View style={{ minWidth: desktop ? theme.controlSizes.avatar : undefined, alignItems: 'center' }}>{seal}</View> : desktop ? <View style={{ width: theme.controlSizes.avatar, height: theme.controlSizes.avatar, backgroundColor: theme.colors.ink, borderRadius: theme.borderRadii.sm, alignItems: 'center', justifyContent: 'center' }}><Text variant="label" color="surface" style={{ fontSize: theme.typography.meta.fontSize }}>{householdName.slice(0, 1)}</Text></View> : null}
     {!rail ? <Text
       numberOfLines={1}
       variant={placement === 'sidebar' ? desktop ? 'label' : 'section' : 'label'}
@@ -411,6 +417,13 @@ interface HouseholdSwitcherProps {
   onClose: () => void;
   /** The household's own pages, listed under the households on a phone. */
   links?: Array<{ label: string; icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; onPress: () => void }>;
+  /** Each household's seal; with it the menu shows seals instead of plain initials. */
+  marks?: Map<string, HouseholdMark>;
+  /**
+   * The 总览 as the first choice, above the households. `selected` when it is
+   * what the page shows; then no household is marked current.
+   */
+  overview?: { selected: boolean; summary: string; onSelect: () => void; onAdjust: () => void };
 }
 
 /**
@@ -419,7 +432,7 @@ interface HouseholdSwitcherProps {
  * centered panel on Web.
  */
 export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
-  ({ households, currentHouseholdId, onSelect, onCreateNew, visible, onClose, links = [], trigger }, ref) => {
+  ({ households, currentHouseholdId, onSelect, onCreateNew, visible, onClose, links = [], trigger, marks, overview }, ref) => {
     const { t } = useTranslation(['households', 'common']);
     const headingRef = useRef<View>(null);
     const desktop = useDesktop();
@@ -499,9 +512,32 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
           </Pressable>
         </View> : null}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: theme.spacing[3] + insets.bottom }}>
+          {overview !== undefined ? (
+            <>
+              <Pressable
+                accessibilityLabel={`${t('overview.name')}，${overview.summary}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: overview.selected }}
+                onPress={() => { overview.onSelect(); onClose(); }}
+                style={rowStyle}
+              >
+                <View style={iconSlot}>
+                  {marks ? <SealStack marks={households.filter(h => h.inOverview).map(h => marks.get(h.id)).filter((mark): mark is HouseholdMark => mark !== undefined)} /> : null}
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} variant="body" style={overview.selected ? { fontWeight: '600' } : undefined}>{t('overview.name')}</Text>
+                  <Text variant="meta" numberOfLines={1}>{overview.summary}</Text>
+                </View>
+                {overview.selected ? <Check color={theme.colors.ink} size={theme.controlSizes.icon} strokeWidth={theme.focus.width} /> : null}
+              </Pressable>
+              <Text variant="caption" color="inkMuted" style={{ paddingHorizontal: theme.spacing[5], paddingTop: theme.spacing[3], paddingBottom: theme.spacing[1] }}>{t('overview.households')}</Text>
+            </>
+          ) : null}
           {households.map((household) => {
-            const current = household.id === currentHouseholdId;
+            const current = overview?.selected !== true && household.id === currentHouseholdId;
             const role = t(`role.${household.role}`);
+            const mark = marks?.get(household.id);
+            const outside = overview !== undefined && !household.inOverview;
             return (
               <Pressable
                 accessibilityLabel={t('householdAndRole', { name: household.name, role })}
@@ -511,15 +547,15 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
                 onPress={() => handleSelect(household.id)}
                 style={rowStyle}
               >
-                <View style={{ ...iconSlot, borderRadius: theme.borderRadii.sm, backgroundColor: current ? theme.colors.primary : theme.colors.surfaceMuted }}>
+                {mark ? <View style={iconSlot}><HouseholdSeal {...mark} size="lg" /></View> : <View style={{ ...iconSlot, borderRadius: theme.borderRadii.sm, backgroundColor: current ? theme.colors.primary : theme.colors.surfaceMuted }}>
                   <Text variant="label" color={current ? 'surface' : 'inkMuted'}>{[...household.name.trim()][0] ?? '?'}</Text>
-                </View>
+                </View>}
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text numberOfLines={1} variant="body" style={current ? { fontWeight: '600' } : undefined}>
                     {household.name}
                   </Text>
                   <Text variant="meta">
-                    {role} · {t('memberCount', { count: household.memberCount })}
+                    {role} · {t('memberCount', { count: household.memberCount })}{outside ? ` · ${t('overview.notIncluded')}` : ''}
                   </Text>
                 </View>
                 {current ? (
@@ -528,6 +564,14 @@ export const HouseholdSwitcher = forwardRef<View, HouseholdSwitcherProps>(
               </Pressable>
             );
           })}
+          {overview !== undefined ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={t('overview.adjust')} onPress={() => { onClose(); overview.onAdjust(); }} style={rowStyle}>
+              <View style={iconSlot}>
+                <SlidersHorizontal color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />
+              </View>
+              <Text variant="body" color="inkMuted">{t('overview.adjust')}</Text>
+            </Pressable>
+          ) : null}
           <Pressable accessibilityRole="button" accessibilityLabel={t('create')} onPress={() => { rememberRouteTrigger(); onCreateNew(); }} style={rowStyle}>
             <View style={iconSlot}>
               <HousePlus color={theme.colors.inkMuted} size={theme.controlSizes.icon} strokeWidth={theme.controlSizes.iconStroke} />

@@ -15,6 +15,7 @@ Read this index only when the owning module or entry point of a request is uncle
 | Session tokens, refresh, login/logout | `src/features/auth/`, `src/api/api-client.ts`, `src/api/refresh-coordinator.ts` |
 | Current household, switching, access-changed state | `src/features/households/household-context.tsx`, `household-api.ts` |
 | Household settings, invitations, member governance | `src/features/households/household-settings.tsx`, `invitation-flow.tsx`, `member-governance.tsx` |
+| 总览 across households: routes, seals, legend, clash notes, 保存到 | `app/(protected)/overview/`, `src/features/overview/`, `src/features/households/household-marks.ts`, `src/ui/household-seal.tsx` |
 | Calendar month view and event forms | `src/features/events/` |
 | Tasks, filters, status transitions | `src/features/tasks/` |
 | Recurrence pickers, summaries, series scope | `src/features/recurrence/` |
@@ -35,6 +36,7 @@ Read this index only when the owning module or entry point of a request is uncle
 | Current user and profile | `src/modules/users/` |
 | Households, invitations, roles, ownership | `src/modules/households/`; pure governance decisions in `household-policy.ts` |
 | Events, tasks, notes, labels | `src/modules/events/`, `tasks/`, `notes/`, `labels/` |
+| 总览: reads across the caller's households, which households it shows | `src/modules/overview/`; contract in [api.md](api.md#permissions) |
 | Assistant providers, encrypted credentials, tool registry, confirmation loop | `src/modules/assistant/`; boundaries and extension points in [api.md](api.md#assistant) |
 | Personal reminder settings and upcoming plan | `src/modules/reminders/`; contracts in [api.md](api.md#personal-reminders), device reconciliation in [client.md](client.md#local-reminders) |
 | Recurrence rules, materialization, scheduling | `src/modules/recurrence/`; lunar anchors and birthday marks in `series-marks.ts` |

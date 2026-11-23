@@ -368,3 +368,14 @@ export const memberColors: string[] = [
   '#4A57A6', '#4C7537', '#AD4067', '#956511',
   '#2C716C', '#7A478A', '#4B6680', '#87573A',
 ];
+
+/**
+ * Each household's mark in the 总览: a square seal in one of these colors,
+ * given out in the order the person joined. The seal is drawn as colored text
+ * and outline on white, so every color holds 4.5:1 there. A person is a round
+ * avatar and a label a dot, so the square shape is what says "household";
+ * vermilion stays out.
+ */
+export const householdMarkColors: string[] = [
+  '#4A57A6', '#2C716C', '#87573A', '#7A478A', '#4B6680', '#4C7537',
+];

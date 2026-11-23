@@ -10,14 +10,15 @@ import { theme } from '../../src/ui/theme';
 export default function HouseholdHandoffRoute() {
   const { t } = useTranslation('households');
   const router = useRouter();
-  const { viewState, households, currentHouseholdId, accessChangedHouseholdName, refreshHouseholds } = useHouseholdContext();
+  const { viewState, households, currentHouseholdId, accessChangedHouseholdName, refreshHouseholds, scope } = useHouseholdContext();
   useEffect(() => {
     if (viewState === 'ready') {
-      router.replace(currentHouseholdId !== null ? `/households/${encodeURIComponent(currentHouseholdId)}` : '/households');
+      // Someone with several households opens on the 总览 unless they last looked at one household.
+      router.replace(currentHouseholdId === null ? '/households' : scope === 'overview' ? '/overview/today' : `/households/${encodeURIComponent(currentHouseholdId)}`);
     } else if (viewState === 'offlineRetained') {
       router.replace('/households');
     }
-  }, [viewState, currentHouseholdId, router]);
+  }, [viewState, currentHouseholdId, router, scope]);
 
   return (
     <AppShell title={t('setupAction')} accessibilityLabel={t('setupAction')} showProfile>

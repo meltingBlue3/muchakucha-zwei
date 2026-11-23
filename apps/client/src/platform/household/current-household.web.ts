@@ -1,6 +1,7 @@
-import type { CurrentHouseholdStore } from './current-household';
+import type { CurrentHouseholdStore, TimeScope } from './current-household';
 
 const CURRENT_ID_KEY = 'muchakucha:currentHouseholdId';
+const SCOPE_KEY = 'muchakucha:timeScope';
 const ACCESS_TIMESTAMPS_KEY = 'muchakucha:householdAccessTimestamps';
 
 function readStorage(key: string): string | null {
@@ -33,6 +34,15 @@ function removeStorage(key: string): void {
 export function createWebCurrentHouseholdStore(): CurrentHouseholdStore {
   return {
     async hydrate(): Promise<void> {},
+
+    getScope(): TimeScope | null {
+      const stored = readStorage(SCOPE_KEY);
+      return stored === 'overview' || stored === 'household' ? stored : null;
+    },
+
+    async setScope(scope: TimeScope): Promise<void> {
+      writeStorage(SCOPE_KEY, scope);
+    },
 
     getCurrentId(): string | null {
       return readStorage(CURRENT_ID_KEY);
@@ -80,6 +90,7 @@ export function createWebCurrentHouseholdStore(): CurrentHouseholdStore {
     async clearAll(): Promise<void> {
       removeStorage(CURRENT_ID_KEY);
       removeStorage(ACCESS_TIMESTAMPS_KEY);
+      removeStorage(SCOPE_KEY);
     },
   };
 }

@@ -15,6 +15,14 @@ import { completionActionLabel } from '../tasks/task-completion';
 import { isOverdue } from '../tasks/task-utils';
 import type { TaskCardCompletionProps } from '../tasks/use-task-completion';
 import { toDateIso } from './calendar-utils';
+import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
+import { HouseholdSeal, type HouseholdMark } from '../../ui/household-seal';
+
+/** In the 总览: each item's household seal, and a clash note for an event that overlaps another household's. */
+export interface TodayMarks {
+  markOf(householdId: string): HouseholdMark | undefined;
+  clashOf(event: EventResponseDto): string | undefined;
+}
 
 const minutes = (iso: string) => { const date = new Date(iso); return date.getHours() * 60 + date.getMinutes(); };
 const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
@@ -74,7 +82,7 @@ function TaskMark({ attention, done = false, busy = false }: { attention: boolea
  * so Web never nests one button in another. A failed write is shown under the
  * marker it came from, with its retry.
  */
-function TimelineTask({ task, top, placement, completion, onOpen }: { task: TaskResponseDto; top: number; placement: ViewStyle; completion: TaskCardCompletionProps; onOpen(): void }) {
+function TimelineTask({ task, top, placement, completion, onOpen, mark }: { task: TaskResponseDto; top: number; placement: ViewStyle; completion: TaskCardCompletionProps; onOpen(): void; mark?: HouseholdMark | undefined }) {
   const { t } = useTranslation(['tasks', 'common']);
   const [pressed, setPressed] = useState(false);
   const fine = useDesktopDensity();
@@ -100,13 +108,14 @@ function TimelineTask({ task, top, placement, completion, onOpen }: { task: Task
         <Pressable
           {...insetFocusRing}
           accessibilityRole="button"
-          accessibilityLabel={t('tasks:card.title', { title: task.title })}
+          accessibilityLabel={mark ? `${t('tasks:card.title', { title: task.title })}，${mark.name}` : t('tasks:card.title', { title: task.title })}
           onPress={onOpen}
           onPressIn={() => setPressed(true)}
           onPressOut={() => setPressed(false)}
           style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingRight: theme.spacing[2] }}
         >
           <Text variant="time">{toTimeValue(new Date(task.dueDate!))}</Text>
+          {mark ? <HouseholdSeal {...mark} size="sm" /> : null}
           <Text variant="bodySm" color={done ? 'inkFaint' : 'ink'} numberOfLines={1} style={{ flexShrink: 1, textDecorationLine: done ? 'line-through' : 'none' }}>{task.title}</Text>
         </Pressable>
       </View>
@@ -137,32 +146,44 @@ function PaneTitle({ children, link }: { children: string; link?: { label: strin
   </View>;
 }
 
-function TimelineEvent({ event, top, height, left, right, onPress }: { event: EventResponseDto; top: number; height: number; left: string; right: string; onPress(): void }) {
+function TimelineEvent({ event, top, height, left, right, onPress, mark, clash }: { event: EventResponseDto; top: number; height: number; left: string; right: string; onPress(): void; mark?: HouseholdMark | undefined; clash?: string | undefined }) {
   const { t } = useTranslation('events');
-  const color = eventColor(event);
+  const color = mark?.color ?? eventColor(event);
+  const clashIcon = clash ? <TriangleAlert size={12} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /> : null;
   const start = toTimeValue(new Date(event.startTime));
   // Under 45 minutes a block has room for one line, so the title shares it with the time.
   const short = height < HOUR * 0.75;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={t('card', { title: event.title })}
+      accessibilityLabel={[t('card', { title: event.title }), mark?.name, clash].filter(Boolean).join('，')}
       onPress={onPress}
       style={({ pressed }) => ({ position: 'absolute', top, height, left: left as `${number}%`, right: right as `${number}%`, overflow: 'hidden', justifyContent: short ? 'center' : 'flex-start', paddingHorizontal: theme.spacing[2], paddingVertical: short ? 0 : theme.spacing[2], gap: theme.spacing[1] / 2, borderRadius: theme.borderRadii.sm, borderLeftWidth: theme.borderWidths.focus + 1, borderLeftColor: color, backgroundColor: labelTint(color), opacity: pressed ? 0.8 : 1 })}
     >
       {short ? (
-        <Text variant="bodySm" color="ink" numberOfLines={1}>
-          <Text variant="time">{start}</Text>{`  ${event.title}`}{event.location ? <Text variant="meta">{`  ${event.location}`}</Text> : null}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] + 2 }}>
+          {mark ? <HouseholdSeal {...mark} size="sm" /> : null}
+          <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1 }}>
+            <Text variant="time">{start}</Text>{`  ${event.title}`}{event.location ? <Text variant="meta">{`  ${event.location}`}</Text> : null}
+          </Text>
+          {clashIcon}
+        </View>
       ) : <>
-        <Text variant="bodySm" color="ink" numberOfLines={1}>{event.title}</Text>
-        <Text variant="time" numberOfLines={1}>{`${start}–${toTimeValue(new Date(event.endTime))}${event.location ? ` · ${event.location}` : ''}`}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] + 2 }}>
+          {mark ? <HouseholdSeal {...mark} size="sm" /> : null}
+          <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flexShrink: 1 }}>{event.title}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[1] }}>
+          <Text variant="time" numberOfLines={1} style={{ flexShrink: 1 }}>{`${start}–${toTimeValue(new Date(event.endTime))}${event.location ? ` · ${event.location}` : ''}`}</Text>
+          {clashIcon}
+        </View>
+        {clash && height >= HOUR * 1.5 ? <Text variant="caption" color="inkMuted" numberOfLines={2}>{clash}</Text> : null}
       </>}
     </Pressable>
   );
 }
 
-function AgendaRow({ label, time, mark, title, onPress }: { label: string; time: string; mark: ReactNode; title: string; onPress(): void }) {
+function AgendaRow({ label, time, mark, title, onPress, seal }: { label: string; time: string; mark: ReactNode; title: string; onPress(): void; seal?: HouseholdMark | undefined }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -172,6 +193,7 @@ function AgendaRow({ label, time, mark, title, onPress }: { label: string; time:
     >
       <View style={{ width: circleSize, alignItems: 'center' }}>{mark}</View>
       <Text variant="time" style={{ width: theme.spacing[10] + theme.spacing[1] }}>{time}</Text>
+      {seal ? <HouseholdSeal {...seal} size="sm" /> : null}
       <Text variant="bodySm" color="ink" numberOfLines={1} style={{ flex: 1 }}>{title}</Text>
     </Pressable>
   );
@@ -193,7 +215,7 @@ function SideColumn({ visible, width, children }: { visible: boolean; width: num
   );
 }
 
-function UpcomingDays({ date, events, tasks, onOpenEvent, onOpenTask }: { date: string; events: EventResponseDto[]; tasks: TaskResponseDto[]; onOpenEvent(event: EventResponseDto): void; onOpenTask(task: TaskResponseDto): void }) {
+function UpcomingDays({ date, events, tasks, onOpenEvent, onOpenTask, marks }: { date: string; events: EventResponseDto[]; tasks: TaskResponseDto[]; onOpenEvent(event: EventResponseDto): void; onOpenTask(task: TaskResponseDto): void; marks?: TodayMarks | undefined }) {
   const { t } = useTranslation(['today', 'events']);
   const days = Array.from({ length: 7 }, (_, index) => { const day = parseDateValue(date); day.setDate(day.getDate() + index + 1); return day; });
   const blocks = days.flatMap(day => {
@@ -208,15 +230,21 @@ function UpcomingDays({ date, events, tasks, onOpenEvent, onOpenTask }: { date: 
       {blocks.map(({ day, iso, dayEvents, dayTasks }) => (
         <View key={iso}>
           <Text variant="meta" style={{ marginBottom: theme.spacing[1] }}>{`${formatDate(day)} ${formatWeekday(day)}`}</Text>
-          {dayEvents.map(event => <AgendaRow key={event.id} label={t('upcomingEvent', { title: event.title })} time={event.allDay ? t('events:allDay') : toTimeValue(new Date(event.startTime))} title={event.title} onPress={() => onOpenEvent(event)} mark={<View style={{ width: theme.borderWidths.focus + 1, height: circleSize + theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: eventColor(event) }} />} />)}
-          {dayTasks.map(task => { const due = minutes(task.dueDate!); return <AgendaRow key={task.id} label={t('upcomingTask', { title: task.title })} time={due === 0 ? '' : clock(due)} title={task.title} onPress={() => onOpenTask(task)} mark={<TaskMark attention={false} />} />; })}
+          {dayEvents.map(event => <AgendaRow key={event.id} seal={marks?.markOf(event.householdId)} label={t('upcomingEvent', { title: event.title })} time={event.allDay ? t('events:allDay') : toTimeValue(new Date(event.startTime))} title={event.title} onPress={() => onOpenEvent(event)} mark={<View style={{ width: theme.borderWidths.focus + 1, height: circleSize + theme.spacing[1], borderRadius: theme.borderRadii.full, backgroundColor: marks?.markOf(event.householdId)?.color ?? eventColor(event) }} />} />)}
+          {dayTasks.map(task => { const due = minutes(task.dueDate!); return <AgendaRow key={task.id} seal={marks?.markOf(task.householdId)} label={t('upcomingTask', { title: task.title })} time={due === 0 ? '' : clock(due)} title={task.title} onPress={() => onOpenTask(task)} mark={<TaskMark attention={false} />} />; })}
         </View>
       ))}
     </Stack>
   );
 }
 
-export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, unscheduled, upcoming, upcomingEvents, renderTask, taskCompletion, onOpenEvent, onOpenTask, onSelectDate, detail, onOpenCalendar, onOpenTasks, onCreateTask }: {
+export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, unscheduled, upcoming, upcomingEvents, renderTask, taskCompletion, onOpenEvent, onOpenTask, onSelectDate, detail, onOpenCalendar, onOpenTasks, onCreateTask, marks, todoFooter, upcomingFooter }: {
+  /** In the 总览: seals and clash notes. */
+  marks?: TodayMarks | undefined;
+  /** Under 待办, such as how many of the family's tasks the 总览 leaves out. */
+  todoFooter?: ReactNode;
+  /** Under 接下来, such as which households the 总览 leaves out. */
+  upcomingFooter?: ReactNode;
   /** What the pane beside Today holds, if one is open. */
   detail: 'tasks' | 'events' | 'notes' | null;
   onOpenCalendar(): void; onOpenTasks(): void; onCreateTask(): void;
@@ -256,7 +284,7 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
     <CalendarGrid compact markedDates={markedDates} value={date} onSelect={onSelectDate} />
     <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4] }}>
       <Text accessibilityRole="header" aria-level={2} variant="label" style={{ marginBottom: theme.spacing[2] }}>{t('nextWeek')}</Text>
-      <UpcomingDays date={date} events={upcomingEvents} tasks={upcoming} onOpenEvent={onOpenEvent} onOpenTask={task => { setOpenedFromUpcoming(true); onOpenTask(task); }} />
+      <UpcomingDays marks={marks} date={date} events={upcomingEvents} tasks={upcoming} onOpenEvent={onOpenEvent} onOpenTask={task => { setOpenedFromUpcoming(true); onOpenTask(task); }} />
     </View>
   </Stack>;
   const groups = [{ key: 'overdue' as const, tasks: overdue, tone: 'accent' as const }, { key: 'today' as const, tasks: dateOnly, tone: 'muted' as const }, { key: 'undated' as const, tasks: unscheduled, tone: 'muted' as const }].filter(group => group.tasks.length > 0);
@@ -270,7 +298,9 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
         <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>{allDay.map(event => {
           const last = new Date(new Date(event.endTime).getTime() - 1);
           const range = toDateIso(last) > toDateIso(new Date(event.startTime)) ? `${formatDate(new Date(event.startTime))} – ${formatDate(last)}` : '';
-          return <Pressable key={event.id} accessibilityRole="button" accessibilityLabel={t('events:card', { title: event.title })} onPress={() => onOpenEvent(event)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[1] + 2, borderRadius: theme.borderRadii.sm, borderLeftWidth: theme.borderWidths.focus + 1, borderLeftColor: eventColor(event), backgroundColor: labelTint(eventColor(event)), opacity: pressed ? 0.8 : 1 })}><Text variant="bodySm" numberOfLines={1} color="ink" style={{ flexShrink: 1 }}>{event.title}</Text>{range ? <Text variant="time" numberOfLines={1}>{range}</Text> : null}</Pressable>;
+          const mark = marks?.markOf(event.householdId);
+          const color = mark?.color ?? eventColor(event);
+          return <Pressable key={event.id} accessibilityRole="button" accessibilityLabel={mark ? `${t('events:card', { title: event.title })}，${mark.name}` : t('events:card', { title: event.title })} onPress={() => onOpenEvent(event)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[1] + 2, borderRadius: theme.borderRadii.sm, borderLeftWidth: theme.borderWidths.focus + 1, borderLeftColor: color, backgroundColor: labelTint(color), opacity: pressed ? 0.8 : 1 })}>{mark ? <HouseholdSeal {...mark} size="sm" /> : null}<Text variant="bodySm" numberOfLines={1} color="ink" style={{ flexShrink: 1 }}>{event.title}</Text>{range ? <Text variant="time" numberOfLines={1}>{range}</Text> : null}</Pressable>;
         })}</Stack>
       </View> : null}
       <ScrollView ref={scroll} testID="today-timeline" style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: theme.spacing[3], paddingTop: theme.spacing[3], paddingBottom: theme.spacing[4] }}>
@@ -285,13 +315,13 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
             const end = Math.min(DAY_END, eventEnd(event));
             const available = overlapsTask(start, end) ? BESIDE_TASK : 100;
             const height = Math.max(theme.typography.time.lineHeight + theme.spacing[2], at(end) - at(start));
-            return <TimelineEvent key={event.id} event={event} top={at(start)} height={height} left={`${lane * available / columns}%`} right={`${100 - (lane + 1) * available / columns}%`} onPress={() => onOpenEvent(event)} />;
+            return <TimelineEvent key={event.id} mark={marks?.markOf(event.householdId)} clash={marks?.clashOf(event)} event={event} top={at(start)} height={height} left={`${lane * available / columns}%`} right={`${100 - (lane + 1) * available / columns}%`} onPress={() => onOpenEvent(event)} />;
           })}
           {scheduled.map(task => {
             const due = Math.max(DAY_START, Math.min(DAY_END - TASK_SPAN, minutes(task.dueDate!)));
             // Beside an event the marker keeps to the lane the events leave free; otherwise it is as wide as its title.
             const placement = overlapsEvent(due) ? { right: 0, width: `${100 - BESIDE_TASK}%` as const } : { left: 0, maxWidth: '100%' as const };
-            return <TimelineTask key={task.id} task={task} top={at(due)} placement={placement} completion={taskCompletion(task)} onOpen={() => { setOpenedFromUpcoming(false); onOpenTask(task); }} />;
+            return <TimelineTask key={task.id} mark={marks?.markOf(task.householdId)} task={task} top={at(due)} placement={placement} completion={taskCompletion(task)} onOpen={() => { setOpenedFromUpcoming(false); onOpenTask(task); }} />;
           })}
           {nowShown ? <View pointerEvents="none" style={{ position: 'absolute', left: -theme.layout.timeColumn, right: 0, top: at(nowMinutes) - theme.typography.time.lineHeight / 2 }}><NowMarker time={clock(nowMinutes)} /></View> : null}
         </View>
@@ -302,12 +332,13 @@ export function DesktopToday({ date, nowMinutes, events, todayTasks, overdue, un
       <ScrollView style={{ flex: 1 }} contentContainerStyle={todoContent}>
         {groups.length ? groups.map(group => <View key={group.key}><GroupLabel flush tone={group.tone}>{t(`tasks:groups.${group.key}`, { count: group.tasks.length })}</GroupLabel><ListGroup flush>{group.tasks.map(renderTask)}</ListGroup></View>) : <Text variant="bodySm">{t('noTasks')}</Text>}
         <Button label={groups.length ? t('addAnotherTask') : t('addTask')} tone="secondary" size="compact" style={{ alignSelf: 'flex-start', marginTop: theme.spacing[1] }} onPress={onCreateTask} />
+        {todoFooter}
         {compact ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], gap: theme.spacing[4] }}><Heading variant="section">{t('upcoming')}</Heading>{next}</View> : null}
       </ScrollView>
     </SideColumn>
     {!compact ? <SideColumn visible={showUpcoming} width={theme.layout.todayUpcomingWidth}>
       <PaneTitle>{t('upcoming')}</PaneTitle>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={columnContent}>{next}</ScrollView>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={columnContent}>{next}{upcomingFooter}</ScrollView>
     </SideColumn> : null}
   </View>;
 }

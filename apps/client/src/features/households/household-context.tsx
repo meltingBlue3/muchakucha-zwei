@@ -4,7 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 
 import type { HouseholdApi } from './household-api';
 import { fetchHouseholds } from './household-api';
-import { createCurrentHouseholdStore, type CurrentHouseholdStore } from '../../platform/household/current-household';
+import { createCurrentHouseholdStore, type CurrentHouseholdStore, type TimeScope } from '../../platform/household/current-household';
 
 export type HouseholdViewState =
   | 'resolving'
@@ -29,6 +29,17 @@ export interface HouseholdContextValue {
   rememberHousehold: (householdId: string) => void;
   enterAccessChanged: (lostHouseholdName?: string, lostHouseholdId?: string) => void;
   resolve: () => Promise<void>;
+  /** The 总览 exists once the person belongs to two households or more. */
+  overviewAvailable: boolean;
+  /**
+   * What 今日, 日历 and 任务 show: the 总览 or the current household. It
+   * follows the last of those pages the person opened, and starts on the
+   * 总览 for someone with several households.
+   */
+  scope: TimeScope;
+  setScope: (scope: TimeScope) => void;
+  /** Saves which households the 总览 shows; false when the server refused or could not be reached. */
+  setOverviewHouseholds: (householdIds: string[]) => Promise<boolean>;
 }
 
 const HouseholdContext = createContext<HouseholdContextValue | null>(null);
@@ -80,11 +91,13 @@ export function createHouseholdProvider(
     const [households, setHouseholds] = useState<ListMyHouseholdsItemDto[]>([]);
     const [currentHouseholdId, setCurrentHouseholdId] = useState<string | null>(null);
     const [accessChangedHouseholdName, setAccessChangedHouseholdName] = useState<string | undefined>(undefined);
+    const [storedScope, setStoredScope] = useState<TimeScope | null>(null);
     const resolvePromise = useRef<Promise<void> | null>(null);
     const mountedRef = useRef(true);
 
     const doResolve = useCallback(async (): Promise<void> => {
       await store.hydrate();
+      if (mountedRef.current) setStoredScope(store.getScope());
       const accessToken = getAccessToken();
       if (accessToken === null) {
         if (mountedRef.current) {
@@ -291,6 +304,28 @@ export function createHouseholdProvider(
       };
     }, [resolve]);
 
+    const overviewAvailable = households.length >= 2;
+    const scope: TimeScope = overviewAvailable ? storedScope ?? 'overview' : 'household';
+
+    const setScope = useCallback((next: TimeScope) => {
+      setStoredScope(next);
+      void store.setScope(next).catch(() => undefined);
+    }, [store]);
+
+    const setOverviewHouseholds = useCallback(async (householdIds: string[]): Promise<boolean> => {
+      const accessToken = getAccessToken();
+      if (accessToken === null || householdIds.length === 0) return false;
+      try {
+        const result = await householdApi.updateOverviewHouseholds(accessToken, { householdIds });
+        if (!mountedRef.current) return true;
+        const chosen = new Set(result.householdIds);
+        setHouseholds((current) => current.map((household) => ({ ...household, inOverview: chosen.has(household.id) })));
+        return true;
+      } catch {
+        return false;
+      }
+    }, [getAccessToken, householdApi]);
+
     const value: HouseholdContextValue = {
       viewState,
       households,
@@ -302,6 +337,10 @@ export function createHouseholdProvider(
       rememberHousehold,
       enterAccessChanged,
       resolve,
+      overviewAvailable,
+      scope,
+      setScope,
+      setOverviewHouseholds,
     };
 
     return React.createElement(

@@ -86,6 +86,10 @@ export interface ListMyHouseholdsItemDto {
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
   memberCount: number;
   ownerMembershipId: string;
+  /** Whether your 总览 shows this household. When none of your households is chosen, all of them count as chosen. */
+  inOverview: boolean;
+  /** When you joined, which keeps each household’s mark in the same order. */
+  joinedAt: string;
 }
 
 export interface GetHouseholdMemberDto {
@@ -499,6 +503,30 @@ export interface UpdateReminderSettingsDto {
   mutedHouseholdIds: string[];
 }
 
+/** Which of your households the 总览 shows. At least one stays chosen. */
+export interface UpdateOverviewHouseholdsDto {
+  /** Households to show in the 总览; every one must be yours. */
+  householdIds: string[];
+}
+
+export interface OverviewHouseholdsDto {
+  householdIds: string[];
+}
+
+/** A member of one of the households in the 总览, so its tasks can name their assignees. */
+export interface OverviewMemberDto {
+  householdId: string;
+  userId: string;
+  displayName: string;
+}
+
+export interface OverviewTaskListResponseDto {
+  tasks: TaskResponseDto[];
+  total: number;
+  materializedThrough?: string | null;
+  members: OverviewMemberDto[];
+}
+
 export interface UpcomingReminderDto {
   /** Stable across edits of the same occurrence; a series occurrence is keyed by rule and date. */
   key: string;
@@ -667,6 +695,9 @@ import type {
   UpcomingReminderListDto,
   RegisterReminderPushDto,
   ReminderPushStatusDto,
+  UpdateOverviewHouseholdsDto,
+  OverviewHouseholdsDto,
+  OverviewTaskListResponseDto,
 } from './models';
 
 export class ApiClientError extends Error {
@@ -1398,6 +1429,29 @@ export class ApiClient {
     return this.authenticated<void>('DELETE', '/api/v1/users/me/reminder-push', accessToken, undefined, signal);
   }
 
+  async updateOverviewHouseholds(accessToken: string, body: UpdateOverviewHouseholdsDto, signal?: AbortSignal): Promise<OverviewHouseholdsDto> {
+    return this.authenticated<OverviewHouseholdsDto>('PUT', '/api/v1/users/me/overview', accessToken, body, signal);
+  }
+
+  async listOverviewEvents(
+    accessToken: string,
+    startDate?: string,
+    endDate?: string,
+    expandRecurring?: boolean,
+    signal?: AbortSignal,
+  ): Promise<EventListResponseDto> {
+    const params = new URLSearchParams();
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    if (expandRecurring !== undefined) params.set('expandRecurring', String(expandRecurring));
+    const qs = params.toString();
+    return this.authenticated<EventListResponseDto>('GET', \`/api/v1/users/me/overview/events\${qs ? \`?\${qs}\` : ''}\`, accessToken, undefined, signal);
+  }
+
+  async listOverviewTasks(accessToken: string, signal?: AbortSignal): Promise<OverviewTaskListResponseDto> {
+    return this.authenticated<OverviewTaskListResponseDto>('GET', '/api/v1/users/me/overview/tasks', accessToken, undefined, signal);
+  }
+
   async setTaskReminder(accessToken: string, householdId: string, taskId: string, body: ReminderChoiceDto, signal?: AbortSignal): Promise<ReminderChoiceDto> {
     return this.authenticated<ReminderChoiceDto>('PUT', \`/api/v1/households/\${encodeURIComponent(householdId)}/tasks/\${encodeURIComponent(taskId)}/my-reminder\`, accessToken, body, signal);
   }
@@ -1677,6 +1731,15 @@ async function generate(): Promise<void> {
       || document.components.schemas.ReminderPushStatusDto === undefined
       || document.components.schemas.UpcomingReminderListDto === undefined) {
       throw new Error('OpenAPI reminder operations or schemas are missing or unstable.');
+    }
+
+    if (document.paths['/api/v1/users/me/overview']?.put?.operationId !== 'updateOverviewHouseholds'
+      || document.paths['/api/v1/users/me/overview/events']?.get?.operationId !== 'listOverviewEvents'
+      || document.paths['/api/v1/users/me/overview/tasks']?.get?.operationId !== 'listOverviewTasks'
+      || document.components?.schemas?.UpdateOverviewHouseholdsDto === undefined
+      || document.components.schemas.OverviewHouseholdsDto === undefined
+      || document.components.schemas.OverviewTaskListResponseDto === undefined) {
+      throw new Error('OpenAPI overview operations or schemas are missing or unstable.');
     }
 
     await mkdir(generatedRoot, { recursive: true });

@@ -1,4 +1,4 @@
-import { memberColors, theme } from '../theme';
+import { householdMarkColors, memberColors, theme } from '../theme';
 
 const luminance = (hex: string): number => {
   const channels = hex.slice(1).match(/.{2}/g)?.map((channel) => Number.parseInt(channel, 16) / 255);
@@ -70,6 +70,13 @@ describe('measured WCAG 2.2 AA palette contract', () => {
   test('keeps white initials readable on every member color', () => {
     for (const color of memberColors) {
       expect(contrast(theme.colors.surface, color)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  test('keeps every household seal readable on white and apart from vermilion', () => {
+    for (const color of householdMarkColors) {
+      expect(contrast(color, theme.colors.surface)).toBeGreaterThanOrEqual(4.5);
+      expect(color.toUpperCase()).not.toBe(theme.colors.accent.toUpperCase());
     }
   });
 });

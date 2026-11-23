@@ -16,16 +16,19 @@ export function subscribeContentChanges(listener: (householdId: string) => void)
   return () => { listeners.delete(wrapped); };
 }
 
-export function useContentChanges(householdId: string | null | undefined, refresh: () => unknown) {
+export function useContentChanges(householdId: string | readonly string[] | null | undefined, refresh: () => unknown) {
   const desktop = useDesktop();
   const path = usePathname();
   const paneOpen = /\/(tasks|events|notes|recurrence-rules)\/[^/]+(?:\/edit)?$/.test(path);
   const latest = useRef(refresh);
   latest.current = refresh;
+  // The 总览 listens to every household it shows; the key keeps the effect stable across renders.
+  const watched = householdId == null ? '' : typeof householdId === 'string' ? householdId : householdId.join(',');
   useEffect(() => {
-    if (!desktop || !paneOpen || !householdId) return;
-    const listener = (changed: string, source?: () => unknown) => { if (changed === householdId && source !== latest.current) void latest.current(); };
+    if (!desktop || !paneOpen || !watched) return;
+    const ids = new Set(watched.split(','));
+    const listener = (changed: string, source?: () => unknown) => { if (ids.has(changed) && source !== latest.current) void latest.current(); };
     listeners.add(listener);
     return () => { listeners.delete(listener); };
-  }, [desktop, paneOpen, householdId]);
+  }, [desktop, paneOpen, watched]);
 }

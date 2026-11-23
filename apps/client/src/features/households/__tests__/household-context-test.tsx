@@ -17,6 +17,8 @@ const alpha: ListMyHouseholdsItemDto = {
   role: 'MEMBER',
   memberCount: 2,
   ownerMembershipId: 'membership-owner-a',
+  inOverview: true,
+  joinedAt: '2026-01-01T00:00:00.000Z',
 };
 const beta: ListMyHouseholdsItemDto = {
   id: 'household-b',
@@ -24,6 +26,8 @@ const beta: ListMyHouseholdsItemDto = {
   role: 'ADMIN',
   memberCount: 3,
   ownerMembershipId: 'membership-owner-b',
+  inOverview: true,
+  joinedAt: '2026-02-01T00:00:00.000Z',
 };
 
 function createStore(): CurrentHouseholdStore & {
@@ -37,6 +41,8 @@ function createStore(): CurrentHouseholdStore & {
   };
   return {
     hydrate: jest.fn(async () => undefined),
+    getScope: () => null,
+    setScope: jest.fn(async () => undefined),
     getCurrentId: () => currentId,
     setCurrentId: jest.fn(async (id: string) => {
       currentId = id;

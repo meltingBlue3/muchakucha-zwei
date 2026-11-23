@@ -1,10 +1,11 @@
 import * as SecureStore from 'expo-secure-store';
-import type { CurrentHouseholdStore } from './current-household';
+import type { CurrentHouseholdStore, TimeScope } from './current-household';
 
 // SecureStore keys allow only letters, digits, ".", "-" and "_"; any other
 // character throws, and the store below swallows that as "unavailable".
 const CURRENT_ID_KEY = 'muchakucha.household.current.v1';
 const ACCESS_TIMESTAMPS_KEY = 'muchakucha.household.accessTimestamps.v1';
+const SCOPE_KEY = 'muchakucha.household.timeScope.v1';
 
 async function readStore(key: string): Promise<string | null> {
   try {
@@ -33,6 +34,7 @@ async function removeStore(key: string): Promise<void> {
 export function createNativeCurrentHouseholdStore(): CurrentHouseholdStore {
   let cachedId: string | null = null;
   let cachedTimestamps: Record<string, number> | null = null;
+  let cachedScope: TimeScope | null = null;
   let hydration: Promise<void> | null = null;
 
   return {
@@ -40,8 +42,10 @@ export function createNativeCurrentHouseholdStore(): CurrentHouseholdStore {
       hydration ??= Promise.all([
         readStore(CURRENT_ID_KEY),
         readStore(ACCESS_TIMESTAMPS_KEY),
-      ]).then(([storedId, storedTimestamps]) => {
+        readStore(SCOPE_KEY),
+      ]).then(([storedId, storedTimestamps, storedScope]) => {
         cachedId = storedId;
+        cachedScope = storedScope === 'overview' || storedScope === 'household' ? storedScope : null;
         if (storedTimestamps === null) {
           cachedTimestamps = {};
           return;
@@ -60,6 +64,15 @@ export function createNativeCurrentHouseholdStore(): CurrentHouseholdStore {
         }
       });
       await hydration;
+    },
+
+    getScope(): TimeScope | null {
+      return cachedScope;
+    },
+
+    async setScope(scope: TimeScope): Promise<void> {
+      cachedScope = scope;
+      await writeStore(SCOPE_KEY, scope);
     },
 
     getCurrentId(): string | null {
@@ -97,8 +110,10 @@ export function createNativeCurrentHouseholdStore(): CurrentHouseholdStore {
     async clearAll(): Promise<void> {
       cachedId = null;
       cachedTimestamps = null;
+      cachedScope = null;
       await removeStore(CURRENT_ID_KEY);
       await removeStore(ACCESS_TIMESTAMPS_KEY);
+      await removeStore(SCOPE_KEY);
     },
   };
 }

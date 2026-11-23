@@ -354,7 +354,19 @@ export class EventsService {
   ): Promise<EventListResponseDto> {
     const role = await this.resolveActorRole(actorId, householdId);
     if (role === null) throw new NotFoundException({ code: 'HOUSEHOLD_NOT_FOUND', message: 'Household not found.' });
+    return this.listAcross(actorId, [householdId], filters);
+  }
 
+  /**
+   * Lists events from several households at once, as the 总览 does. The
+   * caller has already established that the actor belongs to every one of
+   * them; this method checks no membership itself.
+   */
+  async listAcross(
+    actorId: string,
+    householdIds: string[],
+    filters: ListFilters = {},
+  ): Promise<EventListResponseDto> {
     const { startDate, endDate, recurring } = filters;
     // An unparseable query string used to reach Prisma as
     // `startTime.gte: Invalid Date`, which throws inside the query and
@@ -380,9 +392,11 @@ export class EventsService {
       if (days < 0 || days >= 366) {
         throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Calendar range must contain 1 to 366 days.' });
       }
-      if (recurring !== 'false') await this.materializer.materializeEventRange(householdId, from, through);
+      if (recurring !== 'false') {
+        for (const householdId of householdIds) await this.materializer.materializeEventRange(householdId, from, through);
+      }
     }
-    const where: Prisma.EventWhereInput = { householdId, cancelledAt: null };
+    const where: Prisma.EventWhereInput = { householdId: { in: householdIds }, cancelledAt: null };
     if (startDate || endDate) {
       const startTime: Prisma.DateTimeFilter = {};
       if (startDate) {
@@ -422,7 +436,7 @@ export class EventsService {
       // still active — scope the aggregate to rules that can still advance.
       this.prisma.recurrenceRule.aggregate({
         _min: { materializedThrough: true },
-        where: { householdId, OR: [{ endsOn: null }, { endsOn: { gte: utcMidnightToday() } }] },
+        where: { householdId: { in: householdIds }, OR: [{ endsOn: null }, { endsOn: { gte: utcMidnightToday() } }] },
       }),
     ]);
 

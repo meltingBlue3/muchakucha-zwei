@@ -12,6 +12,7 @@ import { HouseholdsModule } from './modules/households/households.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { AssistantModule } from './modules/assistant/assistant.module.js';
 import { RemindersModule } from './modules/reminders/reminders.module.js';
+import { OverviewModule } from './modules/overview/overview.module.js';
 
 @Module({})
 export class AppModule {
@@ -41,6 +42,7 @@ export class AppModule {
         TasksModule,
         NotesModule,
         LabelsModule,
+        OverviewModule,
         RemindersModule.register(environment),
         AssistantModule.register(environment),
       ],

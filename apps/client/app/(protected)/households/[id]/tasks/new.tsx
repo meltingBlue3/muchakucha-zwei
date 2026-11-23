@@ -16,11 +16,12 @@ import {
   HouseholdContextNote,
 } from '../../../../../src/ui/household-components';
 import { Banner, LoadingState, Stack } from '../../../../../src/ui/primitives';
+import { HouseholdTargetField } from '../../../../../src/features/overview/household-target-field';
 import type { CreateTaskDto } from '@muchakucha/api-client';
 
 export default function CreateTaskRoute() {
   const { t } = useTranslation(['tasks', 'shared', 'households']);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, overview } = useLocalSearchParams<{ id: string; overview?: string }>();
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:tasks:new:`;
   const router = useRouter();
@@ -94,7 +95,8 @@ export default function CreateTaskRoute() {
   return (
     <TaskWindow draftPrefix={draftPrefix} title={t('create')} busy={submitting} exitAllowed={exitAllowed}>
       <Stack gap={4}>
-        <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />
+        {/* Opened from the 总览, the form asks which household to save to. */}
+        {overview === '1' && households.length > 1 ? <HouseholdTargetField householdId={id} resource="tasks" /> : <HouseholdContextNote householdName={currentHousehold?.name ?? ''} />}
 
         {loading ? (
           <LoadingState label={t('households:settings.loadingMembers')} />

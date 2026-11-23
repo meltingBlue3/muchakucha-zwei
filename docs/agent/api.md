@@ -30,6 +30,8 @@ Authorization is a server property. Client guards and hidden buttons are conveni
 
 Every household-scoped handler resolves the caller's membership first. A caller who is not a member receives `404 HOUSEHOLD_NOT_FOUND`, and a resource belonging to another household receives that resource's own not-found code — existence is not disclosed to a non-member. A member who is authenticated and in scope but lacks the role for an action receives `403 FORBIDDEN`. Follow `src/modules/notes/notes.service.ts` for the ordering of these checks.
 
+The 总览 (`src/modules/overview/`) reads across households without widening access: it resolves the caller's current memberships first and passes only those household ids to `EventsService.listAcross` / `TasksService.listAcross`, which check no membership themselves and must not be called with ids from a request. Each membership's `inOverview` is the member's own choice; when none is chosen, every household counts as chosen, and `GET /households` reports that effective value. Writes always go through each household's own routes.
+
 `src/modules/households/household-policy.ts` holds the governance decisions as pure functions — role change, removal, ownership transfer, owner leave — so services and integration tests share one source. Extend those functions rather than re-deciding a rule inside a service, and keep the staleness, cross-household, and foreign-key checks in the service where the database is available.
 
 ## Schema and data

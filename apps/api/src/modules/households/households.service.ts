@@ -98,12 +98,15 @@ export class HouseholdsService {
       orderBy: { household: { name: 'asc' } },
     });
 
+    const noneChosen = memberships.every((m) => !m.inOverview);
     return memberships.map((m) => ({
       id: m.household.id,
       name: m.household.name,
       role: (m.id === m.household.ownerMembershipId ? 'OWNER' : m.role) as 'OWNER' | 'ADMIN' | 'MEMBER',
       memberCount: m.household._count.memberships,
       ownerMembershipId: m.household.ownerMembershipId!,
+      inOverview: noneChosen || m.inOverview,
+      joinedAt: m.createdAt.toISOString(),
     }));
   }
 

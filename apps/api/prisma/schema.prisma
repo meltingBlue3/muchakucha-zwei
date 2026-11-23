@@ -57,6 +57,9 @@ model Membership {
   role         String     @db.VarChar(10)
   /// This member's own choice to receive no reminders from this household.
   remindersMuted Boolean  @default(false) @map("reminders_muted")
+  /// This member's own choice to see this household in their 总览, the merged
+  /// view across households. New memberships start included.
+  inOverview   Boolean    @default(true) @map("in_overview")
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
