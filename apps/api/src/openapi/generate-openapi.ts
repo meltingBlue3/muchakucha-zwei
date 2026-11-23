@@ -436,11 +436,14 @@ export interface UpdateLabelRequestDto {
   expectedColor?: string;
 }
 
+export type LabelSystemKey = 'birthday';
+
 export interface LabelResponseDto {
   id: string;
   householdId: string;
   name: string;
   color: string;
+  systemKey: LabelSystemKey | null;
   createdBy: string;
   createdAt: string;
 }
@@ -760,6 +763,7 @@ export class ApiClient {
     accessToken: string,
     body: CreateHouseholdDto,
     signal?: AbortSignal,
+    language?: 'zh' | 'ja',
   ): Promise<CreateHouseholdResponseDto> {
     return this.authenticated<CreateHouseholdResponseDto>(
       'POST',
@@ -767,6 +771,7 @@ export class ApiClient {
       accessToken,
       body,
       signal,
+      language,
     );
   }
 

@@ -107,6 +107,7 @@ describe('lunar yearly event series', () => {
     expect(event.occurrenceDate).toBe(first);
     expect(event.startTime).toBe(new Date(`${first}T00:00:00+08:00`).toISOString());
     expect(event.recurrence).toMatchObject({ freq: 'yearly', lunar: { month: 10, day: 15 }, occasion: 'birthday', birthYear: 1968 });
+    expect(event.labels).toEqual([expect.objectContaining({ name: '生日', systemKey: 'birthday' })]);
 
     const stored = await withDatabase(client => client.query(
       `SELECT "lunar_month", "lunar_day", "occasion", "birth_year" FROM "recurrence_rules" WHERE "id" = $1`, [event.recurrenceRuleId],
@@ -126,8 +127,9 @@ describe('lunar yearly event series', () => {
 
     const listed = await request(token, 'GET', `/api/v1/households/${householdId}/events?expandRecurring=true&startDate=${from}&endDate=${through}`);
     expect(listed.statusCode).toBe(200);
-    const dates = (listed.json().events as Array<{ occurrenceDate: string }>).map(row => row.occurrenceDate);
-    expect(dates).toEqual([later]);
+    const events = listed.json().events as Array<{ occurrenceDate: string; labels: Array<{ name: string; systemKey: string | null }> }>;
+    expect(events.map(row => row.occurrenceDate)).toEqual([later]);
+    expect(events[0]?.labels).toEqual([expect.objectContaining({ name: '生日', systemKey: 'birthday' })]);
   });
 
   test('lists the birthday with its next lunar occurrence', async () => {

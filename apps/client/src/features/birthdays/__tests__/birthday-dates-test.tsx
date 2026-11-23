@@ -70,6 +70,17 @@ describe('the series a saved birthday creates', () => {
     const reminder = { mode: 'before' as const, minutesBefore: 1440, alarm: null };
     expect(birthdayEvents({ ...mom, alsoOther: true }, today, tz, reminder).map(event => event.myReminder)).toEqual([reminder, reminder]);
   });
+
+  test('omits labelIds when unset and forwards explicit labelIds to every series', () => {
+    const omitted = birthdayEvents({ ...mom, alsoOther: true }, today, tz);
+    for (const event of omitted) expect('labelIds' in event).toBe(false);
+
+    const tagged = birthdayEvents({ ...mom, alsoOther: true }, today, tz, undefined, ['bday-id']);
+    expect(tagged.map(event => event.labelIds)).toEqual([['bday-id'], ['bday-id']]);
+
+    const cleared = birthdayEvents({ ...mom, alsoOther: true }, today, tz, undefined, []);
+    expect(cleared.map(event => event.labelIds)).toEqual([[], []]);
+  });
 });
 
 describe('ages and validation', () => {

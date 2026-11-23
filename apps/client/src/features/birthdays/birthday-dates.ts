@@ -146,7 +146,7 @@ function titleFor(name: string, calendar: BirthdayCalendar): string {
   return i18n.t(calendar === 'lunar' ? 'birthdays:eventTitle.lunar' : 'birthdays:eventTitle.solar', { name: name.trim() });
 }
 
-function eventFor(name: string, calendar: BirthdayCalendar, month: number, day: number, birthYear: number | null, todayIso: string, timezone: string, myReminder: ReminderChoiceDto | undefined): CreateEventDto | null {
+function eventFor(name: string, calendar: BirthdayCalendar, month: number, day: number, birthYear: number | null, todayIso: string, timezone: string, myReminder: ReminderChoiceDto | undefined, labelIds: string[] | undefined): CreateEventDto | null {
   const startsOn = calendar === 'lunar' ? nextLunarDate(todayIso, { month, day }) : solarSeriesStart(month, day, todayIso);
   if (startsOn === null) return null;
   // An all-day event, as the event form sends one: local midnight to the end of the day.
@@ -165,6 +165,7 @@ function eventFor(name: string, calendar: BirthdayCalendar, month: number, day: 
       occasion: 'birthday',
       ...(birthYear === null ? {} : { birthYear }),
     },
+    ...(labelIds === undefined ? {} : { labelIds }),
     ...(myReminder === undefined ? {} : { myReminder }),
   };
 }
@@ -175,10 +176,10 @@ function eventFor(name: string, calendar: BirthdayCalendar, month: number, day: 
  * other calendar the year of birth is its own: a 腊月 birthday is lunar 1968
  * and Gregorian 1969.
  */
-export function birthdayEvents(draft: BirthdayDraft, todayIso: string, timezone: string, myReminder?: ReminderChoiceDto): CreateEventDto[] {
+export function birthdayEvents(draft: BirthdayDraft, todayIso: string, timezone: string, myReminder?: ReminderChoiceDto, labelIds?: string[]): CreateEventDto[] {
   const birthYear = birthYearOf(draft);
-  const first = eventFor(draft.name, draft.calendar, draft.month, draft.day, birthYear, todayIso, timezone, myReminder);
+  const first = eventFor(draft.name, draft.calendar, draft.month, draft.day, birthYear, todayIso, timezone, myReminder, labelIds);
   const other = draft.alsoOther ? otherBirthday(draft) : null;
-  const second = other === null ? null : eventFor(draft.name, other.calendar, other.month, other.day, other.year, todayIso, timezone, myReminder);
+  const second = other === null ? null : eventFor(draft.name, other.calendar, other.month, other.day, other.year, todayIso, timezone, myReminder, labelIds);
   return [first, second].filter((event): event is CreateEventDto => event !== null);
 }

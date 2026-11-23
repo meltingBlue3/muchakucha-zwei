@@ -4,6 +4,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { isUniqueConflict } from '../shared/unique-conflict.js';
 import type { CreateLabelDto, LabelResponseDto, LabelListResponseDto } from './dto/create-label.dto.js';
 import type { UpdateLabelDto } from './dto/create-label.dto.js';
+import { labelSystemKey } from './preset-labels.js';
 
 const NAME_MIN = 1;
 const NAME_MAX = 40;
@@ -28,6 +29,7 @@ interface LabelRow {
   householdId: string;
   name: string;
   color: string;
+  systemKey: string | null;
   createdBy: string;
   createdAt: Date;
 }
@@ -245,6 +247,7 @@ export class LabelsService {
       householdId: row.householdId,
       name: row.name,
       color: row.color,
+      systemKey: labelSystemKey(row.systemKey),
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),
     };

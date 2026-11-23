@@ -9,6 +9,7 @@ import type {
 } from './dto/create-household.dto.js';
 import type { GetHouseholdMemberDto, GetHouseholdResponseDto } from './dto/membership.dto.js';
 import { directLeaveOutcome, leaveFailure, removalFailure, roleChangeFailure, transferFailure, type Role } from './household-policy.js';
+import { PRESET_HOUSEHOLD_LABELS, type LabelLanguage } from '../labels/preset-labels.js';
 
 interface HouseholdMemberRow {
   membershipId: string;
@@ -35,6 +36,7 @@ export class HouseholdsService {
   async createHousehold(
     creatorId: string,
     name: string,
+    language: LabelLanguage = 'zh',
   ): Promise<CreateHouseholdResponseDto> {
     const trimmedName = name.trim().normalize('NFC');
     const codePointCount = [...trimmedName].length;
@@ -71,6 +73,16 @@ export class HouseholdsService {
       const updated = await transaction.household.update({
         where: { id: household.id },
         data: { ownerMembershipId: membership.id },
+      });
+
+      await transaction.label.createMany({
+        data: PRESET_HOUSEHOLD_LABELS.map((preset) => ({
+          householdId: household.id,
+          name: preset.names[language],
+          color: preset.color,
+          systemKey: preset.systemKey,
+          createdBy: creatorId,
+        })),
       });
 
       return { household: updated, membership };

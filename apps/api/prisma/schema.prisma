@@ -250,6 +250,7 @@ model Label {
   householdId String   @map("household_id") @db.Uuid
   name        String   @db.VarChar(40)
   color       String   @db.VarChar(7)
+  systemKey   String?  @map("system_key") @db.VarChar(32)
   createdBy   String   @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -260,6 +261,7 @@ model Label {
   ruleLabels  RecurrenceRuleLabel[]
 
   @@unique([householdId, name], map: "Label_household_name_key")
+  @@unique([householdId, systemKey], map: "Label_household_system_key_key")
   @@map("labels")
 }
 

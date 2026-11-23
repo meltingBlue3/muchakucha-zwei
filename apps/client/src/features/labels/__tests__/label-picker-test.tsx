@@ -16,7 +16,7 @@ jest.mock('../../households/household-context', () => ({
   useHouseholdContext: () => ({ households: [{ id: 'family', name: '家', role: mockRole.current }] }),
 }));
 
-const label = (id: string, name: string): LabelListItemDto => ({ id, householdId: 'family', name, color: '#2C716C', createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } });
+const label = (id: string, name: string): LabelListItemDto => ({ id, householdId: 'family', name, color: '#2C716C', systemKey: null, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } });
 
 beforeEach(() => {
   jest.mocked(sessionApiClient.listLabels).mockReset();
@@ -25,9 +25,9 @@ beforeEach(() => {
 });
 
 /** A form that owns the selection, as the event and task forms do. */
-function Form({ initial = [], onChange }: { initial?: string[]; onChange?: (ids: string[]) => void }) {
+function Form({ initial = [], onChange, onLabelsLoaded }: { initial?: string[]; onChange?: (ids: string[]) => void; onLabelsLoaded?: (labels: LabelListItemDto[]) => void }) {
   const [selected, setSelected] = useState(initial);
-  return <LabelPicker householdId="family" selectedLabelIds={selected} onChange={(ids) => { onChange?.(ids); setSelected(ids); }} />;
+  return <LabelPicker householdId="family" selectedLabelIds={selected} onChange={(ids) => { onChange?.(ids); setSelected(ids); }} {...(onLabelsLoaded === undefined ? {} : { onLabelsLoaded: (items) => onLabelsLoaded(items as LabelListItemDto[]) })} />;
 }
 
 const renderForm = (props: Parameters<typeof Form>[0] = {}) => render(<MuchakuchaThemeProvider><Form {...props} /></MuchakuchaThemeProvider>);
@@ -70,7 +70,7 @@ test('an owner with no labels is offered to create one here', async () => {
 test('an admin creates a label without leaving the form, and it is chosen at once', async () => {
   mockRole.current = 'ADMIN';
   jest.mocked(sessionApiClient.listLabels).mockResolvedValue({ labels: [label('chores', '家务')], total: 1 });
-  jest.mocked(sessionApiClient.createLabel).mockResolvedValue({ id: 'checkup', householdId: 'family', name: '体检', color: '#3B7DD8', createdBy: 'admin', createdAt: '2026-11-22T00:00:00.000Z' });
+  jest.mocked(sessionApiClient.createLabel).mockResolvedValue({ id: 'checkup', householdId: 'family', name: '体检', color: '#3B7DD8', systemKey: null, createdBy: 'admin', createdAt: '2026-11-22T00:00:00.000Z' });
   const onChange = jest.fn();
   const view = await renderForm({ initial: ['chores'], onChange });
 
@@ -109,4 +109,20 @@ test('an empty name is not sent', async () => {
 
   expect(await view.findByText('请输入标签名称。')).toBeTruthy();
   await waitFor(() => expect(sessionApiClient.createLabel).not.toHaveBeenCalled());
+});
+
+test('reports loaded labels on success and stays quiet on load failure', async () => {
+  const loaded = [label('bday', '生日')];
+  jest.mocked(sessionApiClient.listLabels).mockResolvedValueOnce({ labels: loaded, total: 1 });
+  const onLabelsLoaded = jest.fn();
+  const ok = await renderForm({ onLabelsLoaded });
+  await ok.findByLabelText('选择标签 生日');
+  expect(onLabelsLoaded).toHaveBeenCalledWith(loaded);
+  await ok.unmount();
+
+  onLabelsLoaded.mockClear();
+  jest.mocked(sessionApiClient.listLabels).mockRejectedValueOnce(new Error('offline'));
+  const failed = await renderForm({ onLabelsLoaded });
+  await failed.findByText('标签没有加载成功。');
+  expect(onLabelsLoaded).not.toHaveBeenCalled();
 });

@@ -1,4 +1,4 @@
-import { useTranslation } from '../../../src/i18n';
+import { currentLanguage, useTranslation } from '../../../src/i18n';
 import { AppShell } from '../../../src/ui/household-components';
 import { RouteWindow } from '../../../src/ui/route-window';
 import { Controller, useForm } from 'react-hook-form';
@@ -93,6 +93,7 @@ export default function NewHouseholdRoute() {
         accessToken,
         { name: normalizedName },
         new AbortController().signal,
+        currentLanguage(),
       );
       setSuccessHouseholdId(household.id);
     } catch {

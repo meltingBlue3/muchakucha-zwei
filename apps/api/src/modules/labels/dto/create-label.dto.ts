@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import { LABEL_SYSTEM_KEYS, type LabelSystemKey } from '../preset-labels.js';
 
 export class CreateLabelDto {
   @ApiProperty({ description: 'Label name', minLength: 1, maxLength: 40 })
@@ -71,6 +72,9 @@ export class LabelResponseDto {
 
   @ApiProperty()
   color!: string;
+
+  @ApiProperty({ enum: LABEL_SYSTEM_KEYS, nullable: true })
+  systemKey!: LabelSystemKey | null;
 
   @ApiProperty()
   createdBy!: string;

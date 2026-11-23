@@ -1,5 +1,5 @@
 import { useTranslation } from '../../i18n';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import Plus from 'lucide-react-native/icons/plus';
@@ -18,6 +18,7 @@ interface LabelPickerProps {
   householdId: string;
   selectedLabelIds: string[];
   onChange: (labelIds: string[]) => void;
+  onLabelsLoaded?: (labels: LabelResponseDto[]) => void;
 }
 
 type CreateError = 'nameRequired' | 'picker.duplicate' | 'picker.createError';
@@ -28,11 +29,13 @@ function isDuplicateName(failure: unknown): boolean {
   return Array.isArray(details) && details.some((detail) => detail.field === 'name' && detail.codes?.includes('duplicate') === true);
 }
 
-export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPickerProps) {
+export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsLoaded }: LabelPickerProps) {
   const { t } = useTranslation(['labels', 'common']);
   const activeTheme = useTheme<Theme>();
   const dense = useDesktopDensity();
   const { households } = useHouseholdContext();
+  const onLabelsLoadedRef = useRef(onLabelsLoaded);
+  onLabelsLoadedRef.current = onLabelsLoaded;
   // Only owners and admins may create labels; a member is never offered it.
   const canCreate = canManageLabels(households.find((household) => household.id === householdId)?.role);
   const [allLabels, setAllLabels] = useState<LabelResponseDto[]>([]);
@@ -54,7 +57,10 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange }: LabelPi
         const token = await sessionTransport.getAccessToken();
         if (token === null) throw new Error('Session expired');
         const result = await sessionApiClient.listLabels(token, householdId);
-        if (!cancelled) setAllLabels(result.labels);
+        if (!cancelled) {
+          setAllLabels(result.labels);
+          onLabelsLoadedRef.current?.(result.labels);
+        }
       } catch {
         // An unloaded list is not an empty one; say so and offer a retry.
         if (!cancelled) setFailed(true);

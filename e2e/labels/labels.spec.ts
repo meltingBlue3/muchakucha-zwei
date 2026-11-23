@@ -78,7 +78,9 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   const householdPath = `/households/${encodeURIComponent(householdId)}`;
 
   await loginUsernameFixture(page, owner.username, password, `${householdPath}/labels`);
-  await expect(page.getByText('还没有标签，创建一个来给日程和任务分类。')).toBeVisible();
+  for (const starter of ['生日', '家务', '采买', '健康', '出行']) {
+    await expect(page.getByLabel(`标签：${starter}`)).toBeVisible();
+  }
 
   // --- Create with a chosen color ---
   await page.getByRole('button', { name: '创建标签', exact: true }).click();
@@ -93,8 +95,8 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   await expect(page.getByLabel('标签：学校')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   let labels = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/labels`);
-  expect(labels.body.labels).toEqual([expect.objectContaining({ name: '学校', color: '#2C716C' })]);
-  const labelId = labels.body.labels[0].id as string;
+  expect(labels.body.labels).toContainEqual(expect.objectContaining({ name: '学校', color: '#2C716C' }));
+  const labelId = (labels.body.labels as Array<{ id: string; name: string }>).find((item) => item.name === '学校')!.id;
 
   // --- A duplicate name is rejected without losing the form ---
   await page.getByRole('button', { name: '创建标签', exact: true }).click();
@@ -115,7 +117,7 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   await expect(page.getByLabel('标签：学习')).toBeVisible();
   await expect(page.getByLabel('标签：学校')).toHaveCount(0);
   labels = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/labels`);
-  expect(labels.body.labels).toEqual([expect.objectContaining({ id: labelId, name: '学习', color: '#3B7DD8' })]);
+  expect(labels.body.labels).toContainEqual(expect.objectContaining({ id: labelId, name: '学习', color: '#3B7DD8' }));
 
   // --- Apply the label while creating a task ---
   await page.goto(`${householdPath}/tasks`);
@@ -148,7 +150,8 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   await page.getByRole('button', { name: '更多操作：标签 学习', exact: true }).click();
   await page.getByRole('menuitem', { name: '删除标签 学习', exact: true }).click();
   await page.getByRole('button', { name: '确认删除标签 学习' }).click();
-  await expect(page.getByText('还没有标签，创建一个来给日程和任务分类。')).toBeVisible();
+  await expect(page.getByLabel('标签：学习')).toHaveCount(0);
+  await expect(page.getByLabel('标签：生日')).toBeVisible();
 
   const detached = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/tasks/${task!.id}`);
   expect(detached.body.labels).toEqual([]);
