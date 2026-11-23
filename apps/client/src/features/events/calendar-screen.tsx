@@ -46,7 +46,6 @@ import { Button, EmptyState, LoadError, LoadingState, Stack } from '../../ui/pri
 import type { Theme } from '../../ui/theme';
 import { overviewHouseholds, useHouseholdMarks } from '../households/household-marks';
 import { householdClashes } from '../overview/overview-items';
-import { OverviewLegend } from '../overview/overview-legend';
 import { OverviewMarksContext, type OverviewMarks } from '../overview/overview-marks-context';
 
 /** All-day events first, then by start time. */
@@ -269,7 +268,6 @@ export function CalendarView({ overview = false }: { overview?: boolean }) {
             <FilterButton ref={filterTrigger} label={t('filter')} count={activeFilterCount} onPress={() => setFiltersOpen(true)} />
           </>}
         />
-        {overview ? <View style={desktop ? { paddingHorizontal: activeTheme.spacing[5], paddingBottom: activeTheme.spacing[3] } : undefined}><OverviewLegend /></View> : null}
         {filtersOpen ? <AppDialog title={t('filter')} busy={false} trigger={filterTrigger} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
           <Stack gap={5}>
             <FilterOptions label={t('recurrence:repeat')} options={RECURRING_FILTERS.map(value => ({ value, label: t(`recurrence:filter.${value}`), name: recurringFilterAccessibilityLabel(value) }))} value={recurringFilter} onChange={value => setRecurringFilter(value as RecurringFilterKey)} />

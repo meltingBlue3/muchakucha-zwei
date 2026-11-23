@@ -10,7 +10,7 @@ import { useDesktopDensity } from '../../ui/use-desktop';
 import { useHouseholdContext } from '../households/household-context';
 import { overviewHouseholds, useHouseholdMarks } from '../households/household-marks';
 
-/** Which households a 总览 page shows, each with its seal, and the way to change them. */
+/** On the 总览's 今日: which households it shows, each with its seal, and the way to change them. 日历 and 任务 leave this to the switch. */
 export function OverviewLegend() {
   const { t } = useTranslation('overview');
   const router = useRouter();

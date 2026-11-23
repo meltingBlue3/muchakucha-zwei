@@ -42,7 +42,7 @@ import { Button, EmptyState, LoadError, LoadingState, Stack, StatusPanel } from 
 import { useCurrentUser } from '../auth/use-current-user';
 import { overviewHouseholds, useHouseholdMarks } from '../households/household-marks';
 import { overviewTasks } from '../overview/overview-items';
-import { OthersHiddenNote, OverviewLegend } from '../overview/overview-legend';
+import { OthersHiddenNote } from '../overview/overview-legend';
 
 type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
 type PriorityFilterKey = 'all' | 'low' | 'medium' | 'high' | 'urgent';
@@ -318,7 +318,6 @@ export function TaskList({ overview = false }: { overview?: boolean }) {
           {...(desktop ? { controls: statusControl } : {})}
           action={<>{desktop ? <><SearchField label={t('search')} placeholder={t('search')} value={query} onChangeText={setQuery} /></> : null}<FilterButton ref={filterTrigger} label={t('filter')} count={activeFilterCount} onPress={() => setFiltersOpen(true)} /></>}
         />
-        {overview ? <OverviewLegend /> : null}
         {!desktop ? statusControl : null}
         {filtersOpen ? <AppDialog title={t('filter')} trigger={filterTrigger} busy={false} onClose={() => setFiltersOpen(false)} footer={<FilterActions onClear={clearFilters} onDone={() => setFiltersOpen(false)} />}>
           <Stack gap={5}>

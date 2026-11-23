@@ -17,6 +17,7 @@ import { formatRecurrenceSummary } from '../../../../../../src/features/recurren
 import { DetailField, DetailPanel, DetailEditButton, FooterDestructiveAction } from '../../../../../../src/ui/detail-fields';
 import { useDesktop } from '../../../../../../src/ui/use-desktop';
 import { ReminderDetailField } from '../../../../../../src/features/reminders/reminder-detail';
+import { HouseholdDetailField } from '../../../../../../src/features/overview/household-detail-field';
 import { DEFAULT_REMINDER } from '../../../../../../src/features/reminders/reminder-rules';
 import { Heading, LoadError, LoadingState, Stack, Text } from '../../../../../../src/ui/primitives';
 import type { Theme } from '../../../../../../src/ui/theme';
@@ -113,6 +114,7 @@ export default function EventDetailRoute() {
             recurrenceSummary.timeZoneNote,
             cancelled ? t('tasks:cancelledRecurrence') : t('occurrenceDetail'),
           ]} /> : null}
+          <HouseholdDetailField householdId={event.householdId} />
         </DetailPanel>
         {event.description ? <Stack gap={desktop ? 1 : 2} style={desktop ? { borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[4] } : undefined}><Text variant={desktop ? 'meta' : 'label'} color={desktop ? 'inkFaint' : 'inkMuted'}>{t('tasks:description')}</Text><Text {...(desktop ? { variant: 'bodySm' as const, color: 'ink' as const } : {})}>{event.description}</Text></Stack> : null}
         {(event.labels ?? []).length ? <Stack gap={2}>
