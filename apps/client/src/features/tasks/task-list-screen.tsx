@@ -24,6 +24,7 @@ import { useTaskCompletion } from './use-task-completion';
 import { useHouseholdContext } from '../households/household-context';
 import { HouseholdScreen } from '../households/household-screen';
 import { mergeLabels, useHouseholdLabels } from '../labels/use-household-labels';
+import { parseSearchQuery } from '../search/search-query';
 import {
   applyRecurringFilter,
   classifyGenerationWindow,
@@ -134,7 +135,8 @@ export default function TaskListScreen() {
   const availableLabels = useMemo(() => mergeLabels(householdLabels, seenLabels), [householdLabels, seenLabels]);
 
   const filteredTasks = useMemo(() => {
-    let result = tasks.filter(task => task.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+    const search = parseSearchQuery(query);
+    let result = tasks.filter(task => search.matches(task.title));
     if (filter !== 'all') {
       result = result.filter((t) => t.status === filter);
     }
