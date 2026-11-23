@@ -58,9 +58,10 @@ export async function assistantToken(): Promise<string> {
 }
 
 /** Callers are keyed by household. A blurred or unmounted screen cannot accept a late response. */
-export function useAssistantQuery<T>(fetcher: (token: string) => Promise<T>) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
+export function useAssistantQuery<T>(fetcher: (token: string) => Promise<T>, readInitial?: () => T | null) {
+  const [data, setData] = useState<T | null>(() => readInitial?.() ?? null);
+  const [loading, setLoading] = useState(data === null);
+  const loadedBeforeFocus = useRef(data !== null);
   const { t } = useTranslation('assistant');
   const [error, setError] = useState<AssistantErrorKey | null>(null);
   const generation = useRef(0);
@@ -87,7 +88,8 @@ export function useAssistantQuery<T>(fetcher: (token: string) => Promise<T>) {
   }, [fetcher]);
   useFocusEffect(useCallback(() => {
     active.current = true;
-    void reload();
+    if (loadedBeforeFocus.current) loadedBeforeFocus.current = false;
+    else void reload();
     return () => { active.current = false; generation.current += 1; };
   }, [reload]));
   return { data, setData, loading, error: error === null ? null : t(error), reload };

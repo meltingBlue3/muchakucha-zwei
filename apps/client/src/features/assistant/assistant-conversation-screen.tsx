@@ -16,6 +16,7 @@ import { AssistantActionsPreview } from './action-preview';
 import { AssistantWorkspace } from './assistant-workspace';
 import { AssistantModelPicker } from './model-picker';
 import { takeFirstMessage } from './first-message';
+import { discardPreparedConversation, loadConversation, readPreparedConversation } from './conversation-navigation';
 
 // The server saves each step of a run, so a short poll shows progress without streaming.
 const PROGRESS_POLL_MS = 2_000;
@@ -30,15 +31,9 @@ function Conversation({ householdId, householdName, writable, conversationId }: 
   const [draft, setDraft] = useState<{ value: string; revision: number }>();
   /** Shown until the server's copy of the conversation includes the message. */
   const [outgoing, setOutgoing] = useState<{ text: string; baseline: number } | null>(null);
-  const load = useCallback(async (token: string) => {
-    const [conversation, providers, history] = await Promise.all([
-      sessionApiClient.getAssistantConversation(token, householdId, conversationId, undefined, currentLanguage()),
-      sessionApiClient.listAssistantProviders(token, householdId),
-      sessionApiClient.listAssistantConversations(token, householdId),
-    ]);
-    return { conversation, providers: providers.providers, history: history.conversations };
-  }, [householdId, conversationId]);
-  const query = useAssistantQuery(load);
+  const load = useCallback((token: string) => loadConversation(token, householdId, conversationId, currentLanguage()), [householdId, conversationId]);
+  const query = useAssistantQuery(load, () => readPreparedConversation(householdId, conversationId));
+  useEffect(() => { discardPreparedConversation(query.data); }, [query.data]);
   const operation = useAssistantOperation();
   const conversation = query.data?.conversation;
   const provider = query.data?.providers.find(item => item.id === conversation?.providerId);

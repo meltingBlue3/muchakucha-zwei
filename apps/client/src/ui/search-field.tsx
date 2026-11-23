@@ -19,9 +19,37 @@ export function SearchField({ label, placeholder, value, onChangeText }: {
 }) {
   const { t } = useTranslation('shared');
   const [focused, setFocused] = useState(false);
+  const [compositionDraft, setCompositionDraft] = useState<string | null>(null);
+  const composing = useRef(false);
   const dense = useDesktopDensity();
   const { width } = useWindowDimensions();
   const input = useRef<TextInput>(null);
+  const text = compositionDraft ?? value;
+
+  // React Native Web does not forward composition props on TextInput.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = input.current as unknown as HTMLInputElement | null;
+    if (!node) return;
+    const startComposition = () => { composing.current = true; };
+    const endComposition = () => {
+      composing.current = false;
+      setCompositionDraft(null);
+      onChangeText(node.value);
+    };
+    node.addEventListener('compositionstart', startComposition);
+    node.addEventListener('compositionend', endComposition);
+    return () => {
+      node.removeEventListener('compositionstart', startComposition);
+      node.removeEventListener('compositionend', endComposition);
+    };
+  }, [onChangeText]);
+
+  const changeText = (nextText: string) => {
+    if (composing.current) setCompositionDraft(nextText);
+    else onChangeText(nextText);
+  };
+
   // On a desktop, / jumps to the page's search unless the person is already typing somewhere.
   useEffect(() => {
     if (!dense || Platform.OS !== 'web') return;
@@ -43,8 +71,8 @@ export function SearchField({ label, placeholder, value, onChangeText }: {
         accessibilityLabel={label}
         placeholder={placeholder}
         placeholderTextColor={theme.colors.inkFaint}
-        value={value}
-        onChangeText={onChangeText}
+        value={text}
+        onChangeText={changeText}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         autoCapitalize="none"
@@ -52,7 +80,7 @@ export function SearchField({ label, placeholder, value, onChangeText }: {
         returnKeyType="search"
         style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', color: theme.colors.ink, fontFamily: theme.fontFamilies.regular, fontSize: dense ? theme.typography.meta.fontSize : theme.typography.body.fontSize, paddingHorizontal: theme.spacing[2], outlineStyle: 'none' } as never}
       />
-      {value !== '' ? (
+      {text !== '' ? (
         <Pressable accessibilityRole="button" accessibilityLabel={t('searchClear')} onPress={() => onChangeText('')} style={{ minWidth: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget, minHeight: dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget - theme.spacing[1], alignItems: 'center', justifyContent: 'center' }}>
           <X size={theme.controlSizes.icon - theme.spacing[1]} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
         </Pressable>
