@@ -83,7 +83,7 @@ export default function TodayRoute() {
   const dayKey = `${householdId}:${currentDate}`;
   const ready = !loading && loadedDay.current === dayKey;
   const { month: calendarMonth, range: calendarRange, selectMonth, refresh: refreshCalendar, events: calendarEvents, status: calendarStatus } =
-    useTodayCalendar(householdId, currentDate, desktop && ready);
+    useTodayCalendar(householdId, currentDate, desktop && viewState !== 'resolving');
 
   const memberNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -320,7 +320,7 @@ export default function TodayRoute() {
         <PageIntro title={desktop ? t('navigation:pages.today') : formatDate(now.date)} subtitle={summary} />
 
         {loading ? <LoadingState label={t('loading')} /> : null}
-        {error !== null ? <LoadError message={t(error)} onRetry={() => void fetchData()} retryAccessibilityLabel={t('retryLoad')} /> : null}
+        {error !== null ? <LoadError message={t(error)} onRetry={() => { void fetchData(); void refreshCalendar(); }} retryAccessibilityLabel={t('retryLoad')} /> : null}
 
         {ready && viewState !== 'resolving' ? (
           desktop ? <DesktopToday detail={detail} date={currentDate} nowMinutes={now.minutes} events={todayEvents} todayTasks={todayTasks} overdue={overdueTasks} unscheduled={unscheduledTasks} upcoming={approachingTasks} upcomingEvents={upcomingEvents} dayCounts={dayCounts} calendarMonth={calendarMonth} calendarStatus={calendarStatus} onCalendarMonthChange={selectMonth} onCalendarRetry={refreshCalendar} renderTask={taskRow} taskCompletion={completion.cardProps} onOpenEvent={handleEventPress} onOpenTask={handleTaskPress} onSelectDate={date => { setCalendarDate(date); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenCalendar={() => { setCalendarDate(currentDate); router.push(`/households/${encodeURIComponent(householdId!)}/events`); }} onOpenTasks={() => router.push(`/households/${encodeURIComponent(householdId!)}/tasks`)} onCreateTask={create('tasks')} /> : wide && secondary

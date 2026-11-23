@@ -3,7 +3,7 @@ import { fireEvent, render, within } from '@testing-library/react-native';
 import type { ComponentProps } from 'react';
 import { StyleSheet } from 'react-native';
 import { formatDate } from '../../../ui/date-values';
-import { dayCountTone } from '../../../ui/picker-panels';
+import { CalendarGrid, dayCountTone } from '../../../ui/picker-panels';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { theme } from '../../../ui/theme';
 import { toCalendarGridRangeIso } from '../calendar-utils';
@@ -145,4 +145,17 @@ test('the mini calendar renders color-scaled superscript counts, hides zeros, an
   } finally {
     jest.useRealTimers();
   }
+});
+
+test('an uncontrolled CalendarGrid still notifies onMonthChange when navigating months', async () => {
+  const onMonthChange = jest.fn();
+  const view = await render(
+    <MuchakuchaThemeProvider>
+      <CalendarGrid value="2026-11-10" onSelect={() => undefined} onMonthChange={onMonthChange} />
+    </MuchakuchaThemeProvider>,
+  );
+  await fireEvent.press(view.getByRole('button', { name: '下个月' }));
+  expect(onMonthChange).toHaveBeenCalledWith(2026, 11);
+  await fireEvent.press(view.getByRole('button', { name: '上个月' }));
+  expect(onMonthChange).toHaveBeenCalledWith(2026, 10);
 });
