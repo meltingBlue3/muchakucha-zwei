@@ -1533,6 +1533,7 @@ export const ja: Catalog = {
   overview: {
     title: 'まとめ',
     legend: 'まとめに入れる家族',
+    household: '家族',
     adjust: '変更',
     adjustLabel: 'まとめに入れる家族を変更',
     loading: 'まとめを読み込み中',

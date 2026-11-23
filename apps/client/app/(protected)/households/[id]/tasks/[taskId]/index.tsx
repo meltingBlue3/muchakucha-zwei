@@ -14,6 +14,7 @@ import { ApiClientError } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { useCurrentUser } from '../../../../../../src/features/auth/use-current-user';
 import { ReminderDetailField } from '../../../../../../src/features/reminders/reminder-detail';
+import { HouseholdDetailField } from '../../../../../../src/features/overview/household-detail-field';
 import { DEFAULT_REMINDER, isOwnTask } from '../../../../../../src/features/reminders/reminder-rules';
 import { formatDate, formatDateTime, toDateValue, toTimeValue } from '../../../../../../src/ui/date-values';
 import { LabelChip } from '../../../../../../src/features/labels/label-chip';
@@ -203,6 +204,7 @@ export default function TaskDetailRoute() {
             cancelled ? t('cancelledRecurrence') : t('occurrenceDetail'),
           ]} /> : desktop ? <DetailField label={t('editConflict:repeat')} value={<Text variant="bodySm" color="inkMuted">{t('noRecurrence')}</Text>} /> : null}
           {desktop && (task.labels ?? []).length ? <DetailField label={t('editConflict:labels')} value={<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2] }}>{task.labels?.map(label => <LabelChip key={label.id} label={label} small />)}</View>} /> : null}
+          <HouseholdDetailField householdId={task.householdId} />
         </DetailPanel>
         {task.description ? <Stack gap={desktop ? 1 : 2} style={desktop ? { borderTopWidth: activeTheme.borderWidths.default, borderTopColor: activeTheme.colors.separator, paddingTop: activeTheme.spacing[4] } : undefined}><Text variant={desktop ? 'meta' : 'label'} color={desktop ? 'inkFaint' : 'inkMuted'}>{t('description')}</Text><Text {...(desktop ? { variant: 'bodySm' as const, color: 'ink' as const } : {})}>{task.description}</Text></Stack> : null}
         {!desktop && (task.labels ?? []).length ? <Stack gap={2}>

@@ -1533,6 +1533,7 @@ export const zh = {
   overview: {
     title: '总览',
     legend: '总览里的家庭',
+    household: '家庭',
     adjust: '调整',
     adjustLabel: '调整总览里的家庭',
     loading: '正在加载总览',
