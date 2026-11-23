@@ -4,8 +4,9 @@ import Cake from 'lucide-react-native/icons/cake';
 import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import CalendarPlus from 'lucide-react-native/icons/calendar-plus';
 import Hash from 'lucide-react-native/icons/hash';
+import Tag from 'lucide-react-native/icons/tag';
 import { useTheme } from '@shopify/restyle';
-import type { CreateEventDto } from '@muchakucha/api-client';
+import type { CreateEventDto, LabelResponseDto } from '@muchakucha/api-client';
 
 import { i18n, useTranslation } from '../../i18n';
 import { DraftNotice } from '../../ui/draft-notice';
@@ -18,6 +19,7 @@ import { useDesktopDensity } from '../../ui/use-desktop';
 import { useWindowStep, type RouteWindowStep } from '../../ui/window-step';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
+import { LabelPicker } from '../labels/label-picker';
 import { deviceTimeZone } from '../recurrence/recurrence-options';
 import { ReminderField } from '../reminders/reminder-field';
 import { alarmValue, choiceFromValue, choiceValue, DEFAULT_REMINDER, fitChoice, sameChoice, type AlarmOptionValue, type ReminderOptionValue } from '../reminders/reminder-rules';
@@ -56,7 +58,19 @@ function nextLine(calendar: BirthdayCalendar, month: number, day: number, birthY
  * optional year of birth. With the year known, the other calendar's birthday
  * can be kept as well, so one entry gives a person both.
  */
-export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit, onCancel }: {
+export function BirthdayForm({
+  draftKey,
+  people,
+  todayIso,
+  submitting,
+  onSubmit,
+  onCancel,
+  householdId,
+  selectedLabelIds,
+  labelsReady = true,
+  onLabelChange,
+  onLabelsLoaded,
+}: {
   draftKey: string;
   /** Names offered as one tap: 我 and the household's members. */
   people: string[];
@@ -64,6 +78,11 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
   submitting: boolean;
   onSubmit(events: CreateEventDto[]): void;
   onCancel(): void;
+  householdId?: string | undefined;
+  selectedLabelIds?: string[] | undefined;
+  labelsReady?: boolean;
+  onLabelChange?: ((labelIds: string[]) => void) | undefined;
+  onLabelsLoaded?: ((labels: LabelResponseDto[]) => void) | undefined;
 }) {
   const { t } = useTranslation(['birthdays', 'common', 'recurrence']);
   const activeTheme = useTheme<Theme>();
@@ -119,7 +138,8 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
     setTimeZoneError(timezone === null);
     if (timezone === null) return;
     const choice = fitChoice(choiceFromValue(reminder, alarm), true);
-    onSubmit(birthdayEvents(draft, todayIso, timezone, sameChoice(choice, DEFAULT_REMINDER) ? undefined : choice));
+    const labelIds = selectedLabelIds !== undefined && labelsReady ? selectedLabelIds : undefined;
+    onSubmit(birthdayEvents(draft, todayIso, timezone, sameChoice(choice, DEFAULT_REMINDER) ? undefined : choice, labelIds));
   };
 
   const calendars: Array<{ value: BirthdayCalendar; label: string; name: string }> = [
@@ -234,6 +254,21 @@ export function BirthdayForm({ draftKey, people, todayIso, submitting, onSubmit,
           onChange={choice => { setReminder(choiceValue(choice)); setAlarm(alarmValue(choice)); }}
         />
       </FormSection>
+
+      {householdId !== undefined && selectedLabelIds !== undefined && onLabelChange !== undefined ? (
+        <FormSection>
+          <FormRow align="start" icon={rowIcon(Tag)}>
+            <View style={{ flex: 1, paddingVertical: activeTheme.spacing[3] }}>
+              <LabelPicker
+                householdId={householdId}
+                selectedLabelIds={selectedLabelIds}
+                onChange={onLabelChange}
+                {...(onLabelsLoaded === undefined ? {} : { onLabelsLoaded })}
+              />
+            </View>
+          </FormRow>
+        </FormSection>
+      ) : null}
 
       {preview.length ? (
         <View accessibilityLabel={t('form.nextName', { lines: preview.join(t('form.nextSeparator')) })} style={{ marginTop: activeTheme.spacing[4], marginLeft: contentInset, padding: activeTheme.spacing[3], borderRadius: activeTheme.borderRadii.sm, backgroundColor: activeTheme.colors.surfaceSubtle, gap: activeTheme.spacing[1] }}>

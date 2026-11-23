@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import type { CreateEventDto } from '@muchakucha/api-client';
+import type { CreateEventDto, LabelResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../../../../../src/features/auth/session-runtime';
 import BirthdayListScreen from '../../../../../src/features/birthdays/birthday-list-screen';
@@ -26,15 +26,24 @@ export default function CreateBirthdayRoute() {
   const householdName = households.find(household => household.id === id)?.name ?? '';
   const workspace = useWorkspaceStore();
   const draftPrefix = `draft:${id}:birthdays:new:`;
+  const labelsKey = draftPrefix + 'labels';
   const { close } = useRouteWindowClose('birthdays');
   const exitAllowed = useRef(false);
   const [pending, setPending] = useState<CreateEventDto[]>([]);
   const [saved, setSaved] = useWorkspaceState<string[]>(draftPrefix + 'saved', []);
+  const [selectedLabelIds, setSelectedLabelIds] = useWorkspaceState<string[]>(labelsKey, []);
+  const [labelsLoadedFor, setLabelsLoadedFor] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [failed, setFailed] = useState(false);
   /** Everyone else in the household, by the name it knows them by; null until loaded. */
   const [others, setOthers] = useState<string[] | null>(null);
   const todayIso = toDateIso(new Date());
+
+  const handleLabelsLoaded = useCallback((labels: LabelResponseDto[]) => {
+    const birthdayLabel = labels.find((label) => label.systemKey === 'birthday');
+    workspace.seed(labelsKey, birthdayLabel ? [birthdayLabel.id] : []);
+    setLabelsLoadedFor(id ?? null);
+  }, [id, labelsKey, workspace]);
 
   useEffect(() => {
     let active = true;
@@ -95,7 +104,19 @@ export default function CreateBirthdayRoute() {
             onRetry={() => void save(pending)}
           />
         ) : (
-          <BirthdayForm draftKey={draftPrefix + 'form'} people={people} todayIso={todayIso} submitting={submitting} onSubmit={events => void save(events)} onCancel={close} />
+          <BirthdayForm
+            draftKey={draftPrefix + 'form'}
+            people={people}
+            todayIso={todayIso}
+            submitting={submitting}
+            onSubmit={events => void save(events)}
+            onCancel={close}
+            householdId={id}
+            selectedLabelIds={selectedLabelIds}
+            labelsReady={labelsLoadedFor === id || workspace.has(labelsKey)}
+            onLabelChange={setSelectedLabelIds}
+            onLabelsLoaded={handleLabelsLoaded}
+          />
         )}
       </Stack>
     </RouteWindow>

@@ -1,8 +1,20 @@
+import { useCallback, useState } from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import type { LabelListItemDto, LabelResponseDto } from '@muchakucha/api-client';
 
 import { setLanguageChoice } from '../../../i18n';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
+import { createWorkspaceState, useWorkspaceState, useWorkspaceStore, WorkspaceStateProvider } from '../../../ui/workspace-state';
+import { sessionApiClient } from '../../auth/session-runtime';
 import { BirthdayForm } from '../birthday-form';
+
+jest.mock('../../auth/session-runtime', () => ({
+  sessionTransport: { getAccessToken: jest.fn(async () => 'token') },
+  sessionApiClient: { listLabels: jest.fn(), createLabel: jest.fn() },
+}));
+jest.mock('../../households/household-context', () => ({
+  useHouseholdContext: () => ({ households: [{ id: 'h', name: '家', role: 'MEMBER' }] }),
+}));
 
 jest.mock('../../reminders/reminder-settings', () => ({
   useReminderSettings: () => ({
@@ -18,8 +30,54 @@ jest.mock('../../recurrence/recurrence-options', () => ({
 jest.mock('expo-localization', () => ({ getLocales: jest.fn(() => [{ languageCode: 'en' }]) }));
 
 afterEach(async () => {
+  jest.mocked(sessionApiClient.listLabels).mockReset();
   await act(async () => { setLanguageChoice('system'); });
 });
+
+const starterLabels: LabelListItemDto[] = [
+  { id: 'label-bday', householdId: 'h', name: '生日', color: '#AD4067', systemKey: 'birthday', createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } },
+  { id: 'label-chores', householdId: 'h', name: '家务', color: '#2C716C', systemKey: null, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } },
+];
+
+function LabelledHarness({ onSubmit }: { onSubmit: jest.Mock }) {
+  const workspace = useWorkspaceStore();
+  const labelsKey = 'draft:h:birthdays:new:labels';
+  const [selectedLabelIds, setSelectedLabelIds] = useWorkspaceState<string[]>(labelsKey, []);
+  const [labelsLoaded, setLabelsLoaded] = useState(false);
+  const handleLabelsLoaded = useCallback((labels: LabelResponseDto[]) => {
+    const birthdayLabel = labels.find((label) => label.systemKey === 'birthday');
+    workspace.seed(labelsKey, birthdayLabel ? [birthdayLabel.id] : []);
+    setLabelsLoaded(true);
+  }, [labelsKey, workspace]);
+  return (
+    <BirthdayForm
+      draftKey="draft:h:birthdays:new:form"
+      people={['我', '妈妈']}
+      todayIso="2026-11-11"
+      submitting={false}
+      onSubmit={onSubmit}
+      onCancel={jest.fn()}
+      householdId="h"
+      selectedLabelIds={selectedLabelIds}
+      labelsReady={labelsLoaded || workspace.has(labelsKey)}
+      onLabelChange={setSelectedLabelIds}
+      onLabelsLoaded={handleLabelsLoaded}
+    />
+  );
+}
+
+async function renderLabelledForm() {
+  const store = createWorkspaceState();
+  const onSubmit = jest.fn();
+  const view = await render(
+    <WorkspaceStateProvider store={store}>
+      <MuchakuchaThemeProvider>
+        <LabelledHarness onSubmit={onSubmit} />
+      </MuchakuchaThemeProvider>
+    </WorkspaceStateProvider>,
+  );
+  return { store, onSubmit, view };
+}
 
 async function renderForm() {
   const onSubmit = jest.fn();
@@ -106,5 +164,63 @@ describe('添加生日', () => {
     await fireEvent.press(view.getByRole('radio', { name: '2月' }));
     expect(view.getByRole('radio', { name: '2月 29日' })).toBeTruthy();
     expect(view.queryByRole('radio', { name: '2月 30日' })).toBeNull();
+  });
+
+  test('preselects the household birthday label without dirtying the draft and forwards chosen labels on save', async () => {
+    jest.mocked(sessionApiClient.listLabels).mockResolvedValue({ labels: starterLabels, total: 2 });
+    const { store, onSubmit, view } = await renderLabelledForm();
+
+    await view.findByLabelText('取消选择标签 生日');
+    expect(view.getByLabelText('选择标签 家务')).toBeTruthy();
+    expect(store.hasDrafts('draft:h:birthdays:new:')).toBe(false);
+
+    await fireEvent.press(view.getByRole('radio', { name: '妈妈' }));
+    await fireEvent.press(view.getByRole('button', { name: '生日日期，选择日期' }));
+    await fireEvent.press(view.getByRole('radio', { name: '十月' }));
+    await fireEvent.press(view.getByRole('radio', { name: '十月十五' }));
+    await fireEvent.press(view.getByRole('button', { name: '完成' }));
+    await fireEvent.changeText(view.getByLabelText('出生年份'), '1968');
+    await fireEvent(view.getByLabelText('也过公历生日'), 'valueChange', true);
+
+    await fireEvent.press(view.getByLabelText('保存'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const events = onSubmit.mock.calls[0][0] as Array<{ labelIds?: string[] }>;
+    expect(events.map(event => event.labelIds)).toEqual([['label-bday'], ['label-bday']]);
+  });
+
+  test('lets the user clear or add labels before saving', async () => {
+    jest.mocked(sessionApiClient.listLabels).mockResolvedValue({ labels: starterLabels, total: 2 });
+    const { store, onSubmit, view } = await renderLabelledForm();
+
+    await view.findByLabelText('取消选择标签 生日');
+    await fireEvent.press(view.getByRole('radio', { name: '妈妈' }));
+    await fireEvent.press(view.getByRole('button', { name: '生日日期，选择日期' }));
+    await fireEvent.press(view.getByRole('button', { name: '完成' }));
+
+    await fireEvent.press(view.getByLabelText('取消选择标签 生日'));
+    expect(store.hasDrafts('draft:h:birthdays:new:')).toBe(true);
+    await fireEvent.press(view.getByLabelText('保存'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect((onSubmit.mock.calls[0][0] as Array<{ labelIds?: string[] }>)[0]?.labelIds).toEqual([]);
+
+    await fireEvent.press(view.getByLabelText('选择标签 家务'));
+    await fireEvent.press(view.getByLabelText('保存'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+    expect((onSubmit.mock.calls[1][0] as Array<{ labelIds?: string[] }>)[0]?.labelIds).toEqual(['label-chores']);
+  });
+
+  test('omits labelIds when household labels fail to load so the server still tags birthdays', async () => {
+    jest.mocked(sessionApiClient.listLabels).mockRejectedValue(new Error('offline'));
+    const { onSubmit, view } = await renderLabelledForm();
+
+    await view.findByText('标签没有加载成功。');
+    await fireEvent.press(view.getByRole('radio', { name: '妈妈' }));
+    await fireEvent.press(view.getByRole('button', { name: '生日日期，选择日期' }));
+    await fireEvent.press(view.getByRole('button', { name: '完成' }));
+    await fireEvent.press(view.getByLabelText('保存'));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const events = onSubmit.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect('labelIds' in events[0]!).toBe(false);
   });
 });

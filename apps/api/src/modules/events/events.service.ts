@@ -18,6 +18,7 @@ import {
 } from '../recurrence/recurrence-date.js';
 import { recurringEventEnd } from '../recurrence/recurring-event-end.js';
 import { resolveSeriesMarks, seriesMarksResponse } from '../recurrence/series-marks.js';
+import { labelSystemKey } from '../labels/preset-labels.js';
 
 const TITLE_MIN = 1;
 const TITLE_MAX = 200;
@@ -85,6 +86,7 @@ interface EventRow {
       householdId: string;
       name: string;
       color: string;
+      systemKey: string | null;
       createdBy: string;
       createdAt: Date;
     };
@@ -305,8 +307,16 @@ export class EventsService {
         });
         // The first occurrence carries the labels itself; generateNewSeries
         // gives the occurrences it writes the series' own labels.
-        await replaceLabels(tx, 'event', householdId, template.id, input.labelIds);
-        await setSeriesLabels(tx, rule.id, input.labelIds ?? []);
+        let effectiveLabelIds = input.labelIds;
+        if (effectiveLabelIds === undefined && plan.rule.occasion === 'birthday') {
+          const birthdayLabel = await tx.label.findUnique({
+            where: { householdId_systemKey: { householdId, systemKey: 'birthday' } },
+            select: { id: true },
+          });
+          if (birthdayLabel !== null) effectiveLabelIds = [birthdayLabel.id];
+        }
+        await replaceLabels(tx, 'event', householdId, template.id, effectiveLabelIds);
+        await setSeriesLabels(tx, rule.id, effectiveLabelIds ?? []);
         if (input.myReminder !== undefined) {
           await writeReminderChoice(tx, actorId, 'event', { id: template.id, recurrenceRuleId: rule.id }, input.myReminder);
         }
@@ -632,6 +642,7 @@ export class EventsService {
         householdId: el.label.householdId,
         name: el.label.name,
         color: el.label.color,
+        systemKey: labelSystemKey(el.label.systemKey),
         createdBy: el.label.createdBy,
         createdAt: el.label.createdAt.toISOString(),
       })),

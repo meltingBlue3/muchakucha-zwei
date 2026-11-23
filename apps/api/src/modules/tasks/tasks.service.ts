@@ -25,6 +25,7 @@ import {
   firstOccurrence as firstOccurrenceOf,
 } from '../recurrence/recurrence-date.js';
 import { resolveSeriesMarks, seriesMarksResponse } from '../recurrence/series-marks.js';
+import { labelSystemKey } from '../labels/preset-labels.js';
 
 const TITLE_MIN = 1;
 const TITLE_MAX = 200;
@@ -78,6 +79,7 @@ interface TaskRow {
       householdId: string;
       name: string;
       color: string;
+      systemKey: string | null;
       createdBy: string;
       createdAt: Date;
     };
@@ -595,6 +597,7 @@ export class TasksService {
         householdId: tl.label.householdId,
         name: tl.label.name,
         color: tl.label.color,
+        systemKey: labelSystemKey(tl.label.systemKey),
         createdBy: tl.label.createdBy,
         createdAt: tl.label.createdAt.toISOString(),
       })),

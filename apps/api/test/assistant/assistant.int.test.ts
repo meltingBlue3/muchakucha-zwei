@@ -430,6 +430,12 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     expect(rules.json().rules).toEqual([expect.objectContaining({
       title: '外婆的农历生日', lunar: { month, day }, occasion: 'birthday', birthYear: 1940, nextOccurrenceDate: targetIso,
     })]);
+    const events = await request(owner, 'GET', `/households/${householdId}/events?expandRecurring=true&startDate=${targetIso}&endDate=${targetIso}`);
+    expect(events.statusCode).toBe(200);
+    expect(events.json().events).toEqual([expect.objectContaining({
+      title: '外婆的农历生日',
+      labels: [expect.objectContaining({ name: '生日', systemKey: 'birthday' })],
+    })]);
 
     conversation = decided.json() as AssistantConversationResponseDto;
     const asked = complete.mock.calls.length;
@@ -592,7 +598,8 @@ describe('assistant configuration, conversation isolation, and confirmed tools',
     const result = await decide(owner, householdId, proposed.json() as AssistantConversationResponseDto);
     expect(JSON.stringify(result.json())).toContain('EDIT_CONFLICT');
     const labels = await request(owner, 'GET', `/households/${householdId}/labels`);
-    expect(labels.json().labels).toEqual([expect.objectContaining({ id: created.json().id, name: '采购与家务', color: '#336699' })]);
+    expect(labels.json().labels).toContainEqual(expect.objectContaining({ id: created.json().id, name: '采购与家务', color: '#336699' }));
+    expect(labels.json().labels.map((label: { name: string }) => label.name)).not.toContain('采购');
   });
 
   test('shared model credentials do not let a member delete an owners note', async () => {

@@ -428,11 +428,14 @@ export interface UpdateLabelRequestDto {
   expectedColor?: string;
 }
 
+export type LabelSystemKey = 'birthday';
+
 export interface LabelResponseDto {
   id: string;
   householdId: string;
   name: string;
   color: string;
+  systemKey: LabelSystemKey | null;
   createdBy: string;
   createdAt: string;
 }

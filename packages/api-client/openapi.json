@@ -306,7 +306,25 @@
     "/api/v1/households": {
       "post": {
         "operationId": "createHousehold",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "accept-language",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "Interface language (zh or ja) for starter labels.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -4412,6 +4430,13 @@
           "color": {
             "type": "string"
           },
+          "systemKey": {
+            "type": "string",
+            "enum": [
+              "birthday"
+            ],
+            "nullable": true
+          },
           "createdBy": {
             "type": "string"
           },
@@ -4424,6 +4449,7 @@
           "householdId",
           "name",
           "color",
+          "systemKey",
           "createdBy",
           "createdAt"
         ]
@@ -5012,6 +5038,13 @@
           "color": {
             "type": "string"
           },
+          "systemKey": {
+            "type": "string",
+            "enum": [
+              "birthday"
+            ],
+            "nullable": true
+          },
           "createdBy": {
             "type": "string"
           },
@@ -5032,6 +5065,7 @@
           "householdId",
           "name",
           "color",
+          "systemKey",
           "createdBy",
           "createdAt",
           "usage"

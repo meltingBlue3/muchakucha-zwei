@@ -106,7 +106,9 @@ async function addMomsBirthdays(page: Page) {
   await expect(form.getByRole('button', { name: '生日日期，农历十月十五' })).toBeVisible();
   await form.getByLabel('出生年份').fill('1968');
   await expect(form.getByText('公历 1968年12月4日')).toBeVisible();
+  await expect(form.getByRole('switch', { name: '也过公历生日' })).toBeVisible();
   await form.getByRole('switch', { name: '也过公历生日' }).click();
+  await expect(form.getByRole('button', { name: '取消选择标签 生日' })).toBeVisible();
   await form.getByRole('button', { name: '保存' }).click();
   await expect(form).toBeHidden();
 }
@@ -133,12 +135,19 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
       const solarTop = (await solarRow.boundingBox())!.y;
       expect(lunarTop < solarTop).toBe(lunar.date < solar);
 
-      // What the server stored: two yearly birthday series.
+      // What the server stored: two yearly birthday series, both tagged with the household's birthday label.
       const rules = await api<{ rules: RuleItem[] }>(account.accessToken, 'GET', `/api/v1/households/${householdId}/recurrence-rules`);
       expect(rules.body.rules.map(rule => [rule.title, rule.occasion, rule.lunar, rule.birthYear, rule.nextOccurrenceDate]).sort()).toEqual([
         ['妈妈的农历生日', 'birthday', { month: 10, day: 15 }, 1968, lunar.date],
         ['妈妈的生日', 'birthday', null, 1968, solar],
       ].sort());
+
+      const [lunarEvents, solarEvents] = await Promise.all([
+        api<{ events: Array<{ title: string; labels: Array<{ name: string; systemKey: string | null }> }> }>(account.accessToken, 'GET', `/api/v1/households/${householdId}/events?expandRecurring=true&startDate=${lunar.date}&endDate=${lunar.date}`),
+        api<{ events: Array<{ title: string; labels: Array<{ name: string; systemKey: string | null }> }> }>(account.accessToken, 'GET', `/api/v1/households/${householdId}/events?expandRecurring=true&startDate=${solar}&endDate=${solar}`),
+      ]);
+      expect(lunarEvents.body.events.find(event => event.title === '妈妈的农历生日')?.labels).toEqual([expect.objectContaining({ name: '生日', systemKey: 'birthday' })]);
+      expect(solarEvents.body.events.find(event => event.title === '妈妈的生日')?.labels).toEqual([expect.objectContaining({ name: '生日', systemKey: 'birthday' })]);
     });
   });
 }
@@ -168,7 +177,7 @@ test.describe('in the calendar', () => {
     }
     await grid.getByRole('button', { name: new RegExp(`^${target.getFullYear()}年${target.getMonth() + 1}月${target.getDate()}日`) }).click();
     await expect(pane.getByRole('button', { name: '日程：妈妈的农历生日', exact: true })).toBeVisible();
-    await expect(pane.getByText(`全天 · 农历十月十五 · ${lunar.lunarYear - 1968} 岁`)).toBeVisible();
+    await expect(pane.getByText(`全天 · 农历十月十五 · ${lunar.lunarYear - 1968} 岁 · 生日`)).toBeVisible();
 
     // 设置 › 显示农历 turns the lunar dates off on this device.
     await page.goto('/settings');

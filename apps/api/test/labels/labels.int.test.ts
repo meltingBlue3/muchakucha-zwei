@@ -75,11 +75,22 @@ async function request(
   });
 }
 
-async function createHousehold(accessToken: string, name: string): Promise<string> {
-  const response = await request(accessToken, 'POST', '/households', { name });
+async function createHousehold(accessToken: string, name: string, language?: string): Promise<string> {
+  const response = await (app.getHttpAdapter().getInstance() as any).inject({
+    method: 'POST',
+    url: '/api/v1/households',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+      ...(language === undefined ? {} : { 'accept-language': language }),
+    },
+    payload: { name },
+  });
   expect(response.statusCode).toBe(201);
   return (response.json() as { id: string }).id;
 }
+
+const STARTER_LABEL_NAMES = ['生日', '家务', '采买', '健康', '出行'];
 
 async function addMemberViaDb(householdId: string, actor: ActorFixture, role: 'ADMIN' | 'MEMBER'): Promise<void> {
   await withDatabase(async (client) => {
@@ -191,7 +202,7 @@ describe('labels API contract', () => {
       const response = await request(owner.accessToken, method, path, payload);
       expect({ method, path, status: response.statusCode }).toEqual({ method, path, status: 400 });
     }
-    expect(await labelNamesOf(owner, householdId, '/labels')).toEqual(['路径检查']);
+    expect(await labelNamesOf(owner, householdId, '/labels')).toEqual([...STARTER_LABEL_NAMES, '路径检查'].sort());
   });
 
   describe('labels chosen while creating content', () => {
@@ -224,7 +235,7 @@ describe('labels API contract', () => {
     });
 
     test('a new weekly task series carries its labels on every occurrence saved with it', async () => {
-      const labelId = await createLabel(owner, householdId, '家务');
+      const labelId = await createLabel(owner, householdId, '保洁');
       const week = firstWeek();
       const created = await householdApi(member, householdId, 'POST', '/tasks', {
         title: '倒垃圾',
@@ -239,7 +250,7 @@ describe('labels API contract', () => {
         .filter((task) => task.recurrenceRuleId === created.json().recurrenceRuleId)
         .sort((a, b) => a.occurrenceDate.localeCompare(b.occurrenceDate));
       expect(series.map((task) => ({ date: task.occurrenceDate, labels: task.labels.map((label) => label.name) })))
-        .toEqual(week.map((date) => ({ date, labels: ['家务'] })));
+        .toEqual(week.map((date) => ({ date, labels: ['保洁'] })));
     });
 
     test('a label from another household refuses the whole create and saves nothing', async () => {
@@ -440,8 +451,11 @@ describe('labels API contract', () => {
       const response = await householdApi(member, householdId, 'GET', '/labels');
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().total).toBe(2);
-      expect(response.json().labels.map((label: { name: string }) => label.name)).toEqual(['a-学校', 'b-运动']);
+      expect(response.json().total).toBe(7);
+      const names = response.json().labels.map((label: { name: string }) => label.name);
+      expect(names.slice(0, 2)).toEqual(['a-学校', 'b-运动']);
+      expect(names).toEqual(expect.arrayContaining(['a-学校', 'b-运动', ...STARTER_LABEL_NAMES]));
+      expect(names).not.toContain('c-别人');
     });
 
     test('a delete sent with the name and colour it was confirmed on fails once the label has changed', async () => {
@@ -468,8 +482,9 @@ describe('labels API contract', () => {
       const stale = await householdApi(owner, householdId, 'PUT', `/labels/${labelId}`, { name: '覆盖', expectedName: '旧名', expectedColor: '#EF4444' });
       expect(stale.statusCode).toBe(409);
       expect(stale.json().error.code).toBe('EDIT_CONFLICT');
-      expect((await householdApi(owner, householdId, 'GET', '/labels')).json().labels)
-        .toEqual([expect.objectContaining({ name: '旧名', color: '#2C716C' })]);
+      const staleLabels = (await householdApi(owner, householdId, 'GET', '/labels')).json().labels as Array<{ id: string; name: string; color: string }>;
+      expect(staleLabels).toContainEqual(expect.objectContaining({ id: labelId, name: '旧名', color: '#2C716C' }));
+      expect(staleLabels.map(label => label.name)).not.toContain('覆盖');
 
       const half = await householdApi(owner, householdId, 'PUT', `/labels/${labelId}`, { name: '覆盖', expectedName: '旧名' });
       expect(half.statusCode).toBe(400);
@@ -477,7 +492,9 @@ describe('labels API contract', () => {
 
       const current = await householdApi(owner, householdId, 'PUT', `/labels/${labelId}`, { name: '覆盖', expectedName: '旧名', expectedColor: '#2C716C' });
       expect(current.statusCode).toBe(200);
-      expect(await labelNamesOf(owner, householdId, '/labels')).toEqual(['覆盖']);
+      const updatedNames = await labelNamesOf(owner, householdId, '/labels');
+      expect(updatedNames).toContain('覆盖');
+      expect(updatedNames).not.toContain('旧名');
     });
 
     test('updates name and color independently', async () => {
@@ -518,7 +535,8 @@ describe('labels API contract', () => {
       expect(response.statusCode).toBe(204);
       expect(await labelNamesOf(owner, householdId, `/tasks/${taskId}`)).toEqual(['保留']);
       expect(await labelNamesOf(owner, householdId, `/events/${eventId}`)).toEqual(['保留']);
-      expect((await householdApi(owner, householdId, 'GET', '/labels')).json().total).toBe(1);
+      expect((await householdApi(owner, householdId, 'GET', '/labels')).json().total).toBe(6);
+      expect(await labelNamesOf(owner, householdId, '/labels')).not.toContain('临时');
     });
 
     test('members can list labels but cannot create, update, or delete them', async () => {
@@ -534,7 +552,10 @@ describe('labels API contract', () => {
         expect(response.statusCode).toBe(403);
         expect(response.json().error.code).toBe('FORBIDDEN');
       }
-      expect(await labelNamesOf(member, householdId, '/labels')).toEqual(['只读']);
+      const memberVisibleNames = await labelNamesOf(member, householdId, '/labels');
+      expect(memberVisibleNames).toContain('只读');
+      expect(memberVisibleNames).not.toContain('成员标签');
+      expect(memberVisibleNames).not.toContain('改名');
     });
 
     test('non-members get HOUSEHOLD_NOT_FOUND', async () => {
@@ -564,7 +585,9 @@ describe('labels API contract', () => {
       expect(update.json().error.code).toBe('LABEL_NOT_FOUND');
       expect(remove.statusCode).toBe(404);
       expect(remove.json().error.code).toBe('LABEL_NOT_FOUND');
-      expect(await labelNamesOf(owner, householdId, '/labels')).toEqual(['跨家']);
+      const ownerNames = await labelNamesOf(owner, householdId, '/labels');
+      expect(ownerNames).toContain('跨家');
+      expect(ownerNames).not.toContain('越界');
     });
   });
 
@@ -609,12 +632,13 @@ describe('labels API contract', () => {
     // one the family can predict: the household list's, not the click order.
     test('an item lists its labels in the household order, whatever order they were chosen in', async () => {
       const entityId = await createEntity(owner, householdId, '多个标签', [sportId, medicalId, schoolId]);
+      const createdIds = new Set([schoolId, sportId, medicalId]);
 
       const household = (await householdApi(owner, householdId, 'GET', '/labels')).json().labels as Array<{ id: string }>;
       const item = (await householdApi(owner, householdId, 'GET', `/${collection}/${entityId}`)).json().labels as Array<{ id: string }>;
       const listed = (await householdApi(owner, householdId, 'GET', `/${collection}`)).json()[collection] as Array<{ id: string; labels: Array<{ id: string }> }>;
 
-      const order = household.map((label) => label.id);
+      const order = household.map((label) => label.id).filter((id) => createdIds.has(id));
       expect(item.map((label) => label.id)).toEqual(order);
       expect(listed.find((row) => row.id === entityId)!.labels.map((label) => label.id)).toEqual(order);
     });
@@ -646,6 +670,108 @@ describe('labels API contract', () => {
           .toEqual({ labelIds, status: 400, code: 'VALIDATION_FAILED' });
       }
       expect((await householdApi(owner, householdId, 'GET', `/${collection}`)).json().total).toBe(0);
+    });
+  });
+
+  describe('starter household labels', () => {
+    test('seeds Chinese starter labels by default and Japanese starter labels when requested', async () => {
+      const zhLabels = (await householdApi(member, householdId, 'GET', '/labels')).json().labels as Array<{ name: string; color: string; systemKey: string | null }>;
+      expect(zhLabels).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: '生日', color: '#AD4067', systemKey: 'birthday' }),
+        expect.objectContaining({ name: '家务', color: '#2C716C', systemKey: null }),
+        expect.objectContaining({ name: '采买', color: '#C98A1B', systemKey: null }),
+        expect.objectContaining({ name: '健康', color: '#4C7537', systemKey: null }),
+        expect.objectContaining({ name: '出行', color: '#3B7DD8', systemKey: null }),
+      ]));
+      expect(zhLabels).toHaveLength(5);
+
+      const jaHouseholdId = await createHousehold(owner.accessToken, '日本の家族', 'ja');
+      const jaLabels = (await householdApi(owner, jaHouseholdId, 'GET', '/labels')).json().labels as Array<{ name: string; color: string; systemKey: string | null }>;
+      expect(jaLabels).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: '誕生日', color: '#AD4067', systemKey: 'birthday' }),
+        expect.objectContaining({ name: '家事', color: '#2C716C', systemKey: null }),
+        expect.objectContaining({ name: '買い物', color: '#C98A1B', systemKey: null }),
+        expect.objectContaining({ name: '健康', color: '#4C7537', systemKey: null }),
+        expect.objectContaining({ name: 'お出かけ', color: '#3B7DD8', systemKey: null }),
+      ]));
+      expect(jaLabels).toHaveLength(5);
+    });
+
+    test('owners and admins can rename, recolor, and delete starter labels while members are forbidden', async () => {
+      const labels = (await householdApi(owner, householdId, 'GET', '/labels')).json().labels as Array<{ id: string; name: string; systemKey: string | null }>;
+      const birthday = labels.find(label => label.systemKey === 'birthday')!;
+      const chores = labels.find(label => label.name === '家务')!;
+
+      expect((await householdApi(member, householdId, 'PUT', `/labels/${birthday.id}`, { name: '家庭日' })).statusCode).toBe(403);
+      expect((await householdApi(member, householdId, 'DELETE', `/labels/${chores.id}`)).statusCode).toBe(403);
+
+      const renamed = await householdApi(admin, householdId, 'PUT', `/labels/${birthday.id}`, { name: '生日纪念', color: '#4A57A6' });
+      expect(renamed.statusCode).toBe(200);
+      expect(renamed.json()).toMatchObject({ id: birthday.id, name: '生日纪念', color: '#4A57A6', systemKey: 'birthday' });
+
+      expect((await householdApi(owner, householdId, 'DELETE', `/labels/${chores.id}`)).statusCode).toBe(204);
+      expect(await labelNamesOf(owner, householdId, '/labels')).not.toContain('家务');
+    });
+  });
+
+  describe('automatic birthday labels', () => {
+    const today = currentCalendarDateIn('UTC');
+    const todayIso = formatIsoDate(today);
+    const nextYearIso = `${today.year + 1}-${todayIso.slice(5)}`;
+    const birthdayPayload = (extra: Record<string, unknown> = {}) => ({
+      title: '爸爸的生日',
+      allDay: true,
+      startTime: `${todayIso}T00:00:00.000Z`,
+      endTime: `${todayIso}T23:59:59.000Z`,
+      recurrence: { freq: 'yearly', startsOn: todayIso, timezone: 'UTC', occasion: 'birthday' },
+      ...extra,
+    });
+
+    test('tags birthday series created without labelIds, even by a regular member, including materialized future years', async () => {
+      const created = await householdApi(member, householdId, 'POST', '/events', birthdayPayload());
+      expect(created.statusCode).toBe(201);
+      expect(created.json().labels).toEqual([expect.objectContaining({ name: '生日', systemKey: 'birthday' })]);
+
+      const nextYear = await householdApi(member, householdId, 'GET', `/events?expandRecurring=true&startDate=${nextYearIso}&endDate=${nextYearIso}`);
+      expect(nextYear.statusCode).toBe(200);
+      const future = (nextYear.json().events as Array<{ recurrenceRuleId: string | null; labels: Array<{ name: string; systemKey: string | null }> }>)
+        .find(event => event.recurrenceRuleId === created.json().recurrenceRuleId);
+      expect(future?.labels).toEqual([expect.objectContaining({ name: '生日', systemKey: 'birthday' })]);
+    });
+
+    test('keeps attaching the birthday label after an admin renames and recolors it', async () => {
+      const labels = (await householdApi(owner, householdId, 'GET', '/labels')).json().labels as Array<{ id: string; systemKey: string | null }>;
+      const birthday = labels.find(label => label.systemKey === 'birthday')!;
+      expect((await householdApi(admin, householdId, 'PUT', `/labels/${birthday.id}`, { name: '家庭寿星', color: '#7A478A' })).statusCode).toBe(200);
+
+      const created = await householdApi(member, householdId, 'POST', '/events', birthdayPayload({ title: '爷爷的生日' }));
+      expect(created.statusCode).toBe(201);
+      expect(created.json().labels).toEqual([expect.objectContaining({ id: birthday.id, name: '家庭寿星', color: '#7A478A', systemKey: 'birthday' })]);
+    });
+
+    test('respects explicit empty or custom labelIds on birthday creation', async () => {
+      const labels = (await householdApi(owner, householdId, 'GET', '/labels')).json().labels as Array<{ id: string; name: string; systemKey: string | null }>;
+      const birthday = labels.find(label => label.systemKey === 'birthday')!;
+      const extraId = await createLabel(owner, householdId, '聚餐');
+
+      const cleared = await householdApi(member, householdId, 'POST', '/events', birthdayPayload({ title: '不打标签的生日', labelIds: [] }));
+      expect(cleared.statusCode).toBe(201);
+      expect(cleared.json().labels).toEqual([]);
+
+      const custom = await householdApi(member, householdId, 'POST', '/events', birthdayPayload({ title: '双标签生日', labelIds: [birthday.id, extraId] }));
+      expect(custom.statusCode).toBe(201);
+      expect(custom.json().labels.map((label: { id: string }) => label.id).sort()).toEqual([birthday.id, extraId].sort());
+    });
+
+    test('does not recreate a deleted birthday label when saving another birthday', async () => {
+      const labels = (await householdApi(owner, householdId, 'GET', '/labels')).json().labels as Array<{ id: string; systemKey: string | null }>;
+      const birthday = labels.find(label => label.systemKey === 'birthday')!;
+      expect((await householdApi(owner, householdId, 'DELETE', `/labels/${birthday.id}`)).statusCode).toBe(204);
+
+      const created = await householdApi(member, householdId, 'POST', '/events', birthdayPayload({ title: '删除标签后的生日' }));
+      expect(created.statusCode).toBe(201);
+      expect(created.json().labels).toEqual([]);
+      expect((await householdApi(owner, householdId, 'GET', '/labels')).json().labels.some((label: { systemKey: string | null }) => label.systemKey === 'birthday')).toBe(false);
     });
   });
 });
