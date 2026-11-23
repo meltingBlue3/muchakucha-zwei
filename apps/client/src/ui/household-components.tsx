@@ -219,7 +219,7 @@ export const AppShell = ({
       ) : null}
       {/* Its parent starts below the status bar, which the keyboard view cannot see. */}
       <PageHeaderContext.Provider value={setPageHeader}>
-      <KeyboardArea style={{ flex: 1, minHeight: 0, ...(desktop ? { marginRight: reserved, ...layoutTransition('margin-right'), ...(notesLayout ? { width: theme.layout.notesListWidth, flex: undefined, flexGrow: 1, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator } : {}) } : {}) }} windowOffset={insets.top}>
+      <KeyboardArea style={{ flex: 1, minHeight: 0, ...(desktop ? { marginRight: reserved, ...layoutTransition('margin-right'), ...(notesLayout ? { width: theme.layout.notesListWidth, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator } : {}) } : {}) }} windowOffset={insets.top}>
         {layout === 'workspace' ? children : <ScrollView
           contentContainerStyle={{
             flexGrow: 1,

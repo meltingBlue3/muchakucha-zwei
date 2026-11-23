@@ -6,10 +6,11 @@ const base = `/households/${householdId}`;
 const taskId = (index: number) => `33333333-3333-4333-8333-${String(index).padStart(12, '0')}`;
 const conversationId = '66666666-6666-4666-8666-666666666666';
 const version = '2026-11-10T02:00:00Z';
-async function setup(page: Page) {
+const defaultNotes = [{ id: 'note-1', householdId, title: '家庭旅行计划', body: '# 周末去郊外\n\n一起准备野餐垫、水和水果。\n\n## 路线\n\n- 周六上午出发\n- 沿湖走一走', createdBy: 'user', createdAt: version, updatedAt: version }, { id: 'note-2', householdId, title: '家电使用说明', body: '洗碗机使用注意事项。', createdBy: 'user', createdAt: version, updatedAt: '2026-10-20T02:00:00Z' }];
+
+async function setup(page: Page, notes = defaultNotes) {
   const labels = [{ id: 'school', name: '学校', color: '#3B7DD8', createdBy: 'user' }, { id: 'home', name: '家务', color: '#4C7537', createdBy: 'user' }];
   const tasks = Array.from({ length: 28 }, (_, index) => ({ id: taskId(index), householdId, title: ['交物业费', '检查朵朵的数学作业', '预约年度体检', '整理冬季衣物'][index % 4] + ` ${index + 1}`, description: '第三单元练习册，重点看应用题。', status: 'pending', priority: index === 0 ? 'high' : 'medium', dueDate: index === 0 ? '2026-11-08T10:00:00Z' : index === 1 ? '2026-11-10T12:00:00Z' : null, assigneeIds: ['user'], labels: [labels[index % 2]], createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null }));
-  const notes = [{ id: 'note-1', householdId, title: '家庭旅行计划', body: '# 周末去郊外\n\n一起准备野餐垫、水和水果。\n\n## 路线\n\n- 周六上午出发\n- 沿湖走一走', createdBy: 'user', createdAt: version, updatedAt: version }, { id: 'note-2', householdId, title: '家电使用说明', body: '洗碗机使用注意事项。', createdBy: 'user', createdAt: version, updatedAt: '2026-10-20T02:00:00Z' }];
   const events = [{ id: 'event-1', householdId, title: '全家旅行', startTime: '2026-11-09T00:00:00+08:00', endTime: '2026-11-12T00:00:00+08:00', allDay: true, labels: [labels[1]], location: '郊外', description: '一起休息几天', createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null }, { id: 'event-2', householdId, title: '朵朵家长会', startTime: '2026-11-10T10:00:00+08:00', endTime: '2026-11-10T11:30:00+08:00', allDay: false, labels: [labels[0]], location: '学校', description: '和老师聊聊最近的学习。', createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null }];
   const household = { id: householdId, name: '林家小院', role: 'OWNER', memberCount: 2, ownerMembershipId: 'member' };
   const members = [{ membershipId: 'member', userId: 'user', displayName: '小林', username: 'xiaolin', role: 'OWNER', isCurrentUser: true }, { membershipId: 'member-2', userId: 'user-2', displayName: '妈妈', username: 'mama', role: 'MEMBER', isCurrentUser: false }];
@@ -151,6 +152,50 @@ for (const width of [1024, 1280, 1440, 1920]) {
     await expect(edit.getByRole('textbox', { name: '任务标题', exact: true })).toHaveValue('待保存的家庭安排');
   });
 }
+
+test('the desktop note list and reading pane scroll independently', async ({ page }) => {
+  const paragraphs = Array.from({ length: 60 }, (_, index) => `正文第 ${index + 1} 段`);
+  const notes = Array.from({ length: 24 }, (_, index) => ({
+    id: `note-${index + 1}`,
+    householdId,
+    title: `家庭笔记 ${index + 1}`,
+    body: index === 0 ? [...paragraphs, '正文末尾'].join('\n\n') : '笔记摘要',
+    createdBy: 'user',
+    createdAt: version,
+    updatedAt: version,
+  }));
+  await setup(page, notes);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto(`${base}/notes`);
+
+  const first = page.getByRole('button', { name: '笔记：家庭笔记 1', exact: true });
+  const last = page.getByRole('button', { name: '笔记：家庭笔记 24', exact: true });
+  const readingTitle = page.getByRole('heading', { name: '家庭笔记 1', exact: true });
+  const readingEnd = page.getByText('正文末尾', { exact: true });
+  await expect(first).toBeInViewport();
+  await expect(last).toHaveCount(1);
+  await expect(last).not.toBeInViewport();
+  await expect(readingEnd).not.toBeInViewport();
+
+  await first.hover();
+  await page.mouse.wheel(0, 2400);
+  await expect(last).toBeInViewport({ ratio: 1 });
+  await expect(readingTitle).toBeInViewport();
+
+  const lastPosition = await last.boundingBox();
+  await readingTitle.hover();
+  await page.mouse.wheel(0, 6000);
+  await expect(readingEnd).toBeInViewport();
+  expect(await last.boundingBox()).toEqual(lastPosition);
+
+  await last.click();
+  const detail = page.getByRole('region', { name: '笔记详情', exact: true });
+  await expect(detail.getByRole('heading', { name: '家庭笔记 24', exact: true })).toBeInViewport();
+  await expect(last).toBeInViewport();
+  await last.hover();
+  await page.mouse.wheel(0, -2400);
+  await expect(first).toBeInViewport({ ratio: 1 });
+});
 
 test('desktop family switching is anchored and date controls fit their popover', async ({ page }, testInfo) => {
   await setup(page);
