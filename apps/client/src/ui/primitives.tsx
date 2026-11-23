@@ -745,19 +745,20 @@ type StatusKind = 'success' | 'expired' | 'resetSuccess' | 'offline';
 type StatusPanelProps = {
   action: ReactNode;
   body: string;
+  focusHeading?: boolean;
   heading: string;
   kind: StatusKind;
 };
 
-export const StatusPanel = ({ action, body, heading, kind }: StatusPanelProps) => {
+export const StatusPanel = ({ action, body, focusHeading = true, heading, kind }: StatusPanelProps) => {
   const activeTheme = useTheme<Theme>();
   const headingRef = useRef<React.ElementRef<typeof RestyleText>>(null);
   const success = kind === 'success' || kind === 'resetSuccess';
   const Icon = success ? CircleCheck : kind === 'offline' ? Info : CircleAlert;
   const color = success ? activeTheme.colors.success : kind === 'expired' ? activeTheme.colors.destructive : activeTheme.colors.ink;
   useEffect(() => {
-    (headingRef.current as unknown as { focus?: () => void } | null)?.focus?.();
-  }, []);
+    if (focusHeading) (headingRef.current as unknown as { focus?: () => void } | null)?.focus?.();
+  }, [focusHeading]);
   return (
     <Box
       accessibilityLiveRegion="polite"

@@ -6,7 +6,7 @@ const base = `/households/${householdId}`;
 const taskId = (index: number) => `33333333-3333-4333-8333-${String(index).padStart(12, '0')}`;
 const conversationId = '66666666-6666-4666-8666-666666666666';
 const version = '2026-11-10T02:00:00Z';
-async function setup(page: Page) {
+async function setup(page: Page, materializedThrough?: string) {
   const labels = [{ id: 'school', name: '学校', color: '#3B7DD8', createdBy: 'user' }, { id: 'home', name: '家务', color: '#4C7537', createdBy: 'user' }];
   const tasks = Array.from({ length: 28 }, (_, index) => ({ id: taskId(index), householdId, title: ['交物业费', '检查朵朵的数学作业', '预约年度体检', '整理冬季衣物'][index % 4] + ` ${index + 1}`, description: '第三单元练习册，重点看应用题。', status: 'pending', priority: index === 0 ? 'high' : 'medium', dueDate: index === 0 ? '2026-11-08T10:00:00Z' : index === 1 ? '2026-11-10T12:00:00Z' : null, assigneeIds: ['user'], labels: [labels[index % 2]], createdBy: 'user', createdAt: version, updatedAt: version, recurrenceRuleId: null, recurrence: null }));
   const notes = [{ id: 'note-1', householdId, title: '家庭旅行计划', body: '# 周末去郊外\n\n一起准备野餐垫、水和水果。\n\n## 路线\n\n- 周六上午出发\n- 沿湖走一走', createdBy: 'user', createdAt: version, updatedAt: version }, { id: 'note-2', householdId, title: '家电使用说明', body: '洗碗机使用注意事项。', createdBy: 'user', createdAt: version, updatedAt: '2026-10-20T02:00:00Z' }];
@@ -22,11 +22,12 @@ async function setup(page: Page) {
     let body: unknown;
     if (path.endsWith('/auth/refresh')) body = { accessToken: 'ui-only' };
     else if (path.endsWith('/users/me')) body = { id: 'user', username: 'xiaolin', displayName: '小林' };
+    else if (path.endsWith('/reminder-push') && method === 'DELETE') return route.fulfill({ status: 204 });
     else if (path.endsWith('/reminder-settings')) body = { taskMinutesBefore: 0, eventMinutesBefore: 15, dateOnlyTime: '09:00', alarm: false, households: [] };
     else if (path.endsWith('/invitations/inbox') || path.endsWith('/invitations')) body = { invitations: [] };
     else if (path === '/api/v1/households') body = [household, { ...household, id: 'other', name: '父母的家' }];
     else if (path.endsWith(`/${householdId}`)) body = { ...household, members };
-    else if (path.endsWith('/tasks')) body = method === 'POST' ? { ...tasks[3], ...route.request().postDataJSON(), id: taskId(99) } : { tasks };
+    else if (path.endsWith('/tasks')) body = method === 'POST' ? { ...tasks[3], ...route.request().postDataJSON(), id: taskId(99) } : { tasks, materializedThrough };
     else if (path.includes('/tasks/')) {
       const task = tasks.find(item => path.endsWith(`/${item.id}`));
       if (task && method === 'PUT') Object.assign(task, route.request().postDataJSON());
@@ -42,6 +43,58 @@ async function setup(page: Page) {
     else if (path.endsWith(`/assistant/conversations/${conversationId}`)) body = conversation;
     else throw new Error(`Missing desktop fixture: ${method} ${path}`);
     await route.fulfill({ json: body });
+  });
+}
+
+test('desktop task search keeps focus when typing past an empty result', async ({ page }) => {
+  await setup(page, '2026-11-09');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/tasks`);
+  await expect(page.getByText('交物业费 1', { exact: true })).toBeVisible();
+  await page.getByRole('radio', { name: '筛选：全部', exact: true }).click();
+
+  const search = page.getByRole('textbox', { name: '搜索任务' });
+  await page.keyboard.press('/');
+  await expect(search).toBeFocused();
+  await page.keyboard.type('d');
+  await expect(page.getByRole('heading', { name: '重复安排还在补齐' })).toBeVisible();
+  await expect(search).toBeFocused();
+  await page.keyboard.type('esk');
+  await expect(search).toHaveValue('desk');
+
+  await page.getByRole('button', { name: '清空搜索' }).click();
+  await expect(search).toHaveValue('');
+  await expect(page.getByText('交物业费 1', { exact: true })).toBeVisible();
+});
+
+for (const { language, drafts, query, match } of [
+  { language: 'Chinese', drafts: ['w', 'wuye'], query: '物业', match: '交物业费 1' },
+  { language: 'Japanese', drafts: ['す', 'すうがく'], query: '数学', match: '检查朵朵的数学作业 2' },
+]) {
+  test(`desktop task search waits for ${language} IME confirmation`, async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Uses Chromium’s native composition protocol');
+    await setup(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${base}/tasks`);
+    const matchingTask = page.getByText(match, { exact: true });
+    const otherTask = page.getByText('预约年度体检 3', { exact: true });
+    await expect(otherTask).toBeVisible();
+
+    const search = page.getByRole('textbox', { name: '搜索任务' });
+    await search.click();
+    const keyboard = await page.context().newCDPSession(page);
+    for (const text of [...drafts, query]) {
+      await keyboard.send('Input.imeSetComposition', { text, selectionStart: text.length, selectionEnd: text.length });
+      await expect(search).toHaveValue(text);
+      await expect(search).toBeFocused();
+      await expect(otherTask).toBeVisible({ timeout: 1500 });
+    }
+
+    await keyboard.send('Input.insertText', { text: query });
+    await expect(search).toHaveValue(query);
+    await expect(search).toBeFocused();
+    await expect(matchingTask).toBeVisible();
+    await expect(otherTask).toHaveCount(0);
   });
 }
 
