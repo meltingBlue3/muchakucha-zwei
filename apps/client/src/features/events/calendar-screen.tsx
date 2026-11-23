@@ -28,6 +28,7 @@ import type { EventResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useHouseholdContext } from '../households/household-context';
+import { labelName } from '../labels/label-name';
 import { mergeLabels, useHouseholdLabels } from '../labels/use-household-labels';
 import { CalendarMonth, type CalendarCellEvent } from './calendar-month';
 import { lunarDescriptionOn, useLunarCalendar } from '../lunar/lunar-calendar';
@@ -152,7 +153,7 @@ export function CalendarView({ overview = false }: { overview?: boolean }) {
     for (const e of events) {
       for (const l of e.labels ?? []) {
         if (!seen.has(l.id)) {
-          seen.set(l.id, { id: l.id, name: l.name, color: l.color });
+          seen.set(l.id, { id: l.id, name: labelName(l), color: l.color });
         }
       }
     }

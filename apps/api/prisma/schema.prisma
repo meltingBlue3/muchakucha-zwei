@@ -248,8 +248,10 @@ model Note {
 model Label {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   householdId String   @map("household_id") @db.Uuid
-  name        String   @db.VarChar(40)
+  /// Null while a starter label keeps its default name, which apps show in the reader's language.
+  name        String?  @db.VarChar(40)
   color       String   @db.VarChar(7)
+  /// Which starter label this is (see starter-labels.ts); null for labels people created.
   systemKey   String?  @map("system_key") @db.VarChar(32)
   createdBy   String   @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)

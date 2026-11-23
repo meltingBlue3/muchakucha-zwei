@@ -23,6 +23,7 @@ import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useTaskCompletion } from './use-task-completion';
 import { useHouseholdContext } from '../households/household-context';
 import { HouseholdScreen } from '../households/household-screen';
+import { labelName } from '../labels/label-name';
 import { mergeLabels, useHouseholdLabels } from '../labels/use-household-labels';
 import { parseSearchQuery } from '../search/search-query';
 import {
@@ -144,7 +145,7 @@ export function TaskList({ overview = false }: { overview?: boolean }) {
     for (const t of tasks) {
       for (const l of t.labels ?? []) {
         if (!seen.has(l.id)) {
-          seen.set(l.id, { id: l.id, name: l.name, color: l.color });
+          seen.set(l.id, { id: l.id, name: labelName(l), color: l.color });
         }
       }
     }

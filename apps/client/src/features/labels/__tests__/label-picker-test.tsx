@@ -16,7 +16,7 @@ jest.mock('../../households/household-context', () => ({
   useHouseholdContext: () => ({ households: [{ id: 'family', name: '家', role: mockRole.current }] }),
 }));
 
-const label = (id: string, name: string): LabelListItemDto => ({ id, householdId: 'family', name, color: '#2C716C', systemKey: null, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } });
+const label = (id: string, name: string): LabelListItemDto => ({ id, householdId: 'family', name, color: '#2C716C', systemKey: null, localizedNames: null, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } });
 
 beforeEach(() => {
   jest.mocked(sessionApiClient.listLabels).mockReset();
@@ -70,7 +70,7 @@ test('an owner with no labels is offered to create one here', async () => {
 test('an admin creates a label without leaving the form, and it is chosen at once', async () => {
   mockRole.current = 'ADMIN';
   jest.mocked(sessionApiClient.listLabels).mockResolvedValue({ labels: [label('chores', '家务')], total: 1 });
-  jest.mocked(sessionApiClient.createLabel).mockResolvedValue({ id: 'checkup', householdId: 'family', name: '体检', color: '#3B7DD8', systemKey: null, createdBy: 'admin', createdAt: '2026-11-22T00:00:00.000Z' });
+  jest.mocked(sessionApiClient.createLabel).mockResolvedValue({ id: 'checkup', householdId: 'family', name: '体检', color: '#3B7DD8', systemKey: null, localizedNames: null, createdBy: 'admin', createdAt: '2026-11-22T00:00:00.000Z' });
   const onChange = jest.fn();
   const view = await renderForm({ initial: ['chores'], onChange });
 

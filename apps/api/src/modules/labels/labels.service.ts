@@ -1,10 +1,11 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { labelOrder } from '../shared/labels-by-name.js';
 import { isUniqueConflict } from '../shared/unique-conflict.js';
 import type { CreateLabelDto, LabelResponseDto, LabelListResponseDto } from './dto/create-label.dto.js';
 import type { UpdateLabelDto } from './dto/create-label.dto.js';
-import { labelSystemKey } from './preset-labels.js';
+import { isDefaultName, labelName, labelResponse, STARTER_LABELS, starterLabel, type LabelRow } from './starter-labels.js';
 
 const NAME_MIN = 1;
 const NAME_MAX = 40;
@@ -24,14 +25,18 @@ function rethrowDuplicate(error: unknown): never {
   throw isUniqueConflict(error) ? duplicateName() : error;
 }
 
-interface LabelRow {
-  id: string;
-  householdId: string;
-  name: string;
-  color: string;
-  systemKey: string | null;
-  createdBy: string;
-  createdAt: Date;
+/**
+ * Labels in the household that read as `name` in some language: by their own
+ * name, or a starter label that keeps a default name equal to it. The unique
+ * index only sees stored names, so this check covers the default ones.
+ */
+function readingAs(householdId: string, name: string, exceptId?: string): Prisma.LabelWhereInput {
+  const starters = STARTER_LABELS.filter((starter) => isDefaultName(starter, name)).map((starter) => starter.systemKey);
+  return {
+    householdId,
+    ...(exceptId === undefined ? {} : { id: { not: exceptId } }),
+    OR: [{ name }, ...(starters.length > 0 ? [{ name: null, systemKey: { in: starters } }] : [])],
+  };
 }
 
 @Injectable()
@@ -89,17 +94,13 @@ export class LabelsService {
 
     this.validateColor(input.color);
 
-    // Check uniqueness within household.
-    const existing = await this.prisma.label.findUnique({
-      where: { householdId_name: { householdId, name } },
-    });
-    if (existing !== null) throw duplicateName();
+    if (await this.nameTaken(householdId, name)) throw duplicateName();
 
     const label = await this.prisma.label.create({
       data: { householdId, name, color: input.color, createdBy: actorId },
     }).catch(rethrowDuplicate);
 
-    return this.toResponse(label);
+    return labelResponse(label);
   }
 
   async list(
@@ -112,13 +113,13 @@ export class LabelsService {
     const [labels, usage] = await Promise.all([
       this.prisma.label.findMany({
         where: { householdId },
-        orderBy: { name: 'asc' },
+        orderBy: labelOrder,
       }),
       this.usage(householdId),
     ]);
 
     return {
-      labels: labels.map((l) => ({ ...this.toResponse(l), usage: usage.get(l.id) ?? { events: 0, tasks: 0 } })),
+      labels: labels.map((l) => ({ ...labelResponse(l), usage: usage.get(l.id) ?? { events: 0, tasks: 0 } })),
       total: labels.length,
     };
   }
@@ -180,15 +181,7 @@ export class LabelsService {
         });
       }
 
-      // Check uniqueness if name changed.
-      if (name !== label.name) {
-        const conflict = await this.prisma.label.findUnique({
-          where: { householdId_name: { householdId, name } },
-        });
-        if (conflict !== null) throw duplicateName();
-      }
-
-      data.name = name;
+      data.name = await this.nameToStore(label, name);
     }
 
     if (input.color !== undefined) {
@@ -200,7 +193,7 @@ export class LabelsService {
       await this.lockLabelSnapshot(tx, householdId, labelId, expected);
       return tx.label.update({ where: { id: labelId }, data });
     }).catch(rethrowDuplicate);
-    return this.toResponse(updated);
+    return labelResponse(updated);
   }
 
   async delete(
@@ -229,27 +222,35 @@ export class LabelsService {
     labelId: string,
     expected: Pick<LabelResponseDto, 'name' | 'color'> | undefined,
   ): Promise<void> {
-    const rows = await tx.$queryRaw<Array<{ name: string; color: string }>>`
-      SELECT name, color FROM labels
+    const rows = await tx.$queryRaw<Array<{ name: string | null; color: string; systemKey: string | null }>>`
+      SELECT name, color, system_key AS "systemKey" FROM labels
       WHERE id = ${labelId}::uuid AND household_id = ${householdId}::uuid
       FOR UPDATE
     `;
     const current = rows[0];
     if (!current) throw new NotFoundException({ code: 'LABEL_NOT_FOUND', message: 'Label not found.' });
-    if (expected && (current.name !== expected.name || current.color !== expected.color)) {
+    if (expected && (labelName(current) !== expected.name || current.color !== expected.color)) {
       throw new ConflictException({ code: 'EDIT_CONFLICT', message: 'Label has changed. Read it again before saving.' });
     }
   }
 
-  private toResponse(row: LabelRow): LabelResponseDto {
-    return {
-      id: row.id,
-      householdId: row.householdId,
-      name: row.name,
-      color: row.color,
-      systemKey: labelSystemKey(row.systemKey),
-      createdBy: row.createdBy,
-      createdAt: row.createdAt.toISOString(),
-    };
+  private async nameTaken(householdId: string, name: string, exceptId?: string): Promise<boolean> {
+    return (await this.prisma.label.findFirst({ where: readingAs(householdId, name, exceptId), select: { id: true } })) !== null;
+  }
+
+  /**
+   * What a rename stores. A starter label given one of its own default names
+   * goes back to, or keeps, its default name, which each reader sees in their
+   * language. That needs every one of its default names free; otherwise the
+   * name is kept as typed, like any other.
+   */
+  private async nameToStore(label: LabelRow, name: string): Promise<string | null> {
+    const starter = starterLabel(label.systemKey);
+    if (starter !== undefined && isDefaultName(starter, name)) {
+      const taken = await Promise.all(Object.values(starter.names).map((defaultName) => this.nameTaken(label.householdId, defaultName, label.id)));
+      if (!taken.includes(true)) return null;
+    }
+    if (name !== label.name && await this.nameTaken(label.householdId, name, label.id)) throw duplicateName();
+    return name;
   }
 }

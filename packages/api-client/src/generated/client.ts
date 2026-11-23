@@ -131,7 +131,6 @@ export class ApiClient {
     accessToken: string,
     body: CreateHouseholdDto,
     signal?: AbortSignal,
-    language?: 'zh' | 'ja',
   ): Promise<CreateHouseholdResponseDto> {
     return this.authenticated<CreateHouseholdResponseDto>(
       'POST',
@@ -139,7 +138,6 @@ export class ApiClient {
       accessToken,
       body,
       signal,
-      language,
     );
   }
 

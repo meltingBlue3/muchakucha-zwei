@@ -9,7 +9,7 @@ import type {
 } from './dto/create-household.dto.js';
 import type { GetHouseholdMemberDto, GetHouseholdResponseDto } from './dto/membership.dto.js';
 import { directLeaveOutcome, leaveFailure, removalFailure, roleChangeFailure, transferFailure, type Role } from './household-policy.js';
-import { PRESET_HOUSEHOLD_LABELS, type LabelLanguage } from '../labels/preset-labels.js';
+import { STARTER_LABELS } from '../labels/starter-labels.js';
 
 interface HouseholdMemberRow {
   membershipId: string;
@@ -36,7 +36,6 @@ export class HouseholdsService {
   async createHousehold(
     creatorId: string,
     name: string,
-    language: LabelLanguage = 'zh',
   ): Promise<CreateHouseholdResponseDto> {
     const trimmedName = name.trim().normalize('NFC');
     const codePointCount = [...trimmedName].length;
@@ -75,12 +74,13 @@ export class HouseholdsService {
         data: { ownerMembershipId: membership.id },
       });
 
+      // Starter labels keep no name of their own, so each member reads them in their own language.
       await transaction.label.createMany({
-        data: PRESET_HOUSEHOLD_LABELS.map((preset) => ({
+        data: STARTER_LABELS.map((starter) => ({
           householdId: household.id,
-          name: preset.names[language],
-          color: preset.color,
-          systemKey: preset.systemKey,
+          name: null,
+          color: starter.color,
+          systemKey: starter.systemKey,
           createdBy: creatorId,
         })),
       });

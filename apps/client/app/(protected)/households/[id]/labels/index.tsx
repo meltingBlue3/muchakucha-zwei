@@ -21,6 +21,7 @@ import { labelColorPresets, labelTint, type Theme } from '../../../../../src/ui/
 import { getRouteTrigger, rememberRouteTrigger } from '../../../../../src/platform/overlays/route-trigger';
 import { focusFieldOnOpen } from '../../../../../src/platform/keyboard/focus-on-open';
 import { UnsavedSwitchDialog } from '../../../../../src/ui/unsaved-switch-dialog';
+import { labelName } from '../../../../../src/features/labels/label-name';
 
 type LabelAction = { kind: 'create' } | { kind: 'edit'; label: LabelListItemDto };
 
@@ -73,8 +74,8 @@ export default function LabelsIndexRoute() {
   };
   const deletePrompt = (label: LabelListItemDto) => {
     const parts = usageParts(label);
-    if (parts === null) return t('deletePrompt', { name: label.name });
-    return parts.length > 0 ? t('deletePromptUsed', { name: label.name, usage: parts.join(t('usageAnd')) }) : t('deletePromptUnused', { name: label.name });
+    if (parts === null) return t('deletePrompt', { name: labelName(label) });
+    return parts.length > 0 ? t('deletePromptUsed', { name: labelName(label), usage: parts.join(t('usageAnd')) }) : t('deletePromptUnused', { name: labelName(label) });
   };
 
   // Only the wide list names who created each label; the labels stand on their own if the names fail to load.
@@ -109,13 +110,13 @@ export default function LabelsIndexRoute() {
     trigger.current = getRouteTrigger();
     setActionError(null);
     setNameError(null);
-    setName(next.kind === 'create' ? '' : next.label.name);
+    setName(next.kind === 'create' ? '' : labelName(next.label));
     setColor(next.kind === 'create' ? labelColorPresets[0]! : formColor(next.label));
     setAction(next);
   };
   const open = (next: LabelAction) => {
     if (busy) return;
-    if (desktop && action && (name !== (action.kind === 'create' ? '' : action.label.name) || color !== (action.kind === 'create' ? labelColorPresets[0] : formColor(action.label)))) { setPendingAction(next); return; }
+    if (desktop && action && (name !== (action.kind === 'create' ? '' : labelName(action.label)) || color !== (action.kind === 'create' ? labelColorPresets[0] : formColor(action.label)))) { setPendingAction(next); return; }
     applyOpen(next);
   };
   const close = () => { if (!busy) setAction(null); };
@@ -196,23 +197,23 @@ export default function LabelsIndexRoute() {
         {labels.map(label => {
           const usage = usageLine(label);
           const dot = <View style={{ width: desktop ? theme.spacing[2] + 2 : theme.spacing[3], height: desktop ? theme.spacing[2] + 2 : theme.spacing[3], borderRadius: theme.borderRadii.full, backgroundColor: label.color }} />;
-          const menu = canManage ? <CardActionsMenu subject={t('subject', { name: label.name })} actions={[
-            { kind: 'edit', accessibilityLabel: t('editItem', { name: label.name }), onPress: () => open({ kind: 'edit', label }) },
-            { kind: 'delete', accessibilityLabel: t('deleteItem', { name: label.name }), onPress: () => openDelete(label) },
+          const menu = canManage ? <CardActionsMenu subject={t('subject', { name: labelName(label) })} actions={[
+            { kind: 'edit', accessibilityLabel: t('editItem', { name: labelName(label) }), onPress: () => open({ kind: 'edit', label }) },
+            { kind: 'delete', accessibilityLabel: t('deleteItem', { name: labelName(label) }), onPress: () => openDelete(label) },
           ]} /> : null;
           if (desktop && canManage) {
             const creator = members.find(member => member.userId === label.createdBy)?.displayName;
             const shown = action?.kind === 'edit' && action.label.id === label.id;
-            return <ListRow key={label.id} accessibilityLabel={t('item', { name: label.name })} selected={shown} onPress={() => open({ kind: 'edit', label })}
+            return <ListRow key={label.id} accessibilityLabel={t('item', { name: labelName(label) })} selected={shown} onPress={() => open({ kind: 'edit', label })}
               leading={<View style={{ width: theme.spacing[6], height: theme.layout.desktopControl, alignItems: 'center', justifyContent: 'center' }}>{dot}</View>}
               trailing={<>{usage ? <Text variant="meta" numberOfLines={1} style={{ width: theme.spacing[10] * 4 }}>{usage}</Text> : null}{creator ? <Text variant="meta" numberOfLines={1} style={{ width: theme.spacing[10] * 3 }}>{t('creator', { name: creator })}</Text> : null}{menu}</>}>
-              <Text variant="bodySm" color="ink" numberOfLines={1}>{label.name}</Text>
+              <Text variant="bodySm" color="ink" numberOfLines={1}>{labelName(label)}</Text>
             </ListRow>;
           }
           return <View key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], minHeight: theme.controlSizes.touchTarget + theme.spacing[2], paddingLeft: theme.spacing[4], paddingRight: theme.spacing[2] }}>
             {dot}
             <View style={{ flex: 1 }}>
-              <Text accessibilityLabel={t('item', { name: label.name })}>{label.name}</Text>
+              <Text accessibilityLabel={t('item', { name: labelName(label) })}>{labelName(label)}</Text>
               {usage ? <Text variant="caption" color="inkMuted">{usage}</Text> : null}
             </View>
             {menu}
@@ -242,7 +243,7 @@ export default function LabelsIndexRoute() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[1], borderRadius: theme.borderRadii.sm, borderLeftWidth: theme.borderWidths.focus + 1, borderLeftColor: color, backgroundColor: labelTint(color) }}><Text variant="time">16:30</Text><Text variant="bodySm" color="ink">{t('sampleEvent')}</Text></View>
             </Stack>
           </Stack> : null}
-        {actionError ? <Text color="destructive" accessibilityRole="alert">{action.kind === 'create' ? t(actionError) : t(actionError, { name: action.label.name })}</Text> : null}
+        {actionError ? <Text color="destructive" accessibilityRole="alert">{action.kind === 'create' ? t(actionError) : t(actionError, { name: labelName(action.label) })}</Text> : null}
         {!desktop ? <FormActions onCancel={close} onSubmit={() => void submit()} submitting={busy} submitLabel={action.kind === 'create' ? t('shared:create') : t('common:save')} /> : null}
       </Stack>
     </AppDialog> : null}

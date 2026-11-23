@@ -61,7 +61,7 @@ function renderRoute() {
 }
 
 async function renderAs(actorRole: 'OWNER' | 'ADMIN' | 'MEMBER', labels = [
-  { id: 'label-1', name: '采购', color: '#B94736', systemKey: null, createdAt: new Date().toISOString() },
+  { id: 'label-1', name: '采购', color: '#B94736', systemKey: null, localizedNames: null, createdAt: new Date().toISOString() },
 ]) {
   mockRole.current = actorRole;
   mockListLabels.mockResolvedValue({ labels });
@@ -124,7 +124,7 @@ describe('labels screen offers only the actions the API will accept', () => {
 
 describe('editing a label someone else has just changed', () => {
   test('shows its current name, keeps what was typed, and saves against the new version', async () => {
-    const original = { id: 'label-1', householdId: 'household-1', name: '采购', color: '#B5562F', systemKey: null, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z' };
+    const original = { id: 'label-1', householdId: 'household-1', name: '采购', color: '#B5562F', systemKey: null, localizedNames: null, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z' };
     const renamed = { ...original, name: '买菜' };
     mockUpdateLabel
       .mockRejectedValueOnce(new ApiClientError(409, { error: { code: 'EDIT_CONFLICT' } }))
@@ -149,7 +149,7 @@ describe('editing a label someone else has just changed', () => {
 
 describe('editing a label whose colour is not one of the presets', () => {
   test('offers that colour, already chosen, beside the presets', async () => {
-    const view = await renderAs('OWNER', [{ id: 'label-1', name: '采购', color: '#EF4444', systemKey: null, createdAt: '2026-11-01T00:00:00.000Z' }]);
+    const view = await renderAs('OWNER', [{ id: 'label-1', name: '采购', color: '#EF4444', systemKey: null, localizedNames: null, createdAt: '2026-11-01T00:00:00.000Z' }]);
 
     await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
     await fireEvent.press(view.getByRole('menuitem', { name: '编辑标签 采购' }));
@@ -159,7 +159,7 @@ describe('editing a label whose colour is not one of the presets', () => {
   });
 
   test('matches a preset written in lower case', async () => {
-    const view = await renderAs('OWNER', [{ id: 'label-1', name: '采购', color: '#b5562f', systemKey: null, createdAt: '2026-11-01T00:00:00.000Z' }]);
+    const view = await renderAs('OWNER', [{ id: 'label-1', name: '采购', color: '#b5562f', systemKey: null, localizedNames: null, createdAt: '2026-11-01T00:00:00.000Z' }]);
 
     await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
     await fireEvent.press(view.getByRole('menuitem', { name: '编辑标签 采购' }));
@@ -170,8 +170,8 @@ describe('editing a label whose colour is not one of the presets', () => {
 });
 
 describe('how much each label is used', () => {
-  const used = { id: 'label-1', name: '采购', color: '#B5562F', systemKey: null, createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 2, tasks: 1 } };
-  const unused = { id: 'label-2', name: '闲置', color: '#2C716C', systemKey: null, createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } };
+  const used = { id: 'label-1', name: '采购', color: '#B5562F', systemKey: null, localizedNames: null, createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 2, tasks: 1 } };
+  const unused = { id: 'label-2', name: '闲置', color: '#2C716C', systemKey: null, localizedNames: null, createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } };
 
   test('each row says how many events and tasks carry the label', async () => {
     const view = await renderAs('MEMBER', [used, unused]);

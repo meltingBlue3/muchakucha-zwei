@@ -428,7 +428,14 @@ export interface UpdateLabelRequestDto {
   expectedColor?: string;
 }
 
-export type LabelSystemKey = 'birthday';
+/** The starter label a label began as; new birthdays are tagged with birthday. */
+export type LabelSystemKey = 'birthday' | 'chores' | 'shopping' | 'health' | 'outings';
+
+/** A starter label's default name in each interface language. */
+export interface LabelNamesDto {
+  zh: string;
+  ja: string;
+}
 
 export interface LabelResponseDto {
   id: string;
@@ -436,6 +443,8 @@ export interface LabelResponseDto {
   name: string;
   color: string;
   systemKey: LabelSystemKey | null;
+  /** Set while a starter label keeps its default name: show the reader's language. name then holds the Chinese one. */
+  localizedNames: LabelNamesDto | null;
   createdBy: string;
   createdAt: string;
 }

@@ -17,7 +17,7 @@ import { FormActions, Stack, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
 import { useDesktopDensity } from '../../ui/use-desktop';
 import { useWindowStep, type RouteWindowStep } from '../../ui/window-step';
-import { useWorkspaceState } from '../../ui/workspace-state';
+import { useWorkspaceState, useWorkspaceStore } from '../../ui/workspace-state';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 import { LabelPicker } from '../labels/label-picker';
 import { deviceTimeZone } from '../recurrence/recurrence-options';
@@ -66,10 +66,6 @@ export function BirthdayForm({
   onSubmit,
   onCancel,
   householdId,
-  selectedLabelIds,
-  labelsReady = true,
-  onLabelChange,
-  onLabelsLoaded,
 }: {
   draftKey: string;
   /** Names offered as one tap: 我 and the household's members. */
@@ -78,19 +74,27 @@ export function BirthdayForm({
   submitting: boolean;
   onSubmit(events: CreateEventDto[]): void;
   onCancel(): void;
-  householdId?: string | undefined;
-  selectedLabelIds?: string[] | undefined;
-  labelsReady?: boolean;
-  onLabelChange?: ((labelIds: string[]) => void) | undefined;
-  onLabelsLoaded?: ((labels: LabelResponseDto[]) => void) | undefined;
+  /** The household whose labels are offered. */
+  householdId: string;
 }) {
   const { t } = useTranslation(['birthdays', 'common', 'recurrence']);
   const activeTheme = useTheme<Theme>();
   const inputs = useComposeInputStyles();
   const dense = useDesktopDensity();
+  const workspace = useWorkspaceStore();
   const [draft, setDraft] = useWorkspaceState<BirthdayDraft>(`${draftKey}:birthday`, EMPTY_BIRTHDAY);
   const [reminder, setReminder] = useWorkspaceState<ReminderOptionValue>(`${draftKey}:reminder`, () => choiceValue(DEFAULT_REMINDER));
   const [alarm, setAlarm] = useWorkspaceState<AlarmOptionValue>(`${draftKey}:alarm`, () => alarmValue(DEFAULT_REMINDER));
+  const labelsKey = `${draftKey}:labels`;
+  const [labelIds, setLabelIds] = useWorkspaceState<string[]>(labelsKey, []);
+  const [labelsLoaded, setLabelsLoaded] = useState(false);
+  // The household's birthday label starts chosen. Seeding is not an edit, so
+  // an untouched form is still not a draft, and a draft keeps its own choice.
+  const chooseBirthdayLabel = useCallback((labels: LabelResponseDto[]) => {
+    const birthday = labels.find(label => label.systemKey === 'birthday');
+    workspace.seed(labelsKey, birthday ? [birthday.id] : []);
+    setLabelsLoaded(true);
+  }, [labelsKey, workspace]);
   const [errors, setErrors] = useState<BirthdayErrors>({});
   const [picking, setPicking] = useState(false);
   const [timeZoneError, setTimeZoneError] = useState(false);
@@ -138,8 +142,9 @@ export function BirthdayForm({
     setTimeZoneError(timezone === null);
     if (timezone === null) return;
     const choice = fitChoice(choiceFromValue(reminder, alarm), true);
-    const labelIds = selectedLabelIds !== undefined && labelsReady ? selectedLabelIds : undefined;
-    onSubmit(birthdayEvents(draft, todayIso, timezone, sameChoice(choice, DEFAULT_REMINDER) ? undefined : choice, labelIds));
+    // Until the labels have loaded, nothing was chosen: leaving them out lets the server add the birthday label.
+    const chosenLabels = labelsLoaded || workspace.has(labelsKey) ? labelIds : undefined;
+    onSubmit(birthdayEvents(draft, todayIso, timezone, sameChoice(choice, DEFAULT_REMINDER) ? undefined : choice, chosenLabels));
   };
 
   const calendars: Array<{ value: BirthdayCalendar; label: string; name: string }> = [
@@ -255,20 +260,13 @@ export function BirthdayForm({
         />
       </FormSection>
 
-      {householdId !== undefined && selectedLabelIds !== undefined && onLabelChange !== undefined ? (
-        <FormSection>
-          <FormRow align="start" icon={rowIcon(Tag)}>
-            <View style={{ flex: 1, paddingVertical: activeTheme.spacing[3] }}>
-              <LabelPicker
-                householdId={householdId}
-                selectedLabelIds={selectedLabelIds}
-                onChange={onLabelChange}
-                {...(onLabelsLoaded === undefined ? {} : { onLabelsLoaded })}
-              />
-            </View>
-          </FormRow>
-        </FormSection>
-      ) : null}
+      <FormSection>
+        <FormRow align="start" icon={rowIcon(Tag)}>
+          <View style={{ flex: 1, paddingVertical: activeTheme.spacing[3] }}>
+            <LabelPicker householdId={householdId} selectedLabelIds={labelIds} onChange={setLabelIds} onLabelsLoaded={chooseBirthdayLabel} />
+          </View>
+        </FormRow>
+      </FormSection>
 
       {preview.length ? (
         <View accessibilityLabel={t('form.nextName', { lines: preview.join(t('form.nextSeparator')) })} style={{ marginTop: activeTheme.spacing[4], marginLeft: contentInset, padding: activeTheme.spacing[3], borderRadius: activeTheme.borderRadii.sm, backgroundColor: activeTheme.colors.surfaceSubtle, gap: activeTheme.spacing[1] }}>

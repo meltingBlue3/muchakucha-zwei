@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import type { LabelResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
+import { labelName } from './label-name';
 
 /**
  * Every label the household has, refreshed when the screen regains focus, so a
@@ -31,6 +32,6 @@ export function useHouseholdLabels(householdId: string | null | undefined): Labe
 /** Household labels first, then any extra ones found on loaded items, without duplicates. */
 export function mergeLabels(household: LabelResponseDto[], seen: Array<{ id: string; name: string; color: string }>) {
   const merged = new Map<string, { id: string; name: string; color: string }>();
-  for (const label of [...household, ...seen]) if (!merged.has(label.id)) merged.set(label.id, { id: label.id, name: label.name, color: label.color });
+  for (const label of [...household, ...seen]) if (!merged.has(label.id)) merged.set(label.id, { id: label.id, name: labelName(label), color: label.color });
   return [...merged.values()];
 }

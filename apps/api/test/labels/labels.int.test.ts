@@ -75,17 +75,8 @@ async function request(
   });
 }
 
-async function createHousehold(accessToken: string, name: string, language?: string): Promise<string> {
-  const response = await (app.getHttpAdapter().getInstance() as any).inject({
-    method: 'POST',
-    url: '/api/v1/households',
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      'content-type': 'application/json',
-      ...(language === undefined ? {} : { 'accept-language': language }),
-    },
-    payload: { name },
-  });
+async function createHousehold(accessToken: string, name: string): Promise<string> {
+  const response = await request(accessToken, 'POST', '/households', { name });
   expect(response.statusCode).toBe(201);
   return (response.json() as { id: string }).id;
 }
@@ -674,33 +665,65 @@ describe('labels API contract', () => {
   });
 
   describe('starter household labels', () => {
-    test('seeds Chinese starter labels by default and Japanese starter labels when requested', async () => {
-      const zhLabels = (await householdApi(member, householdId, 'GET', '/labels')).json().labels as Array<{ name: string; color: string; systemKey: string | null }>;
-      expect(zhLabels).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: '生日', color: '#AD4067', systemKey: 'birthday' }),
-        expect.objectContaining({ name: '家务', color: '#2C716C', systemKey: null }),
-        expect.objectContaining({ name: '采买', color: '#C98A1B', systemKey: null }),
-        expect.objectContaining({ name: '健康', color: '#4C7537', systemKey: null }),
-        expect.objectContaining({ name: '出行', color: '#3B7DD8', systemKey: null }),
-      ]));
-      expect(zhLabels).toHaveLength(5);
+    type Listed = { id: string; name: string; color: string; systemKey: string | null; localizedNames: { zh: string; ja: string } | null };
+    const listed = async () => (await householdApi(owner, householdId, 'GET', '/labels')).json().labels as Listed[];
+    const starter = async (systemKey: string) => (await listed()).find(label => label.systemKey === systemKey)!;
 
-      const jaHouseholdId = await createHousehold(owner.accessToken, '日本の家族', 'ja');
-      const jaLabels = (await householdApi(owner, jaHouseholdId, 'GET', '/labels')).json().labels as Array<{ name: string; color: string; systemKey: string | null }>;
-      expect(jaLabels).toEqual(expect.arrayContaining([
-        expect.objectContaining({ name: '誕生日', color: '#AD4067', systemKey: 'birthday' }),
-        expect.objectContaining({ name: '家事', color: '#2C716C', systemKey: null }),
-        expect.objectContaining({ name: '買い物', color: '#C98A1B', systemKey: null }),
-        expect.objectContaining({ name: '健康', color: '#4C7537', systemKey: null }),
-        expect.objectContaining({ name: 'お出かけ', color: '#3B7DD8', systemKey: null }),
-      ]));
-      expect(jaLabels).toHaveLength(5);
+    test('a new household\'s starters keep no name of their own and read in every member\'s language', async () => {
+      const labels = (await householdApi(member, householdId, 'GET', '/labels')).json().labels as Listed[];
+      // Starters come after named labels, in a fixed order, so an item's first label (its colour) is stable.
+      expect(labels).toEqual([
+        expect.objectContaining({ systemKey: 'birthday', name: '生日', localizedNames: { zh: '生日', ja: '誕生日' }, color: '#AD4067' }),
+        expect.objectContaining({ systemKey: 'chores', name: '家务', localizedNames: { zh: '家务', ja: '家事' }, color: '#2C716C' }),
+        expect.objectContaining({ systemKey: 'health', name: '健康', localizedNames: { zh: '健康', ja: '健康' }, color: '#4C7537' }),
+        expect.objectContaining({ systemKey: 'outings', name: '出行', localizedNames: { zh: '出行', ja: 'お出かけ' }, color: '#3B7DD8' }),
+        expect.objectContaining({ systemKey: 'shopping', name: '采买', localizedNames: { zh: '采买', ja: '買い物' }, color: '#C98A1B' }),
+      ]);
+      const stored = await withDatabase(client => client.query(`SELECT "name" FROM "labels" WHERE "household_id" = $1`, [householdId]));
+      expect(stored.rows.map(row => row.name)).toEqual([null, null, null, null, null]);
+    });
+
+    test('no other label may take a starter\'s default name, in either language', async () => {
+      for (const name of ['生日', '誕生日', '家事', 'お出かけ']) {
+        const created = await householdApi(owner, householdId, 'POST', '/labels', { name, color: '#10B981' });
+        expect(created.statusCode).toBe(400);
+        expect(created.json().error.details).toEqual([expect.objectContaining({ field: 'name', codes: ['duplicate'] })]);
+      }
+      const school = await createLabel(owner, householdId, '学校');
+      const renamed = await householdApi(owner, householdId, 'PUT', `/labels/${school}`, { name: '買い物' });
+      expect(renamed.statusCode).toBe(400);
+      expect(await labelNamesOf(owner, householdId, '/labels')).toContain('学校');
+    });
+
+    test('a renamed starter reads alike everywhere until it is given one of its default names again', async () => {
+      const birthday = await starter('birthday');
+      const renamed = await householdApi(admin, householdId, 'PUT', `/labels/${birthday.id}`, { name: '寿星' });
+      expect(renamed.json()).toMatchObject({ name: '寿星', systemKey: 'birthday', localizedNames: null });
+
+      // A device in either language saving the name it shows restores the default.
+      const restored = await householdApi(admin, householdId, 'PUT', `/labels/${birthday.id}`, { name: '誕生日', color: '#7A478A', expectedName: '寿星', expectedColor: '#AD4067' });
+      expect(restored.statusCode).toBe(200);
+      expect(restored.json()).toMatchObject({ name: '生日', color: '#7A478A', localizedNames: { zh: '生日', ja: '誕生日' } });
+
+      // A recolour from a Japanese device sends 誕生日 and the version it read, which names it in Chinese.
+      const recoloured = await householdApi(admin, householdId, 'PUT', `/labels/${birthday.id}`, { name: '誕生日', color: '#AD4067', expectedName: '生日', expectedColor: '#7A478A' });
+      expect(recoloured.statusCode).toBe(200);
+      expect(recoloured.json()).toMatchObject({ name: '生日', localizedNames: { zh: '生日', ja: '誕生日' } });
+    });
+
+    test('a default name another label already has stays the starter\'s own, so the two never read alike', async () => {
+      const birthday = await starter('birthday');
+      expect((await householdApi(admin, householdId, 'PUT', `/labels/${birthday.id}`, { name: '寿星' })).statusCode).toBe(200);
+      await createLabel(owner, householdId, '誕生日');
+
+      const renamed = await householdApi(admin, householdId, 'PUT', `/labels/${birthday.id}`, { name: '生日' });
+      expect(renamed.statusCode).toBe(200);
+      expect(renamed.json()).toMatchObject({ name: '生日', localizedNames: null });
     });
 
     test('owners and admins can rename, recolor, and delete starter labels while members are forbidden', async () => {
-      const labels = (await householdApi(owner, householdId, 'GET', '/labels')).json().labels as Array<{ id: string; name: string; systemKey: string | null }>;
-      const birthday = labels.find(label => label.systemKey === 'birthday')!;
-      const chores = labels.find(label => label.name === '家务')!;
+      const birthday = await starter('birthday');
+      const chores = await starter('chores');
 
       expect((await householdApi(member, householdId, 'PUT', `/labels/${birthday.id}`, { name: '家庭日' })).statusCode).toBe(403);
       expect((await householdApi(member, householdId, 'DELETE', `/labels/${chores.id}`)).statusCode).toBe(403);

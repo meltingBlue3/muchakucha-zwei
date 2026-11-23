@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
-import { LABEL_SYSTEM_KEYS, type LabelSystemKey } from '../preset-labels.js';
+import { LABEL_SYSTEM_KEYS, type LabelSystemKey } from '../starter-labels.js';
 
 export class CreateLabelDto {
   @ApiProperty({ description: 'Label name', minLength: 1, maxLength: 40 })
@@ -60,6 +60,15 @@ export class UpdateLabelRequestDto extends UpdateLabelDto {
   expectedColor?: string;
 }
 
+/** A starter label's default name in each interface language. */
+export class LabelNamesDto {
+  @ApiProperty()
+  zh!: string;
+
+  @ApiProperty()
+  ja!: string;
+}
+
 export class LabelResponseDto {
   @ApiProperty()
   id!: string;
@@ -67,14 +76,17 @@ export class LabelResponseDto {
   @ApiProperty()
   householdId!: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'The label\'s own name. A starter label that keeps its default name reports the Chinese one here; see localizedNames.' })
   name!: string;
 
   @ApiProperty()
   color!: string;
 
-  @ApiProperty({ enum: LABEL_SYSTEM_KEYS, nullable: true })
+  @ApiProperty({ enum: LABEL_SYSTEM_KEYS, nullable: true, description: 'The starter label this one began as, renamed or not. New birthdays are tagged with `birthday`.' })
   systemKey!: LabelSystemKey | null;
+
+  @ApiProperty({ type: () => LabelNamesDto, nullable: true, description: 'Set while a starter label keeps its default name: that name in each interface language, so apps show the reader\'s own.' })
+  localizedNames!: LabelNamesDto | null;
 
   @ApiProperty()
   createdBy!: string;

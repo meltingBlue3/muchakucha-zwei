@@ -72,6 +72,30 @@ async function createHousehold(accessToken: string, name: string): Promise<strin
   return response.body.id as string;
 }
 
+test('starter labels read in each device\'s language until someone renames them', async ({ browser }) => {
+  const owner = await prepareAccount('owner', '标签主人');
+  const householdId = await createHousehold(owner.accessToken, '两种语言的家');
+  const japanese = await browser.newContext({ locale: 'ja-JP', baseURL: WEB_ORIGIN });
+  try {
+    const page = await japanese.newPage();
+    await loginUsernameFixture(page, owner.username, password, `/households/${encodeURIComponent(householdId)}/labels`);
+    for (const starter of ['誕生日', '家事', '買い物', '健康', 'お出かけ']) {
+      await expect(page.getByLabel(`ラベル：${starter}`)).toBeVisible();
+    }
+    await expect(page.getByLabel('ラベル：生日')).toHaveCount(0);
+
+    // Once renamed, a starter has a name of its own, the same in every language.
+    const labels = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/labels`);
+    const birthday = (labels.body.labels as Array<{ id: string; systemKey: string | null }>).find((label) => label.systemKey === 'birthday')!;
+    expect((await apiCall(owner.accessToken, 'PUT', `/households/${householdId}/labels/${birthday.id}`, { name: '寿星' })).status).toBe(200);
+    await page.reload();
+    await expect(page.getByLabel('ラベル：寿星')).toBeVisible();
+    await expect(page.getByLabel('ラベル：誕生日')).toHaveCount(0);
+  } finally {
+    await japanese.close();
+  }
+});
+
 test('manages labels and applies them to a task in the browser', async ({ page }) => {
   const owner = await prepareAccount('owner', '标签主人');
   const householdId = await createHousehold(owner.accessToken, '标签之家');

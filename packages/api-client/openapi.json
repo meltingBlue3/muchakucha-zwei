@@ -306,25 +306,7 @@
     "/api/v1/households": {
       "post": {
         "operationId": "createHousehold",
-        "parameters": [
-          {
-            "name": "accept-language",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "description": "Interface language (zh or ja) for starter labels.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -4415,6 +4397,21 @@
           "durationMinutes"
         ]
       },
+      "LabelNamesDto": {
+        "type": "object",
+        "properties": {
+          "zh": {
+            "type": "string"
+          },
+          "ja": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "zh",
+          "ja"
+        ]
+      },
       "LabelResponseDto": {
         "type": "object",
         "properties": {
@@ -4425,7 +4422,8 @@
             "type": "string"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "The label's own name. A starter label that keeps its default name reports the Chinese one here; see localizedNames."
           },
           "color": {
             "type": "string"
@@ -4433,9 +4431,24 @@
           "systemKey": {
             "type": "string",
             "enum": [
-              "birthday"
+              "birthday",
+              "chores",
+              "shopping",
+              "health",
+              "outings"
             ],
-            "nullable": true
+            "nullable": true,
+            "description": "The starter label this one began as, renamed or not. New birthdays are tagged with `birthday`."
+          },
+          "localizedNames": {
+            "nullable": true,
+            "description": "Set while a starter label keeps its default name: that name in each interface language, so apps show the reader's own.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LabelNamesDto"
+              }
+            ]
           },
           "createdBy": {
             "type": "string"
@@ -4450,6 +4463,7 @@
           "name",
           "color",
           "systemKey",
+          "localizedNames",
           "createdBy",
           "createdAt"
         ]
@@ -5033,7 +5047,8 @@
             "type": "string"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "The label's own name. A starter label that keeps its default name reports the Chinese one here; see localizedNames."
           },
           "color": {
             "type": "string"
@@ -5041,9 +5056,24 @@
           "systemKey": {
             "type": "string",
             "enum": [
-              "birthday"
+              "birthday",
+              "chores",
+              "shopping",
+              "health",
+              "outings"
             ],
-            "nullable": true
+            "nullable": true,
+            "description": "The starter label this one began as, renamed or not. New birthdays are tagged with `birthday`."
+          },
+          "localizedNames": {
+            "nullable": true,
+            "description": "Set while a starter label keeps its default name: that name in each interface language, so apps show the reader's own.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LabelNamesDto"
+              }
+            ]
           },
           "createdBy": {
             "type": "string"
@@ -5066,6 +5096,7 @@
           "name",
           "color",
           "systemKey",
+          "localizedNames",
           "createdBy",
           "createdAt",
           "usage"

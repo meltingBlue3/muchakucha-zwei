@@ -55,5 +55,4 @@ test('entering a created household retries resolution without creating a duplica
   await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/households/new-family'));
   expect(mockRefresh).toHaveBeenCalledWith('new-family');
   expect(mockCreate).toHaveBeenCalledTimes(1);
-  expect(mockCreate).toHaveBeenCalledWith('test-token', { name: '我们的小家' }, expect.any(AbortSignal), 'zh');
 });

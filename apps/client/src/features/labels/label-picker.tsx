@@ -13,6 +13,7 @@ import { labelColorPresets, type Theme } from '../../ui/theme';
 import { Button, Spinner, Stack, Text, TextField } from '../../ui/primitives';
 import { useDesktopDensity } from '../../ui/use-desktop';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
+import { labelName } from './label-name';
 
 interface LabelPickerProps {
   householdId: string;
@@ -172,7 +173,7 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
                 onPress={() => handleToggle(label)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
-                accessibilityLabel={t(isSelected ? 'picker.unselect' : 'picker.select', { name: label.name })}
+                accessibilityLabel={t(isSelected ? 'picker.unselect' : 'picker.select', { name: labelName(label) })}
                 style={chipTarget}
               >
                 <LabelChip label={label} selected={isSelected} dense={dense} />
