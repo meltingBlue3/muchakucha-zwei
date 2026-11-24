@@ -152,6 +152,13 @@ export class UpdateNoteArguments extends UpdateNoteDto {
 
   @IsOptional() @IsString() @MaxLength(20_000)
   declare body?: string;
+
+  // Not part of a body save: run as the note's own pin and label writes.
+  @IsOptional() @IsArray() @IsUUID('4', { each: true })
+  labelIds?: string[];
+
+  @IsOptional() @IsBoolean()
+  pinned?: boolean;
 }
 
 export class DeleteContentArguments extends IdArguments {
@@ -244,6 +251,7 @@ export const editProperties = { expectedUpdatedAt: timestamp };
 export const occurrenceEditProperties = { ...editProperties, expectedRuleUpdatedAt: timestamp };
 export const labelSnapshotProperties = { expectedName: labelProperties.name, expectedColor: labelProperties.color };
 export const labelsProperty = { labelIds: uuidArray };
+export const pinnedProperty = { pinned: { type: 'boolean', description: 'true pins the note at the top of the notes list for the whole household; false unpins it.' } };
 export const recurrenceProperty = { recurrence };
 export const eventListProperties = { ...listProperties, startDate: date, endDate: date, recurring: { type: 'boolean' } };
 export const seriesListProperties = { ...listProperties, birthdays: { type: 'boolean', description: 'Only birthday series.' } };

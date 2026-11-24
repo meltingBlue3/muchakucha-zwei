@@ -14,18 +14,20 @@ const actor = { userId: '10000000-0000-4000-8000-000000000001', householdId: '20
 const recordId = '30000000-0000-4000-8000-000000000001';
 const otherUserId = '10000000-0000-4000-8000-000000000002';
 const version = '2026-10-04T10:00:00.000Z';
-const note = { id: recordId, householdId: actor.householdId, title: '购物计划', body: '买苹果', createdBy: actor.userId, updatedBy: actor.userId, createdAt: version, updatedAt: version };
+const content = { id: recordId, householdId: actor.householdId, title: '购物计划', body: '买苹果', createdBy: actor.userId, updatedBy: actor.userId, createdAt: version, updatedAt: version };
+const note = { ...content, pinnedAt: null, labels: [] };
 const event = {
-  ...note, description: '晚饭', startTime: '2026-10-04T12:00:00.000Z', endTime: '2026-10-04T13:00:00.000Z',
+  ...content, description: '晚饭', startTime: '2026-10-04T12:00:00.000Z', endTime: '2026-10-04T13:00:00.000Z',
   allDay: false, location: null, recurrenceRuleId: null, occurrenceDate: null, cancelledAt: null, recurrence: null, labels: [],
   myReminder: { mode: 'default' as const, minutesBefore: null },
 };
 const task = {
-  ...note, description: '洗碗', status: 'pending' as const, priority: 'medium' as const, assigneeIds: [], dueDate: null,
+  ...content, description: '洗碗', status: 'pending' as const, priority: 'medium' as const, assigneeIds: [], dueDate: null,
   recurrenceRuleId: null, occurrenceDate: null, recurrence: null, labels: [],
   myReminder: { mode: 'default' as const, minutesBefore: null },
 };
 const label = { id: recordId, householdId: actor.householdId, name: '家务', color: '#EF4444', systemKey: null, localizedNames: null, createdBy: actor.userId, createdAt: version };
+const foreignLabelId = '40000000-0000-4000-8000-000000000001';
 const series = {
   id: recordId, updatedAt: version, freq: 'yearly', interval: 1, byWeekday: [], startsOn: '2026-11-23', endsOn: null, count: null,
   timezone: 'Asia/Shanghai', startTimeLocal: '00:00', durationMinutes: 1440, lunar: null, occasion: null, birthYear: null,
@@ -52,10 +54,12 @@ function fixtures(role: 'OWNER' | 'ADMIN' | 'MEMBER' = 'OWNER') {
     getById: vi.fn<NotesService['getById']>().mockResolvedValue(note),
     create: vi.fn<NotesService['create']>().mockResolvedValue(note),
     update: vi.fn<NotesService['update']>().mockResolvedValue(note),
+    setPinned: vi.fn<NotesService['setPinned']>().mockResolvedValue({ ...note, pinnedAt: version }),
+    replaceLabels: vi.fn<NotesService['replaceLabels']>().mockResolvedValue({ ...note, labels: [label] }),
     delete: vi.fn<NotesService['delete']>().mockResolvedValue(undefined),
   };
   const labels = {
-    list: vi.fn<LabelsService['list']>().mockResolvedValue({ labels: [{ ...label, usage: { events: 0, tasks: 0 } }], total: 1 }),
+    list: vi.fn<LabelsService['list']>().mockResolvedValue({ labels: [{ ...label, usage: { events: 0, tasks: 0, notes: 0 } }], total: 1 }),
     create: vi.fn<LabelsService['create']>().mockResolvedValue(label),
     update: vi.fn<LabelsService['update']>().mockResolvedValue(label),
     delete: vi.fn<LabelsService['delete']>().mockResolvedValue(undefined),
@@ -125,6 +129,80 @@ describe('assistant tool boundary', () => {
     await tools.execute(actor, call(name, { ...args }));
     expect((name === 'create_task' ? tasks : events).create)
       .toHaveBeenCalledWith(actor.userId, actor.householdId, expect.objectContaining({ labelIds: [recordId] }));
+  });
+
+  test('a new note is proposed with its labels and pin, and saved with them', async () => {
+    const { tools, notes } = fixtures();
+    const definition = tools.definitions().find(tool => tool.name === 'create_note')!;
+    expect(Object.keys((definition.parameters as { properties: Record<string, unknown> }).properties)).toEqual(expect.arrayContaining(['labelIds', 'pinned']));
+    notes.create.mockResolvedValue({ ...note, pinnedAt: version, labels: [label] });
+
+    const created = await tools.execute(actor, call('create_note', { title: '开学清单', labelIds: [recordId], pinned: true }));
+
+    expect(notes.create).toHaveBeenCalledWith(actor.userId, actor.householdId, expect.objectContaining({ title: '开学清单', labelIds: [recordId], pinned: true }));
+    expect(created).toMatchObject({ pinned: true, labels: [{ name: '家务' }] });
+  });
+
+  test('a note edit can relabel or pin without touching the text, and still needs the version it was read at', async () => {
+    const { tools, notes } = fixtures('MEMBER');
+    notes.getById.mockResolvedValue({ ...note, createdBy: otherUserId });
+    const definition = tools.definitions().find(tool => tool.name === 'update_note')!;
+    expect(definition.description).toMatch(/labelIds replaces all/);
+    expect(definition.description).toMatch(/list_labels/);
+
+    const relabelled = await tools.execute(actor, call('update_note', { id: recordId, expectedUpdatedAt: version, labelIds: [recordId] }));
+    expect(notes.replaceLabels).toHaveBeenCalledWith(actor.userId, actor.householdId, recordId, [recordId]);
+    expect(relabelled).toMatchObject({ labels: [{ id: recordId }], pinned: false });
+    await tools.execute(actor, call('update_note', { id: recordId, expectedUpdatedAt: version, labelIds: [] }));
+    expect(notes.replaceLabels).toHaveBeenLastCalledWith(actor.userId, actor.householdId, recordId, []);
+
+    const pinned = await tools.execute(actor, call('update_note', { id: recordId, expectedUpdatedAt: version, pinned: true }));
+    expect(notes.setPinned).toHaveBeenCalledWith(actor.userId, actor.householdId, recordId, true);
+    expect(pinned).toMatchObject({ pinned: true });
+    expect(notes.update).not.toHaveBeenCalled();
+
+    await expect(tools.prepare(actor, call('update_note', { id: recordId, pinned: false }))).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED' } });
+    notes.getById.mockResolvedValue({ ...note, updatedAt: '2026-10-04T10:01:00.000Z' });
+    await expect(tools.prepare(actor, call('update_note', { id: recordId, expectedUpdatedAt: version, pinned: false }))).rejects.toMatchObject({ response: { code: 'EDIT_CONFLICT' } });
+    expect(notes.setPinned).toHaveBeenCalledOnce();
+  });
+
+  test('a note edit saves the text first, then the pin and labels', async () => {
+    const { tools, notes } = fixtures();
+    const order: string[] = [];
+    notes.update.mockImplementation(async () => { order.push('update'); return note; });
+    notes.setPinned.mockImplementation(async () => { order.push('pin'); return { ...note, pinnedAt: version }; });
+    notes.replaceLabels.mockImplementation(async () => { order.push('labels'); return { ...note, pinnedAt: version, labels: [label] }; });
+
+    const result = await tools.execute(actor, call('update_note', { id: recordId, expectedUpdatedAt: version, body: '买梨', pinned: true, labelIds: [recordId] }));
+
+    expect(order).toEqual(['update', 'pin', 'labels']);
+    expect(notes.update).toHaveBeenCalledWith(actor.userId, actor.householdId, recordId, { expectedUpdatedAt: version, body: '买梨' });
+    expect(result).toMatchObject({ pinned: true, labels: [{ id: recordId }] });
+  });
+
+  test('labels of another household are refused when the note change is proposed, before anything is written', async () => {
+    const { tools, notes } = fixtures();
+    for (const request of [
+      call('create_note', { title: '计划', labelIds: [foreignLabelId] }),
+      call('update_note', { id: recordId, expectedUpdatedAt: version, body: '改了正文', labelIds: [recordId, foreignLabelId] }),
+    ]) {
+      await expect(tools.prepare(actor, request)).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED', details: [{ field: 'labelIds' }] } });
+      await expect(tools.execute(actor, request)).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED' } });
+    }
+    expect(notes.create).not.toHaveBeenCalled();
+    expect(notes.update).not.toHaveBeenCalled();
+    expect(notes.replaceLabels).not.toHaveBeenCalled();
+  });
+
+  test('note reads say whether each note is pinned and carry its label names', async () => {
+    const { tools, notes } = fixtures();
+    notes.list.mockResolvedValue({ notes: [{ ...note, pinnedAt: version, labels: [label] }, { ...note, id: foreignLabelId, title: '另一篇' }], total: 2 });
+    notes.getById.mockResolvedValue({ ...note, pinnedAt: version, labels: [label] });
+
+    await expect(tools.execute(actor, call('list_notes'))).resolves.toMatchObject({ items: [{ pinned: true, labels: [{ name: '家务' }] }, { pinned: false, labels: [] }] });
+    await expect(tools.execute(actor, call('list_notes', { query: '家务' }))).resolves.toMatchObject({ total: 1, items: [{ pinned: true }] });
+    await expect(tools.execute(actor, call('get_note', { id: recordId }))).resolves.toMatchObject({ pinned: true, labels: [{ name: '家务' }] });
   });
 
   test('rejects unknown nested recurrence properties and unsupported series updates', async () => {

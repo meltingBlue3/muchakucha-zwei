@@ -185,7 +185,7 @@ test('tool results distinguish a successful delete from a conflict and summarize
 });
 
 test('delete confirmation resolves the actual note and sends only the explicit human decision', async () => {
-  jest.mocked(sessionApiClient.getNote).mockResolvedValue({ id: 'note', householdId: 'home', title: '开学清单', body: '买书包', createdBy: 'owner', updatedBy: 'owner', createdAt: provider.updatedAt, updatedAt: provider.updatedAt });
+  jest.mocked(sessionApiClient.getNote).mockResolvedValue({ id: 'note', householdId: 'home', title: '开学清单', body: '买书包', createdBy: 'owner', updatedBy: 'owner', createdAt: provider.updatedAt, updatedAt: provider.updatedAt, pinnedAt: null, labels: [] });
   const decide = jest.fn();
   const view = await render(<MuchakuchaThemeProvider><AssistantActionsPreview householdId="home" actions={[{ id: 'call_delete', name: 'delete_note', arguments: { id: 'note', expectedUpdatedAt: provider.updatedAt } }]} busy={false} onDecide={decide} /></MuchakuchaThemeProvider>);
   expect(await view.findByText('开学清单')).toBeTruthy();
@@ -200,7 +200,7 @@ test('delete confirmation resolves the actual note and sends only the explicit h
 test('a batch runs only the checked items that still match their targets', async () => {
   jest.mocked(sessionApiClient.getNote).mockImplementation(async (_token, _household, noteId) => ({
     id: noteId, householdId: 'home', title: noteId === 'changed' ? '已被家人修改' : '旧清单', body: '', createdBy: 'owner', updatedBy: 'owner', createdAt: provider.updatedAt,
-    updatedAt: noteId === 'changed' ? '2026-10-04T01:00:00.000Z' : provider.updatedAt,
+    updatedAt: noteId === 'changed' ? '2026-10-04T01:00:00.000Z' : provider.updatedAt, pinnedAt: null, labels: [],
   }));
   const decide = jest.fn();
   const actions = [
@@ -221,7 +221,7 @@ test('a batch runs only the checked items that still match their targets', async
 });
 
 test('a changed target cannot be approved under an old proposal', async () => {
-  jest.mocked(sessionApiClient.getNote).mockResolvedValue({ id: 'note', householdId: 'home', title: '已经修改', body: '', createdBy: 'owner', updatedBy: 'owner', createdAt: provider.updatedAt, updatedAt: '2026-10-04T01:00:00.000Z' });
+  jest.mocked(sessionApiClient.getNote).mockResolvedValue({ id: 'note', householdId: 'home', title: '已经修改', body: '', createdBy: 'owner', updatedBy: 'owner', createdAt: provider.updatedAt, updatedAt: '2026-10-04T01:00:00.000Z', pinnedAt: null, labels: [] });
   const view = await render(<MuchakuchaThemeProvider><AssistantActionsPreview householdId="home" actions={[{ id: 'call_delete', name: 'delete_note', arguments: { id: 'note', expectedUpdatedAt: provider.updatedAt } }]} busy={false} onDecide={jest.fn()} /></MuchakuchaThemeProvider>);
   await view.findByText('操作对象已有变化。请取消这次操作，让助手重新查询并生成建议。');
   expect(view.getByRole('button', { name: '确认删除' })).toBeDisabled();
@@ -263,6 +263,28 @@ test('an edit shows what it replaces, and a note body edit lists removed lines a
     { label: '标签', value: '无', before: '家务' },
   ]);
   expect(status.unresolved).toBe(false);
+});
+
+test('a note edit shows its labels and pin beside what they were, the way a task shows its labels', () => {
+  const note = { title: '周末采购', body: '', pinnedAt: null, labels: [{ id: 'label-1', name: '家务' }], updatedAt: provider.updatedAt };
+  const pin = assistantActionDetails({ id: 'call', name: 'update_note', arguments: { id: 'note', expectedUpdatedAt: provider.updatedAt, pinned: true, labelIds: ['label-2'] } },
+    { target: note, labels: { 'label-2': '采购' }, members: {} });
+  expect(pin.fields).toEqual([
+    { label: '置顶', value: '是', before: '否' },
+    { label: '标签', value: '采购', before: '家务' },
+  ]);
+  expect(pin.unresolved).toBe(false);
+
+  const unpin = assistantActionDetails({ id: 'call', name: 'update_note', arguments: { id: 'note', expectedUpdatedAt: provider.updatedAt, pinned: false, labelIds: [] } },
+    { target: { ...note, pinnedAt: provider.updatedAt }, labels: {}, members: {} });
+  expect(unpin.fields).toEqual([
+    { label: '置顶', value: '否', before: '是' },
+    { label: '标签', value: '无', before: '家务' },
+  ]);
+
+  const created = assistantActionDetails({ id: 'call', name: 'create_note', arguments: { title: '开学清单', pinned: true, labelIds: ['label-2'] } },
+    { target: null, labels: { 'label-2': '学校' }, members: {} });
+  expect(created.fields).toEqual([{ label: '标题', value: '开学清单' }, { label: '置顶', value: '是' }, { label: '标签', value: '学校' }]);
 });
 
 test('line changes keep document order and give up on texts too long to compare', () => {
@@ -315,7 +337,7 @@ test('a Japanese device confirms editing or deleting an unrenamed starter label 
   await act(async () => { setLanguageChoice('ja'); });
   const starter = {
     id: 'bday', householdId: 'home', name: '生日', localizedNames: { zh: '生日', ja: '誕生日' },
-    color: '#AD4067', systemKey: 'birthday' as const, createdBy: 'owner', createdAt: provider.updatedAt, usage: { events: 0, tasks: 0 },
+    color: '#AD4067', systemKey: 'birthday' as const, createdBy: 'owner', createdAt: provider.updatedAt, usage: { events: 0, tasks: 0, notes: 0 },
   };
   jest.mocked(sessionApiClient.listLabels).mockResolvedValue({ labels: [starter], total: 1 });
 
