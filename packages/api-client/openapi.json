@@ -4946,6 +4946,11 @@
           "createdBy": {
             "type": "string"
           },
+          "updatedBy": {
+            "type": "string",
+            "nullable": true,
+            "description": "Who saved the note last; null once that account is deleted."
+          },
           "createdAt": {
             "type": "string"
           },
@@ -4958,6 +4963,7 @@
           "householdId",
           "title",
           "createdBy",
+          "updatedBy",
           "createdAt",
           "updatedAt"
         ]

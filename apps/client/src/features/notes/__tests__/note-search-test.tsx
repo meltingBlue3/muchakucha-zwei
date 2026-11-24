@@ -40,7 +40,7 @@ jest.mock('../../households/household-context', () => ({
 
 function note(id: string, title: string): NoteResponseDto {
   const now = new Date().toISOString();
-  return { id, householdId: 'household-1', title, body: null, createdBy: 'user', createdAt: now, updatedAt: now };
+  return { id, householdId: 'household-1', title, body: null, createdBy: 'user', updatedBy: 'user', createdAt: now, updatedAt: now };
 }
 
 async function renderNotes(notes: NoteResponseDto[]) {

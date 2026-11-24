@@ -257,6 +257,36 @@ describe('notes API contract', () => {
     expect(bodyOnly.json()).toMatchObject({ title: '新标题', body: null });
   });
 
+  test('records the author as the last editor of a new note', async () => {
+    const created = await noteApi(member, householdId, 'POST', '', { title: '新笔记' });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({ createdBy: member.userId, updatedBy: member.userId });
+    expect((await noteApi(owner, householdId, 'GET', `/${created.json().id}`)).json().updatedBy).toBe(member.userId);
+  });
+
+  test('records the member who saved a note last without changing its author', async () => {
+    const noteId = await createNote(member, householdId, { title: '共同的清单', body: '- [ ] 牛奶' });
+
+    const update = await noteApi(otherMember, householdId, 'PUT', `/${noteId}`, { body: '- [x] 牛奶' });
+
+    expect(update.statusCode).toBe(200);
+    expect(update.json()).toMatchObject({ createdBy: member.userId, updatedBy: otherMember.userId });
+    const stored = (await noteApi(member, householdId, 'GET', `/${noteId}`)).json();
+    expect(stored).toMatchObject({ body: '- [x] 牛奶', createdBy: member.userId, updatedBy: otherMember.userId });
+    const listed = (await noteApi(owner, householdId, 'GET')).json().notes.find((note: { id: string }) => note.id === noteId);
+    expect(listed.updatedBy).toBe(otherMember.userId);
+  });
+
+  test('a deleted account no longer shows as the last editor', async () => {
+    const noteId = await createNote(member, householdId, { title: '有人改过' });
+    expect((await noteApi(otherMember, householdId, 'PUT', `/${noteId}`, { title: '有人改过了' })).statusCode).toBe(200);
+
+    await withDatabase((client) => client.query(`DELETE FROM "User" WHERE "id" = $1`, [otherMember.userId]));
+
+    expect((await noteApi(member, householdId, 'GET', `/${noteId}`)).json()).toMatchObject({ title: '有人改过了', createdBy: member.userId, updatedBy: null });
+  });
+
   test('rejects a whitespace-only title on update', async () => {
     const noteId = await createNote(owner, householdId, { title: '保持不变' });
 
