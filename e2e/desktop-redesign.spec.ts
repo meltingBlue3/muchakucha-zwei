@@ -6,7 +6,7 @@ const base = `/households/${householdId}`;
 const taskId = (index: number) => `33333333-3333-4333-8333-${String(index).padStart(12, '0')}`;
 const conversationId = '66666666-6666-4666-8666-666666666666';
 const version = '2026-11-10T02:00:00Z';
-const defaultNotes = [{ id: 'note-1', householdId, title: '家庭旅行计划', body: '# 周末去郊外\n\n一起准备野餐垫、水和水果。\n\n## 路线\n\n- 周六上午出发\n- 沿湖走一走', createdBy: 'user', updatedBy: 'user', createdAt: version, updatedAt: version }, { id: 'note-2', householdId, title: '家电使用说明', body: '洗碗机使用注意事项。', createdBy: 'user', updatedBy: 'user-2', createdAt: version, updatedAt: '2026-10-20T02:00:00Z' }];
+const defaultNotes = [{ id: 'note-1', householdId, title: '家庭旅行计划', body: '# 周末去郊外\n\n一起准备野餐垫、水和水果。\n\n## 路线\n\n- 周六上午出发\n- 沿湖走一走', createdBy: 'user', updatedBy: 'user', createdAt: version, updatedAt: version, pinnedAt: null, labels: [] }, { id: 'note-2', householdId, title: '家电使用说明', body: '洗碗机使用注意事项。', createdBy: 'user', updatedBy: 'user-2', createdAt: version, updatedAt: '2026-10-20T02:00:00Z', pinnedAt: null, labels: [] }];
 
 async function setup(
   page: Page,
@@ -220,6 +220,8 @@ test('the desktop note list and reading pane scroll independently', async ({ pag
     updatedBy: 'user',
     createdAt: version,
     updatedAt: version,
+    pinnedAt: null,
+    labels: [],
   }));
   await setup(page, { notes });
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -816,7 +818,7 @@ test('labels are edited in the side pane beside a list that stays usable', async
   const deleteLabel = pane.getByRole('button', { name: '删除标签', exact: true });
   await deleteLabel.click();
   const deletion = page.getByRole('dialog', { name: '删除标签', exact: true });
-  await expect(deletion.getByText(/日程和任务本身会保留/)).toBeVisible();
+  await expect(deletion.getByText(/日程、任务和笔记本身会保留/)).toBeVisible();
   await deletion.getByRole('button', { name: '取消', exact: true }).click();
   await expect(pane.getByLabel('编辑标签名称')).toHaveValue('未保存的标签');
   await expect(deleteLabel).toBeFocused();

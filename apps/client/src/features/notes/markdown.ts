@@ -63,3 +63,21 @@ export function noteTitle(title: string, body: string): string | null {
 export function setChecklistItem(markdown: string, tick: ChecklistTick): string | null {
   return applyChecklistTick(markdown, parser.parse(markdown, {}), tick);
 }
+
+export interface ChecklistProgress { done: number; total: number }
+
+/**
+ * How much of a note's checklists is ticked, counting every item wherever it
+ * sits (nested, in a quote); null when the note has none. Items are what
+ * checklists.ts marks, so this agrees with the boxes the note shows.
+ */
+export function checklistProgress(body: string): ChecklistProgress | null {
+  let done = 0;
+  let total = 0;
+  for (const token of parser.parse(body, {})) {
+    if (token.type !== 'list_item_open' || token.attrGet('data-type') !== 'taskItem') continue;
+    total += 1;
+    if (token.attrGet('data-checked') === 'true') done += 1;
+  }
+  return total === 0 ? null : { done, total };
+}

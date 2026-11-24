@@ -34,8 +34,8 @@ afterEach(async () => {
 });
 
 const starterLabels: LabelListItemDto[] = [
-  { id: 'label-bday', householdId: 'h', name: '生日', color: '#AD4067', systemKey: 'birthday', localizedNames: { zh: '生日', ja: '誕生日' }, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } },
-  { id: 'label-chores', householdId: 'h', name: '家务', color: '#2C716C', systemKey: 'chores', localizedNames: { zh: '家务', ja: '家事' }, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } },
+  { id: 'label-bday', householdId: 'h', name: '生日', color: '#AD4067', systemKey: 'birthday', localizedNames: { zh: '生日', ja: '誕生日' }, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0, notes: 0 } },
+  { id: 'label-chores', householdId: 'h', name: '家务', color: '#2C716C', systemKey: 'chores', localizedNames: { zh: '家务', ja: '家事' }, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0, notes: 0 } },
 ];
 
 beforeEach(() => {

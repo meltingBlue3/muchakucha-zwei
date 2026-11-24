@@ -17,7 +17,7 @@ jest.mock('../../households/household-context', () => ({
   useHouseholdContext: () => ({ households: [{ id: 'family', name: '家', role: mockRole.current }] }),
 }));
 
-const label = (id: string, name: string): LabelListItemDto => ({ id, householdId: 'family', name, color: '#2C716C', systemKey: null, localizedNames: null, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } });
+const label = (id: string, name: string): LabelListItemDto => ({ id, householdId: 'family', name, color: '#2C716C', systemKey: null, localizedNames: null, createdBy: 'owner', createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0, notes: 0 } });
 
 beforeEach(() => {
   jest.mocked(sessionApiClient.listLabels).mockReset();

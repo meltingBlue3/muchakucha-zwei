@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { Keyboard, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
-import type { NoteResponseDto } from '@muchakucha/api-client';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { Keyboard, Pressable, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import type { LabelResponseDto, NoteResponseDto } from '@muchakucha/api-client';
 import Bold from 'lucide-react-native/icons/bold';
 import Check from 'lucide-react-native/icons/check';
 import CircleAlert from 'lucide-react-native/icons/circle-alert';
@@ -11,10 +11,13 @@ import Heading from 'lucide-react-native/icons/heading';
 import Link from 'lucide-react-native/icons/link';
 import List from 'lucide-react-native/icons/list';
 import ListTodo from 'lucide-react-native/icons/list-todo';
+import Pin from 'lucide-react-native/icons/pin';
 import Share2 from 'lucide-react-native/icons/share-2';
+import Tag from 'lucide-react-native/icons/tag';
 import { useTranslation } from '../../i18n';
 import { exportMarkdown, markdownExportKind } from '../../platform/clipboard/markdown-export';
 import { useSoftKeyboardShown } from '../../platform/keyboard/soft-keyboard';
+import { AnchoredPopover } from '../../ui/anchored-popover';
 import { CardActionsMenu, type CardAction } from '../../ui/card-actions-menu';
 import { formatDateTime } from '../../ui/date-values';
 import { DraftNotice } from '../../ui/draft-notice';
@@ -25,8 +28,13 @@ import { theme } from '../../ui/theme';
 import { useDesktop, useDesktopDensity } from '../../ui/use-desktop';
 import { contentDeleteConfirmation, useContentDeletion } from '../content/content-deletion';
 import { useCanDeleteContent } from '../content/use-content-delete';
+import { LabelChip } from '../labels/label-chip';
+import { labelName } from '../labels/label-name';
+import { LabelPicker } from '../labels/label-picker';
 import { HouseholdTargetField } from '../overview/household-target-field';
+import { PickerActions } from '../../ui/picker-panels';
 import { safeLink } from './markdown';
+import { saveNoteLabels, saveNotePin, subscribeNoteMarks, type NoteMarks } from './note-marks';
 import NoteEditor, { type NoteEditorChange, type NoteEditorColors, type NoteEditorFormat, type NoteEditorHandle, type NoteEditorLabels, type NoteEditorMetrics } from './note-editor-dom';
 import { NoteWindow } from './note-window';
 import { useNoteAutosave, type NoteSaveStatus } from './use-note-autosave';
@@ -86,6 +94,10 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
   }, [exported]);
   const [comparing, setComparing] = useState(false);
   const exitAllowed = useRef(false);
+  const marking = useNoteMarking(latest);
+  const [picking, setPicking] = useState<'button' | 'row' | null>(null);
+  const labelsButton = useRef<View>(null);
+  const labelsRow = useRef<View>(null);
   const canDelete = useCanDeleteContent();
   const deletion = useContentDeletion('notes', householdId, latest?.id, () => { exitAllowed.current = true; onClose(); });
 
@@ -166,10 +178,26 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
     ...(latest && canDelete(latest) ? [{ kind: 'delete' as const, accessibilityLabel: t('deleteCard', { title }), onPress: (trigger: View | null) => void openDelete(trigger) }] : []),
     { label: t(markdownExportKind === 'copy' ? 'menu.copy' : 'menu.share'), icon: markdownExportKind === 'copy' ? Copy : Share2, accessibilityLabel: t(markdownExportKind === 'copy' ? 'menu.copy' : 'menu.share'), onPress: () => void exportNote() },
   ];
+  const marks = marking.marks;
+  const pinned = marks !== null && marks.pinnedAt !== null;
+  const openLabels = (from: 'button' | 'row') => {
+    // The choice covers the note on a phone; the keyboard goes with it.
+    if (!desktop) { command(handle => handle.blur()); Keyboard.dismiss(); }
+    setPicking(from);
+  };
   const header = <Inline gap={1}>
     <NoteSaveState status={autosave.status} />
+    {/* A note not saved yet has nothing to pin or label: these come with its first save. */}
+    {marks ? <>
+      <HeaderButton label={t(pinned ? 'unpin' : 'pin')} pressed={pinned} disabled={marking.busy} icon={Pin} onPress={() => void marking.setPinned(!pinned)} />
+      <HeaderButton ref={labelsButton} label={t('labels')} pressed={false} expanded={picking !== null} icon={Tag} onPress={() => openLabels('button')} />
+    </> : null}
     <CardActionsMenu subject={t('card', { title })} actions={actions} />
   </Inline>;
+  const closeLabels = () => setPicking(null);
+  const labelChoice = picking && latest && marks ? <NoteLabelChoice householdId={householdId} selected={marks.labels.map(label => label.id)} busy={marking.busy}
+    onCancel={closeLabels}
+    onDone={(ids, known) => { setPicking(null); void marking.setLabels(ids, known); }} /> : null;
 
   const showToolbar = !desktop && focused && keyboard && insert === null;
   const toolbar = showToolbar ? <NoteToolbar format={format}
@@ -184,19 +212,23 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
       });
     }} /> : undefined;
 
-  const step = insert ? {
+  const labelStep = labelChoice && !desktop ? { title: t('labels'), onClose: closeLabels, content: labelChoice } : null;
+  const step = labelStep ?? (insert ? {
     title: insert.kind === 'link' ? t('format.insertLink') : t('format.insertTable'),
     onClose: () => setInsert(null),
     onReturn: () => command(handle => handle.focus('')),
     content: <InsertStep kind={insert.kind} label={insert.label}
       onLink={(href, label) => { setInsert(null); command(handle => handle.setLink(href, label)); }}
       onTable={(columns, rows) => { setInsert(null); command(handle => handle.insertTable(columns, rows, Array.from({ length: columns }, (_, index) => t('format.column', { number: index + 1 })))); }} />,
-  } : null;
+  } : null);
 
   const conflict = autosave.conflict;
   // On a wide pane the notes above the document line up with its reading column.
   const column: ViewStyle | undefined = desktop ? { width: '100%', maxWidth: theme.layout.readingWidth, alignSelf: 'center' } : undefined;
   const quiet = [column, { paddingHorizontal: metrics.gutter }];
+  const labelRow = marks && marks.labels.length > 0
+    ? <NoteLabelRow ref={labelsRow} labels={marks.labels} expanded={picking !== null} onPress={() => openLabels('row')} style={desktop ? column : { paddingHorizontal: metrics.gutter }} />
+    : null;
   return (
     <NoteWindow
       title={t('document')}
@@ -212,8 +244,12 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
     >
       <Stack gap={3} style={{ flex: 1, minHeight: 0 }}>
         {noteId === 'new' ? <View style={column}>{chooseHousehold ? <HouseholdTargetField householdId={householdId} resource="notes" /> : <HouseholdContextNote householdName={householdName} />}</View> : null}
+        {/* The title is the editor's first line, so the labels go above it: at the top of the column, or under the byline on a phone. */}
+        {desktop ? labelRow : null}
         {!desktop && byline ? <Text variant="caption" color="inkMuted" style={{ paddingHorizontal: metrics.gutter, fontFamily: theme.fontFamilies.numeric }}>{byline}</Text> : null}
+        {!desktop ? labelRow : null}
         <DraftNotice style={quiet} />
+        {marking.failure ? <QuietNotice style={quiet} icon={CircleAlert} text={t(marking.failure)} /> : null}
         {autosave.status === 'offline' || autosave.status === 'failed' ? <QuietNotice style={quiet} icon={CloudOff} text={t(autosave.status === 'offline' ? 'offline' : 'saveFailed')} /> : null}
         {exported ? <QuietNotice style={quiet} icon={exported === 'copied' ? Check : CircleAlert} text={t(exported === 'copied' ? 'menu.copied' : 'menu.exportFailed')} /> : null}
         {autosave.status === 'sessionExpired' ? <View style={column}><Banner>{t('auth:errors.sessionExpired')}</Banner></View> : null}
@@ -248,8 +284,102 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
           />
         </View>
       </Stack>
+      {labelChoice && desktop ? (
+        <AnchoredPopover scrollable align={picking === 'button' ? 'end' : 'start'} title={t('labels')} trigger={picking === 'row' ? labelsRow : labelsButton} busy={marking.busy} onClose={closeLabels}>{labelChoice}</AnchoredPopover>
+      ) : null}
     </NoteWindow>
   );
+}
+
+/**
+ * The note's pin and labels as this page shows them. They save at once and on
+ * their own, never through the autosave: the page shows the change straight
+ * away, takes the note as saved when it comes back, and puts it back as it
+ * was if the save fails. The autosave's conflict base is not touched, since
+ * neither changes the note's version.
+ */
+function useNoteMarking(latest: NoteResponseDto | null) {
+  // What this page last chose or saved; until then, what the latest save of the note says.
+  const [own, setOwn] = useState<(NoteMarks & { noteId: string }) | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<'pinFailed' | 'unpinFailed' | 'labelsFailed' | null>(null);
+  const noteId = latest?.id ?? null;
+  const householdId = latest?.householdId ?? null;
+  const marks: NoteMarks | null = latest === null ? null : own?.noteId === latest.id ? own : { pinnedAt: latest.pinnedAt, labels: latest.labels };
+
+  // A pin or labels saved elsewhere on this device, such as from the list's menu.
+  useEffect(() => subscribeNoteMarks(note => {
+    if (note.id === noteId) setOwn({ noteId: note.id, pinnedAt: note.pinnedAt, labels: note.labels });
+  }), [noteId]);
+
+  const save = async (next: NoteMarks, write: (household: string, id: string) => Promise<NoteResponseDto>, failed: NonNullable<typeof failure>) => {
+    if (noteId === null || householdId === null || marks === null) return;
+    const before = marks;
+    setFailure(null);
+    setBusy(true);
+    setOwn({ noteId, ...next });
+    try {
+      const saved = await write(householdId, noteId);
+      setOwn({ noteId, pinnedAt: saved.pinnedAt, labels: saved.labels });
+    } catch {
+      setOwn({ noteId, ...before });
+      setFailure(failed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return {
+    marks,
+    busy,
+    failure,
+    setPinned: (pinned: boolean) => marks && save({ ...marks, pinnedAt: pinned ? marks.pinnedAt ?? new Date().toISOString() : null },
+      (household, id) => saveNotePin(household, id, pinned), pinned ? 'pinFailed' : 'unpinFailed'),
+    /** `known` names the chosen labels, in the household's order, until the saved note does. */
+    setLabels: (ids: string[], known: readonly LabelResponseDto[]) => marks && save({ ...marks, labels: known.filter(label => ids.includes(label.id)) },
+      (household, id) => saveNoteLabels(household, id, ids), 'labelsFailed'),
+  };
+}
+
+/** An icon button in the note's header. `pressed` shows a state, such as a pinned note, the way the format tools do. */
+const HeaderButton = forwardRef<View, { label: string; icon: typeof Pin; pressed: boolean; expanded?: boolean; disabled?: boolean; onPress(): void }>(
+  function HeaderButton({ label, icon: Icon, pressed, expanded, disabled = false, onPress }, ref) {
+    const dense = useDesktopDensity();
+    const size = dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget;
+    return <Pressable ref={ref} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, ...(expanded === undefined ? {} : { expanded }) }}
+      {...(expanded === undefined ? {} : { 'aria-expanded': expanded, 'aria-haspopup': 'dialog' as const })}
+      disabled={disabled} onPress={onPress}
+      style={({ pressed: down }) => ({ minWidth: size, minHeight: size, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, backgroundColor: down ? theme.colors.surfaceMuted : pressed ? theme.colors.surfaceSelected : theme.colors.transparent })}>
+      <Icon size={theme.controlSizes.icon - theme.spacing[1] / 2} color={theme.colors.ink} strokeWidth={pressed ? theme.focus.width : theme.controlSizes.iconStroke} />
+    </Pressable>;
+  },
+);
+
+/** The note's labels above its title; pressing the row opens the label choice too. */
+const NoteLabelRow = forwardRef<View, { labels: LabelResponseDto[]; expanded: boolean; style: StyleProp<ViewStyle>; onPress(): void }>(
+  function NoteLabelRow({ labels, expanded, style, onPress }, ref) {
+    const { t } = useTranslation('notes');
+    const dense = useDesktopDensity();
+    return <View style={style}>
+      <Pressable ref={ref} accessibilityRole="button" accessibilityLabel={t('labelsOf', { names: labels.map(labelName).join('、') })}
+        accessibilityState={{ expanded }} aria-expanded={expanded} aria-haspopup="dialog" onPress={onPress}
+        // A finger needs the full target; the chips stay small inside it.
+        style={({ pressed }) => ({ alignSelf: 'flex-start', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.spacing[1], minHeight: dense ? undefined : theme.controlSizes.touchTarget, paddingVertical: theme.spacing[1], opacity: pressed ? 0.7 : 1 })}>
+        {labels.map(label => <LabelChip key={label.id} label={label} small />)}
+      </Pressable>
+    </View>;
+  },
+);
+
+/** Choosing the note's labels, kept here until 完成, as the task form chooses them. */
+function NoteLabelChoice({ householdId, selected: initial, busy, onCancel, onDone }: { householdId: string; selected: string[]; busy: boolean; onCancel(): void; onDone(ids: string[], known: LabelResponseDto[]): void }) {
+  const { t } = useTranslation('common');
+  const [selected, setSelected] = useState(initial);
+  const [known, setKnown] = useState<LabelResponseDto[]>([]);
+  return <Stack gap={2}>
+    <LabelPicker householdId={householdId} selectedLabelIds={selected} onChange={setSelected} onLabelsLoaded={setKnown} />
+    <PickerActions onCancel={onCancel} onConfirm={() => onDone(selected, known)} confirmLabel={t('done')} busy={busy} />
+  </Stack>;
 }
 
 /** Saved, saving or not saved: words and a small mark, never in vermilion. */

@@ -20,6 +20,9 @@ const WAVE_DASH = /〜/g;
  * 达·芬奇. Half-width ･ is ・ after NFKC.
  */
 const SEPARATORS = /[\s·・]+/u;
+const SEPARATOR = /^[\s·・]$/u;
+/** A character NFKC may join to the one before it: a combining mark, or one that becomes one (ﾞ becomes U+3099). */
+const JOINS_PREVIOUS = /^\p{M}/u;
 
 /**
  * Folds text so the forms people type interchangeably compare equal: NFKC
@@ -36,6 +39,12 @@ function fold(text: string): string {
     .replace(WAVE_DASH, '~');
 }
 
+/** Where a match lies in the text as written, in UTF-16 units; `end` is exclusive. */
+export interface SearchRange {
+  start: number;
+  end: number;
+}
+
 export interface SearchQuery {
   /** True when the query holds no word, so everything should show. */
   readonly blank: boolean;
@@ -44,6 +53,41 @@ export interface SearchQuery {
    * query matches anything; a missing field matches nothing.
    */
   matches(...fields: ReadonlyArray<string | null | undefined>): boolean;
+  /**
+   * Where the earliest word of the query that appears in `text` lies in it,
+   * as written; null when none does or the query is blank. Folding the way
+   * `matches` does can change the length (㍿ is 株式会社, ｶﾞ is ガ) and spaces
+   * are skipped, so a match is mapped back to whole written characters.
+   */
+  locate(text: string): SearchRange | null;
+}
+
+/**
+ * Folds `text` one written character at a time, keeping for each folded
+ * UTF-16 unit the range of the written character it came from. A character
+ * travels with the marks NFKC would join to it, so ｶﾞ and e with a combining
+ * accent fold as one; separators are left out, as `matches` leaves them out.
+ */
+function foldWithOrigins(text: string): { folded: string; starts: number[]; ends: number[] } {
+  const units: Array<{ start: number; end: number }> = [];
+  let index = 0;
+  for (const character of text) {
+    const last = units[units.length - 1];
+    if (last !== undefined && JOINS_PREVIOUS.test(character.normalize('NFKC'))) last.end += character.length;
+    else units.push({ start: index, end: index + character.length });
+    index += character.length;
+  }
+  let folded = '';
+  const starts: number[] = [];
+  const ends: number[] = [];
+  for (const { start, end } of units) {
+    for (const character of fold(text.slice(start, end))) {
+      if (SEPARATOR.test(character)) continue;
+      folded += character;
+      for (let unit = 0; unit < character.length; unit++) { starts.push(start); ends.push(end); }
+    }
+  }
+  return { folded, starts, ends };
 }
 
 /**
@@ -62,6 +106,18 @@ export function parseSearchQuery(query: string): SearchQuery {
       if (words.length === 0) return true;
       const texts = fields.flatMap(field => (field ? [fold(field).split(SEPARATORS).join('')] : []));
       return words.every(word => texts.some(text => text.includes(word)));
+    },
+    locate(text) {
+      if (words.length === 0 || text === '') return null;
+      const { folded, starts, ends } = foldWithOrigins(text);
+      let found: SearchRange | null = null;
+      for (const word of words) {
+        const at = folded.indexOf(word);
+        if (at < 0) continue;
+        const range = { start: starts[at]!, end: ends[at + word.length - 1]! };
+        if (found === null || range.start < found.start || (range.start === found.start && range.end > found.end)) found = range;
+      }
+      return found;
     },
   };
 }

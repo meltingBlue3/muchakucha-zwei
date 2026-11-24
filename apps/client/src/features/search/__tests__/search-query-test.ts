@@ -85,3 +85,59 @@ describe('parseSearchQuery', () => {
     expect(finds('ー', '1-2')).toBe(false);
   });
 });
+
+describe('SearchQuery.locate', () => {
+  /** The written text a query found, so each case reads as what a person would see marked. */
+  const marked = (query: string, text: string) => {
+    const range = parseSearchQuery(query).locate(text);
+    return range === null ? null : text.slice(range.start, range.end);
+  };
+
+  test('finds the words where they are written, or nowhere', () => {
+    expect(parseSearchQuery('钥匙').locate('门口抽屉里有钥匙')).toEqual({ start: 6, end: 8 });
+    expect(marked('钥匙', '没有')).toBeNull();
+    expect(marked('', '任意')).toBeNull();
+    expect(marked('钥匙', '')).toBeNull();
+  });
+
+  test('marks full-width and half-width forms as they are written', () => {
+    expect(marked('wifi', '密码在 ＷｉＦｉ 背面')).toBe('ＷｉＦｉ');
+    expect(marked('ＡＢＣ', 'xx abc yy')).toBe('abc');
+    expect(marked('ガス', '払う ｶﾞｽ代')).toBe('ｶﾞｽ');
+    expect(marked('ｶﾞｽ', '払う ガス代')).toBe('ガス');
+  });
+
+  test('marks hiragana for katakana and the reverse', () => {
+    expect(marked('みるく', '帰りにミルクを買う')).toBe('ミルク');
+    expect(marked('ミルク', '帰りにみるくを買う')).toBe('みるく');
+  });
+
+  test('a match across a space includes the space as written', () => {
+    expect(marked('買い物リスト', 'メモ：買い物 リスト')).toBe('買い物 リスト');
+    expect(marked('買い物 リスト', '今週の買い物リスト')).toBe('買い物');
+  });
+
+  test('a character NFKC changes the length of is marked whole', () => {
+    expect(parseSearchQuery('株式').locate('ABC㍿です')).toEqual({ start: 3, end: 4 });
+    expect(marked('会社', 'ABC㍿')).toBe('㍿');
+    expect(marked('株式会社です', 'ABC㍿です')).toBe('㍿です');
+    expect(marked('kg', '买 5㎏ 大米')).toBe('㎏');
+  });
+
+  test('a combining accent stays with its letter', () => {
+    const decomposed = 'cafe\u0301 计划';
+    expect(marked('café', decomposed)).toBe('cafe\u0301');
+    expect(marked('f\u00e9', decomposed)).toBe('fe\u0301');
+    // As in `matches`, the accented letter is one letter, not e followed by an accent.
+    expect(marked('e', decomposed)).toBeNull();
+  });
+
+  test('the earliest of several words is the one marked', () => {
+    expect(marked('牛乳 パン', 'パンと牛乳')).toBe('パン');
+    expect(marked('牛乳 パン', '牛乳だけ')).toBe('牛乳');
+  });
+
+  test('characters outside the basic plane are kept whole', () => {
+    expect(marked('𠮷野', '𠮷野家の牛丼')).toBe('𠮷野');
+  });
+});
