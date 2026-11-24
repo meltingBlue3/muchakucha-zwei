@@ -43,15 +43,19 @@ export async function lockContent(tx: Prisma.TransactionClient, kind: Kind, hous
   return nextEditTime(rows[0].updatedAt);
 }
 
-export async function replaceLabels(tx: Prisma.TransactionClient, kind: 'task' | 'event', householdId: string, id: string, ids?: string[]) {
+export async function replaceLabels(tx: Prisma.TransactionClient, kind: 'task' | 'event' | 'note', householdId: string, id: string, ids?: string[]) {
   if (ids === undefined) return;
   const labels = await tx.label.count({ where: { id: { in: ids }, householdId } });
   if (labels !== new Set(ids).size) throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Invalid labels.', details: [{ field: 'labelIds', codes: ['invalid'] }] });
+  const labelIds = [...new Set(ids)];
   if (kind === 'task') {
     await tx.taskLabel.deleteMany({ where: { taskId: id } });
-    await tx.taskLabel.createMany({ data: [...new Set(ids)].map(labelId => ({ taskId: id, labelId })) });
-  } else {
+    await tx.taskLabel.createMany({ data: labelIds.map(labelId => ({ taskId: id, labelId })) });
+  } else if (kind === 'event') {
     await tx.eventLabel.deleteMany({ where: { eventId: id } });
-    await tx.eventLabel.createMany({ data: [...new Set(ids)].map(labelId => ({ eventId: id, labelId })) });
+    await tx.eventLabel.createMany({ data: labelIds.map(labelId => ({ eventId: id, labelId })) });
+  } else {
+    await tx.noteLabel.deleteMany({ where: { noteId: id } });
+    await tx.noteLabel.createMany({ data: labelIds.map(labelId => ({ noteId: id, labelId })) });
   }
 }

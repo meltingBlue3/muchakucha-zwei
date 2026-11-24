@@ -399,6 +399,13 @@ export interface TaskListResponseDto {
 export interface CreateNoteDto {
   title: string;
   body?: string;
+  labelIds?: string[];
+  pinned?: boolean;
+}
+
+/** Replaces the note's labels; an empty list removes them all. */
+export interface NoteLabelsDto {
+  labelIds: string[];
 }
 
 export interface UpdateNoteDto {
@@ -417,6 +424,10 @@ export interface NoteResponseDto {
   updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** When the note was pinned for the household; null when it is not. Pinning does not change updatedAt. */
+  pinnedAt: string | null;
+  /** Changing them does not change updatedAt. */
+  labels: LabelResponseDto[];
 }
 
 export interface NoteListResponseDto {
@@ -461,6 +472,7 @@ export interface LabelResponseDto {
 export interface LabelUsageDto {
   events: number;
   tasks: number;
+  notes: number;
 }
 
 /** A recurring series counts once in usage, however many occurrences it has. */
@@ -692,6 +704,7 @@ import type {
   TaskResponseDto,
   TaskListResponseDto,
   CreateNoteDto,
+  NoteLabelsDto,
   UpdateNoteDto,
   NoteResponseDto,
   NoteListResponseDto,
@@ -1275,6 +1288,52 @@ export class ApiClient {
     return this.authenticated<NoteResponseDto>(
       'PUT',
       \`/api/v1/households/\${encodeURIComponent(householdId)}/notes/\${encodeURIComponent(noteId)}\`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async pinNote(
+    accessToken: string,
+    householdId: string,
+    noteId: string,
+    signal?: AbortSignal,
+  ): Promise<NoteResponseDto> {
+    return this.authenticated<NoteResponseDto>(
+      'PUT',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/notes/\${encodeURIComponent(noteId)}/pin\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async unpinNote(
+    accessToken: string,
+    householdId: string,
+    noteId: string,
+    signal?: AbortSignal,
+  ): Promise<NoteResponseDto> {
+    return this.authenticated<NoteResponseDto>(
+      'DELETE',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/notes/\${encodeURIComponent(noteId)}/pin\`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async setNoteLabels(
+    accessToken: string,
+    householdId: string,
+    noteId: string,
+    body: NoteLabelsDto,
+    signal?: AbortSignal,
+  ): Promise<NoteResponseDto> {
+    return this.authenticated<NoteResponseDto>(
+      'PUT',
+      \`/api/v1/households/\${encodeURIComponent(householdId)}/notes/\${encodeURIComponent(noteId)}/labels\`,
       accessToken,
       body,
       signal,

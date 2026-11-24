@@ -445,6 +445,175 @@ describe('notes API contract', () => {
     expect(current.statusCode).toBe(204);
   });
 
+  describe('pins and labels', () => {
+    async function createLabel(household: string, name: string): Promise<string> {
+      const response = await request(owner.accessToken, 'POST', `/households/${household}/labels`, { name, color: '#2C716C' });
+      expect(response.statusCode).toBe(201);
+      return response.json().id;
+    }
+
+    const labelIdsOf = (note: { labels: Array<{ id: string }> }) => note.labels.map((label) => label.id);
+
+    test('any member can pin, unpin and relabel a note someone else wrote', async () => {
+      const noteId = await createNote(owner, householdId, { title: '家庭 Wi-Fi' });
+      const [school, shopping] = await Promise.all([createLabel(householdId, '学校'), createLabel(householdId, '采购')]);
+
+      const pinned = await noteApi(member, householdId, 'PUT', `/${noteId}/pin`);
+      expect(pinned.statusCode).toBe(200);
+      expect(Date.parse(pinned.json().pinnedAt)).not.toBeNaN();
+      expect((await noteApi(otherMember, householdId, 'GET', `/${noteId}`)).json().pinnedAt).toBe(pinned.json().pinnedAt);
+
+      // Pinning again keeps the note where it is rather than re-stamping it.
+      const again = await noteApi(otherMember, householdId, 'PUT', `/${noteId}/pin`);
+      expect(again.statusCode).toBe(200);
+      expect(again.json().pinnedAt).toBe(pinned.json().pinnedAt);
+
+      const householdOrder = (await request(member.accessToken, 'GET', `/households/${householdId}/labels`)).json().labels
+        .map((label: { id: string }) => label.id).filter((id: string) => id === school || id === shopping);
+      for (const labelIds of [[shopping, school, shopping], [school, shopping]]) {
+        const relabelled = await noteApi(member, householdId, 'PUT', `/${noteId}/labels`, { labelIds });
+        expect(relabelled.statusCode).toBe(200);
+        // In the household list's order, whatever order they were sent in.
+        expect(labelIdsOf(relabelled.json())).toEqual(householdOrder);
+      }
+      const listed = (await noteApi(owner, householdId, 'GET')).json().notes[0];
+      expect(listed).toMatchObject({ id: noteId, pinnedAt: pinned.json().pinnedAt });
+      expect(labelIdsOf(listed)).toEqual(householdOrder);
+
+      const unpinned = await noteApi(otherMember, householdId, 'DELETE', `/${noteId}/pin`);
+      expect(unpinned.statusCode).toBe(200);
+      expect(unpinned.json().pinnedAt).toBeNull();
+      expect((await noteApi(owner, householdId, 'DELETE', `/${noteId}/pin`)).statusCode).toBe(200);
+
+      const cleared = await noteApi(otherMember, householdId, 'PUT', `/${noteId}/labels`, { labelIds: [] });
+      expect(cleared.statusCode).toBe(200);
+      const stored = (await noteApi(owner, householdId, 'GET', `/${noteId}`)).json();
+      expect(stored).toMatchObject({ pinnedAt: null, labels: [], createdBy: owner.userId });
+    });
+
+    test('pinning and relabelling are not edits: the version and last editor stay, and a save on the old version succeeds', async () => {
+      const noteId = await createNote(member, householdId, { title: '周末采购', body: '- [ ] 牛奶' });
+      const label = await createLabel(householdId, '采购');
+      const base = (await noteApi(member, householdId, 'GET', `/${noteId}`)).json();
+
+      const pinned = await noteApi(otherMember, householdId, 'PUT', `/${noteId}/pin`);
+      const relabelled = await noteApi(admin, householdId, 'PUT', `/${noteId}/labels`, { labelIds: [label] });
+      expect([pinned.statusCode, relabelled.statusCode]).toEqual([200, 200]);
+      for (const response of [pinned, relabelled]) {
+        expect(response.json()).toMatchObject({ updatedAt: base.updatedAt, updatedBy: member.userId });
+      }
+      expect((await noteApi(owner, householdId, 'GET', `/${noteId}`)).json()).toMatchObject({ updatedAt: base.updatedAt, updatedBy: member.userId });
+
+      const save = await noteApi(member, householdId, 'PUT', `/${noteId}`, { body: '- [x] 牛奶', expectedUpdatedAt: base.updatedAt });
+      expect(save.statusCode).toBe(200);
+      const saved = (await noteApi(owner, householdId, 'GET', `/${noteId}`)).json();
+      expect(saved).toMatchObject({ body: '- [x] 牛奶', pinnedAt: pinned.json().pinnedAt });
+      expect(labelIdsOf(saved)).toEqual([label]);
+    });
+
+    test('a pin does not move the note in the list order', async () => {
+      const olderId = await createNote(owner, householdId, { title: '先建的' });
+      const newerId = await createNote(owner, householdId, { title: '后建的' });
+
+      expect((await noteApi(member, householdId, 'PUT', `/${olderId}/pin`)).statusCode).toBe(200);
+
+      expect((await noteApi(member, householdId, 'GET')).json().notes.map((note: { id: string }) => note.id)).toEqual([newerId, olderId]);
+    });
+
+    test('rejects labels of another household and keeps the note\'s labels', async () => {
+      const noteId = await createNote(member, householdId, { title: '只贴本家的标签' });
+      const own = await createLabel(householdId, '学校');
+      const otherHouseholdId = await createHousehold(owner.accessToken, '第二个家');
+      const foreign = await createLabel(otherHouseholdId, '别家的');
+      expect((await noteApi(member, householdId, 'PUT', `/${noteId}/labels`, { labelIds: [own] })).statusCode).toBe(200);
+
+      for (const labelIds of [[foreign], [own, foreign], [randomUUID()]]) {
+        const response = await noteApi(member, householdId, 'PUT', `/${noteId}/labels`, { labelIds });
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error.code).toBe('VALIDATION_FAILED');
+      }
+      const created = await noteApi(member, householdId, 'POST', '', { title: '新建也不行', labelIds: [foreign] });
+      expect(created.statusCode).toBe(400);
+      expect(created.json().error.code).toBe('VALIDATION_FAILED');
+
+      expect(labelIdsOf((await noteApi(member, householdId, 'GET', `/${noteId}`)).json())).toEqual([own]);
+      expect((await noteApi(member, householdId, 'GET')).json().notes.map((note: { title: string }) => note.title)).toEqual(['只贴本家的标签']);
+    });
+
+    test.each([
+      ['a missing list', {}],
+      ['a non-array', { labelIds: 'all' }],
+      ['a malformed id', { labelIds: ['not-a-uuid'] }],
+    ])('rejects %s of labels', async (_name, payload) => {
+      const noteId = await createNote(member, householdId, { title: '标签格式' });
+
+      const response = await noteApi(member, householdId, 'PUT', `/${noteId}/labels`, payload);
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('a new note is written with its labels and pin together', async () => {
+      const label = await createLabel(householdId, '学校');
+
+      const created = await noteApi(member, householdId, 'POST', '', { title: '开学要带的', labelIds: [label], pinned: true });
+
+      expect(created.statusCode).toBe(201);
+      const stored = (await noteApi(owner, householdId, 'GET', `/${created.json().id}`)).json();
+      expect(Date.parse(stored.pinnedAt)).not.toBeNaN();
+      expect(labelIdsOf(stored)).toEqual([label]);
+      const plain = await noteApi(member, householdId, 'POST', '', { title: '普通的', pinned: false });
+      expect(plain.json()).toMatchObject({ pinnedAt: null, labels: [] });
+    });
+
+    test('deleting a label keeps the notes that carried it', async () => {
+      const [school, shopping] = await Promise.all([createLabel(householdId, '学校'), createLabel(householdId, '采购')]);
+      const noteId = await createNote(member, householdId, { title: '带两个标签', labelIds: [school, shopping] });
+
+      const removed = await request(owner.accessToken, 'DELETE', `/households/${householdId}/labels/${school}`);
+
+      expect(removed.statusCode).toBe(204);
+      const stored = (await noteApi(member, householdId, 'GET', `/${noteId}`)).json();
+      expect(stored.title).toBe('带两个标签');
+      expect(labelIdsOf(stored)).toEqual([shopping]);
+    });
+
+    test('non-members get HOUSEHOLD_NOT_FOUND and change nothing', async () => {
+      const label = await createLabel(householdId, '学校');
+      const noteId = await createNote(owner, householdId, { title: '私密笔记' });
+
+      const responses = await Promise.all([
+        noteApi(outsider, householdId, 'PUT', `/${noteId}/pin`),
+        noteApi(outsider, householdId, 'DELETE', `/${noteId}/pin`),
+        noteApi(outsider, householdId, 'PUT', `/${noteId}/labels`, { labelIds: [label] }),
+      ]);
+
+      for (const response of responses) {
+        expect(response.statusCode).toBe(404);
+        expect(response.json().error.code).toBe('HOUSEHOLD_NOT_FOUND');
+      }
+      expect((await noteApi(owner, householdId, 'GET', `/${noteId}`)).json()).toMatchObject({ pinnedAt: null, labels: [] });
+    });
+
+    test('a note cannot be pinned or relabelled through another household', async () => {
+      const noteId = await createNote(owner, householdId, { title: '只属于笔记组' });
+      const otherHouseholdId = await createHousehold(owner.accessToken, '第二个家');
+
+      const responses = await Promise.all([
+        noteApi(owner, otherHouseholdId, 'PUT', `/${noteId}/pin`),
+        noteApi(owner, otherHouseholdId, 'DELETE', `/${noteId}/pin`),
+        noteApi(owner, otherHouseholdId, 'PUT', `/${noteId}/labels`, { labelIds: [] }),
+        noteApi(owner, householdId, 'PUT', `/${randomUUID()}/pin`),
+      ]);
+
+      for (const response of responses) {
+        expect(response.statusCode).toBe(404);
+        expect(response.json().error.code).toBe('NOTE_NOT_FOUND');
+      }
+      expect((await noteApi(owner, householdId, 'GET', `/${noteId}`)).json().pinnedAt).toBeNull();
+    });
+  });
+
   describe('permissions', () => {
     test.each([
       ['member', () => otherMember],

@@ -240,10 +240,13 @@ model Note {
   updatedBy   String?   @map("updated_by") @db.Uuid
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  /// When the note was pinned for the whole household; null when it is not pinned.
+  pinnedAt    DateTime? @map("pinned_at") @db.Timestamptz(3)
 
   household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   creator     User      @relation(fields: [createdBy], references: [id], onDelete: Cascade)
   updater     User?     @relation("NoteUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  labels      NoteLabel[]
 
   @@index([householdId, createdAt(sort: Desc)], map: "Note_household_created_idx")
   @@map("notes")
@@ -265,6 +268,7 @@ model Label {
   eventLabels EventLabel[]
   taskLabels  TaskLabel[]
   ruleLabels  RecurrenceRuleLabel[]
+  noteLabels  NoteLabel[]
 
   @@unique([householdId, name], map: "Label_household_name_key")
   @@unique([householdId, systemKey], map: "Label_household_system_key_key")
@@ -291,6 +295,17 @@ model TaskLabel {
 
   @@id([taskId, labelId])
   @@map("task_labels")
+}
+
+model NoteLabel {
+  noteId  String @map("note_id") @db.Uuid
+  labelId String @map("label_id") @db.Uuid
+
+  note  Note  @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, labelId])
+  @@map("note_labels")
 }
 
 model RecurrenceRuleLabel {

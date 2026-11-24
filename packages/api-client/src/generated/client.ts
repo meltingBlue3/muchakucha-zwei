@@ -50,6 +50,7 @@ import type {
   TaskResponseDto,
   TaskListResponseDto,
   CreateNoteDto,
+  NoteLabelsDto,
   UpdateNoteDto,
   NoteResponseDto,
   NoteListResponseDto,
@@ -633,6 +634,52 @@ export class ApiClient {
     return this.authenticated<NoteResponseDto>(
       'PUT',
       `/api/v1/households/${encodeURIComponent(householdId)}/notes/${encodeURIComponent(noteId)}`,
+      accessToken,
+      body,
+      signal,
+    );
+  }
+
+  async pinNote(
+    accessToken: string,
+    householdId: string,
+    noteId: string,
+    signal?: AbortSignal,
+  ): Promise<NoteResponseDto> {
+    return this.authenticated<NoteResponseDto>(
+      'PUT',
+      `/api/v1/households/${encodeURIComponent(householdId)}/notes/${encodeURIComponent(noteId)}/pin`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async unpinNote(
+    accessToken: string,
+    householdId: string,
+    noteId: string,
+    signal?: AbortSignal,
+  ): Promise<NoteResponseDto> {
+    return this.authenticated<NoteResponseDto>(
+      'DELETE',
+      `/api/v1/households/${encodeURIComponent(householdId)}/notes/${encodeURIComponent(noteId)}/pin`,
+      accessToken,
+      undefined,
+      signal,
+    );
+  }
+
+  async setNoteLabels(
+    accessToken: string,
+    householdId: string,
+    noteId: string,
+    body: NoteLabelsDto,
+    signal?: AbortSignal,
+  ): Promise<NoteResponseDto> {
+    return this.authenticated<NoteResponseDto>(
+      'PUT',
+      `/api/v1/households/${encodeURIComponent(householdId)}/notes/${encodeURIComponent(noteId)}/labels`,
       accessToken,
       body,
       signal,

@@ -391,6 +391,13 @@ export interface TaskListResponseDto {
 export interface CreateNoteDto {
   title: string;
   body?: string;
+  labelIds?: string[];
+  pinned?: boolean;
+}
+
+/** Replaces the note's labels; an empty list removes them all. */
+export interface NoteLabelsDto {
+  labelIds: string[];
 }
 
 export interface UpdateNoteDto {
@@ -409,6 +416,10 @@ export interface NoteResponseDto {
   updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** When the note was pinned for the household; null when it is not. Pinning does not change updatedAt. */
+  pinnedAt: string | null;
+  /** Changing them does not change updatedAt. */
+  labels: LabelResponseDto[];
 }
 
 export interface NoteListResponseDto {
@@ -453,6 +464,7 @@ export interface LabelResponseDto {
 export interface LabelUsageDto {
   events: number;
   tasks: number;
+  notes: number;
 }
 
 /** A recurring series counts once in usage, however many occurrences it has. */

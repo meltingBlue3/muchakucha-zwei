@@ -358,12 +358,16 @@ describe('labels API contract', () => {
   describe('label management', () => {
     // Shown beside each label and before deleting one. A recurring series is
     // one thing to the family, however many occurrences it has generated.
-    test('the list says how many events and tasks use each label, a series once', async () => {
+    test('the list says how many events, tasks and notes use each label, a series once', async () => {
       const used = await createLabel(owner, householdId, '常用');
       await createLabel(owner, householdId, '没用过');
+      const notesOnly = await createLabel(owner, householdId, '只在笔记上');
       await createEvent(owner, householdId, '一次性日程', [used]);
       await createTask(owner, householdId, '任务一', [used]);
       await createTask(owner, householdId, '任务二', [used]);
+      for (const [title, labelIds] of [['购物清单', [used, notesOnly]], ['Wi-Fi', [notesOnly]], ['没贴标签', []]] as const) {
+        expect((await householdApi(member, householdId, 'POST', '/notes', { title, labelIds })).statusCode).toBe(201);
+      }
       const today = formatIsoDate(currentCalendarDateIn('UTC'));
       const series = await householdApi(owner, householdId, 'POST', '/events', {
         title: '每天的日程',
@@ -376,8 +380,9 @@ describe('labels API contract', () => {
 
       const labels = (await householdApi(member, householdId, 'GET', '/labels')).json().labels as Array<{ name: string; usage: unknown }>;
 
-      expect(labels.find((label) => label.name === '常用')!.usage).toEqual({ events: 2, tasks: 2 });
-      expect(labels.find((label) => label.name === '没用过')!.usage).toEqual({ events: 0, tasks: 0 });
+      expect(labels.find((label) => label.name === '常用')!.usage).toEqual({ events: 2, tasks: 2, notes: 1 });
+      expect(labels.find((label) => label.name === '只在笔记上')!.usage).toEqual({ events: 0, tasks: 0, notes: 2 });
+      expect(labels.find((label) => label.name === '没用过')!.usage).toEqual({ events: 0, tasks: 0, notes: 0 });
     });
 
     test('creates a label with a trimmed name', async () => {
