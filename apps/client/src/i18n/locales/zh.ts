@@ -1558,7 +1558,6 @@ export const zh = {
     openReminders: '打开提醒设置',
     saveError: '没能保存，请检查网络后重试。',
     saveTo: '保存到',
-    saveToHint: '负责人和标签跟着家庭走，换家庭会清空它们。',
     chooseHousehold: '选择保存到哪个家庭',
   },
 };
