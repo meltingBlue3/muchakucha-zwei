@@ -1558,7 +1558,6 @@ export const ja: Catalog = {
     openReminders: 'リマインダー設定を開く',
     saveError: '保存できませんでした。ネットワークを確認して、もう一度お試しください。',
     saveTo: '保存先',
-    saveToHint: '担当者とラベルは家族ごとのものです。家族を変えると空になります。',
     chooseHousehold: '保存先の家族を選ぶ',
   },
 };

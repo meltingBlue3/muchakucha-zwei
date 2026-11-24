@@ -1,12 +1,9 @@
 import { useCallback, useContext, useRef, useState, type ComponentType } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, View } from 'react-native';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
 import Pencil from 'lucide-react-native/icons/pencil';
 import Trash2 from 'lucide-react-native/icons/trash-2';
-import { useOverlayFocus } from '../platform/overlays/overlay-focus';
-import { insetFocusRing } from '../platform/focus-ring/focus-ring';
-import { Text } from './primitives';
+import { AnchoredMenu, MenuItem } from './anchored-menu';
 import { theme } from './theme';
 import { useDesktopDensity } from './use-desktop';
 import { RowInteraction } from './row-interaction';
@@ -46,38 +43,28 @@ function ActionsMenu({ subject, actions, disabled = false }: { subject: string; 
   const [focused, setFocused] = useState(false);
   const control = dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget;
   const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState({ top: 0, right: theme.layout.mobileInset });
-  const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const trigger = useRef<View>(null);
-  const panel = useRef<View>(null);
-  const initial = useRef<View>(null);
   const close = useCallback(() => setOpen(false), []);
-  const focus = useOverlayFocus({ mode: open ? 'menu' : 'closed', panel, initial, trigger, onClose: close });
   const menuLabel = t('moreActions', { subject });
-  const panelHeight = actions.length * control + theme.spacing[4];
   return <>
-    <Pressable ref={trigger} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} accessibilityRole="button" accessibilityLabel={menuLabel} accessibilityState={{ disabled, expanded: open }} aria-expanded={open} aria-haspopup="menu" disabled={disabled} onPress={() => {
-      trigger.current?.measureInWindow((x, y, w, h) => setAnchor({ top: y + h, right: Math.max(theme.layout.mobileInset, width - x - w) }));
-      setOpen(true);
-    }} style={({ pressed }) => ({ minWidth: control, minHeight: control, opacity: dense && !hovered && !focused && !open ? 0 : 1, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, backgroundColor: pressed || open ? theme.colors.surfaceMuted : theme.colors.transparent })}>
+    <Pressable ref={trigger} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} accessibilityRole="button" accessibilityLabel={menuLabel} accessibilityState={{ disabled, expanded: open }} aria-expanded={open} aria-haspopup="menu" disabled={disabled} onPress={() => setOpen(true)} style={({ pressed }) => ({ minWidth: control, minHeight: control, opacity: dense && !hovered && !focused && !open ? 0 : 1, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, backgroundColor: pressed || open ? theme.colors.surfaceMuted : theme.colors.transparent })}>
       <Ellipsis size={theme.controlSizes.icon} color={theme.colors.inkFaint} strokeWidth={theme.controlSizes.iconStroke} />
     </Pressable>
-    {open ? <Modal {...(Platform.OS === 'web' ? { 'aria-label': menuLabel } : {})} transparent visible animationType="none" onShow={focus} onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
-      <View style={{ flex: 1 }}>
-        <Pressable accessible={false} tabIndex={-1} testID="card-menu-dismiss" onPress={close} style={StyleSheet.absoluteFill} />
-        <View ref={panel} accessibilityRole="menu" accessibilityLabel={menuLabel} accessibilityViewIsModal style={{ position: 'absolute', top: Math.max(insets.top, Math.min(anchor.top, height - insets.bottom - panelHeight - theme.spacing[2])), right: anchor.right, minWidth: theme.controlSizes.touchTarget * 3, backgroundColor: theme.colors.surface, padding: theme.spacing[2], borderRadius: theme.borderRadii.lg, borderWidth: theme.borderWidths.default, borderColor: theme.colors.separator, boxShadow: theme.shadow.soft }}>
-          {actions.map((action, index) => {
-            const { icon: Icon, destructive = false } = action.kind ? STANDARD_LOOK[action.kind] : action;
-            return (
-              <Pressable {...insetFocusRing} key={action.accessibilityLabel} ref={index === 0 ? initial : undefined} accessibilityRole="menuitem" accessibilityLabel={action.accessibilityLabel} onPress={() => { close(); requestAnimationFrame(() => action.onPress(trigger.current)); }} style={({ pressed }) => ({ minHeight: control, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[3], paddingHorizontal: theme.spacing[3], borderRadius: theme.borderRadii.md, backgroundColor: pressed ? (destructive ? theme.colors.destructiveSoft : theme.colors.surfaceMuted) : theme.colors.surface })}>
-                <Icon size={theme.controlSizes.icon} color={destructive ? theme.colors.destructive : theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} />
-                <Text variant="label" color={destructive ? 'destructive' : 'ink'}>{action.kind ? t(`common:${action.kind}`) : action.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-    </Modal> : null}
+    {open ? <AnchoredMenu label={menuLabel} trigger={trigger} align="end" onClose={close} dismissTestID="card-menu-dismiss">
+      {actions.map((action, index) => {
+        const { icon, destructive = false } = action.kind ? STANDARD_LOOK[action.kind] : action;
+        return (
+          <MenuItem
+            key={action.accessibilityLabel}
+            initial={index === 0}
+            icon={icon}
+            destructive={destructive}
+            label={action.kind ? t(`common:${action.kind}`) : action.label}
+            accessibilityLabel={action.accessibilityLabel}
+            onPress={() => { close(); requestAnimationFrame(() => action.onPress(trigger.current)); }}
+          />
+        );
+      })}
+    </AnchoredMenu> : null}
   </>;
 }
