@@ -1,7 +1,8 @@
-import type { AssistantConversationResponseDto } from '@muchakucha/api-client';
+import type { AssistantConversationResponseDto, LabelNamesDto } from '@muchakucha/api-client';
 import type { TFunction } from 'i18next';
 import { i18n } from '../../i18n';
 import { zh } from '../../i18n/locales/zh';
+import { labelName } from '../labels/label-name';
 
 export interface AssistantConversationRecord {
   kind: 'user' | 'assistant' | 'query' | 'operation';
@@ -25,10 +26,23 @@ function parse(content: string): Record<string, unknown> | null {
   try { return object(JSON.parse(content)); } catch { return null; }
 }
 
+function localizedNamesOf(value: unknown): LabelNamesDto | null {
+  const names = object(value);
+  return names && typeof names.zh === 'string' && typeof names.ja === 'string'
+    ? { zh: names.zh, ja: names.ja }
+    : null;
+}
+
+function rowTitle(row: Record<string, unknown>): string | null {
+  if (typeof row.title === 'string') return row.title;
+  if (typeof row.name === 'string') return labelName({ name: row.name, localizedNames: localizedNamesOf(row.localizedNames) });
+  return null;
+}
+
 function rememberTitle(value: unknown, titles: Map<string, string>): void {
   const row = object(value);
   if (!row || typeof row.id !== 'string') return;
-  const title = typeof row.title === 'string' ? row.title : typeof row.name === 'string' ? row.name : null;
+  const title = rowTitle(row);
   if (title !== null) titles.set(row.id, title);
 }
 
@@ -37,7 +51,7 @@ function source(value: unknown, resource: string, t: TFunction<'assistant'>): As
   if (!row) return [];
   const section = Object.hasOwn(sections, resource) ? sections[resource] : undefined;
   const link = section && typeof row.id === 'string' ? { link: { section, id: row.id } } : {};
-  const title = typeof row.title === 'string' ? row.title : typeof row.name === 'string' ? row.name : null;
+  const title = rowTitle(row);
   if (!title) return [];
   const excerpt = typeof row.body === 'string' ? row.body : typeof row.description === 'string' ? row.description : '';
   const partial = excerpt.length > 1600 || row.contentTruncated === true || Array.isArray(row.truncatedFields) && row.truncatedFields.length > 0;

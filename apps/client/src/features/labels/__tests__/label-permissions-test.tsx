@@ -1,13 +1,15 @@
-import { ApiClientError } from '@muchakucha/api-client';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { ApiClientError, type LabelNamesDto, type LabelResponseDto } from '@muchakucha/api-client';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { setLanguageChoice } from '../../../i18n';
 import LabelsIndexRoute from '../../../../app/(protected)/households/[id]/labels/index';
 import { canManageLabels } from '../label-permissions';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 
 const mockListLabels = jest.fn();
 const mockUpdateLabel = jest.fn();
+const mockDeleteLabel = jest.fn();
 const mockRole = { current: 'MEMBER' as 'OWNER' | 'ADMIN' | 'MEMBER' };
 
 jest.mock('expo-router', () => ({ usePathname: () => '/',
@@ -24,6 +26,7 @@ jest.mock('../../auth/session-runtime', () => ({
   sessionApiClient: {
     listLabels: (...args: unknown[]) => mockListLabels(...args),
     updateLabel: (...args: unknown[]) => mockUpdateLabel(...args),
+    deleteLabel: (...args: unknown[]) => mockDeleteLabel(...args),
   },
   sessionTransport: {
     getAccessToken: () => Promise.resolve('access-token'),
@@ -60,9 +63,22 @@ function renderRoute() {
   );
 }
 
-async function renderAs(actorRole: 'OWNER' | 'ADMIN' | 'MEMBER', labels = [
-  { id: 'label-1', name: '采购', color: '#B94736', systemKey: null, localizedNames: null, createdAt: new Date().toISOString() },
-]) {
+async function renderAs(
+  actorRole: 'OWNER' | 'ADMIN' | 'MEMBER',
+  labels: Array<{
+    id: string;
+    householdId?: string;
+    name: string;
+    color: string;
+    systemKey: LabelResponseDto['systemKey'];
+    localizedNames: LabelNamesDto | null;
+    createdBy?: string;
+    createdAt: string;
+    usage?: { events: number; tasks: number };
+  }> = [
+    { id: 'label-1', name: '采购', color: '#B94736', systemKey: null, localizedNames: null, createdAt: new Date().toISOString() },
+  ],
+) {
   mockRole.current = actorRole;
   mockListLabels.mockResolvedValue({ labels });
   const view = await renderRoute();
@@ -73,6 +89,11 @@ async function renderAs(actorRole: 'OWNER' | 'ADMIN' | 'MEMBER', labels = [
 beforeEach(() => {
   mockListLabels.mockReset();
   mockUpdateLabel.mockReset();
+  mockDeleteLabel.mockReset();
+});
+
+afterEach(async () => {
+  await act(async () => { setLanguageChoice('system'); });
 });
 
 describe('canManageLabels', () => {
@@ -196,5 +217,28 @@ describe('how much each label is used', () => {
     await fireEvent.press(view.getByRole('menuitem', { name: '删除标签 闲置' }));
 
     expect(await view.findByText('“闲置”没有用在任何日程或任务上，删除后不影响其他内容。')).toBeTruthy();
+  });
+});
+
+describe('deleting an unrenamed starter label in Japanese', () => {
+  test('uses the Japanese name in the confirmation control while sending the API snapshot name', async () => {
+    await act(async () => { setLanguageChoice('ja'); });
+    mockDeleteLabel.mockResolvedValueOnce(undefined);
+    const view = await renderAs('OWNER', [{
+      id: 'label-bday', name: '生日', color: '#AD4067', systemKey: 'birthday',
+      localizedNames: { zh: '生日', ja: '誕生日' }, createdAt: '2026-11-01T00:00:00.000Z',
+      usage: { events: 0, tasks: 0 },
+    }]);
+
+    await fireEvent.press(await view.findByLabelText('ラベル 誕生日の操作メニュー'));
+    await fireEvent.press(view.getByRole('menuitem', { name: 'ラベル「誕生日」を削除' }));
+
+    const confirm = await view.findByLabelText('ラベルを削除：誕生日');
+    expect(view.queryByLabelText('ラベルを削除：生日')).toBeNull();
+
+    await fireEvent.press(confirm);
+    await waitFor(() => expect(mockDeleteLabel).toHaveBeenCalledWith(
+      'access-token', 'household-1', 'label-bday', { expectedName: '生日', expectedColor: '#AD4067' },
+    ));
   });
 });

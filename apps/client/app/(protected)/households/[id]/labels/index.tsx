@@ -250,8 +250,8 @@ export default function LabelsIndexRoute() {
     {deleteTarget && canManage ? <AppDialog title={t('delete')} busy={busy} onClose={closeDelete} trigger={deleteTrigger} preferCancel>
       <Stack gap={4}>
         <Text>{deletePrompt(deleteTarget)}</Text>
-        {deleteError ? <Text color="destructive" accessibilityRole="alert">{t(deleteError, { name: deleteTarget.name })}</Text> : null}
-        <ConfirmActions confirmLabel={t('delete')} confirmAccessibilityLabel={t('confirmDeleteItem', { name: deleteTarget.name })} destructive alignEnd busy={busy} onCancel={closeDelete} onConfirm={() => void submitDelete()} />
+        {deleteError ? <Text color="destructive" accessibilityRole="alert">{t(deleteError, { name: labelName(deleteTarget) })}</Text> : null}
+        <ConfirmActions confirmLabel={t('delete')} confirmAccessibilityLabel={t('confirmDeleteItem', { name: labelName(deleteTarget) })} destructive alignEnd busy={busy} onCancel={closeDelete} onConfirm={() => void submitDelete()} />
       </Stack>
     </AppDialog> : null}
     {/* Labels keep no drafts, so switching away from unsaved changes loses them. */}

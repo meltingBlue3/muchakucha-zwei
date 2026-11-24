@@ -2,7 +2,7 @@ import { i18n, useTranslation } from '../../i18n';
 import { zh } from '../../i18n/locales/zh';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import type { AssistantConversationResponseDto } from '@muchakucha/api-client';
+import type { AssistantConversationResponseDto, LabelNamesDto } from '@muchakucha/api-client';
 import Check from 'lucide-react-native/icons/check';
 import { sessionApiClient } from '../auth/session-runtime';
 import { Banner, Button, ConfirmActions, Heading, Inline, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
@@ -17,8 +17,8 @@ import { labelName } from '../labels/label-name';
 
 type PendingAction = AssistantConversationResponseDto['pendingActions'][number];
 type Target = {
-  title: string; updatedAt?: string; description?: string | null; body?: string | null; startTime?: string; endTime?: string; dueDate?: string | null;
-  allDay?: boolean; location?: string | null; status?: string; priority?: string; assigneeIds?: string[]; labels?: Array<{ id: string; name: string }>;
+  title: string; snapshotName?: string; updatedAt?: string; description?: string | null; body?: string | null; startTime?: string; endTime?: string; dueDate?: string | null;
+  allDay?: boolean; location?: string | null; status?: string; priority?: string; assigneeIds?: string[]; labels?: Array<{ id: string; name: string; localizedNames?: LabelNamesDto | null }>;
   color?: string; recurrence?: { updatedAt: string } | null;
 };
 export interface ActionPreviewContext { target: Target | null; labels: Record<string, string>; members: Record<string, string> }
@@ -82,7 +82,7 @@ export function assistantActionDetails(action: PendingAction, context: ActionPre
   const stale = context.target !== null && (
     (typeof action.arguments.expectedUpdatedAt === 'string' && context.target.updatedAt !== action.arguments.expectedUpdatedAt) ||
     (typeof action.arguments.expectedRuleUpdatedAt === 'string' && context.target.recurrence?.updatedAt !== action.arguments.expectedRuleUpdatedAt) ||
-    (typeof action.arguments.expectedName === 'string' && context.target.title !== action.arguments.expectedName) ||
+    (typeof action.arguments.expectedName === 'string' && (context.target.snapshotName ?? context.target.title) !== action.arguments.expectedName) ||
     (typeof action.arguments.expectedColor === 'string' && context.target.color !== action.arguments.expectedColor)
   );
   const target = verb === 'update' ? context.target : null;
@@ -160,7 +160,7 @@ function ActionItem({ householdId, action, position, choice, busy, onReady }: {
         const result = await sessionApiClient.listLabels(token, householdId);
         const label = result.labels.find(item => item.id === targetId);
         if (!label) throw new Error('missing label');
-        return { title: labelName(label), color: label.color };
+        return { title: labelName(label), snapshotName: label.name, color: label.color };
       }
       throw new Error('unsupported target');
     };
