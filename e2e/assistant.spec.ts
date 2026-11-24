@@ -107,6 +107,10 @@ async function mockAssistant(page: Page, options: { empty?: boolean; voice?: boo
         // The API's response projection intentionally contains no credential fields.
         body = result;
         status = method === 'POST' ? 201 : 200;
+      } else if (method === 'DELETE' && parts.length === 7) {
+        family.providers = family.providers.filter(item => item.id !== parts[6]);
+        await route.fulfill({ status: 204 });
+        return;
       } else throw new Error(`Unexpected provider request ${method} ${path}`);
     } else if (family && parts[4] === 'assistant' && parts[5] === 'transcriptions' && method === 'POST') {
       state.transcriptions.push(input);
@@ -554,7 +558,8 @@ for (const width of [320, 390, 1440]) {
     await dialog.getByRole('button', { name: '创建', exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await openModelSettings(page);
-    const providers = page.getByRole('main', { name: '助手模型配置', exact: true });
+    // A wide screen opens 模型配置 as a window above the assistant; a phone opens a subpage.
+    const providers = width === 1440 ? page.getByRole('dialog', { name: '模型配置', exact: true }) : page.getByRole('main', { name: '助手模型配置', exact: true });
     await expect(providers.getByText('仅自己可用 · 已配置密钥', { exact: true })).toBeVisible();
     await providers.getByRole('button', { name: '添加模型配置', exact: true }).click();
     await dialog.getByLabel('配置名称', { exact: true }).fill('家人共用模型');
@@ -580,8 +585,8 @@ for (const width of [320, 390, 1440]) {
     expect(browserStorage).not.toContain('ui-private-secret');
     expect(browserStorage).not.toContain('ui-household-secret');
     await expect(page.getByText(/ui-(?:private|household)-secret/)).toHaveCount(0);
-    // A phone goes back from the subpage; a wide screen goes up through the sidebar, as from 家庭设置.
-    if (width === 1440) await page.getByRole('tab', { name: '助手', exact: true }).click();
+    // A phone goes back from the subpage; a wide screen closes the window over the assistant.
+    if (width === 1440) await providers.getByRole('button', { name: '关闭模型配置', exact: true }).click();
     else await providers.getByRole('button', { name: '返回', exact: true }).click();
     // The first message is typed on the assistant home; the conversation is created for it and sends it.
     const home = page.getByRole('main', { name: '家庭助手', exact: true });
@@ -612,6 +617,61 @@ for (const width of [320, 390, 1440]) {
     expect(state.families.get(householdId)!.conversations[0]!.messages.filter(item => item.role === 'user').map(item => item.content)).toEqual(['这周出门前需要准备什么？', '继续整理周日的安排']);
   });
 }
+
+test('on a wide screen 模型配置 is a window above the assistant, and a direct link draws the assistant behind it', async ({ page }) => {
+  await mockAssistant(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openExistingConversation(page);
+  const conversationUrl = page.url();
+  const entry = page.getByRole('main', { name: '助手对话', exact: true }).getByTestId('assistant-history').getByRole('button', { name: '模型配置', exact: true });
+  await entry.click();
+  await expect(page).toHaveURL(`${base}/assistant/providers`);
+  const settings = page.getByRole('dialog', { name: '模型配置', exact: true });
+  const panel = settings.getByTestId('app-dialog-panel');
+  await expect(settings.getByText('我的日常助手', { exact: true })).toBeVisible();
+  await expect(settings.getByRole('button', { name: '添加模型配置', exact: true })).toBeVisible();
+  // The conversation stays behind a centered window rather than giving way to a page.
+  await expect(page.locator('[aria-label="助手对话"]')).toBeVisible();
+  await expect(page.getByRole('main', { name: '助手模型配置', exact: true })).toHaveCount(0);
+  const box = await panel.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.width).toBeLessThanOrEqual(640 + 1);
+  expect(box!.x).toBeGreaterThan(200);
+  await checkLayout(page, settings);
+  await page.keyboard.press('Escape');
+  await expect(settings).toHaveCount(0);
+  await expect(page).toHaveURL(conversationUrl);
+  await expect(entry).toBeFocused();
+
+  // Opening from the model picker returns focus to the picker trigger when closed.
+  const picker = page.getByRole('button', { name: '选择模型：我的日常助手', exact: true });
+  await picker.click();
+  await page.getByRole('dialog', { name: '选择模型', exact: true }).getByRole('button', { name: '模型配置', exact: true }).click();
+  await expect(settings).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(settings).toHaveCount(0);
+  await expect(picker).toBeFocused();
+
+  // Deleting a configuration from the window confirms above the assistant and returns to the window.
+  await entry.click();
+  await settings.getByRole('button', { name: '更多操作：模型配置：我的日常助手', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除模型配置：我的日常助手', exact: true }).click();
+  const remove = page.getByRole('dialog', { name: '删除模型配置', exact: true });
+  await remove.getByRole('button', { name: '删除模型配置', exact: true }).click();
+  await expect(remove).toHaveCount(0);
+  await expect(settings.getByText('还没有模型配置。添加支持工具调用的对话模型后即可使用助手。', { exact: true })).toBeVisible();
+  await expect(settings.evaluate(node => node.contains(document.activeElement))).resolves.toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(settings).toHaveCount(0);
+  await expect(page).toHaveURL(conversationUrl);
+
+  await page.goto(`${base}/assistant/providers`);
+  await expect(settings.getByRole('button', { name: '添加模型配置', exact: true })).toBeVisible();
+  await expect(page.locator('[aria-label="家庭助手"]')).toBeVisible();
+  await settings.getByRole('button', { name: '关闭模型配置', exact: true }).click();
+  await expect(page).toHaveURL(`${base}/assistant`);
+  await expect(page.getByRole('main', { name: '家庭助手', exact: true })).toBeVisible();
+});
 
 test('assistant proposals show readable targets and only explicit confirmation changes family content', async ({ page }) => {
   const state = await mockAssistant(page);

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import Sparkles from 'lucide-react-native/icons/sparkles';
 import { sessionApiClient } from '../auth/session-runtime';
 import { Banner, Button, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
+import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { theme } from '../../ui/theme';
 import { AssistantBoundary, assistantPath, type AssistantHouseholdProps } from './assistant-boundary';
 import { chatProviders, transcriptionProvider, useAssistantOperation, useAssistantQuery } from './assistant-runtime';
@@ -61,7 +62,7 @@ function AssistantHome({ householdId, householdName, writable }: AssistantHouseh
           <PromptSuggestions disabled={operation.busy || !writable || voice.engaged} onPick={setMessage} />
         </Stack> : <Stack gap={3}>
           <Text variant="bodySm">{t('home.needModel')}</Text>
-          <Button label={t('home.addModel')} disabled={!writable} onPress={() => router.push(`${assistantPath(householdId)}/providers/new`)} style={{ alignSelf: 'flex-start' }} />
+          <Button label={t('home.addModel')} disabled={!writable} onPress={() => { rememberRouteTrigger(); router.push(`${assistantPath(householdId)}/providers/new`); }} style={{ alignSelf: 'flex-start' }} />
         </Stack> : null}
       </Stack>
     </ScrollView>

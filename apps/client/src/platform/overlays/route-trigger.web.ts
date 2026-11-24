@@ -12,9 +12,10 @@ export function getRouteTrigger(): View | null {
   if (!original) return null;
   const label = original.getAttribute('aria-label');
   // The control that opened the window, else one with its label (a refetch can
-  // replace a list row), else the page's create button.
+  // replace a list row), else the active dialog's or page's create button.
   const target = () => (original.isConnected ? original : label
     ? document.querySelector<HTMLElement>(`[aria-label="${CSS.escape(label)}"]`) : null)
+    ?? document.querySelector<HTMLElement>('[role="dialog"] [data-route-focus="fallback"]')
     ?? document.querySelector<HTMLElement>('[role="main"] [data-route-focus="fallback"]')
     ?? document.querySelector<HTMLElement>('[role="main"] button:not([disabled])');
   return { focus() {

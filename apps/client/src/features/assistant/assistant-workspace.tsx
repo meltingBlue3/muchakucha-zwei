@@ -21,6 +21,7 @@ import { assistantPath } from './assistant-boundary';
 import { MenuRow } from './menu-row';
 import { useDesktop } from '../../ui/use-desktop';
 import { useConversationNavigation } from './conversation-navigation';
+import { useModelSettingsEntry } from './model-settings-entry';
 
 export function AssistantWorkspace({ householdId, householdName, title, conversationId, conversations, busy, children, inspector, onRefresh, onDelete }: {
   householdId: string; householdName: string; title: string; conversationId?: string;
@@ -38,6 +39,7 @@ export function AssistantWorkspace({ householdId, householdName, title, conversa
   const historyTrigger = useRef<View>(null);
   const optionsTrigger = useRef<View>(null);
   const root = assistantPath(householdId);
+  const modelSettings = useModelSettingsEntry(householdId);
   const closeDialog = () => { cancel(); setDialog(null); };
   const startNew = () => { closeDialog(); router.push(root); };
   const showOptions = () => { cancel(); setDialog('options'); };
@@ -93,7 +95,8 @@ export function AssistantWorkspace({ householdId, householdName, title, conversa
     {desktop ? <View testID="assistant-history" style={{ width: theme.layout.assistantHistoryWidth, borderRightWidth: theme.borderWidths.default, borderRightColor: theme.colors.separator }}>
       <View testID="desktop-column-header" style={{ ...columnHeader, paddingLeft: theme.spacing[5], paddingRight: theme.spacing[2] + 2 }}><Heading variant="section" level={2} style={{ flex: 1 }}>{t('assistant')}</Heading><IconButton label={t('workspace.newConversation')} appearance="plain" disabled={busy} icon={<SquarePen size={theme.controlSizes.icon - 3} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />} onPress={startNew} /></View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[3], gap: theme.spacing[3] }}>{desktopHistory}</ScrollView>
-      <Pressable accessibilityRole="link" accessibilityLabel={t('models.title')} onPress={() => { cancel(); router.push(`${root}/providers`); }} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] + 2, minHeight: theme.layout.desktopControl + theme.spacing[4], paddingHorizontal: theme.spacing[5], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, backgroundColor: pressed || hovered ? theme.colors.surfaceSubtle : theme.colors.transparent })}>
+      {/* Opens 模型配置 as a window above the workspace; closing it returns focus here. */}
+      <Pressable accessibilityRole="button" accessibilityLabel={t('models.title')} aria-haspopup="dialog" onPress={() => { cancel(); modelSettings.open(); }} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] + 2, minHeight: theme.layout.desktopControl + theme.spacing[4], paddingHorizontal: theme.spacing[5], borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, backgroundColor: pressed || hovered ? theme.colors.surfaceSubtle : theme.colors.transparent })}>
         <Settings2 size={theme.controlSizes.icon - 4} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} /><Text variant="meta" color="inkMuted">{t('models.title')}</Text>
       </Pressable>
     </View> : null}
@@ -118,7 +121,7 @@ export function AssistantWorkspace({ householdId, householdName, title, conversa
       headerActions={dialog === 'history' ? <Button label={t('workspace.newConversation')} tone="secondary" size="compact" disabled={busy} onPress={startNew} /> : null}>
       {dialog === 'history' ? history : <Stack gap={3}>
         <View>
-          <MenuRow label={t('models.title')} icon={Settings} opensPage onPress={() => { setDialog(null); router.push(`${root}/providers`); }} />
+          <MenuRow label={t('models.title')} icon={Settings} opensPage={!modelSettings.window} onPress={() => { setDialog(null); modelSettings.open(true); }} />
           <MenuRow label={t('workspace.refresh')} icon={RefreshCw} onPress={() => { setDialog(null); onRefresh(); }} />
           {onDelete ? <MenuRow label={t('delete.deleteConversation')} icon={Trash2} destructive onPress={() => {
             setDialog(null);
