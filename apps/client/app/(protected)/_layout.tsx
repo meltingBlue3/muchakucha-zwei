@@ -14,6 +14,7 @@ import { AppShell } from '../../src/ui/household-components';
 import { Spinner, Text, Stack as UIStack } from '../../src/ui/primitives';
 import { theme } from '../../src/ui/theme';
 import { RouteSurface } from '../../src/platform/layout/route-surface';
+import { useDesktop } from '../../src/ui/use-desktop';
 
 /**
  * Renders children (the Stack navigator) at all times so the navigation
@@ -68,6 +69,8 @@ const styles = StyleSheet.create({
 });
 
 export default function ProtectedLayout() {
+  // 模型配置 is a window above the assistant on desktop, and a subpage everywhere else.
+  const desktop = useDesktop();
   const getAccessToken = useMemo(
     () => () => sessionTransport.getAccessToken(),
     [],
@@ -92,6 +95,12 @@ export default function ProtectedLayout() {
         ...['households/[id]/assistant/providers/new', 'households/[id]/assistant/providers/[providerId]/edit', 'households/[id]/assistant/providers/[providerId]/delete', 'households/[id]/assistant/conversations/[conversationId]/delete', 'households/[id]/tasks/new', 'households/[id]/tasks/[taskId]/index', 'households/[id]/tasks/[taskId]/edit', 'households/[id]/tasks/[taskId]/delete', 'households/[id]/events/new', 'households/[id]/events/[eventId]/index', 'households/[id]/events/[eventId]/edit', 'households/[id]/events/[eventId]/delete', 'households/[id]/notes/new', 'households/[id]/notes/[noteId]/index', 'households/[id]/notes/[noteId]/edit', 'households/[id]/notes/[noteId]/delete', 'households/new', 'households/[id]/recurrence-rules/[ruleId]/index', 'households/[id]/recurrence-rules/[ruleId]/edit', 'households/[id]/birthdays/new', 'households/[id]/members/[membershipId]/remove', 'households/[id]/members/[membershipId]/role', 'households/[id]/ownership/transfer', 'households/[id]/ownership/leave', 'households/[id]/leave', 'households/[id]/invitations/[invitationId]/revoke', 'overview/households'].map(name =>
           React.createElement(Stack.Screen, { key: name, name, options: { presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } } }),
         ),
+        React.createElement(Stack.Screen, {
+          name: 'households/[id]/assistant/providers/index',
+          options: desktop
+            ? { presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }
+            : { presentation: 'card', contentStyle: { backgroundColor: theme.colors.canvas } },
+        }),
       )),
     ),
   );

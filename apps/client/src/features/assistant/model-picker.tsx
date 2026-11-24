@@ -1,7 +1,6 @@
 import { useTranslation } from '../../i18n';
 import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
 import type { AssistantProviderResponseDto } from '@muchakucha/api-client';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import Sparkles from 'lucide-react-native/icons/sparkles';
@@ -10,14 +9,14 @@ import Settings from 'lucide-react-native/icons/settings';
 import { AppDialog } from '../../ui/app-dialog';
 import { Inline, Stack, Text } from '../../ui/primitives';
 import { theme } from '../../ui/theme';
-import { assistantPath } from './assistant-boundary';
 import { MenuRow } from './menu-row';
+import { useModelSettingsEntry } from './model-settings-entry';
 
 export function AssistantModelPicker({ householdId, providers, selectedId, busy, newConversation = false, onSelect }: {
   householdId: string; providers: AssistantProviderResponseDto[]; selectedId?: string | null;
   busy: boolean; newConversation?: boolean; onSelect(id: string): void;
 }) {
-  const router = useRouter();
+  const modelSettings = useModelSettingsEntry(householdId);
   const { t } = useTranslation('assistant');
   const trigger = useRef<View>(null);
   const [open, setOpen] = useState(false);
@@ -37,7 +36,7 @@ export function AssistantModelPicker({ householdId, providers, selectedId, busy,
         <Text variant="caption">{provider.baseUrl}</Text>
         {provider.hasCredential ? null : <Text variant="caption" color="destructive">{provider.ownedByMe ? t('picker.missingOwnKey') : t('picker.missingSharedKey')}</Text>}
       </Pressable>)}
-      <MenuRow label={t('models.title')} icon={Settings} opensPage onPress={() => { setOpen(false); router.push(`${assistantPath(householdId)}/providers`); }} />
+      <MenuRow label={t('models.title')} icon={Settings} opensPage={!modelSettings.window} onPress={() => { setOpen(false); modelSettings.open(true); }} />
       <Text variant="caption">{t('picker.privacy')}</Text>
     </Stack></AppDialog> : null}
   </>;
