@@ -101,10 +101,13 @@ export class LabelUsageDto {
 
   @ApiProperty()
   tasks!: number;
+
+  @ApiProperty()
+  notes!: number;
 }
 
 export class LabelListItemDto extends LabelResponseDto {
-  @ApiProperty({ type: () => LabelUsageDto, description: 'Events and tasks carrying the label; a recurring series counts once.' })
+  @ApiProperty({ type: () => LabelUsageDto, description: 'Events, tasks and notes carrying the label; a recurring series counts once.' })
   usage!: LabelUsageDto;
 }
 

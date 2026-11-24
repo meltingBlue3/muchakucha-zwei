@@ -2088,6 +2088,146 @@
         ]
       }
     },
+    "/api/v1/households/{householdId}/notes/{noteId}/pin": {
+      "put": {
+        "operationId": "pinNote",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "noteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "notes"
+        ]
+      },
+      "delete": {
+        "operationId": "unpinNote",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "noteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "notes"
+        ]
+      }
+    },
+    "/api/v1/households/{householdId}/notes/{noteId}/labels": {
+      "put": {
+        "operationId": "setNoteLabels",
+        "parameters": [
+          {
+            "name": "householdId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "noteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteLabelsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "notes"
+        ]
+      }
+    },
     "/api/v1/households/{householdId}/labels": {
       "post": {
         "operationId": "createLabel",
@@ -4922,6 +5062,17 @@
           "body": {
             "type": "string",
             "description": "Optional note body (Markdown)"
+          },
+          "labelIds": {
+            "description": "Labels of this household to put on the note",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "Pin the note for the whole household"
           }
         },
         "required": [
@@ -4956,6 +5107,18 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "pinnedAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "When the note was pinned for the household; null when it is not pinned. Pinning does not change updatedAt."
+          },
+          "labels": {
+            "description": "In the household label list's order. Changing them does not change updatedAt.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LabelResponseDto"
+            }
           }
         },
         "required": [
@@ -4965,7 +5128,9 @@
           "createdBy",
           "updatedBy",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "pinnedAt",
+          "labels"
         ]
       },
       "NoteListResponseDto": {
@@ -5008,6 +5173,21 @@
           "expectedUpdatedAt"
         ]
       },
+      "NoteLabelsDto": {
+        "type": "object",
+        "properties": {
+          "labelIds": {
+            "description": "Labels of this household; replaces the note's labels",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "labelIds"
+        ]
+      },
       "CreateLabelDto": {
         "type": "object",
         "properties": {
@@ -5036,11 +5216,15 @@
           },
           "tasks": {
             "type": "number"
+          },
+          "notes": {
+            "type": "number"
           }
         },
         "required": [
           "events",
-          "tasks"
+          "tasks",
+          "notes"
         ]
       },
       "LabelListItemDto": {
@@ -5088,7 +5272,7 @@
             "type": "string"
           },
           "usage": {
-            "description": "Events and tasks carrying the label; a recurring series counts once.",
+            "description": "Events, tasks and notes carrying the label; a recurring series counts once.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/LabelUsageDto"

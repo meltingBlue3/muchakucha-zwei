@@ -23,7 +23,7 @@ import {
 import { AccessTokenGuard, type AccessTokenClaims } from '../auth/access-token.guard.js';
 import { DeleteVersionQueryDto, deletePrecondition } from '../shared/delete-version.dto.js';
 import { NotesService } from './notes.service.js';
-import { CreateNoteDto, NoteListResponseDto, NoteResponseDto } from './dto/create-note.dto.js';
+import { CreateNoteDto, NoteLabelsDto, NoteListResponseDto, NoteResponseDto } from './dto/create-note.dto.js';
 import { UpdateNoteDto } from './dto/update-note.dto.js';
 
 interface AuthenticatedRequest {
@@ -84,6 +84,42 @@ export class NotesController {
     @Body() input: UpdateNoteDto,
   ): Promise<NoteResponseDto> {
     return this.notesService.update(request.auth.sub, householdId, noteId, input);
+  }
+
+  // Pins and labels need no edit version and leave updatedAt alone: they are
+  // not edits of the note, so they never turn a body save into a conflict.
+  @Put(':noteId/pin')
+  @ApiOperation({ operationId: 'pinNote' })
+  @ApiOkResponse({ type: NoteResponseDto })
+  pin(
+    @Req() request: AuthenticatedRequest,
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('noteId', uuidParam) noteId: string,
+  ): Promise<NoteResponseDto> {
+    return this.notesService.setPinned(request.auth.sub, householdId, noteId, true);
+  }
+
+  @Delete(':noteId/pin')
+  @ApiOperation({ operationId: 'unpinNote' })
+  @ApiOkResponse({ type: NoteResponseDto })
+  unpin(
+    @Req() request: AuthenticatedRequest,
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('noteId', uuidParam) noteId: string,
+  ): Promise<NoteResponseDto> {
+    return this.notesService.setPinned(request.auth.sub, householdId, noteId, false);
+  }
+
+  @Put(':noteId/labels')
+  @ApiOperation({ operationId: 'setNoteLabels' })
+  @ApiOkResponse({ type: NoteResponseDto })
+  setLabels(
+    @Req() request: AuthenticatedRequest,
+    @Param('householdId', uuidParam) householdId: string,
+    @Param('noteId', uuidParam) noteId: string,
+    @Body() input: NoteLabelsDto,
+  ): Promise<NoteResponseDto> {
+    return this.notesService.replaceLabels(request.auth.sub, householdId, noteId, input.labelIds);
   }
 
   @Delete(':noteId')
