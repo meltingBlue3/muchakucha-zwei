@@ -6,7 +6,7 @@ const base = `/households/${householdId}`;
 const taskId = (index: number) => `33333333-3333-4333-8333-${String(index).padStart(12, '0')}`;
 const conversationId = '66666666-6666-4666-8666-666666666666';
 const version = '2026-11-10T02:00:00Z';
-const defaultNotes = [{ id: 'note-1', householdId, title: '家庭旅行计划', body: '# 周末去郊外\n\n一起准备野餐垫、水和水果。\n\n## 路线\n\n- 周六上午出发\n- 沿湖走一走', createdBy: 'user', createdAt: version, updatedAt: version }, { id: 'note-2', householdId, title: '家电使用说明', body: '洗碗机使用注意事项。', createdBy: 'user', createdAt: version, updatedAt: '2026-10-20T02:00:00Z' }];
+const defaultNotes = [{ id: 'note-1', householdId, title: '家庭旅行计划', body: '# 周末去郊外\n\n一起准备野餐垫、水和水果。\n\n## 路线\n\n- 周六上午出发\n- 沿湖走一走', createdBy: 'user', updatedBy: 'user', createdAt: version, updatedAt: version }, { id: 'note-2', householdId, title: '家电使用说明', body: '洗碗机使用注意事项。', createdBy: 'user', updatedBy: 'user-2', createdAt: version, updatedAt: '2026-10-20T02:00:00Z' }];
 
 async function setup(
   page: Page,
@@ -217,17 +217,23 @@ test('the desktop note list and reading pane scroll independently', async ({ pag
     title: `家庭笔记 ${index + 1}`,
     body: index === 0 ? [...paragraphs, '正文末尾'].join('\n\n') : '笔记摘要',
     createdBy: 'user',
+    updatedBy: 'user',
     createdAt: version,
     updatedAt: version,
   }));
   await setup(page, { notes });
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto(`${base}/notes`);
+  // Arriving at the notes opens the latest beside the list, ready to write in.
+  await expect(page).toHaveURL(`${base}/notes/note-1`);
 
   const first = page.getByRole('button', { name: '笔记：家庭笔记 1', exact: true });
   const last = page.getByRole('button', { name: '笔记：家庭笔记 24', exact: true });
-  const readingTitle = page.getByRole('heading', { name: '家庭笔记 1', exact: true });
-  const readingEnd = page.getByText('正文末尾', { exact: true });
+  const detail = page.getByRole('region', { name: '笔记', exact: true });
+  const readingTitle = detail.locator('h1.note-title');
+  const readingEnd = detail.getByText('正文末尾', { exact: true });
+  await expect(readingTitle).toHaveText('家庭笔记 1');
+  await expect(detail).toContainText('小林写 · ');
   await expect(first).toBeInViewport();
   await expect(last).toHaveCount(1);
   await expect(last).not.toBeInViewport();
@@ -245,12 +251,17 @@ test('the desktop note list and reading pane scroll independently', async ({ pag
   expect(await last.boundingBox()).toEqual(lastPosition);
 
   await last.click();
-  const detail = page.getByRole('region', { name: '笔记详情', exact: true });
-  await expect(detail.getByRole('heading', { name: '家庭笔记 24', exact: true })).toBeInViewport();
+  await expect(readingTitle).toHaveText('家庭笔记 24');
+  await expect(readingTitle).toBeInViewport();
   await expect(last).toBeInViewport();
   await last.hover();
   await page.mouse.wheel(0, -2400);
   await expect(first).toBeInViewport({ ratio: 1 });
+
+  // Closing the note leaves the list with nothing open; it does not reopen by itself.
+  await detail.getByRole('button', { name: '关闭笔记', exact: true }).click();
+  await expect(page).toHaveURL(`${base}/notes`);
+  await expect(page.getByText('从左边选一篇笔记，或创建一篇新的。', { exact: true })).toBeVisible();
 });
 
 test('desktop family switching is anchored and date controls fit their popover', async ({ page }, testInfo) => {
@@ -682,7 +693,9 @@ test('creating from Today keeps only the columns related to what is being made',
     expect((await menu.boundingBox())!.width).toBe(184);
     await expect(page.getByTestId('create-menu-blur')).toHaveCount(0);
     await menu.getByRole('menuitem', { name: `创建${kind}`, exact: true }).click();
-    const region = page.getByRole('region', { name: `创建${kind}`, exact: true });
+    // A new note is already the note itself, so its pane has the note's name.
+    const name = kind === '笔记' ? '笔记' : `创建${kind}`;
+    const region = page.getByRole('region', { name, exact: true });
     const panel = region.getByTestId('app-dialog-panel');
     await expect(panel).toHaveCSS('opacity', '1');
     const pane = (await panel.boundingBox())!;
@@ -694,7 +707,7 @@ test('creating from Today keeps only the columns related to what is being made',
     }
     await page.screenshot({ path: testInfo.outputPath(`today-create-${kind}-1440.png`) });
     // The way out is a round 32px button, not a bare glyph.
-    const close = region.getByRole('button', { name: `关闭创建${kind}`, exact: true });
+    const close = region.getByRole('button', { name: `关闭${name}`, exact: true });
     expect((await close.boundingBox())!.width).toBe(32);
     await expect(close).toHaveCSS('border-radius', '999px');
     await close.click();

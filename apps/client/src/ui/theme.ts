@@ -269,6 +269,8 @@ export const theme = createTheme({
     desktopSearchWidthCompact: 160,
     /** The desktop 创建 menu under the page header's button. */
     createMenuWidth: 184,
+    /** The note editor's 「/」 insert menu, beside the caret. */
+    slashMenuWidth: 260,
     /** The Ctrl K search panel. */
     commandPaletteWidth: 560,
     /** The member table's 用户名 and 角色 columns. */
@@ -337,6 +339,8 @@ export const theme = createTheme({
     /** A desktop pane sliding in and the columns making room for it. */
     paneMs: 200,
     paneOffset: 16,
+    /** How long a passing confirmation such as 「已复制」 stays; undo notices stay until dismissed. */
+    noticeMs: 4000,
     /** Quick to start, gentle to settle. */
     easing: 'cubic-bezier(0.2, 0, 0, 1)',
   },

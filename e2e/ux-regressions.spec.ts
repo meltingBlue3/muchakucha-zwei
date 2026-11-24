@@ -40,7 +40,7 @@ async function setup(page: Page) {
     else if (path.endsWith('/tasks/' + taskId) && method === 'PUT') { status = 403; body = { error: { code: 'FORBIDDEN' } }; }
     else if (path.endsWith('/tasks')) body = method === 'POST' ? task : { tasks: [task] };
     else if (path.endsWith('/events')) body = method === 'POST' ? { id: taskId } : { events: [] };
-    else if (path.endsWith('/notes')) body = method === 'POST' ? { id: taskId } : { notes: [] };
+    else if (path.endsWith('/notes')) body = method === 'POST' ? { id: taskId, householdId: a, ...JSON.parse(route.request().postData() ?? '{}'), createdBy: 'user', updatedBy: 'user', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : { notes: [] };
     else if (path.endsWith('/' + a) || path.endsWith('/' + b)) body = { ...household(path.endsWith(a) ? a : b), members: [] };
     else status = 404;
     await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -284,20 +284,44 @@ for (const kind of ['tasks', 'events'] as const) {
   });
 }
 
-test('a note draft survives cancel and is cleared only after successful save', async ({ page }) => {
+const noteEditor = (page: Page) => page.getByRole('textbox', { name: '笔记内容', exact: true });
+const noteTitleLine = (page: Page) => noteEditor(page).locator('h1.note-title');
+const noteWindow = (page: Page, name = '笔记') => page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name, exact: true });
+/** The note as the API would return it after a save. */
+const savedNote = (input: { title: string; body?: string }, id = taskId) => ({ id, householdId: a, title: input.title, body: input.body ?? null, createdBy: 'user', updatedBy: 'user', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: new Date().toISOString() });
+async function writeNote(page: Page, title: string, body: string) {
+  await noteTitleLine(page).click();
+  await page.keyboard.type(title);
+  await page.keyboard.press('Enter');
+  await page.keyboard.type(body);
+}
+
+test('a new note keeps its draft while saves fail, and is not drafted again once saved', async ({ page }) => {
   await setup(page);
+  let online = false;
+  await page.route(`**/api/v1/households/${a}/notes`, route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    return online ? route.fulfill({ json: savedNote(route.request().postDataJSON()) }) : route.fulfill({ status: 503, json: {} });
+  });
   await page.goto(`/households/${a}/notes`);
   await page.getByLabel('创建笔记', { exact: true }).click();
-  await page.getByLabel('笔记标题').fill('还没写完');
-  await page.getByLabel('笔记内容').fill('第一行内容');
-  await page.getByRole('button', { name: '关闭创建笔记', exact: true }).click();
+  await writeNote(page, '还没写完', '第一行内容');
+  await expect(page.getByText('保存失败。内容已存在这台设备，稍后会再试。', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('note-save-state')).toHaveText('未保存');
+  await page.getByRole('button', { name: '关闭笔记', exact: true }).click();
   await page.getByLabel('创建笔记', { exact: true }).click();
-  await expect(page.getByLabel('笔记标题')).toHaveValue('还没写完');
-  await expect(page.getByLabel('笔记内容')).toHaveValue('第一行内容');
-  await page.getByLabel('创建', { exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/households/${a}/notes$`));
+  await expect(noteTitleLine(page)).toHaveText('还没写完');
+  await expect(noteEditor(page)).toContainText('第一行内容');
+  await expect(page.getByTestId('note-save-state')).toHaveText('未保存');
+  online = true;
+  await noteEditor(page).getByText('第一行内容').click();
+  await page.keyboard.press('Control+Enter');
+  await expect(page.getByTestId('note-save-state')).toHaveText('已保存');
+  await expect(page).toHaveURL(new RegExp(`/households/${a}/notes/${taskId}$`));
+  await page.getByRole('button', { name: '关闭笔记', exact: true }).click();
   await page.getByRole('main', { name: '家庭笔记', exact: true }).getByLabel('创建笔记', { exact: true }).click();
-  await expect(page.getByLabel('笔记标题')).toHaveValue('');
+  await expect(noteTitleLine(page)).toHaveText('');
+  await expect(page.getByTestId('note-save-state')).toHaveCount(0);
 });
 
 test('a failed inbox has a working retry action', async ({ page }) => {
@@ -359,181 +383,156 @@ for (const width of [320, 390, 1440]) {
 }
 
 for (const width of [390, 800, 1700]) {
-  test(`Markdown note editor fills the writing area at ${width}px`, async ({ page }) => {
+  test(`the note editor fills the writing area at ${width}px and scrolls inside it`, async ({ page }) => {
     await setup(page);
     await page.setViewportSize({ width, height: 720 });
     await page.goto(`/households/${a}/notes/new`);
-    const input = page.getByRole('textbox', { name: '笔记内容' });
-    const editor = page.getByRole(width >= 1024 ? 'region' : 'dialog', { name: '创建笔记', exact: true });
-    const panel = editor.getByTestId('app-dialog-panel');
-    const source = '给家人的笔记\n'.repeat(60);
-    await editor.getByRole('textbox', { name: '笔记标题' }).press('Tab');
-    await expect(input).toBeFocused();
-    await input.fill(source);
-    await expect.soft(input).toHaveCSS('outline-width', '0px', { timeout: 1500 });
-    await expect.soft(input).toHaveCSS('outline-style', 'solid', { timeout: 1500 });
-
-    const smaller = (await input.boundingBox())!;
+    const window = noteWindow(page);
+    const panel = window.getByTestId('app-dialog-panel');
+    const scroller = page.locator('.note-editor');
+    await noteTitleLine(page).click();
+    await page.keyboard.type('给家人的笔记');
+    for (let line = 0; line < 40; line++) { await page.keyboard.press('Enter'); await page.keyboard.type(`第 ${line + 1} 行`); }
+    // The page is the editing surface: no field border or outline around the text.
+    await expect(noteEditor(page)).toHaveCSS('outline-style', 'none');
+    const smaller = (await scroller.boundingBox())!;
     await page.setViewportSize({ width, height: 960 });
-    await expect.poll(async () => (await input.boundingBox())!.height).toBeGreaterThan(smaller.height + 200);
-    const body = (await input.boundingBox())!;
+    await expect.poll(async () => (await scroller.boundingBox())!.height).toBeGreaterThan(smaller.height + 200);
+    const body = (await scroller.boundingBox())!;
     const frame = (await panel.boundingBox())!;
-    const nextControl = width === 390 ? await editor.getByRole('toolbar').boundingBox()
-      : width === 800 ? await editor.getByRole('button', { name: '取消', exact: true }).boundingBox() : null;
     expect(body.width).toBeGreaterThan(frame.width * 0.85);
-    expect((nextControl?.y ?? frame.y + frame.height) - (body.y + body.height)).toBeLessThan(48);
-    expect(await input.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
-    await expect(input).toHaveValue(source);
-    await expect(input).toHaveCSS('border-left-width', '0px');
+    // Down to the window's bottom, or to the formatting bar above the keyboard on a phone.
+    const below = width < 1024 ? await window.getByRole('toolbar', { name: '笔记格式' }).boundingBox() : null;
+    expect((below?.y ?? frame.y + frame.height) - (body.y + body.height)).toBeLessThan(48);
+    expect(await scroller.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   });
 }
 
 for (const width of [320, 390, 1440]) {
-  test(`Markdown note editor preserves source and fits ${width}px`, async ({ page }) => {
+  test(`the note editor formats from its toolbar or the / menu and fits ${width}px`, async ({ page }, testInfo) => {
     const requests = await setup(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/households/${a}/notes/new`);
-    const dialog = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '创建笔记', exact: true });
-    await dialog.getByLabel('笔记标题').fill('日语学习');
-    const input = dialog.getByLabel('笔记内容');
-    const previewButton = dialog.getByRole('button', { name: '预览', exact: true });
-    const closeButton = dialog.getByRole('button', { name: '关闭创建笔记', exact: true });
-    const previewBox = await previewButton.boundingBox();
-    const closeBox = await closeButton.boundingBox();
-    expect(Math.abs(previewBox!.y - closeBox!.y)).toBeLessThan(2);
-    // Compact editors are full-screen sheets: close leads the header, actions trail it.
-    if (width < 600) {
-      const submitBox = await dialog.getByRole('button', { name: '创建', exact: true }).boundingBox();
-      expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(previewBox!.x);
-      expect(previewBox!.x + previewBox!.width).toBeLessThanOrEqual(submitBox!.x);
-      expect(submitBox!.x + submitBox!.width).toBeLessThanOrEqual(width);
-    } else {
-      expect(previewBox!.x + previewBox!.width).toBeLessThanOrEqual(closeBox!.x);
-    }
-    await expect(previewButton).toHaveText('');
+    const window = noteWindow(page);
+    const wide = width >= 1024;
+    // The header carries the way out, the save state and the note's menu on one line.
+    const closeBox = (await window.getByRole('button', { name: '关闭笔记', exact: true }).boundingBox())!;
+    const menuBox = (await window.getByRole('button', { name: '更多操作：笔记：笔记', exact: true }).boundingBox())!;
+    expect(Math.abs((closeBox.y + closeBox.height / 2) - (menuBox.y + menuBox.height / 2))).toBeLessThan(2);
+    expect(wide ? menuBox.x < closeBox.x : closeBox.x < menuBox.x).toBe(true);
 
-    await input.fill('日语学习');
-    await input.selectText();
-    await dialog.getByRole('button', { name: '粗体', exact: true }).click();
-    await expect(input).toHaveValue('**日语学习**');
-    await dialog.getByRole('button', { name: '标题格式' }).click();
-    const headings = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '标题格式', exact: true });
-    await expect(page.getByRole('dialog')).toHaveCount(width >= 1024 ? 0 : 1);
-    await expect(headings.getByRole('button', { name: 'H6', exact: true })).toBeVisible();
-    await headings.getByRole('button', { name: 'H2', exact: true }).click();
-    await expect(input).toBeFocused();
-    await expect(input).toHaveValue('## **日语学习**');
-    await input.press('End');
-    await input.press('Enter');
-    await dialog.getByRole('button', { name: '链接', exact: true }).click();
-    const linkWindow = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '插入链接', exact: true });
-    await expect(input).not.toBeVisible();
-    await linkWindow.getByLabel('显示文字', { exact: true }).fill('学习资料');
-    await linkWindow.getByLabel('网址', { exact: true }).fill('https://example.com');
-    expect((await new AxeBuilder({ page }).include(width >= 1024 ? '[role="region"]' : '[role="dialog"]').analyze()).violations).toEqual([]);
-    await page.screenshot({ path: `/tmp/muchakucha-markdown-link-window-${width}.png` });
-    await linkWindow.getByRole('button', { name: '插入链接', exact: true }).click();
-    await expect(input).toBeFocused();
-    await expect(input).toHaveValue(/学习资料/);
-    await dialog.getByRole('button', { name: '表格', exact: true }).click();
-    const tableWindow = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '插入表格', exact: true });
-    await expect(page.getByRole('dialog')).toHaveCount(width >= 1024 ? 0 : 1);
-    await tableWindow.getByRole('button', { name: '插入表格', exact: true }).click();
-    const source = await input.inputValue();
-    await dialog.getByRole('button', { name: '预览', exact: true }).click();
-    await expect(dialog.getByRole('heading', { name: '日语学习', level: 2 })).toBeVisible();
-    await expect(dialog.getByRole('link', { name: '学习资料' })).toBeVisible();
-    await expect(dialog.getByRole('columnheader')).toHaveCount(2);
-    const panel = dialog.getByTestId('app-dialog-panel');
-    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-    expect((await new AxeBuilder({ page }).include(width >= 1024 ? '[role="region"]' : '[role="dialog"]').analyze()).violations).toEqual([]);
-    await page.screenshot({ path: `/tmp/muchakucha-markdown-preview-${width}.png` });
-    await dialog.getByRole('button', { name: '编辑', exact: true }).click();
-    await expect(input).toHaveValue(source);
-    const toolbar = dialog.getByRole('toolbar', { name: '笔记格式' });
-    await expect(toolbar).toBeVisible();
-    expect(await toolbar.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-    await page.screenshot({ path: `/tmp/muchakucha-markdown-editor-${width}.png` });
-    await dialog.getByRole('button', { name: '创建', exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/households/${a}/notes$`));
-    const saved = requests.find(request => request.method === 'POST' && request.path.endsWith('/notes'));
-    expect(JSON.parse(saved!.data as string).body).toBe(source);
+    await writeNote(page, '日语学习', '词语');
+    await page.keyboard.press('Shift+Home');
+    const toolbar = window.getByRole('toolbar', { name: '笔记格式' });
+    if (wide) {
+      // A wide screen keeps no standing toolbar; Markdown and the / menu do the formatting.
+      await expect(toolbar).toHaveCount(0);
+      await page.keyboard.press('Control+b');
+    } else {
+      expect(await toolbar.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await toolbar.getByRole('button', { name: '粗体', exact: true }).click();
+      await expect(toolbar.getByRole('button', { name: '粗体', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    }
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    if (wide) { await page.keyboard.type('/小标'); await page.keyboard.press('Enter'); } else await toolbar.getByRole('button', { name: '小标题', exact: true }).click();
+    await page.keyboard.type('资料');
+    await page.keyboard.press('Enter');
+    if (wide) { await page.keyboard.type('/链接'); await page.keyboard.press('Enter'); } else await toolbar.getByRole('button', { name: '链接', exact: true }).click();
+    const link = noteWindow(page, '插入链接');
+    await expect(noteEditor(page)).toBeHidden();
+    await link.getByLabel('显示文字', { exact: true }).fill('学习资料');
+    await link.getByLabel('网址', { exact: true }).fill('https://example.com');
+    expect((await new AxeBuilder({ page }).include(wide ? '[role="region"]' : '[role="dialog"]').analyze()).violations).toEqual([]);
+    await link.getByRole('button', { name: '插入链接', exact: true }).click();
+    await expect(noteEditor(page).getByRole('link', { name: '学习资料' })).toBeVisible();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('/表格');
+    await page.keyboard.press('Enter');
+    await noteWindow(page, '插入表格').getByRole('button', { name: '插入表格', exact: true }).click();
+    await expect(noteEditor(page).getByRole('table')).toBeVisible();
+    await expect(page.getByTestId('note-save-state')).toHaveText('已保存');
+    const writes = requests.filter(request => /\/notes(\/[^/]+)?$/.test(request.path) && (request.method === 'POST' || request.method === 'PUT'));
+    const saved = JSON.parse(String(writes[writes.length - 1]!.data)) as { title: string; body: string };
+    expect(saved.title).toBe('日语学习');
+    expect(saved.body).toContain('**词语**');
+    expect(saved.body).toContain('## 资料');
+    expect(saved.body).toContain('[学习资料](https://example.com)');
+    expect(saved.body).toMatch(/\| --- \| --- \|/);
+    expect(await window.getByTestId('app-dialog-panel').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect((await new AxeBuilder({ page }).include(wide ? '[role="region"]' : '[role="dialog"]').analyze()).violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`note-formats-${width}.png`) });
   });
 }
 
-test('Japanese note editor localizes validation, table insertion and preview', async ({ browser }) => {
+test('the Japanese note editor names its tools, menu and states in Japanese', async ({ browser }) => {
   const context = await browser.newContext({ locale: 'ja-JP', viewport: { width: 320, height: 900 } });
   try {
     const page = await context.newPage();
     const requests = await setup(page);
     await page.goto(`/households/${a}/notes/new`);
-    const editor = page.getByRole('dialog', { name: 'ノートを作成', exact: true });
-    await editor.getByRole('button', { name: '作成', exact: true }).click();
-    await expect(editor.getByText('ノートのタイトルを入力してください。')).toBeVisible();
-    await editor.getByRole('textbox', { name: 'ノートのタイトル', exact: true }).fill('旅行の計画');
-
-    const toolbar = editor.getByRole('toolbar', { name: 'ノートの書式' });
-    await toolbar.getByRole('button', { name: '表', exact: true }).click();
-    const table = page.getByRole('dialog', { name: '表を挿入', exact: true });
-    await table.getByRole('button', { name: '表を挿入', exact: true }).click();
-
-    const input = editor.getByRole('textbox', { name: 'ノートの本文', exact: true });
-    await expect(input).toHaveValue(/^\| 列1 \| 列2 \|/);
-    await expect(input).toBeFocused();
-    expect(await input.evaluate(el => {
-      const { value, selectionStart, selectionEnd } = el as HTMLTextAreaElement;
-      return value.slice(selectionStart ?? 0, selectionEnd ?? 0);
-    })).toBe('列1');
-
-    await editor.getByRole('button', { name: 'プレビュー', exact: true }).click();
-    await expect(editor.getByLabel('ノートの表。横にスクロールできます')).toBeVisible();
-    const panel = editor.getByTestId('app-dialog-panel');
-    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-    await editor.getByRole('button', { name: '作成', exact: true }).click();
-    await expect(page.getByRole('main', { name: '家族のノート', exact: true })).toBeVisible();
-    expect(requests.find(request => request.method === 'POST' && request.path.endsWith('/notes'))?.data).toContain('列1');
+    const editor = page.getByRole('textbox', { name: 'ノートの本文', exact: true });
+    await expect(editor.locator('h1.note-title')).toHaveAttribute('data-placeholder', 'タイトル');
+    await editor.locator('h1.note-title').click();
+    await page.keyboard.type('旅行の計画');
+    await page.keyboard.press('Enter');
+    const toolbar = page.getByRole('dialog', { name: 'ノート', exact: true }).getByRole('toolbar', { name: 'ノートの書式' });
+    for (const name of ['チェックリスト', '箇条書き', '見出し', '太字', 'リンク', 'キーボードを閉じる']) await expect(toolbar.getByRole('button', { name, exact: true })).toBeVisible();
+    await toolbar.getByRole('button', { name: 'チェックリスト', exact: true }).click();
+    await page.keyboard.type('パスポート');
+    await expect(editor.getByRole('checkbox', { name: '未チェック：パスポート', exact: true })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('/');
+    await expect(page.getByRole('listbox', { name: '挿入', exact: true }).getByRole('option')).toHaveText(['チェックリスト- [ ]', '箇条書き-', '番号付きリスト1.', '見出し##', '引用>', '区切り線---', '表| |', 'コードブロック```', 'リンク[ ]( )']);
+    await page.keyboard.press('Backspace');
+    await expect(page.getByTestId('note-save-state')).toHaveText('保存済み');
+    expect(requests.find(request => request.method === 'POST' && request.path.endsWith('/notes'))?.data).toContain('- [ ] パスポート');
+    await editor.getByRole('checkbox', { name: '未チェック：パスポート', exact: true }).click();
+    await expect(editor.getByRole('checkbox', { name: 'チェック済み：パスポート', exact: true })).toBeChecked();
   } finally {
     await context.close();
   }
 });
 
-test('note format windows close back to editing without losing the selection or draft', async ({ page }) => {
+test('the link and table steps close back to the text without losing it, and old edit links open the note', async ({ page }) => {
   await setup(page);
-  const note = { id: taskId, householdId: a, title: '日语学习', body: '词语练习', createdBy: 'user', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' };
-  await page.route(`**/api/v1/households/${a}/notes/${taskId}`, route => route.fulfill({ json: note }));
+  // The formatting toolbar belongs to a phone.
+  await page.setViewportSize({ width: 390, height: 844 });
+  let note = savedNote({ title: '日语学习', body: '词语练习' });
+  await page.route(`**/api/v1/households/${a}/notes/${taskId}`, route => {
+    if (route.request().method() === 'PUT') note = { ...note, ...route.request().postDataJSON(), updatedAt: new Date().toISOString() };
+    return route.fulfill({ json: note });
+  });
   await page.goto(`/households/${a}/notes/${taskId}/edit`);
-  const editor = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '编辑笔记', exact: true });
-  const input = editor.getByLabel('笔记内容');
-  await expect(input).toHaveValue('词语练习');
-  await input.selectText();
-  await editor.getByRole('button', { name: '链接', exact: true }).click();
-  const link = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '插入链接', exact: true });
+  await expect(page).toHaveURL(new RegExp(`/notes/${taskId}$`));
+  const window = noteWindow(page);
+  await expect(noteTitleLine(page)).toHaveText('日语学习');
+  await noteEditor(page).getByText('词语练习').click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Shift+Home');
+  await window.getByRole('toolbar', { name: '笔记格式' }).getByRole('button', { name: '链接', exact: true }).click();
+  const link = noteWindow(page, '插入链接');
   await expect(link.getByLabel('显示文字')).toHaveValue('词语练习');
   await link.getByLabel('网址', { exact: true }).fill('https://example.com');
   await link.getByRole('button', { name: '关闭插入链接', exact: true }).click();
-  await expect(input).toBeFocused();
-  await expect(input).toHaveValue('词语练习');
-  await editor.getByRole('button', { name: '粗体', exact: true }).click();
-  await expect(input).toHaveValue('**词语练习**');
-  await editor.getByRole('button', { name: '表格', exact: true }).click();
-  const table = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '插入表格', exact: true });
-  await table.getByRole('button', { name: '关闭插入表格' }).click();
-  await expect(input).toHaveValue('**词语练习**');
-  await editor.getByRole('button', { name: '标题格式' }).click();
-  const headings = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '标题格式', exact: true });
-  await expect(headings).toBeVisible();
-  // The heading choices are a step of the editor: inside the side pane's region on a wide screen, a dialog on a phone.
-  expect((await new AxeBuilder({ page }).include((page.viewportSize()?.width ?? 0) >= 1024 ? '[role="region"]' : '[role="dialog"]').analyze()).violations).toEqual([]);
-  await page.screenshot({ path: '/tmp/muchakucha-markdown-heading-window.png' });
+  await expect(noteEditor(page)).toBeFocused();
+  await expect(noteEditor(page)).toContainText('词语练习');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('/表格');
+  await page.keyboard.press('Enter');
+  const table = noteWindow(page, '插入表格');
+  await expect(table).toBeVisible();
+  expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
   await page.keyboard.press('Escape');
-  await expect(input).toBeFocused();
-  await expect(input).toHaveValue('**词语练习**');
-  await expect(editor.getByRole('button', { name: '丢弃草稿' })).toHaveCount(0);
-  await editor.getByRole('button', { name: '预览', exact: true }).click();
-  await expect(editor.getByTestId('markdown-body')).toHaveText('词语练习');
-  await editor.getByRole('button', { name: '编辑', exact: true }).click();
-  await expect(input).toHaveValue('**词语练习**');
-  await expect(page).toHaveURL(new RegExp(`/notes/${taskId}/edit$`));
+  await expect(table).toBeHidden();
+  await expect(noteEditor(page)).toContainText('词语练习');
+  await expect(noteEditor(page).getByRole('table')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(page).toHaveURL(new RegExp(`/notes/${taskId}$`));
 });
 
 for (const width of [320, 390, 1440]) {
@@ -567,9 +566,11 @@ for (const width of [320, 390, 1440]) {
         if (width === 1440) expect((await menu.boundingBox())!.y).toBeGreaterThan(button!.y + button!.height);
         await page.getByRole('menuitem', { name: '创建任务', exact: true }).click();
       } else await create.click();
-      const editor = page.getByRole(width >= 1024 ? 'region' : 'dialog', { name: route === 'today' ? '创建任务' : createLabel, exact: true });
+      // A new note opens as the note itself, so its window is named 笔记.
+      const windowName = route === 'today' ? '创建任务' : route === 'notes' ? '笔记' : createLabel;
+      const editor = page.getByRole(width >= 1024 ? 'region' : 'dialog', { name: windowName, exact: true });
       await expect(editor).toBeVisible();
-      if (width >= 1024) await editor.getByRole('heading', { name: route === 'today' ? '创建任务' : createLabel, exact: true }).focus();
+      if (width >= 1024) await editor.getByRole('heading', { name: windowName, exact: true }).focus();
       await page.keyboard.press('Escape');
       await expect(create).toBeFocused();
       if (route !== 'tasks' && route !== 'events') continue;

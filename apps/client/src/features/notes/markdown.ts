@@ -1,10 +1,11 @@
-import { i18n } from '../../i18n';
 import MarkdownIt from 'markdown-it';
 import type Token from 'markdown-it/lib/token.mjs';
+import { applyChecklistTick, checklists, inlineText, type ChecklistTick } from './checklists';
 
-// A single dialect is shared by reading, preview, and card excerpts. HTML and
-// images stay literal in this first release; no HTML is passed to a WebView.
-const parser = new MarkdownIt({ html: false, breaks: true }).disable('image');
+// A single dialect is shared by reading, card excerpts and the editor: HTML and
+// images stay literal, a single newline is a line break, and checklists follow
+// checklists.ts. No HTML from a note is ever rendered as markup.
+const parser = new MarkdownIt({ html: false, breaks: true }).disable('image').use(checklists);
 export interface MarkdownNode { token: Token; children: MarkdownNode[] }
 export function parseMarkdown(source: string): MarkdownNode[] {
   const roots: MarkdownNode[] = [];
@@ -19,7 +20,7 @@ export function parseMarkdown(source: string): MarkdownNode[] {
 }
 export function markdownExcerpt(source: string): string {
   const text = (nodes: MarkdownNode[]): string => nodes.map(({ token, children }) => {
-    if (token.type === 'inline') return (token.children ?? []).map(t => t.type === 'softbreak' || t.type === 'hardbreak' ? ' ' : t.nesting === 0 ? t.content : '').join('');
+    if (token.type === 'inline') return inlineText(token);
     return children.length ? text(children) : token.content;
   }).join(' ');
   return text(parseMarkdown(source)).replace(/\s+/g, ' ').trim();
@@ -28,52 +29,37 @@ export function safeLink(value: string): boolean {
   try { const url = new URL(value); return ['https:', 'http:', 'mailto:'].includes(url.protocol); }
   catch { return false; }
 }
-export interface Selection { start: number; end: number }
-export interface MarkdownEdit { value: string; selection: Selection }
-export function replaceSelection(value: string, selection: Selection, replacement: string): MarkdownEdit {
-  const start = Math.max(0, Math.min(selection.start, value.length));
-  const end = Math.max(start, Math.min(selection.end, value.length));
-  return { value: value.slice(0, start) + replacement + value.slice(end), selection: { start: start + replacement.length, end: start + replacement.length } };
+
+/** The API's limit, in UTF-16 units as it counts them. */
+const TITLE_MAX = 200;
+function clip(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  // Do not leave half of a surrogate pair at the end.
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
 }
-export function toggleBold(value: string, selection: Selection): MarkdownEdit {
-  const { start, end } = selection;
-  const selected = value.slice(start, end);
-  if (selected.startsWith('**') && selected.endsWith('**') && selected.length >= 4) {
-    const result = replaceSelection(value, selection, selected.slice(2, -2));
-    return { ...result, selection: { start, end: end - 4 } };
+
+/**
+ * The title a note is saved under: the title line when it has text, otherwise
+ * the body's first line that has any, as plain text. Null when both are empty,
+ * which means there is nothing to save.
+ */
+export function noteTitle(title: string, body: string): string | null {
+  const own = title.replace(/\s+/g, ' ').trim();
+  if (own) return clip(own, TITLE_MAX);
+  for (const token of parser.parse(body, {})) {
+    const source = token.type === 'inline' ? inlineText(token, '\n') : token.type === 'fence' || token.type === 'code_block' ? token.content : '';
+    const line = source.split('\n').map(part => part.replace(/\s+/g, ' ').trim()).find(Boolean);
+    if (line) return clip(line, TITLE_MAX);
   }
-  if (value.slice(Math.max(0, start - 2), start) === '**' && value.slice(end, end + 2) === '**') {
-    const result = replaceSelection(value, { start: start - 2, end: end + 2 }, selected);
-    return { ...result, selection: { start: start - 2, end: end - 2 } };
-  }
-  return { ...replaceSelection(value, selection, `**${selected}**`), selection: { start: start + 2, end: end + 2 } };
+  return null;
 }
-export function headingLevel(value: string, selection: Selection): number {
-  const start = selection.start === 0 ? 0 : value.lastIndexOf('\n', selection.start - 1) + 1;
-  return /^ {0,3}(#{1,6})(?:[ \t]+|$)/.exec(value.slice(start))?.[1]?.length ?? 0;
-}
-export function setHeading(value: string, selection: Selection, level: number): MarkdownEdit {
-  const start = selection.start === 0 ? 0 : value.lastIndexOf('\n', selection.start - 1) + 1;
-  const newline = value.indexOf('\n', selection.start);
-  const end = newline < 0 ? value.length : newline;
-  const original = value.slice(start, end);
-  const line = /^ {0,3}#{1,6}(?:\s+|$)/.test(original)
-    ? original.replace(/^ {0,3}#{1,6}(?:\s+|$)/, '').replace(/\s+#+\s*$/, '')
-    : original;
-  return replaceSelection(value, { start, end }, (level ? '#'.repeat(level) + ' ' : '') + line);
-}
-export function insertLink(value: string, selection: Selection, label: string, url: string): MarkdownEdit {
-  const escaped = label.replace(/([\\\[\]])/g, '\\$1').replace(/\r?\n/g, ' ');
-  return replaceSelection(value, selection, `[${escaped || url}](<${url.replace(/</g, '%3C').replace(/>/g, '%3E')}>)`);
-}
-export function insertTable(value: string, selection: Selection, columns: number, rows: number): MarkdownEdit {
-  const headings = Array.from({ length: columns }, (_, i) => i18n.t('notes:format.column', { number: i + 1 }));
-  const header = '| ' + headings.join(' | ') + ' |';
-  const divider = '| ' + Array(columns).fill('---').join(' | ') + ' |';
-  const row = '| ' + Array(columns).fill(i18n.t('notes:format.cell')).join(' | ') + ' |';
-  const prefix = selection.start ? '\n\n' : '';
-  const table = prefix + [header, divider, ...Array<string>(rows).fill(row)].join('\n') + '\n\n';
-  const result = replaceSelection(value, selection, table);
-  const start = selection.start + prefix.length + 2;
-  return { ...result, selection: { start, end: start + (headings[0]?.length ?? 0) } };
+
+/**
+ * Replays a tick from this device on the latest Markdown someone else saved:
+ * the `index`-th checklist item is set to `checked` if its text is still
+ * `text`. Returns the new Markdown, or null when the item is gone or changed.
+ */
+export function setChecklistItem(markdown: string, tick: ChecklistTick): string | null {
+  return applyChecklistTick(markdown, parser.parse(markdown, {}), tick);
 }
