@@ -11,17 +11,19 @@ import { daysSinceMonday, formatYearMonth, formatDayLabel, normalizeDateInput, n
 import { useTranslation } from '../i18n';
 
 /** Right-aligned 取消 / 确定, like a Material dialog. */
-export function PickerActions({ onCancel, onConfirm, confirmLabel, confirmDisabled = false }: {
+export function PickerActions({ onCancel, onConfirm, confirmLabel, confirmDisabled = false, busy = false }: {
   onCancel(): void;
   onConfirm(): void;
   confirmLabel?: string;
   confirmDisabled?: boolean;
+  /** While the confirmation is being sent: it shows progress and 取消 waits. */
+  busy?: boolean;
 }) {
   const { t } = useTranslation('common');
   return (
     <Inline gap={2} style={{ justifyContent: 'flex-end', marginTop: theme.spacing[2] }}>
-      <Button label={t('cancel')} tone="secondary" onPress={onCancel} />
-      <Button label={confirmLabel ?? t('confirm')} disabled={confirmDisabled} onPress={onConfirm} />
+      <Button label={t('cancel')} tone="secondary" disabled={busy} onPress={onCancel} />
+      <Button label={confirmLabel ?? t('confirm')} disabled={confirmDisabled} loading={busy} onPress={onConfirm} />
     </Inline>
   );
 }

@@ -3,6 +3,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useState } from 'react';
 import { sessionApiClient } from '../../auth/session-runtime';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
+import { WindowStepContext } from '../../../ui/window-step';
 import { LabelPicker } from '../label-picker';
 
 const mockRole = { current: 'MEMBER' as 'OWNER' | 'ADMIN' | 'MEMBER' };
@@ -109,6 +110,18 @@ test('an empty name is not sent', async () => {
 
   expect(await view.findByText('请输入标签名称。')).toBeTruthy();
   await waitFor(() => expect(sessionApiClient.createLabel).not.toHaveBeenCalled());
+});
+
+test('inside a window, 新建标签 opens as a step of the window rather than below the labels', async () => {
+  mockRole.current = 'OWNER';
+  jest.mocked(sessionApiClient.listLabels).mockResolvedValue({ labels: [label('chores', '家务')], total: 1 });
+  const host = { show: jest.fn(), hide: jest.fn() };
+  const view = await render(<MuchakuchaThemeProvider><WindowStepContext.Provider value={host}><Form /></WindowStepContext.Provider></MuchakuchaThemeProvider>);
+
+  await fireEvent.press(await view.findByRole('button', { name: '新建标签' }));
+
+  expect(view.queryByLabelText('标签名称')).toBeNull();
+  expect(host.show).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ title: '新建标签' }));
 });
 
 test('reports loaded labels on success and stays quiet on load failure', async () => {

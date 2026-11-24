@@ -1,5 +1,5 @@
 import { useTranslation } from '../../i18n';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import Plus from 'lucide-react-native/icons/plus';
@@ -10,8 +10,11 @@ import { LabelChip } from './label-chip';
 import { LabelColorChoices } from './label-color-choices';
 import { canManageLabels } from './label-permissions';
 import { labelColorPresets, type Theme } from '../../ui/theme';
-import { Button, Spinner, Stack, Text, TextField } from '../../ui/primitives';
-import { useDesktopDensity } from '../../ui/use-desktop';
+import { Spinner, Stack, Text, TextField } from '../../ui/primitives';
+import { AnchoredPopover } from '../../ui/anchored-popover';
+import { PickerActions } from '../../ui/picker-panels';
+import { useDesktop, useDesktopDensity } from '../../ui/use-desktop';
+import { useWindowStep, type RouteWindowStep } from '../../ui/window-step';
 import { focusFieldOnOpen } from '../../platform/keyboard/focus-on-open';
 import { labelName } from './label-name';
 
@@ -43,11 +46,10 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const desktop = useDesktop();
   const [creating, setCreating] = useState(false);
-  const [draftName, setDraftName] = useState('');
-  const [draftColor, setDraftColor] = useState(labelColorPresets[0]!);
   const [saving, setSaving] = useState(false);
-  const [createError, setCreateError] = useState<CreateError | null>(null);
+  const createTrigger = useRef<View>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,34 +94,37 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
     [selectedLabelIds, onChange],
   );
 
-  const openCreate = () => {
-    setDraftName('');
-    setDraftColor(labelColorPresets[0]!);
-    setCreateError(null);
-    setCreating(true);
-  };
+  const closeCreate = useCallback(() => { if (!saving) setCreating(false); }, [saving]);
 
   // The new label joins the list and the selection together, so the form never
   // has to be left to create one.
-  const submitCreate = async () => {
-    if (saving) return;
-    const name = draftName.trim();
-    if (!name) { setCreateError('nameRequired'); return; }
+  const createLabel = useCallback(async (name: string, color: string): Promise<CreateError | null> => {
     setSaving(true);
-    setCreateError(null);
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) throw new Error('Session expired');
-      const created = await sessionApiClient.createLabel(token, householdId, { name, color: draftColor });
+      const created = await sessionApiClient.createLabel(token, householdId, { name, color });
       setAllLabels((previous) => [...previous, created]);
       onChange([...selectedLabelIds, created.id]);
       setCreating(false);
+      return null;
     } catch (failure) {
-      setCreateError(isDuplicateName(failure) ? 'picker.duplicate' : 'picker.createError');
+      return isDuplicateName(failure) ? 'picker.duplicate' : 'picker.createError';
     } finally {
       setSaving(false);
     }
-  };
+  }, [householdId, selectedLabelIds, onChange]);
+
+  // Opened over the form rather than at its foot, where a short window cut it
+  // off: a popover by the button on a wide screen, a step of the window on a phone.
+  const createForm = useMemo(() => creating ? <LabelCreateForm saving={saving} dense={dense} onSubmit={createLabel} onCancel={closeCreate} /> : null, [creating, saving, dense, createLabel, closeCreate]);
+  const createStep = useMemo<RouteWindowStep | null>(() => createForm && !desktop ? {
+    title: t('picker.create'),
+    onClose: closeCreate,
+    onReturn: () => (createTrigger.current as unknown as { focus?(): void } | null)?.focus?.(),
+    content: createForm,
+  } : null, [createForm, desktop, closeCreate, t]);
+  const inWindow = useWindowStep(createStep);
 
   if (loading) {
     return (
@@ -148,8 +153,9 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
 
   // A fine pointer needs no 44px target, so desktop chips sit in tight rows.
   const chipTarget = ({ pressed }: { pressed: boolean }) => ({ minHeight: dense ? undefined : activeTheme.controlSizes.touchTarget, justifyContent: 'center' as const, borderRadius: activeTheme.borderRadii.full, opacity: pressed ? 0.7 : 1 });
-  const createButton = canCreate && !creating ? (
-    <Pressable accessibilityRole="button" accessibilityLabel={t('picker.create')} onPress={openCreate} style={chipTarget}>
+  // It stays in place while the form is open, so the popover keeps its anchor and focus returns to it.
+  const createButton = canCreate ? (
+    <Pressable ref={createTrigger} accessibilityRole="button" accessibilityLabel={t('picker.create')} accessibilityState={{ expanded: creating }} aria-expanded={creating} aria-haspopup="dialog" onPress={() => { if (creating) closeCreate(); else setCreating(true); }} style={chipTarget}>
       {/* Shaped like a label, but dashed: it adds one rather than being one. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: activeTheme.spacing[1], borderWidth: activeTheme.borderWidths.default, borderStyle: 'dashed', borderColor: activeTheme.colors.border, borderRadius: activeTheme.borderRadii.full, paddingHorizontal: dense ? activeTheme.spacing[2] + 2 : activeTheme.spacing[3], ...(dense ? { height: activeTheme.spacing[6] } : { paddingVertical: activeTheme.spacing[1] }) }}>
         <Plus size={dense ? activeTheme.spacing[3] : activeTheme.spacing[4]} color={activeTheme.colors.ink} strokeWidth={activeTheme.controlSizes.iconStroke} />
@@ -160,7 +166,7 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
 
   return (
     <Stack gap={2}>
-      {allLabels.length === 0 && !creating ? (
+      {allLabels.length === 0 ? (
         <Text variant="caption" color="inkMuted">{t(canCreate ? 'picker.emptyManager' : 'picker.emptyMember')}</Text>
       ) : null}
       {allLabels.length > 0 || createButton ? (
@@ -183,28 +189,56 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
           {createButton}
         </View>
       ) : null}
-      {creating ? (
-        // Framed as one step inside the form, so it does not read as more fields of the item.
-        <Stack gap={3} style={{ padding: activeTheme.spacing[3], borderWidth: activeTheme.borderWidths.default, borderColor: activeTheme.colors.separator, borderRadius: activeTheme.borderRadii.md }}>
-          <TextField
-            label={t('name')}
-            value={draftName}
-            onChangeText={(text) => { setDraftName(text); if (text.trim() && createError === 'nameRequired') setCreateError(null); }}
-            maxLength={40}
-            disabled={saving}
-            autoFocus={focusFieldOnOpen}
-            {...(createError === 'nameRequired' ? { error: t('nameRequired') } : {})}
-            returnKeyType="done"
-            onSubmitEditing={() => void submitCreate()}
-          />
-          <LabelColorChoices colors={labelColorPresets} value={draftColor} onChange={setDraftColor} disabled={saving} dense={dense} />
-          {createError !== null && createError !== 'nameRequired' ? <Text variant="caption" color="destructive" accessibilityRole="alert">{t(createError)}</Text> : null}
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: activeTheme.spacing[2] }}>
-            <Button label={t('common:cancel')} tone="secondary" size="compact" disabled={saving} onPress={() => setCreating(false)} />
-            <Button label={t('picker.createSubmit')} size="compact" loading={saving} onPress={() => void submitCreate()} />
-          </View>
-        </Stack>
+      {createForm && desktop ? (
+        <AnchoredPopover scrollable title={t('picker.create')} trigger={createTrigger} busy={saving} onClose={closeCreate}>{createForm}</AnchoredPopover>
+      ) : createForm && !inWindow ? (
+        // Outside a window it opens in place, framed so it does not read as more fields of the item.
+        <View style={{ padding: activeTheme.spacing[3], borderWidth: activeTheme.borderWidths.default, borderColor: activeTheme.colors.separator, borderRadius: activeTheme.borderRadii.md }}>{createForm}</View>
       ) : null}
+    </Stack>
+  );
+}
+
+/**
+ * 新建标签: a name and a colour. `onSubmit` sends them and answers with what
+ * went wrong, if anything; what was typed stays until it succeeds.
+ */
+function LabelCreateForm({ saving, dense, onSubmit, onCancel }: {
+  saving: boolean;
+  dense: boolean;
+  onSubmit(name: string, color: string): Promise<CreateError | null>;
+  onCancel(): void;
+}) {
+  const { t } = useTranslation('labels');
+  const [name, setName] = useState('');
+  const [color, setColor] = useState(labelColorPresets[0]!);
+  const [error, setError] = useState<CreateError | null>(null);
+
+  const submit = async () => {
+    if (saving) return;
+    const trimmed = name.trim();
+    if (!trimmed) { setError('nameRequired'); return; }
+    setError(null);
+    const failure = await onSubmit(trimmed, color);
+    if (failure !== null) setError(failure);
+  };
+
+  return (
+    <Stack gap={3}>
+      <TextField
+        label={t('name')}
+        value={name}
+        onChangeText={(text) => { setName(text); if (text.trim() && error === 'nameRequired') setError(null); }}
+        maxLength={40}
+        disabled={saving}
+        autoFocus={focusFieldOnOpen}
+        {...(error === 'nameRequired' ? { error: t('nameRequired') } : {})}
+        returnKeyType="done"
+        onSubmitEditing={() => void submit()}
+      />
+      <LabelColorChoices colors={labelColorPresets} value={color} onChange={setColor} disabled={saving} dense={dense} />
+      {error !== null && error !== 'nameRequired' ? <Text variant="caption" color="destructive" accessibilityRole="alert">{t(error)}</Text> : null}
+      <PickerActions onCancel={onCancel} onConfirm={() => void submit()} confirmLabel={t('picker.createSubmit')} busy={saving} />
     </Stack>
   );
 }
