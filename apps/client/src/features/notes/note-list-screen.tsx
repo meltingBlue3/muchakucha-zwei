@@ -1,15 +1,12 @@
 import { useTranslation } from '../../i18n';
-import { useContentChanges } from '../content/content-changes';
+import { subscribeContentChanges } from '../content/content-changes';
 import { useResourceNavigation } from '../../ui/use-resource-navigation';
 import { useDesktop } from '../../ui/use-desktop';
-import { MarkdownBody } from './markdown-body';
 import { theme } from '../../ui/theme';
-import { ScrollView, View } from 'react-native';
-import { DetailEditButton } from '../../ui/detail-fields';
-import { formatDateTime } from '../../ui/date-values';
+import { View } from 'react-native';
 import { useOpenWindowItem } from '../../ui/route-window';
 import { FloatingCreateButton } from '../../ui/floating-create-button';
-import { useContentDelete, useContentEdit } from '../content/use-content-delete';
+import { useContentDelete } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
 import { useWorkspaceState } from '../../ui/workspace-state';
 import { PageIntro } from '../../ui/page-intro';
@@ -17,14 +14,14 @@ import { GroupLabel, ListGroup } from '../../ui/list-group';
 import { SearchField } from '../../ui/search-field';
 import { HouseholdScreen } from '../households/household-screen';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NoteResponseDto } from '@muchakucha/api-client';
 
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useHouseholdContext } from '../households/household-context';
 import { NoteCard } from '../notes/note-card';
 import { searchNotesByTitle } from '../notes/note-search';
-import { Button, EmptyState, Heading, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
+import { Button, EmptyState, LoadError, LoadingState, Stack, Text } from '../../ui/primitives';
 
 export default function NotesListRoute() {
   const { t } = useTranslation(['notes', 'auth', 'navigation']);
@@ -34,7 +31,6 @@ export default function NotesListRoute() {
   const openResource = useResourceNavigation();
   const openNoteId = useOpenWindowItem('noteId');
   const deleteNote = useContentDelete('notes');
-  const editNote = useContentEdit('notes');
   const { currentHouseholdId } = useHouseholdContext();
 
   const [notes, setNotes] = useState<NoteResponseDto[]>([]);
@@ -44,6 +40,8 @@ export default function NotesListRoute() {
   const [query, setQuery] = useWorkspaceState(`view:${id}:notes:query`, '');
   const loadedHousehold = useRef<string | null>(null);
   const requestGeneration = useRef(0);
+  // On a wide screen the latest note opens beside the list once per visit; closing it leaves the list.
+  const openedLatest = useRef<string | null>(null);
 
   const householdId = id ?? currentHouseholdId;
   const visibleNotes = searchNotesByTitle(notes, query);
@@ -82,7 +80,22 @@ export default function NotesListRoute() {
     }, [fetchData]),
   );
 
-  useContentChanges(householdId, fetchData);
+  // A note saves itself, also just after its window closed: the list follows every save, at any width.
+  useEffect(() => {
+    if (!householdId) return undefined;
+    return subscribeContentChanges(changed => { if (changed === householdId) void fetchData(); });
+  }, [householdId, fetchData]);
+
+  const latest = notes[0];
+  const open = useRef(openResource);
+  open.current = openResource;
+  useEffect(() => {
+    // Decided once, when the list first arrives: a note closed later stays closed.
+    if (!desktop || loading || !householdId || loadedHousehold.current !== householdId || openedLatest.current === householdId) return;
+    openedLatest.current = householdId;
+    // Opened above the list like a click would, so the list stays where it is behind it.
+    if (!openNoteId && latest) open.current(`/households/${encodeURIComponent(householdId)}/notes/${encodeURIComponent(latest.id)}`);
+  }, [desktop, loading, openNoteId, latest, householdId]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -113,12 +126,8 @@ export default function NotesListRoute() {
       onRefresh={handleRefresh}
       width="reading"
       floatingAction={<FloatingCreateButton label={t('create')} onPress={handleCreateNote} />}
-      aside={desktop && !openNoteId && notes[0] ? <View style={{ flex: 1, minHeight: 0 }}>
-        <View style={{ height: theme.layout.paneHeaderHeight, flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2], paddingLeft: theme.spacing[6], paddingRight: theme.spacing[3], borderBottomWidth: theme.borderWidths.default, borderBottomColor: theme.colors.separator }}>
-          <Text variant="meta" color="inkFaint" numberOfLines={1} style={{ flex: 1, fontFamily: theme.fontFamilies.numeric }}>{t('updated', { date: formatDateTime(new Date(notes[0].updatedAt)) })}</Text>
-          <DetailEditButton accessibilityLabel={t('editLatest')} worded onPress={() => openResource(`/households/${encodeURIComponent(householdId!)}/notes/${encodeURIComponent(notes[0]!.id)}/edit`)} />
-        </View>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: theme.spacing[5], paddingHorizontal: theme.spacing[6], width: '100%', maxWidth: theme.layout.readingWidth + theme.spacing[6] * 2, alignSelf: 'center', gap: theme.spacing[4] }}><Heading level={2} style={theme.typography.readingTitle}>{notes[0].title}</Heading><MarkdownBody source={notes[0].body ?? ''} /></ScrollView>
+      aside={desktop && !openNoteId && latest ? <View style={{ flex: 1, paddingVertical: theme.spacing[5], paddingHorizontal: theme.spacing[6] }}>
+        <Text color="inkMuted">{t('pickNote')}</Text>
       </View> : null}
     >
       <Stack gap={5}>
@@ -142,7 +151,7 @@ export default function NotesListRoute() {
 
         {groups.filter(group => group.items.length).map(group => <Stack key={group.key} gap={desktop ? 0 : 2}>{group.key !== 'all' ? <GroupLabel flush>{t(group.key)}</GroupLabel> : null}<ListGroup flush>
           {group.items.map((note) => (
-            <NoteCard key={note.id} note={note} selected={note.id === openNoteId || (desktop && !openNoteId && note.id === notes[0]?.id)} onPress={handleNotePress} onEdit={editNote(note)} onDelete={deleteNote(note)} />
+            <NoteCard key={note.id} note={note} selected={note.id === openNoteId} onPress={handleNotePress} onDelete={deleteNote(note)} />
           ))}
         </ListGroup></Stack>)}
       </Stack>

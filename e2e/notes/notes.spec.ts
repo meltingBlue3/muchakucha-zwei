@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Browser, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
 import { loginUsernameFixture } from '../support/auth';
@@ -10,10 +10,9 @@ const DATABASE_URL =
   'postgresql://muchakucha_test:muchakucha_test_only@127.0.0.1:5432/muchakucha_test';
 const password = 'correct horse battery staple 2026';
 
-async function prepareAccount(
-  seed: string,
-  displayName: string,
-): Promise<{ username: string; accessToken: string; userId: string }> {
+interface Account { username: string; accessToken: string; userId: string }
+
+async function prepareAccount(seed: string, displayName: string): Promise<Account> {
   const database = new Client({ connectionString: DATABASE_URL });
   await database.connect();
   try {
@@ -85,7 +84,20 @@ async function addMembershipViaDb(householdId: string, userId: string): Promise<
   }
 }
 
-test('creates, reads, edits, and deletes a note in the browser', async ({ page }) => {
+/** The note's window: a named region beside the list on a wide screen, a dialog on a phone. */
+const noteWindow = (page: Page) => page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记', exact: true });
+const editor = (page: Page) => page.getByRole('textbox', { name: '笔记内容', exact: true });
+const saveState = (page: Page) => page.getByTestId('note-save-state');
+const box = (page: Page, text: string) => editor(page).getByRole('checkbox', { name: new RegExp(`^(已勾选|未勾选)：${text}$`) });
+
+async function signedIn(browser: Browser, account: Account, destination: string): Promise<Page> {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: 'reduce' });
+  const page = await context.newPage();
+  await loginUsernameFixture(page, account.username, password, destination);
+  return page;
+}
+
+test('a note is written in place, saves itself, and is deleted from its own menu', async ({ page }) => {
   const owner = await prepareAccount('owner', '笔记主人');
   const householdId = await createHousehold(owner.accessToken, '笔记之家');
   const notesPath = `/households/${encodeURIComponent(householdId)}/notes`;
@@ -93,63 +105,56 @@ test('creates, reads, edits, and deletes a note in the browser', async ({ page }
   await loginUsernameFixture(page, owner.username, password, notesPath);
   await expect(page.getByText('还没有笔记', { exact: true })).toBeVisible();
 
-  // --- Create: an empty title stays on the form with an inline error ---
-  await page.getByRole('button', { name: '创建笔记' }).click();
+  // --- New: the title is the document's first line, and Enter moves into the body ---
+  await page.getByRole('button', { name: '创建笔记' }).first().click();
   await expect(page).toHaveURL(new RegExp(`${notesPath}/new$`));
-  await page.getByRole('button', { name: '创建', exact: true }).click();
-  await expect(page.getByText('请输入笔记标题。')).toBeVisible();
-
-  await page.getByLabel('笔记标题').fill('  暑假计划  ');
-  await page.getByLabel('笔记内容').fill('游泳课\n看外婆');
-  await page.getByRole('button', { name: '创建', exact: true }).click();
-
-  await expect(page).toHaveURL(new RegExp(`${notesPath}$`));
-  const card = page.getByRole('button', { name: '笔记：暑假计划', exact: true });
-  await expect(card).toBeVisible();
-  await expect(card).toContainText('游泳课');
-
+  await expect(editor(page)).not.toBeFocused();
+  await editor(page).locator('h1.note-title').click();
+  await page.keyboard.type('暑假计划');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('游泳课');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('看外婆');
+  await expect(saveState(page)).toHaveText('已保存');
+  // The first save created the note, and the page took its address without reopening.
+  await expect(page).toHaveURL(new RegExp(`${notesPath}/[0-9a-f-]{36}$`));
+  const noteId = page.url().split('/').pop()!;
   const listed = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes`);
   expect(listed.body.total).toBe(1);
-  expect(listed.body.notes[0]).toMatchObject({ title: '暑假计划', body: '游泳课\n看外婆', createdBy: owner.userId });
-  const noteId = listed.body.notes[0].id as string;
+  expect(listed.body.notes[0]).toMatchObject({ id: noteId, title: '暑假计划', body: '游泳课\n\n看外婆', createdBy: owner.userId, updatedBy: owner.userId });
+  await expect(noteWindow(page)).toContainText('笔记主人写');
 
-  // --- Read ---
+  // --- Reading again changes nothing ---
+  await page.reload();
+  await expect(editor(page).locator('h1.note-title')).toHaveText('暑假计划');
+  await expect(saveState(page)).toHaveText('已保存');
+  await page.waitForTimeout(1500);
+  expect((await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`)).body.updatedAt).toBe(listed.body.notes[0].updatedAt);
+
+  // --- Editing the title saves it, and closing shows it in the list ---
+  await editor(page).locator('h1.note-title').click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('（改）');
+  await expect(saveState(page)).toHaveText('已保存');
+  await expect.poll(async () => (await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`)).body.title).toBe('暑假计划（改）');
+  await page.getByRole('button', { name: '关闭笔记', exact: true }).click();
+  const card = page.getByRole('button', { name: '笔记：暑假计划（改）', exact: true });
+  await expect(card).toContainText('游泳课');
+
+  // --- Delete from the note's own 「…」: cancel keeps it, confirm returns to the empty list ---
   await card.click();
-  await expect(page).toHaveURL(new RegExp(`${notesPath}/${noteId}$`));
-  // The note opens in the wide reading pane, a named region, or in a phone's dialog.
-  const detail = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记详情' });
-  await expect(detail.getByRole('heading', { name: '暑假计划' })).toBeVisible();
-  await expect(detail.getByText('看外婆')).toBeVisible();
-
-  // --- Edit: saving returns to the refreshed detail view ---
-  await page.getByRole('button', { name: '编辑笔记' }).click();
-  await expect(page).toHaveURL(new RegExp(`${notesPath}/${noteId}/edit$`));
-  await expect(page.getByLabel('笔记标题')).toHaveValue('暑假计划');
-  await page.getByLabel('笔记标题').fill('暑假安排');
-  await page.getByLabel('笔记内容').fill('');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
-
-  await expect(detail.getByRole('heading', { name: '暑假安排' })).toBeVisible();
-  await expect(detail.getByText('这篇笔记还没有内容。')).toBeVisible();
-  const updated = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`);
-  expect(updated.body).toMatchObject({ title: '暑假安排', body: null });
-
-  // --- Delete: cancel keeps the note, confirm returns to the empty list ---
-  await page.getByRole('button', { name: '关闭笔记详情' }).click();
-  await page.getByRole('button', { name: '更多操作：笔记：暑假安排' }).click();
-  await page.getByRole('menuitem', { name: '删除笔记：暑假安排' }).click();
-  await expect(page.getByText('确定要删除「暑假安排」吗？此操作不可撤销。')).toBeVisible();
-  await page.getByRole('dialog', { name: '删除笔记', exact: true }).getByRole('button', { name: '取消', exact: true }).click();
-  await expect(page.getByText('确定要删除「暑假安排」吗？此操作不可撤销。')).toBeHidden();
-
-  await page.getByRole('button', { name: '更多操作：笔记：暑假安排' }).click();
-  await page.getByRole('menuitem', { name: '删除笔记：暑假安排' }).click();
-  await page.getByRole('dialog', { name: '删除笔记', exact: true }).getByRole('button', { name: '删除笔记', exact: true }).click();
-
+  await noteWindow(page).getByRole('button', { name: '更多操作：笔记：暑假计划（改）', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除笔记：暑假计划（改）', exact: true }).click();
+  const question = page.getByRole('dialog', { name: '删除笔记', exact: true });
+  await question.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(question).toBeHidden();
+  await expect(editor(page)).toBeVisible();
+  await noteWindow(page).getByRole('button', { name: '更多操作：笔记：暑假计划（改）', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除笔记：暑假计划（改）', exact: true }).click();
+  await question.getByRole('button', { name: '删除笔记', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${notesPath}$`));
   await expect(page.getByText('还没有笔记', { exact: true })).toBeVisible();
-  const afterDelete = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`);
-  expect(afterDelete.status).toBe(404);
+  expect((await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`)).status).toBe(404);
 });
 
 test('household members see shared notes, most recently updated first, and can search them', async ({ page }) => {
@@ -169,6 +174,8 @@ test('household members see shared notes, most recently updated first, and can s
   await expect(cards).toHaveCount(2);
   await expect(cards.nth(0)).toHaveAccessibleName('笔记：垃圾分类时间');
   await expect(cards.nth(1)).toHaveAccessibleName('笔记：Wi-Fi 密码');
+  // A wide screen opens the latest note beside the list on arrival.
+  await expect(editor(page).locator('h1.note-title')).toHaveText('垃圾分类时间');
 
   // --- Title search narrows the list without a round trip ---
   const search = page.getByLabel('搜索笔记');
@@ -184,7 +191,6 @@ test('household members see shared notes, most recently updated first, and can s
   await expect(cards).toHaveCount(2);
 });
 
-
 test('a member edits another member’s shared note without gaining deletion rights', async ({ page }) => {
   const owner = await prepareAccount('edit-owner', '笔记主人');
   const creator = await prepareAccount('edit-author', '笔记作者');
@@ -192,25 +198,98 @@ test('a member edits another member’s shared note without gaining deletion rig
   const householdId = await createHousehold(owner.accessToken, '协作笔记之家');
   await addMembershipViaDb(householdId, creator.userId);
   await addMembershipViaDb(householdId, member.userId);
-  const created = await apiCall(creator.accessToken, 'POST', `/households/${householdId}/notes`, {
-    title: '采购清单', body: '牛奶',
-  });
+  const created = await apiCall(creator.accessToken, 'POST', `/households/${householdId}/notes`, { title: '采购清单', body: '牛奶' });
   expect(created.status).toBe(201);
   const noteId = created.body.id as string;
-  await loginUsernameFixture(page, member.username, password, `/households/${householdId}/notes`);
-  await page.getByRole('button', { name: '笔记：采购清单', exact: true }).click();
-  await page.getByRole('button', { name: '编辑笔记', exact: true }).click();
-  await expect(page.getByRole('button', { name: '删除笔记', exact: true })).toHaveCount(0);
-  await page.getByLabel('笔记标题').fill('周末采购清单');
-  await page.getByLabel('笔记内容').fill('牛奶、面包');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
-  // Read the saved note in its window: on a wide screen the refreshed list beside it shows the same words.
-  const detail = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记详情' });
-  await expect(detail.getByRole('heading', { name: '周末采购清单', exact: true })).toBeVisible();
-  await expect(detail.getByText('牛奶、面包', { exact: true })).toBeVisible();
+
+  await loginUsernameFixture(page, member.username, password, `/households/${householdId}/notes/${noteId}`);
+  await editor(page).getByText('牛奶', { exact: true }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('、面包');
+  await expect(saveState(page)).toHaveText('已保存');
+  await expect(noteWindow(page)).toContainText('笔记作者写 · 协作成员');
+  // The note's menu copies but does not delete for someone who did not write it.
+  await noteWindow(page).getByRole('button', { name: '更多操作：笔记：采购清单', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: '复制为 Markdown', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /^删除笔记：/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
   const deleted = await apiCall(member.accessToken, 'DELETE', `/households/${householdId}/notes/${noteId}`);
   expect(deleted.status).toBe(403);
   const saved = await apiCall(creator.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`);
-  expect(saved.status).toBe(200);
-  expect(saved.body).toMatchObject({ title: '周末采购清单', body: '牛奶、面包', createdBy: creator.userId });
+  expect(saved.body).toMatchObject({ title: '采购清单', body: '牛奶、面包', createdBy: creator.userId, updatedBy: member.userId });
+});
+
+test('a box ticked by one member is ticked for another after a refresh', async ({ browser }) => {
+  const owner = await prepareAccount('tick-owner', '妈妈');
+  const member = await prepareAccount('tick-member', '爸爸');
+  const householdId = await createHousehold(owner.accessToken, '勾选之家');
+  await addMembershipViaDb(householdId, member.userId);
+  const created = await apiCall(owner.accessToken, 'POST', `/households/${householdId}/notes`, { title: '菜场', body: '- [ ] 排骨\n- [ ] 小葱' });
+  const path = `/households/${householdId}/notes/${created.body.id}`;
+  const mother = await signedIn(browser, owner, path);
+  const father = await signedIn(browser, member, path);
+  try {
+    await expect(box(mother, '排骨')).not.toBeChecked();
+    await box(father, '排骨').click();
+    await expect(box(father, '排骨')).toBeChecked();
+    // Ticking does not put the caret in the text.
+    await expect(editor(father)).not.toBeFocused();
+    await expect.poll(async () => (await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${created.body.id}`)).body.body).toBe('- [x] 排骨\n- [ ] 小葱');
+    await mother.reload();
+    await expect(box(mother, '排骨')).toBeChecked();
+    await expect(box(mother, '小葱')).not.toBeChecked();
+  } finally {
+    await mother.context().close();
+    await father.context().close();
+  }
+});
+
+test('a tick merges into another member’s change, and a text change against theirs pauses and asks', async ({ browser }) => {
+  const owner = await prepareAccount('merge-owner', '妈妈');
+  const member = await prepareAccount('merge-member', '爸爸');
+  const householdId = await createHousehold(owner.accessToken, '合并之家');
+  await addMembershipViaDb(householdId, member.userId);
+  const created = await apiCall(owner.accessToken, 'POST', `/households/${householdId}/notes`, { title: '菜场', body: '- [ ] 排骨\n- [ ] 小葱' });
+  const noteId = created.body.id as string;
+  const read = async () => (await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`)).body;
+  const path = `/households/${householdId}/notes/${noteId}`;
+  const mother = await signedIn(browser, owner, path);
+  const father = await signedIn(browser, member, path);
+  try {
+    // Mother adds an item; father still has the note as it was when he opened it.
+    await editor(mother).getByText('小葱', { exact: true }).click();
+    await mother.keyboard.press('End');
+    await mother.keyboard.press('Enter');
+    await mother.keyboard.type('西红柿');
+    await expect(saveState(mother)).toHaveText('已保存');
+    await expect.poll(async () => (await read()).body).toBe('- [ ] 排骨\n- [ ] 小葱\n- [ ] 西红柿');
+
+    // His tick lands on her version without asking him anything.
+    await box(father, '小葱').click();
+    await expect.poll(async () => (await read()).body).toBe('- [ ] 排骨\n- [x] 小葱\n- [ ] 西红柿');
+    await expect(editor(father).getByText('西红柿', { exact: true })).toBeVisible();
+    await expect(box(father, '小葱')).toBeChecked();
+    await expect(father.getByRole('alert')).toHaveCount(0);
+    await expect(saveState(father)).toHaveText('已保存');
+
+    // Her next words meet his save: saving stops and she is asked, with her text kept.
+    const before = await read();
+    await editor(mother).getByText('西红柿', { exact: true }).click();
+    await mother.keyboard.press('End');
+    await mother.keyboard.type(' 6 个');
+    const banner = mother.getByRole('alert').filter({ hasText: '在你写的时候也改了这篇' });
+    await expect(banner).toContainText('爸爸在你写的时候也改了这篇。自动保存先停下，你的内容还在。');
+    await expect(saveState(mother)).toHaveText('未保存');
+    expect((await read()).updatedAt).toBe(before.updatedAt);
+    await expect(editor(mother).getByText('西红柿 6 个', { exact: true })).toBeVisible();
+    await banner.getByRole('button', { name: '对照最新内容', exact: true }).click();
+    await expect(banner).toContainText('正文：- [ ] 排骨 - [x] 小葱 - [ ] 西红柿');
+    await banner.getByRole('button', { name: '用我的版本保存', exact: true }).click();
+    await expect(saveState(mother)).toHaveText('已保存');
+    await expect.poll(async () => (await read()).body).toBe('- [ ] 排骨\n- [ ] 小葱\n- [ ] 西红柿 6 个');
+  } finally {
+    await mother.context().close();
+    await father.context().close();
+  }
 });

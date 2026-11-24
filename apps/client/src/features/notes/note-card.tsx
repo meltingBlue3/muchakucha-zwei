@@ -10,7 +10,6 @@ import { theme } from '../../ui/theme';
 import { useDesktop } from '../../ui/use-desktop';
 
 interface NoteCardProps {
-  onEdit?: (() => void) | undefined;
   onDelete?: (() => void) | undefined;
   note: NoteResponseDto;
   onPress: (note: NoteResponseDto) => void;
@@ -19,7 +18,7 @@ interface NoteCardProps {
 }
 
 /** One note as a list row: title, then when it changed and how it begins. */
-export function NoteCard({ note, onPress, onEdit, onDelete, selected = false }: NoteCardProps) {
+export function NoteCard({ note, onPress, onDelete, selected = false }: NoteCardProps) {
   const { t } = useTranslation('notes');
   const excerpt = markdownExcerpt(note.body ?? '');
   const desktop = useDesktop();
@@ -29,8 +28,8 @@ export function NoteCard({ note, onPress, onEdit, onDelete, selected = false }: 
       accessibilityLabel={t('card', { title: note.title })}
       onPress={() => onPress(note)}
       selected={selected}
+      // Opening a note is editing it, so the menu only deletes.
       trailing={<CardActionsMenu subject={t('card', { title: note.title })} actions={[
-        ...(onEdit ? [{ kind: 'edit' as const, accessibilityLabel: t('editCard', { title: note.title }), onPress: onEdit }] : []),
         ...(onDelete ? [{ kind: 'delete' as const, accessibilityLabel: t('deleteCard', { title: note.title }), onPress: onDelete }] : []),
       ]} />}
     >

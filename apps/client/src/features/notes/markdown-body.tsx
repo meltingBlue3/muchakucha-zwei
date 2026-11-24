@@ -3,9 +3,11 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Linking, ScrollView, View, Text as NativeText, type TextStyle } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type Token from 'markdown-it/lib/token.mjs';
+import Check from 'lucide-react-native/icons/check';
 import { Stack, Text } from '../../ui/primitives';
 import type { Theme } from '../../ui/theme';
 import { parseMarkdown, safeLink, type MarkdownNode } from './markdown';
+import { inlineText } from './checklists';
 import { useDesktop } from '../../ui/use-desktop';
 
 export function MarkdownBody({ source, tableLabel, headingOffset = 0, chat = false }: {
@@ -44,8 +46,22 @@ export function MarkdownBody({ source, tableLabel, headingOffset = 0, chat = fal
     };
     return walk();
   };
-  const render = (items: MarkdownNode[]): ReactNode[] => items.map(({ token, children }, index) => {
-    if (token.type === 'inline') return <Text key={index} selectable style={bodyStyle}>{inline(token.children ?? [])}</Text>;
+  const lineHeight = (bodyStyle ?? theme.typography.body).lineHeight;
+  // A ticked item reads as done: struck through and quieter, like a completed task.
+  const done: TextStyle = { textDecorationLine: 'line-through', color: theme.colors.inkFaint };
+  const render = (items: MarkdownNode[], ticked = false): ReactNode[] => items.map(({ token, children }, index) => {
+    if (token.type === 'inline') return <Text key={index} selectable style={[bodyStyle, ticked ? done : undefined]}>{inline(token.children ?? [])}</Text>;
+    // A checklist in a reply is read here, never ticked: the box shows its state and is not a control.
+    if (token.type === 'bullet_list_open' && token.attrGet('data-type') === 'taskList') return <Stack key={index} gap={desktop ? 0 : 2}>{children.map((item, i) => {
+      const checked = item.token.attrGet('data-checked') === 'true';
+      const [first, ...rest] = item.children;
+      return <View key={i} style={{ flexDirection: 'row', gap: theme.spacing[2] }}>
+        <View accessible role="checkbox" aria-checked={checked} aria-disabled aria-label={inlineText(first?.children[0]?.token).trim() || t('format.emptyItem')} style={{ width: theme.controlSizes.checkbox, height: theme.controlSizes.checkbox, marginTop: (lineHeight - theme.controlSizes.checkbox) / 2, borderRadius: theme.borderRadii.sm / 2, borderWidth: checked ? 0 : theme.borderWidths.focus, borderColor: theme.colors.border, backgroundColor: checked ? theme.colors.ink : theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+          {checked ? <Check size={theme.controlSizes.checkbox - theme.spacing[2]} color={theme.colors.surface} strokeWidth={theme.focus.width + 1} /> : null}
+        </View>
+        <View style={{ flex: 1 }}>{first ? render([first], checked) : null}{render(rest)}</View>
+      </View>;
+    })}</Stack>;
     if (token.type === 'heading_open') {
       const level = Number(token.tag.slice(1));
       const typography = level === 1 ? theme.typography.heading : level === 2 ? theme.typography.section : level === 3 ? theme.typography.body : level === 4 ? theme.typography.label : theme.typography.bodySm;
@@ -60,7 +76,7 @@ export function MarkdownBody({ source, tableLabel, headingOffset = 0, chat = fal
     if (token.type === 'hr') return <View key={index} style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator }} />;
     if (token.type === 'fence' || token.type === 'code_block') return <ScrollView key={index} tabIndex={0} horizontal><Text selectable style={{ backgroundColor: theme.colors.surfaceMuted, padding: theme.spacing[3] }}>{token.content}</Text></ScrollView>;
     if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') return <Stack key={index} gap={desktop ? 0 : 2}>{children.map((child, i) => <View key={i} style={{ flexDirection: 'row', gap: theme.spacing[2] }}><Text style={bodyStyle}>{token.type === 'bullet_list_open' ? '•' : `${Number(token.attrGet('start') ?? 1) + i}.`}</Text><View style={{ flex: 1 }}>{render(child.children)}</View></View>)}</Stack>;
-    return <View key={index} style={token.type === 'blockquote_open' ? { borderLeftWidth: theme.borderWidths.focus, borderLeftColor: theme.colors.outline, paddingLeft: theme.spacing[3] } : undefined}>{children.length ? render(children) : <Text selectable>{token.content}</Text>}</View>;
+    return <View key={index} style={token.type === 'blockquote_open' ? { borderLeftWidth: theme.borderWidths.focus, borderLeftColor: theme.colors.outline, paddingLeft: theme.spacing[3] } : undefined}>{children.length ? render(children, ticked) : <Text selectable>{token.content}</Text>}</View>;
   });
   return <Stack gap={3} testID="markdown-body">{source.trim() ? render(nodes) : <Text color="inkMuted">{t('format.emptyBody')}</Text>}{linkError ? <Text accessibilityRole="alert" color="destructive">{t('format.openLinkError')}</Text> : null}</Stack>;
 }

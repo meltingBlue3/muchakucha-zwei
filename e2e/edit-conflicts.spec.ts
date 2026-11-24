@@ -91,8 +91,61 @@ async function addMembershipViaDb(householdId: string, userId: string): Promise<
   }
 }
 
-for (const resource of ['notes', 'tasks', 'events'] as const) {
-  test(`${resource}: stale drafts survive restart and require reviewing the latest version`, async ({ page }, testInfo) => {
+test('notes: a stale draft survives a restart, and saving over the latest version is asked first', async ({ page }, testInfo) => {
+  const owner = await prepareAccount('conf-owner', '共同作者');
+  const writer = await prepareAccount('conf-edit', '草稿作者');
+  const householdId = await createHousehold(owner.accessToken, '编辑冲突之家');
+  await addMembershipViaDb(householdId, writer.userId);
+  const root = `/households/${householdId}/notes`;
+  const created = await apiCall(owner.accessToken, 'POST', root, { title: '共同内容', body: '- [ ] 牛奶' });
+  expect(created.status).toBe(201);
+  const path = `${root}/${created.body.id}`;
+  const editor = page.getByRole('textbox', { name: '笔记内容', exact: true });
+  const title = editor.locator('h1.note-title');
+  const banner = page.getByRole('alert').filter({ hasText: '在你写的时候也改了这篇' });
+  const saves = /\/api\/v1\/households\/[^/]+\/notes\/[^/]+$/;
+  await loginUsernameFixture(page, writer.username, password, path);
+
+  // Written while saves cannot get through: it stays on this device.
+  await page.route(saves, route => route.request().method() === 'PUT' ? route.abort() : route.fallback());
+  await title.click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Shift+Home');
+  await page.keyboard.type('我的未保存草稿');
+  await expect(page.getByTestId('note-save-state')).toHaveText('未保存');
+  expect((await apiCall(owner.accessToken, 'PUT', path, { title: '另一成员已保存' })).status).toBe(200);
+  await page.unroute(saves);
+
+  // After a restart the draft is back, and its save meets the other member's version.
+  await page.reload();
+  await expect(title).toHaveText('我的未保存草稿');
+  await expect(banner).toContainText('共同作者在你写的时候也改了这篇。自动保存先停下，你的内容还在。');
+  expect((await apiCall(owner.accessToken, 'GET', path)).body.title).toBe('另一成员已保存');
+  await banner.getByRole('button', { name: '对照最新内容', exact: true }).click();
+  await expect(banner.getByText('标题：另一成员已保存', { exact: true })).toBeVisible();
+  await expect(title).toHaveText('我的未保存草稿');
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`conflict-${width}.png`), fullPage: true });
+  }
+
+  // Reading is not a lock: a newer save after the comparison is caught again.
+  expect((await apiCall(owner.accessToken, 'PUT', path, { title: '又一次更新' })).status).toBe(200);
+  await banner.getByRole('button', { name: '用我的版本保存', exact: true }).click();
+  await expect(banner).toBeVisible();
+  expect((await apiCall(owner.accessToken, 'GET', path)).body.title).toBe('又一次更新');
+  await banner.getByRole('button', { name: '对照最新内容', exact: true }).click();
+  await expect(banner.getByText('标题：又一次更新', { exact: true })).toBeVisible();
+  await banner.getByRole('button', { name: '用我的版本保存', exact: true }).click();
+  await expect(page.getByTestId('note-save-state')).toHaveText('已保存');
+  await expect(banner).toHaveCount(0);
+  expect((await apiCall(owner.accessToken, 'GET', path)).body).toMatchObject({ title: '我的未保存草稿', body: '- [ ] 牛奶', updatedBy: writer.userId });
+});
+
+for (const resource of ['tasks', 'events'] as const) {
+  test(`${resource}: stale drafts survive restart and require reviewing the latest version`, async ({ page }) => {
     const owner = await prepareAccount('conf-owner', '共同作者');
     const editor = await prepareAccount('conf-edit', '草稿作者');
     const householdId = await createHousehold(owner.accessToken, '编辑冲突之家');
@@ -103,7 +156,7 @@ for (const resource of ['notes', 'tasks', 'events'] as const) {
     });
     expect(created.status).toBe(201);
     const path = `${root}/${created.body.id}`;
-    const noun = resource === 'notes' ? '笔记' : resource === 'tasks' ? '任务' : '日程';
+    const noun = resource === 'tasks' ? '任务' : '日程';
     const save = resource === 'tasks' ? '保存' : '保存';
     await loginUsernameFixture(page, editor.username, password, path);
     await page.getByRole('button', { name: `编辑${noun}`, exact: true }).click();
@@ -119,14 +172,6 @@ for (const resource of ['notes', 'tasks', 'events'] as const) {
     await page.getByRole('button', { name: '查看最新内容', exact: true }).click();
     await expect(page.getByText('标题：另一成员已保存', { exact: true })).toBeVisible();
     await expect(page.getByLabel(`${noun}标题`, { exact: true })).toHaveValue('我的未保存草稿');
-    if (resource === 'notes') {
-      for (const width of [320, 390, 1440]) {
-        await page.setViewportSize({ width, height: 900 });
-        await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-        await page.screenshot({ path: testInfo.outputPath(`conflict-${width}.png`), fullPage: true });
-      }
-    }
     // Reading is not a lock: a new edit after review must still reject the old snapshot.
     expect((await apiCall(owner.accessToken, 'PUT', path, { title: '又一次更新' })).status).toBe(200);
     await page.getByRole('button', { name: '已查看，继续整理草稿', exact: true }).click();

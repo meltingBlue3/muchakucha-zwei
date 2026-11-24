@@ -5,7 +5,7 @@ const householdId = '11111111-1111-4111-8111-111111111111';
 const noteId = '33333333-3333-4333-8333-333333333333';
 const base = `/households/${householdId}`;
 async function setup(page: Page, role = 'OWNER') {
-  let note = { id: noteId, householdId, title: '暑假计划：和家人一起安排一个轻松的假期', body: '先商量每个人想去的地方。\n'.repeat(45), createdBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
+  let note = { id: noteId, householdId, title: '暑假计划：和家人一起安排一个轻松的假期', body: '先商量每个人想去的地方。\n'.repeat(45), createdBy: 'user', updatedBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
   let labels = [{ id: 'label', name: '家务', color: '#277A72' }];
   let failLabels = false;
   await page.clock.setFixedTime(new Date('2030-06-15T04:00:00Z'));
@@ -21,7 +21,7 @@ async function setup(page: Page, role = 'OWNER') {
     else if (path.endsWith('/' + householdId)) body = { ...household, members: [{ membershipId: 'member', userId: 'user', displayName: '小林', role, isCurrentUser: true }] };
     else if (path.endsWith('/notes')) body = { notes: [note], total: 1 };
     else if (path.endsWith('/notes/' + noteId)) {
-      if (method === 'PUT') note = { ...note, ...route.request().postDataJSON() };
+      if (method === 'PUT') note = { ...note, ...route.request().postDataJSON(), updatedAt: new Date().toISOString() };
       body = note;
     } else if (path.includes('/labels')) {
       if (method !== 'GET' && failLabels) { await route.fulfill({ status: 500, json: { error: { code: 'server_error' } } }); return; }
@@ -45,19 +45,19 @@ for (const width of [320, 390, 1440]) {
     await page.goto(`${base}/notes`);
     await page.getByLabel('搜索笔记', { exact: true }).fill('暑假');
     await page.getByRole('button', { name: /^笔记：/ }).click();
-    const detail = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记详情', exact: true });
-    await expect(detail.getByRole('button', { name: '编辑笔记' })).toBeInViewport();
+    const note = page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记', exact: true });
+    const editor = note.getByRole('textbox', { name: '笔记内容', exact: true });
+    await expect(note.getByRole('button', { name: /^更多操作：笔记：/ })).toBeInViewport();
+    await expect(note.getByTestId('note-save-state')).toHaveText('已保存');
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`note-detail-${width}.png`) });
-    await page.getByRole('button', { name: '编辑笔记', exact: true }).click();
-    await page.getByLabel('笔记标题', { exact: true }).fill('暑假改好的计划');
+    // The note is written where it is read: no 编辑 to press, and the change saves itself.
+    await expect(page.getByRole('button', { name: /^编辑/ })).toHaveCount(0);
+    // A triple click selects the whole title line, however it wraps.
+    await editor.locator('h1.note-title').click({ clickCount: 3 });
+    await page.keyboard.type('暑假改好的计划');
+    await expect(note.getByTestId('note-save-state')).toHaveText('已保存');
     await expect(page.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
-    await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: '编辑笔记', exact: true }).click();
-    await expect(page.getByLabel('笔记标题', { exact: true })).toHaveValue('暑假改好的计划');
-    await page.getByLabel('笔记内容', { exact: true }).fill('');
-    await page.getByRole('button', { name: '保存', exact: true }).click();
-    await expect(detail.getByText('这篇笔记还没有内容。')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByLabel('搜索笔记', { exact: true })).toHaveValue('暑假');
     await expect(page.getByRole('button', { name: '笔记：暑假改好的计划', exact: true })).toBeVisible();
@@ -95,18 +95,23 @@ for (const width of [320, 390, 1440]) {
   });
 }
 
-test('direct note edits restore drafts and closing returns to detail without stacked dialogs', async ({ page }) => {
+test('an old edit link opens the note, whose unsaved draft survives a reload in one window', async ({ page }) => {
   await setup(page);
+  // Saves fail, so what is written stays on this device.
+  await page.route(`**/api/v1/households/${householdId}/notes/${noteId}`, route => route.request().method() === 'PUT' ? route.fulfill({ status: 503, json: {} }) : route.fallback());
   await page.goto(`${base}/notes/${noteId}/edit`);
-  await page.getByLabel('笔记标题', { exact: true }).fill('保存到设备的草稿');
+  await expect(page).toHaveURL(`${base}/notes/${noteId}`);
+  const title = page.getByRole('textbox', { name: '笔记内容', exact: true }).locator('h1.note-title');
+  await title.click({ clickCount: 3 });
+  await page.keyboard.type('保存到设备的草稿');
+  await expect(page.getByTestId('note-save-state')).toHaveText('未保存');
   await page.reload();
-  await expect(page.getByLabel('笔记标题', { exact: true })).toHaveValue('保存到设备的草稿');
+  await expect(title).toHaveText('保存到设备的草稿');
+  await expect(page.getByTestId('note-save-state')).toHaveText('未保存');
   await expect(page.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
   // One window and nothing stacked: a phone's single dialog, or the wide reading pane with no dialog at all.
   await expect(page.getByRole('dialog')).toHaveCount((page.viewportSize()?.width ?? 0) >= 1024 ? 0 : 1);
-  await page.getByRole('button', { name: '关闭编辑笔记', exact: true }).click();
-  await expect(page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记详情', exact: true })).toBeVisible();
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '关闭笔记', exact: true }).click();
   await expect(page).toHaveURL(`${base}/notes`);
 });
 
@@ -186,6 +191,8 @@ test('a completed preview task keeps its undo action even if the server reorders
 for (const role of ['OWNER', 'ADMIN', 'MEMBER']) {
   test(`${role} uses the note card menu and failed deletion remains retryable`, async ({ page }) => {
     await setup(page, role);
+    // A phone: a wide screen opens the note beside the list, with a 「…」 of its own.
+    await page.setViewportSize({ width: 390, height: 844 });
     let deleted = false;
     let fail = true;
     const note = { id: noteId, householdId, title: '待删除笔记', body: null, createdBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
@@ -241,7 +248,8 @@ for (const [language, labels] of [
           await route.fulfill({ json: note });
         });
         await page.goto(`${base}/notes`);
-        await page.getByRole('button', { name: labels.more, exact: true }).click();
+        // A wide screen has opened the note beside the list, with a 「…」 of its own; this is the row's.
+        await page.getByRole('button', { name: labels.more, exact: true }).first().click();
         await page.getByRole('menuitem', { name: labels.delete, exact: true }).click();
         await page.getByRole('button', { name: labels.confirm, exact: true }).click();
         await expect(page).toHaveURL(`${base}/notes`);
@@ -254,7 +262,9 @@ for (const [language, labels] of [
 
 test('member cannot delete another author note through the card or direct URL', async ({ page }) => {
   await setup(page, 'MEMBER');
-  const note = { id: noteId, householdId, title: '其他成员的笔记', body: null, createdBy: 'other-user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
+  // A phone: the note opens as a sheet, where a wide screen would open it beside the list unasked.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const note = { id: noteId, householdId, title: '其他成员的笔记', body: null, createdBy: 'other-user', updatedBy: 'other-user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
   let writes = 0;
   await page.route(`**/api/v1/households/${householdId}/notes`, route => route.fulfill({ json: { notes: [note], total: 1 } }));
   await page.route(`**/api/v1/households/${householdId}/notes/${noteId}`, route => {
@@ -263,9 +273,11 @@ test('member cannot delete another author note through the card or direct URL', 
   });
   await page.goto(`${base}/notes`);
   await expect(page.getByRole('button', { name: '笔记：其他成员的笔记', exact: true })).toBeVisible();
-  // Any member may edit, so the menu stays; only the delete entry is withheld.
-  await page.getByRole('button', { name: '更多操作：笔记：其他成员的笔记', exact: true }).click();
-  await expect(page.getByRole('menuitem', { name: '编辑笔记：其他成员的笔记', exact: true })).toBeVisible();
+  // Opening the note is editing it, so a card offers no menu when it cannot delete.
+  await expect(page.getByRole('button', { name: '更多操作：笔记：其他成员的笔记', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '笔记：其他成员的笔记', exact: true }).click();
+  await page.getByRole('dialog', { name: '笔记', exact: true }).getByRole('button', { name: '更多操作：笔记：其他成员的笔记', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: '复制为 Markdown', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: /^删除笔记：/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await page.goto(`${base}/notes/${noteId}/delete`);

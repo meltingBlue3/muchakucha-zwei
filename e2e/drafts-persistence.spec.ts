@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
 import { loginUsernameFixture } from './support/auth';
@@ -122,46 +122,60 @@ async function getHouseholdMemberships(
 
 const draftKey = (userId: string) => `muchakucha:drafts:v1:${userId}`;
 
+// A note saves itself; while saves cannot reach the server, what was written stays on this device.
+const blockNoteSaves = (target: Page | BrowserContext) => target.route(/\/api\/v1\/households\/[^/]+\/notes(\/[^/]+)?$/, route => ['POST', 'PUT'].includes(route.request().method()) ? route.abort() : route.fallback());
+const unblockNoteSaves = (target: Page | BrowserContext) => target.unroute(/\/api\/v1\/households\/[^/]+\/notes(\/[^/]+)?$/);
+const noteEditor = (page: Page) => page.getByRole('textbox', { name: '笔记内容', exact: true });
+const noteTitle = (page: Page) => noteEditor(page).locator('h1.note-title');
+async function writeNote(page: Page, title: string, body?: string) {
+  await noteTitle(page).click();
+  await page.keyboard.type(title);
+  if (body !== undefined) { await page.keyboard.press('Enter'); await page.keyboard.type(body); }
+}
+
 test('note drafts survive browser restart, stay household scoped, and clear on save', async ({ page, context }, testInfo) => {
   const account = await prepareAccount('draft', '草稿用户');
   const first = await createHousehold(account.accessToken, '草稿家庭 A');
   const second = await createHousehold(account.accessToken, '草稿家庭 B');
+  await blockNoteSaves(context);
   await loginUsernameFixture(page, account.username, password);
   await page.goto(`${WEB_ORIGIN}/households/${first.id}/notes`);
-  await page.getByRole('button', { name: '创建笔记', exact: true }).click();
-  await page.getByLabel('笔记标题').fill('重启后继续');
-  await page.getByLabel('笔记内容').fill('未保存的内容');
+  await page.getByRole('button', { name: '创建笔记', exact: true }).first().click();
+  await writeNote(page, '重启后继续', '未保存的内容');
+  await expect(page.getByText('已存在这台设备，联网后自动保存。', { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel('笔记标题')).toHaveValue('重启后继续');
-  await expect(page.getByLabel('笔记内容')).toHaveValue('未保存的内容');
+  await expect(noteTitle(page)).toHaveText('重启后继续');
+  await expect(noteEditor(page)).toContainText('未保存的内容');
+  await expect(page.getByTestId('note-save-state')).toHaveText('未保存');
   // Closing the tab destroys all in-memory React state; the new tab restores from disk.
   const fresh = await context.newPage();
   await page.close();
   await fresh.goto(`${WEB_ORIGIN}/households/${second.id}/notes/new`);
-  await expect(fresh.getByLabel('笔记标题')).toHaveValue('');
+  await expect(noteTitle(fresh)).toHaveText('');
   await fresh.goto(`${WEB_ORIGIN}/households/${first.id}/notes`);
-  await fresh.getByRole('button', { name: '创建笔记', exact: true }).click();
-  await expect(fresh.getByLabel('笔记标题')).toHaveValue('重启后继续');
+  await fresh.getByRole('button', { name: '创建笔记', exact: true }).first().click();
+  await expect(noteTitle(fresh)).toHaveText('重启后继续');
   await expect(fresh.getByRole('button', { name: '丢弃草稿', exact: true })).toHaveCount(0);
-  // The editor is the wide reading pane, a named region, or a phone's dialog; either way only one window is open.
-  const editor = () => fresh.getByRole((fresh.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '创建笔记', exact: true });
+  // The note is the wide reading pane, a named region, or a phone's dialog; either way only one window is open.
+  const window = () => fresh.getByRole((fresh.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name: '笔记', exact: true });
   await expect(fresh.getByRole('dialog')).toHaveCount((fresh.viewportSize()?.width ?? 0) >= 1024 ? 0 : 1);
   for (const width of [320, 390, 1440]) {
     await fresh.setViewportSize({ width, height: 900 });
-    await expect(editor().getByRole('button', { name: '创建', exact: true })).toBeVisible();
+    await expect(window().getByTestId('note-save-state')).toHaveText('未保存');
     expect((await new AxeBuilder({ page: fresh }).analyze()).violations).toEqual([]);
     expect(await fresh.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await fresh.screenshot({ path: testInfo.outputPath(`draft-${width}.png`) });
   }
-  await editor().getByRole('button', { name: '取消', exact: true }).click();
-  await expect(fresh).toHaveURL(new RegExp(`/households/${first.id}/notes$`));
-  await fresh.getByRole('button', { name: '创建笔记', exact: true }).click();
-  await expect(fresh.getByLabel('笔记标题')).toHaveValue('重启后继续');
-  await expect(fresh.getByLabel('笔记内容')).toHaveValue('未保存的内容');
-  await fresh.getByRole('button', { name: '创建', exact: true }).click();
-  await expect(fresh).toHaveURL(new RegExp(`/households/${first.id}/notes$`));
+  // Back online, Ctrl Enter saves at once; the note takes its address and the draft is gone.
+  await unblockNoteSaves(context);
+  await noteEditor(fresh).getByText('未保存的内容').click();
+  await fresh.keyboard.press('Control+Enter');
+  await expect(fresh.getByTestId('note-save-state')).toHaveText('已保存');
+  await expect(fresh).toHaveURL(new RegExp(`/households/${first.id}/notes/[0-9a-f-]{36}$`));
+  const saved = await fetch(`${API_ORIGIN}/api/v1/households/${first.id}/notes`, { headers: { authorization: `Bearer ${account.accessToken}` } }).then(response => response.json());
+  expect(saved.notes).toEqual([expect.objectContaining({ title: '重启后继续', body: '未保存的内容' })]);
   await fresh.goto(`${WEB_ORIGIN}/households/${first.id}/notes/new`);
-  await expect(fresh.getByLabel('笔记标题')).toHaveValue('');
+  await expect(noteTitle(fresh)).toHaveText('');
   expect(await fresh.evaluate((key) => localStorage.getItem(key), draftKey(account.userId))).toBeNull();
 });
 
@@ -193,26 +207,29 @@ test('offline refresh retains drafts; confirmed household access loss removes on
   const kept = await createHousehold(member.accessToken, '保留的家庭');
   await addMembershipViaDb(lost.id, member.userId, 'MEMBER');
   await loginUsernameFixture(page, member.username, password);
+  // Saves cannot reach the server, so each household keeps a draft of its new note.
+  await blockNoteSaves(page);
   for (const household of [lost, kept]) {
     await page.goto(`${WEB_ORIGIN}/households/${household.id}/notes/new`);
-    await page.getByLabel('笔记标题').fill(household.name);
+    await writeNote(page, household.name);
+    await expect(page.getByTestId('note-save-state')).toHaveText('未保存');
   }
   // A failed membership request is not evidence of removal.
   await page.route(`${API_ORIGIN}/api/v1/households`, (route) => route.abort());
   await page.reload();
-  await expect(page.getByLabel('笔记标题')).toHaveValue(kept.name);
+  await expect(noteTitle(page)).toHaveText(kept.name);
   const before = await page.evaluate((key) => localStorage.getItem(key), draftKey(member.userId));
   expect(before).toContain(lost.id);
   await page.unroute(`${API_ORIGIN}/api/v1/households`);
   const response = await request.post(`${API_ORIGIN}/api/v1/households/${lost.id}/leave`, { headers: { authorization: `Bearer ${member.accessToken}` } });
   expect(response.status()).toBe(204);
   await page.reload();
-  await expect(page.getByLabel('笔记标题')).toHaveValue(kept.name);
+  await expect(noteTitle(page)).toHaveText(kept.name);
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), draftKey(member.userId))).not.toContain(lost.id);
   expect(await page.evaluate((key) => localStorage.getItem(key), draftKey(member.userId))).toContain(kept.id);
   await addMembershipViaDb(lost.id, member.userId, 'MEMBER');
   await page.goto(`${WEB_ORIGIN}/households/${lost.id}/notes/new`);
-  await expect(page.getByLabel('笔记标题')).toHaveValue('');
+  await expect(noteTitle(page)).toHaveText('');
 });
 
 
