@@ -24,7 +24,7 @@ const T1 = '2026-11-24T08:01:00.000Z';
 const T2 = '2026-11-24T08:02:00.000Z';
 const groceries = '- [ ] 牛奶\n- [ ] 鸡蛋';
 const note = (patch: Partial<NoteResponseDto> = {}): NoteResponseDto => ({
-  id: 'note-1', householdId: 'home', title: '采购', body: groceries, createdBy: 'me', updatedBy: 'me', createdAt: T0, updatedAt: T0, ...patch,
+  id: 'note-1', householdId: 'home', title: '采购', body: groceries, createdBy: 'me', updatedBy: 'me', createdAt: T0, updatedAt: T0, pinnedAt: null, labels: [], ...patch,
 });
 const edit = (body: string, title = '采购'): NoteEditorChange => ({ title, body, kind: 'edit' });
 const tick = (index: number, text: string, checked: boolean, body: string): NoteEditorChange => ({ title: '采购', body, kind: 'tick', tick: { index, text, checked } });

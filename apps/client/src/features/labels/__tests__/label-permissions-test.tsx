@@ -74,7 +74,7 @@ async function renderAs(
     localizedNames: LabelNamesDto | null;
     createdBy?: string;
     createdAt: string;
-    usage?: { events: number; tasks: number };
+    usage?: { events: number; tasks: number; notes?: number };
   }> = [
     { id: 'label-1', name: '采购', color: '#B94736', systemKey: null, localizedNames: null, createdAt: new Date().toISOString() },
   ],
@@ -191,13 +191,19 @@ describe('editing a label whose colour is not one of the presets', () => {
 });
 
 describe('how much each label is used', () => {
-  const used = { id: 'label-1', name: '采购', color: '#B5562F', systemKey: null, localizedNames: null, createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 2, tasks: 1 } };
-  const unused = { id: 'label-2', name: '闲置', color: '#2C716C', systemKey: null, localizedNames: null, createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0 } };
+  const used = { id: 'label-1', name: '采购', color: '#B5562F', systemKey: null, localizedNames: null, createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 2, tasks: 1, notes: 0 } };
+  const unused = { id: 'label-2', name: '闲置', color: '#2C716C', systemKey: null, localizedNames: null, createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0, notes: 0 } };
 
-  test('each row says how many events and tasks carry the label', async () => {
-    const view = await renderAs('MEMBER', [used, unused]);
+  const onNotes = { id: 'label-3', name: '学校', color: '#3B7DD8', systemKey: null, localizedNames: null, createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 0, tasks: 0, notes: 3 } };
+  // A server from before notes had labels sends no note count.
+  const older = { id: 'label-4', name: '旧版', color: '#4C7537', systemKey: null, localizedNames: null, createdAt: '2026-11-01T00:00:00.000Z', usage: { events: 1, tasks: 0 } };
 
-    expect(await view.findByText('2 个日程 · 1 个任务')).toBeTruthy();
+  test('each row says how many events, tasks and notes carry the label', async () => {
+    const view = await renderAs('MEMBER', [{ ...used, usage: { events: 2, tasks: 1, notes: 4 } }, unused, onNotes, older]);
+
+    expect(await view.findByText('2 个日程 · 1 个任务 · 4 篇笔记')).toBeTruthy();
+    expect(view.getByText('3 篇笔记')).toBeTruthy();
+    expect(view.getByText('1 个日程')).toBeTruthy();
     expect(view.getByText('未使用')).toBeTruthy();
   });
 
@@ -207,7 +213,23 @@ describe('how much each label is used', () => {
     await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
     await fireEvent.press(view.getByRole('menuitem', { name: '删除标签 采购' }));
 
-    expect(await view.findByText('删除“采购”后，它会从 2 个日程和 1 个任务中移除，日程和任务本身会保留。')).toBeTruthy();
+    expect(await view.findByText('删除“采购”后，它会从 2 个日程和 1 个任务中移除，日程、任务和笔记本身会保留。')).toBeTruthy();
+  });
+
+  test('deleting a label used on notes counts them and keeps the notes', async () => {
+    const view = await renderAs('OWNER', [{ ...used, usage: { events: 2, tasks: 1, notes: 3 } }, onNotes]);
+
+    await fireEvent.press(await view.findByLabelText('更多操作：标签 采购'));
+    await fireEvent.press(view.getByRole('menuitem', { name: '删除标签 采购' }));
+    expect(await view.findByText('删除“采购”后，它会从 2 个日程、1 个任务和 3 篇笔记中移除，日程、任务和笔记本身会保留。')).toBeTruthy();
+  });
+
+  test('a label only on notes is not called unused', async () => {
+    const view = await renderAs('OWNER', [onNotes]);
+
+    await fireEvent.press(await view.findByLabelText('更多操作：标签 学校'));
+    await fireEvent.press(view.getByRole('menuitem', { name: '删除标签 学校' }));
+    expect(await view.findByText('删除“学校”后，它会从 3 篇笔记中移除，日程、任务和笔记本身会保留。')).toBeTruthy();
   });
 
   test('deleting an unused label says nothing else changes', async () => {
@@ -216,7 +238,7 @@ describe('how much each label is used', () => {
     await fireEvent.press(await view.findByLabelText('更多操作：标签 闲置'));
     await fireEvent.press(view.getByRole('menuitem', { name: '删除标签 闲置' }));
 
-    expect(await view.findByText('“闲置”没有用在任何日程或任务上，删除后不影响其他内容。')).toBeTruthy();
+    expect(await view.findByText('“闲置”没有用在任何日程、任务或笔记上，删除后不影响其他内容。')).toBeTruthy();
   });
 });
 
@@ -227,7 +249,7 @@ describe('deleting an unrenamed starter label in Japanese', () => {
     const view = await renderAs('OWNER', [{
       id: 'label-bday', name: '生日', color: '#AD4067', systemKey: 'birthday',
       localizedNames: { zh: '生日', ja: '誕生日' }, createdAt: '2026-11-01T00:00:00.000Z',
-      usage: { events: 0, tasks: 0 },
+      usage: { events: 0, tasks: 0, notes: 0 },
     }]);
 
     await fireEvent.press(await view.findByLabelText('ラベル 誕生日の操作メニュー'));

@@ -5,7 +5,7 @@ const householdId = '11111111-1111-4111-8111-111111111111';
 const noteId = '33333333-3333-4333-8333-333333333333';
 const base = `/households/${householdId}`;
 async function setup(page: Page, role = 'OWNER') {
-  let note = { id: noteId, householdId, title: '暑假计划：和家人一起安排一个轻松的假期', body: '先商量每个人想去的地方。\n'.repeat(45), createdBy: 'user', updatedBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
+  let note = { id: noteId, householdId, title: '暑假计划：和家人一起安排一个轻松的假期', body: '先商量每个人想去的地方。\n'.repeat(45), createdBy: 'user', updatedBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z', pinnedAt: null, labels: [] };
   let labels = [{ id: 'label', name: '家务', color: '#277A72' }];
   let failLabels = false;
   await page.clock.setFixedTime(new Date('2030-06-15T04:00:00Z'));
@@ -195,7 +195,7 @@ for (const role of ['OWNER', 'ADMIN', 'MEMBER']) {
     await page.setViewportSize({ width: 390, height: 844 });
     let deleted = false;
     let fail = true;
-    const note = { id: noteId, householdId, title: '待删除笔记', body: null, createdBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
+    const note = { id: noteId, householdId, title: '待删除笔记', body: null, createdBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z', pinnedAt: null, labels: [] };
     await page.route(`**/api/v1/households/${householdId}/notes`, route => route.fulfill({ json: { notes: deleted ? [] : [note], total: deleted ? 0 : 1 } }));
     // Matched on the path: a confirmed delete carries its version in the query string.
     await page.route(url => url.pathname === `/api/v1/households/${householdId}/notes/${noteId}`, async route => {
@@ -241,7 +241,7 @@ for (const [language, labels] of [
         await setup(page);
         await page.setViewportSize({ width, height: 900 });
         let deleted = false;
-        const note = { id: noteId, householdId, title: '待删除笔记', body: null, createdBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
+        const note = { id: noteId, householdId, title: '待删除笔记', body: null, createdBy: 'user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z', pinnedAt: null, labels: [] };
         await page.route(`**/api/v1/households/${householdId}/notes`, route => route.fulfill({ json: { notes: deleted ? [] : [note], total: deleted ? 0 : 1 } }));
         await page.route(url => url.pathname === `/api/v1/households/${householdId}/notes/${noteId}`, async route => {
           if (route.request().method() === 'DELETE') deleted = true;
@@ -264,7 +264,7 @@ test('member cannot delete another author note through the card or direct URL', 
   await setup(page, 'MEMBER');
   // A phone: the note opens as a sheet, where a wide screen would open it beside the list unasked.
   await page.setViewportSize({ width: 390, height: 844 });
-  const note = { id: noteId, householdId, title: '其他成员的笔记', body: null, createdBy: 'other-user', updatedBy: 'other-user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z' };
+  const note = { id: noteId, householdId, title: '其他成员的笔记', body: null, createdBy: 'other-user', updatedBy: 'other-user', createdAt: '2030-06-01T00:00:00Z', updatedAt: '2030-06-01T00:00:00Z', pinnedAt: null, labels: [] };
   let writes = 0;
   await page.route(`**/api/v1/households/${householdId}/notes`, route => route.fulfill({ json: { notes: [note], total: 1 } }));
   await page.route(`**/api/v1/households/${householdId}/notes/${noteId}`, route => {
@@ -273,8 +273,11 @@ test('member cannot delete another author note through the card or direct URL', 
   });
   await page.goto(`${base}/notes`);
   await expect(page.getByRole('button', { name: '笔记：其他成员的笔记', exact: true })).toBeVisible();
-  // Opening the note is editing it, so a card offers no menu when it cannot delete.
-  await expect(page.getByRole('button', { name: '更多操作：笔记：其他成员的笔记', exact: true })).toHaveCount(0);
+  // Anyone may pin a note, so the card's menu is there, but it does not delete someone else's.
+  await page.getByRole('button', { name: '更多操作：笔记：其他成员的笔记', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: '置顶笔记：其他成员的笔记', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /^删除笔记：/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '笔记：其他成员的笔记', exact: true }).click();
   await page.getByRole('dialog', { name: '笔记', exact: true }).getByRole('button', { name: '更多操作：笔记：其他成员的笔记', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: '复制为 Markdown', exact: true })).toBeVisible();

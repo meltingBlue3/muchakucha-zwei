@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react-native';
 import { MuchakuchaThemeProvider } from '../../../ui/primitives';
 import { MarkdownBody } from '../markdown-body';
-import { markdownExcerpt, noteTitle, parseMarkdown, safeLink, setChecklistItem } from '../markdown';
+import { checklistProgress, markdownExcerpt, noteTitle, parseMarkdown, safeLink, setChecklistItem } from '../markdown';
 
 const groceries = '## 菜场\n\n- [x] 排骨 两斤\n- [ ] 西红柿 6 个\n- [ ] 鸡蛋 **一盒**\n\n> 周日上午去';
 
@@ -112,5 +112,25 @@ describe('checklists when reading', () => {
     expect(view.getByRole('checkbox', { name: '西红柿', checked: false })).toBeTruthy();
     expect(view.getByText('西红柿')).toBeTruthy();
     expect(view.queryByText(/\[ \]|\[x\]/)).toBeNull();
+  });
+});
+
+describe('checklistProgress', () => {
+  test('a note without checklist items has no progress', () => {
+    expect(checklistProgress('')).toBeNull();
+    expect(checklistProgress('## 菜场\n\n- 排骨\n- 西红柿')).toBeNull();
+    // A list that mixes plain and boxed items is a plain list, so its brackets are text.
+    expect(checklistProgress('- [ ] 排骨\n- 西红柿')).toBeNull();
+  });
+
+  test('counts ticked items against all of them', () => {
+    expect(checklistProgress('- [ ] 排骨\n- [ ] 西红柿')).toEqual({ done: 0, total: 2 });
+    expect(checklistProgress(groceries)).toEqual({ done: 1, total: 3 });
+    expect(checklistProgress('- [x] 排骨\n- [X] 西红柿')).toEqual({ done: 2, total: 2 });
+  });
+
+  test('items in nested lists, quotes and separate lists all count', () => {
+    const nested = '- [x] 菜场\n  - [ ] 排骨\n  - [x] 西红柿\n\n> - [ ] 引用里的一项\n\n后来又想起\n\n- [ ] 鸡蛋';
+    expect(checklistProgress(nested)).toEqual({ done: 2, total: 5 });
   });
 });

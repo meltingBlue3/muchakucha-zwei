@@ -63,10 +63,12 @@ export default function LabelsIndexRoute() {
   const previewName = name.trim() || t('name');
   const swatches = action && action.kind !== 'create' && !presetFor(action.label.color) ? [action.label.color, ...labelColorPresets] : labelColorPresets;
   // A series counts once. No usage at all means a server from before the
-  // count, so say nothing rather than claim the label is unused.
+  // count, so say nothing rather than claim the label is unused; a server from
+  // before notes had labels reports no note count, which means none.
   const usageParts = (label: LabelListItemDto) => label.usage ? [
     label.usage.events > 0 ? t('usageEvents', { count: label.usage.events }) : null,
     label.usage.tasks > 0 ? t('usageTasks', { count: label.usage.tasks }) : null,
+    (label.usage.notes ?? 0) > 0 ? t('usageNotes', { count: label.usage.notes }) : null,
   ].filter((part): part is string => part !== null) : null;
   const usageLine = (label: LabelListItemDto) => {
     const parts = usageParts(label);
@@ -75,7 +77,9 @@ export default function LabelsIndexRoute() {
   const deletePrompt = (label: LabelListItemDto) => {
     const parts = usageParts(label);
     if (parts === null) return t('deletePrompt', { name: labelName(label) });
-    return parts.length > 0 ? t('deletePromptUsed', { name: labelName(label), usage: parts.join(t('usageAnd')) }) : t('deletePromptUnused', { name: labelName(label) });
+    // 「2 个日程、1 个任务和 3 篇笔记」: the last part joins with 和.
+    const usage = parts.length > 1 ? `${parts.slice(0, -1).join(t('usageSeparator'))}${t('usageAnd')}${parts[parts.length - 1]}` : parts[0];
+    return usage ? t('deletePromptUsed', { name: labelName(label), usage }) : t('deletePromptUnused', { name: labelName(label) });
   };
 
   // Only the wide list names who created each label; the labels stand on their own if the names fail to load.
@@ -148,7 +152,7 @@ export default function LabelsIndexRoute() {
       const result = action.kind === 'create'
         ? await sessionApiClient.createLabel(token, householdId, data)
         : await sessionApiClient.updateLabel(token, householdId, action.label.id, { ...data, expectedName: action.label.name, expectedColor: action.label.color });
-      setLabels(previous => action.kind === 'create' ? [...previous, { ...result, usage: { events: 0, tasks: 0 } }] : previous.map(label => label.id === result.id ? { ...label, ...result } : label));
+      setLabels(previous => action.kind === 'create' ? [...previous, { ...result, usage: { events: 0, tasks: 0, notes: 0 } }] : previous.map(label => label.id === result.id ? { ...label, ...result } : label));
       setAction(null);
     } catch (caught: unknown) {
       setActionError('saveError');

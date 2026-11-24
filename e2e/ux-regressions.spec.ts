@@ -40,7 +40,7 @@ async function setup(page: Page) {
     else if (path.endsWith('/tasks/' + taskId) && method === 'PUT') { status = 403; body = { error: { code: 'FORBIDDEN' } }; }
     else if (path.endsWith('/tasks')) body = method === 'POST' ? task : { tasks: [task] };
     else if (path.endsWith('/events')) body = method === 'POST' ? { id: taskId } : { events: [] };
-    else if (path.endsWith('/notes')) body = method === 'POST' ? { id: taskId, householdId: a, ...JSON.parse(route.request().postData() ?? '{}'), createdBy: 'user', updatedBy: 'user', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : { notes: [] };
+    else if (path.endsWith('/notes')) body = method === 'POST' ? { id: taskId, householdId: a, ...JSON.parse(route.request().postData() ?? '{}'), createdBy: 'user', updatedBy: 'user', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), pinnedAt: null, labels: [] } : { notes: [] };
     else if (path.endsWith('/' + a) || path.endsWith('/' + b)) body = { ...household(path.endsWith(a) ? a : b), members: [] };
     else status = 404;
     await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -288,7 +288,7 @@ const noteEditor = (page: Page) => page.getByRole('textbox', { name: '笔记内�
 const noteTitleLine = (page: Page) => noteEditor(page).locator('h1.note-title');
 const noteWindow = (page: Page, name = '笔记') => page.getByRole((page.viewportSize()?.width ?? 0) >= 1024 ? 'region' : 'dialog', { name, exact: true });
 /** The note as the API would return it after a save. */
-const savedNote = (input: { title: string; body?: string }, id = taskId) => ({ id, householdId: a, title: input.title, body: input.body ?? null, createdBy: 'user', updatedBy: 'user', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: new Date().toISOString() });
+const savedNote = (input: { title: string; body?: string }, id = taskId) => ({ id, householdId: a, title: input.title, body: input.body ?? null, createdBy: 'user', updatedBy: 'user', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: new Date().toISOString(), pinnedAt: null, labels: [] });
 async function writeNote(page: Page, title: string, body: string) {
   await noteTitleLine(page).click();
   await page.keyboard.type(title);
@@ -348,7 +348,7 @@ for (const width of [320, 390, 1440]) {
       const path = new URL(route.request().url()).pathname;
       const common = { householdId: a, createdBy: 'user', createdAt: start, updatedAt: start, labels: [], recurrenceRuleId: null, recurrence: null };
       const body = path.endsWith('/events') ? { events: [{ ...common, id: 'event-preview', title: '接孩子放学，一起去公园散步', startTime: start, endTime: end, allDay: false, location: '学校南门 · 记得带水杯', description: null }] }
-        : path.endsWith('/notes') ? { notes: [{ ...common, id: 'note-preview', title: '这周想一起做的事', body: '周末试试新的番茄意面。\n买一束鲜花，给阳台的植物浇水。' }] }
+        : path.endsWith('/notes') ? { notes: [{ ...common, pinnedAt: null, id: 'note-preview', title: '这周想一起做的事', body: '周末试试新的番茄意面。\n买一束鲜花，给阳台的植物浇水。' }] }
         : { tasks: [{ ...common, id: taskId, title: '补充家里的水果、牛奶和周末早餐食材', status: 'pending', priority: 'medium', dueDate: null, description: '冰箱里还有鸡蛋，购物前先看一眼清单。', assigneeIds: [] }] };
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
     });

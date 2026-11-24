@@ -47,7 +47,7 @@ async function mockAssistant(page: Page, options: { empty?: boolean; voice?: boo
         ...provider('语音转写'), id: asrProviderId, protocol: 'qwen-asr' as const, baseUrl: 'https://dashscope.example.com/compatible-mode/v1', model: 'qwen3-asr-flash',
       }] : [])],
       conversations: options.empty ? [] : [conversation('周末准备清单', '根据家庭旅行清单，记得带野餐垫和水。')],
-      notes: [{ id: noteId, householdId, title: '家庭旅行清单', body: '野餐垫、水和水果。', createdBy: userId, createdAt: version, updatedAt: version }],
+      notes: [{ id: noteId, householdId, title: '家庭旅行清单', body: '野餐垫、水和水果。', createdBy: userId, createdAt: version, updatedAt: version, pinnedAt: null, labels: [] }],
       tasks: [] as Array<Record<string, unknown>>,
     }],
     [secondHouseholdId, {

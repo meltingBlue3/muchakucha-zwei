@@ -90,8 +90,8 @@ const editor = (page: Page) => page.getByRole('textbox', { name: '笔记内容',
 const saveState = (page: Page) => page.getByTestId('note-save-state');
 const box = (page: Page, text: string) => editor(page).getByRole('checkbox', { name: new RegExp(`^(已勾选|未勾选)：${text}$`) });
 
-async function signedIn(browser: Browser, account: Account, destination: string): Promise<Page> {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: 'reduce' });
+async function signedIn(browser: Browser, account: Account, destination: string, viewport = { width: 1280, height: 720 }): Promise<Page> {
+  const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
   const page = await context.newPage();
   await loginUsernameFixture(page, account.username, password, destination);
   return page;
@@ -186,7 +186,7 @@ test('household members see shared notes, most recently updated first, and can s
   // --- A query matching nothing explains itself and can be cleared ---
   await search.fill('不存在的标题');
   await expect(cards).toHaveCount(0);
-  await expect(page.getByText(/没有标题匹配/)).toBeVisible();
+  await expect(page.getByText('没有笔记匹配「不存在的标题」。', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '清除搜索' }).click();
   await expect(cards).toHaveCount(2);
 });
@@ -292,4 +292,132 @@ test('a tick merges into another member’s change, and a text change against th
     await mother.context().close();
     await father.context().close();
   }
+});
+
+test('a member pins another member’s note from its header, and the household finds it on top', async ({ browser }) => {
+  const owner = await prepareAccount('pin-owner', '妈妈');
+  const member = await prepareAccount('pin-member', '爸爸');
+  const householdId = await createHousehold(owner.accessToken, '置顶之家');
+  await addMembershipViaDb(householdId, member.userId);
+  const wifi = (await apiCall(owner.accessToken, 'POST', `/households/${householdId}/notes`, { title: '家里的 Wi-Fi', body: '密码贴在路由器背面' })).body;
+  await apiCall(owner.accessToken, 'POST', `/households/${householdId}/notes`, { title: '旅行计划' });
+  const read = async () => (await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${wifi.id}`)).body;
+  const father = await signedIn(browser, member, `/households/${householdId}/notes/${wifi.id}`);
+  try {
+    await noteWindow(father).getByRole('button', { name: '置顶', exact: true }).click();
+    await expect(noteWindow(father).getByRole('button', { name: '取消置顶', exact: true })).toBeVisible();
+    await expect.poll(async () => (await read()).pinnedAt).not.toBeNull();
+    // A pin is not an edit: the note keeps its version and its last editor.
+    expect(await read()).toMatchObject({ updatedAt: wifi.updatedAt, updatedBy: owner.userId });
+  } finally {
+    await father.context().close();
+  }
+
+  const mother = await signedIn(browser, owner, `/households/${householdId}/notes`, { width: 390, height: 844 });
+  try {
+    const cards = mother.getByRole('button', { name: /^笔记：/ });
+    await expect(cards).toHaveCount(2);
+    await expect(cards.nth(0)).toHaveAccessibleName('笔记：家里的 Wi-Fi，已置顶');
+    await expect(cards.nth(1)).toHaveAccessibleName('笔记：旅行计划');
+    await expect(mother.getByText('置顶', { exact: true })).toBeVisible();
+    await expect(mother.getByText('其他', { exact: true })).toBeVisible();
+  } finally {
+    await mother.context().close();
+  }
+});
+
+test('relabelling a note while someone writes it never stops their saving', async ({ browser }) => {
+  const owner = await prepareAccount('label-owner', '妈妈');
+  const member = await prepareAccount('label-member', '爸爸');
+  const householdId = await createHousehold(owner.accessToken, '标签笔记之家');
+  await addMembershipViaDb(householdId, member.userId);
+  const created = await apiCall(owner.accessToken, 'POST', `/households/${householdId}/notes`, { title: '菜场', body: '- [ ] 排骨' });
+  const noteId = created.body.id as string;
+  const read = async () => (await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`)).body;
+  const path = `/households/${householdId}/notes/${noteId}`;
+  const mother = await signedIn(browser, owner, path);
+  const father = await signedIn(browser, member, path);
+  try {
+    await editor(mother).getByText('排骨', { exact: true }).click();
+    await mother.keyboard.press('End');
+    await mother.keyboard.type(' 两斤');
+    await expect.poll(async () => (await read()).body).toBe('- [ ] 排骨 两斤');
+
+    // He labels the note she is writing, from his own copy of it.
+    await noteWindow(father).getByRole('button', { name: '标签', exact: true }).click();
+    const picker = father.getByRole('dialog', { name: '标签', exact: true });
+    await picker.getByRole('button', { name: '选择标签 采买', exact: true }).click();
+    await picker.getByRole('button', { name: '完成', exact: true }).click();
+    await expect(picker).toBeHidden();
+    await expect(noteWindow(father).getByRole('button', { name: '标签：采买', exact: true })).toBeVisible();
+    await expect.poll(async () => (await read()).labels.map((label: { name: string }) => label.name)).toEqual(['采买']);
+
+    // She goes on writing against the version she opened: no conflict, nothing lost.
+    await mother.keyboard.type('，要新鲜的');
+    await expect.poll(async () => (await read()).body).toBe('- [ ] 排骨 两斤，要新鲜的');
+    await expect(saveState(mother)).toHaveText('已保存');
+    await expect(mother.getByRole('alert')).toHaveCount(0);
+    expect(await read()).toMatchObject({ updatedBy: owner.userId, labels: [expect.objectContaining({ name: '采买' })] });
+  } finally {
+    await mother.context().close();
+    await father.context().close();
+  }
+});
+
+test('a label put on a note filters the list down to it, and a body search shows where it matched', async ({ page }) => {
+  const owner = await prepareAccount('find-owner', '妈妈');
+  const householdId = await createHousehold(owner.accessToken, '找得到之家');
+  const notesPath = `/households/${encodeURIComponent(householdId)}/notes`;
+  const shopping = (await apiCall(owner.accessToken, 'POST', `/households/${householdId}/notes`, { title: '周末采购', body: '- [x] 排骨\n- [ ] 小葱' })).body;
+  await apiCall(owner.accessToken, 'POST', `/households/${householdId}/notes`, { title: '旅行计划', body: '七月去青岛，订海边的酒店，带上防晒霜和泳衣。' });
+
+  await loginUsernameFixture(page, owner.username, password, notesPath);
+  const cards = page.getByRole('button', { name: /^笔记：/ });
+  await expect(cards).toHaveCount(2);
+  // Nothing carries a label yet, so there is no label row.
+  await expect(page.getByRole('radiogroup', { name: '按标签筛选' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: '笔记：周末采购，清单 1/2', exact: true }).click();
+  await expect(editor(page).locator('h1.note-title')).toHaveText('周末采购');
+  await noteWindow(page).getByRole('button', { name: '标签', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: '标签', exact: true });
+  await picker.getByRole('button', { name: '选择标签 采买', exact: true }).click();
+  await picker.getByRole('button', { name: '完成', exact: true }).click();
+  await expect(noteWindow(page).getByRole('button', { name: '标签：采买', exact: true })).toBeVisible();
+  await expect.poll(async () => (await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${shopping.id}`)).body.labels.length).toBe(1);
+
+  const row = page.getByRole('radiogroup', { name: '按标签筛选' });
+  await expect(row.getByRole('radio', { name: '全部', exact: true })).toBeChecked();
+  await row.getByRole('radio', { name: '采买', exact: true }).click();
+  await expect(cards).toHaveCount(1);
+  await expect(cards.nth(0)).toHaveAccessibleName('笔记：周末采购，清单 1/2，采买');
+  await row.getByRole('radio', { name: '全部', exact: true }).click();
+  await expect(cards).toHaveCount(2);
+
+  // --- The search reads bodies too, and the row shows the words around the match ---
+  await page.getByLabel('搜索笔记').fill('防晒');
+  await expect(cards).toHaveCount(1);
+  await expect(cards.nth(0)).toHaveAccessibleName('笔记：旅行计划');
+  await expect(cards.nth(0).getByTestId('note-snippet')).toHaveText('…青岛，订海边的酒店，带上防晒霜和泳衣。');
+  await expect(cards.nth(0).getByTestId('note-snippet').getByText('防晒', { exact: true })).toBeVisible();
+});
+
+test('a new note offers no pin or labels until its first save', async ({ page }) => {
+  const owner = await prepareAccount('new-owner', '妈妈');
+  const householdId = await createHousehold(owner.accessToken, '新笔记之家');
+  const notesPath = `/households/${encodeURIComponent(householdId)}/notes`;
+
+  await loginUsernameFixture(page, owner.username, password, notesPath);
+  await page.getByRole('button', { name: '创建笔记' }).first().click();
+  await expect(page).toHaveURL(new RegExp(`${notesPath}/new$`));
+  await expect(editor(page)).toBeVisible();
+  await expect(noteWindow(page).getByRole('button', { name: '置顶', exact: true })).toHaveCount(0);
+  await expect(noteWindow(page).getByRole('button', { name: '标签', exact: true })).toHaveCount(0);
+
+  await editor(page).locator('h1.note-title').click();
+  await page.keyboard.type('开学要带的');
+  await expect(saveState(page)).toHaveText('已保存');
+  await expect(page).toHaveURL(new RegExp(`${notesPath}/[0-9a-f-]{36}$`));
+  await expect(noteWindow(page).getByRole('button', { name: '置顶', exact: true })).toBeVisible();
+  await expect(noteWindow(page).getByRole('button', { name: '标签', exact: true })).toBeVisible();
 });

@@ -167,7 +167,7 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   await page.goto(`${householdPath}/labels`);
   await page.getByRole('button', { name: '更多操作：标签 学习', exact: true }).click();
   await page.getByRole('menuitem', { name: '删除标签 学习', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '删除标签', exact: true })).toContainText('日程和任务本身会保留');
+  await expect(page.getByRole('dialog', { name: '删除标签', exact: true })).toContainText('日程、任务和笔记本身会保留');
   await page.getByRole('dialog', { name: '删除标签', exact: true }).getByRole('button', { name: '取消', exact: true }).click();
   await expect(page.getByLabel('标签：学习')).toBeVisible();
 
@@ -182,4 +182,35 @@ test('manages labels and applies them to a task in the browser', async ({ page }
   await page.goto(`${householdPath}/tasks/${task!.id}`);
   await expect(page.getByRole('heading', { name: '准备开学用品' })).toBeVisible();
   await expect(page.getByLabel('标签：学习')).toHaveCount(0);
+});
+
+test('a label used only on notes counts them, and deleting it keeps the notes', async ({ page }) => {
+  const owner = await prepareAccount('owner', '标签主人');
+  const householdId = await createHousehold(owner.accessToken, '笔记标签之家');
+  const householdPath = `/households/${encodeURIComponent(householdId)}`;
+  const label = (await apiCall(owner.accessToken, 'POST', `/households/${householdId}/labels`, { name: '学校', color: '#2C716C' })).body;
+  const notes = [];
+  for (const title of ['开学要带的', '家长会时间']) {
+    const created = await apiCall(owner.accessToken, 'POST', `/households/${householdId}/notes`, { title, labelIds: [label.id] });
+    expect(created.status).toBe(201);
+    notes.push(created.body.id as string);
+  }
+
+  await loginUsernameFixture(page, owner.username, password, `${householdPath}/labels`);
+  await expect(page.getByText('2 篇笔记', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: '更多操作：标签 学校', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除标签 学校', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '删除标签', exact: true })).toContainText('删除“学校”后，它会从 2 篇笔记中移除，日程、任务和笔记本身会保留。');
+  await page.getByRole('button', { name: '确认删除标签 学校' }).click();
+  await expect(page.getByLabel('标签：学校')).toHaveCount(0);
+
+  for (const noteId of notes) {
+    const kept = await apiCall(owner.accessToken, 'GET', `/households/${householdId}/notes/${noteId}`);
+    expect(kept.status).toBe(200);
+    expect(kept.body.labels).toEqual([]);
+  }
+  await page.goto(`${householdPath}/notes`);
+  await expect(page.getByRole('button', { name: /^笔记：/ })).toHaveCount(2);
+  await expect(page.getByRole('radiogroup', { name: '按标签筛选' })).toHaveCount(0);
 });
