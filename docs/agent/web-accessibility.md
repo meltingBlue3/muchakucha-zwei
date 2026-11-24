@@ -28,7 +28,7 @@ Changing the dialog shell means re-running the account and household settings jo
 
 ## Established roles
 
-- `Screen` renders `role="main"` on Web and takes `accessibilityLabel` as its name. Scope a locator to `getByRole('main', { name: '笔记详情' })` when a list stays mounted behind a detail view; an unscoped text locator hits Playwright strict mode.
+- `Screen` renders `role="main"` on Web and takes `accessibilityLabel` as its name. Scope a locator to `getByRole('main', { name: '家庭笔记' })` when a detail view stays open beside the list; an unscoped text locator hits Playwright strict mode.
 - `Spinner` is `role="progressbar"` with its label as the name. Wait on `getByRole('progressbar', { name: '正在恢复登录状态' })` rather than on the text, which can match more than one node during a transition.
 - Collection items expose a prefixed name — `笔记：暑假计划`, `标签：学习` — so a list assertion can match `/^笔记：/` and stay readable.
 
