@@ -1,5 +1,6 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { ApiClientError, type AssistantConversationResponseDto, type AssistantProviderResponseDto } from '@muchakucha/api-client';
+import { setLanguageChoice } from '../../../i18n';
 import { MuchakuchaThemeProvider, Text } from '../../../ui/primitives';
 import { AssistantProviderForm } from '../provider-form';
 import { AssistantConversationPanel } from '../conversation-panel';
@@ -18,6 +19,10 @@ jest.mock('../../auth/session-runtime', () => ({ sessionTransport: { getAccessTo
 
 const provider: AssistantProviderResponseDto = { id: 'provider', name: '我的模型', protocol: 'openai-compatible', baseUrl: 'https://api.example.com/v1', model: 'family-model', visibility: 'private', ownedByMe: true, hasCredential: true, updatedAt: '2026-10-04T00:00:00.000Z', usage: null };
 const conversation: AssistantConversationResponseDto = { id: 'chat', title: '家庭安排', providerId: 'provider', version: 1, state: 'idle', messages: [], pendingActions: [], updatedAt: '2026-10-04T00:00:00.000Z' };
+
+afterEach(async () => {
+  await act(async () => { setLanguageChoice('system'); });
+});
 
 test('query evidence uses saved tool data, marks partial content and excludes model claims and write results', () => {
   const records = assistantConversationRecords([
@@ -304,4 +309,77 @@ test('a late response from a previous household cannot replace the active househ
   await act(async () => { resolveOld?.('旧家庭的私密对话'); });
   expect(view.getByText('当前家庭的对话')).toBeTruthy();
   expect(view.queryByText('旧家庭的私密对话')).toBeNull();
+});
+
+test('a Japanese device confirms editing or deleting an unrenamed starter label using its expectedName snapshot while displaying Japanese', async () => {
+  await act(async () => { setLanguageChoice('ja'); });
+  const starter = {
+    id: 'bday', householdId: 'home', name: '生日', localizedNames: { zh: '生日', ja: '誕生日' },
+    color: '#AD4067', systemKey: 'birthday' as const, createdBy: 'owner', createdAt: provider.updatedAt, usage: { events: 0, tasks: 0 },
+  };
+  jest.mocked(sessionApiClient.listLabels).mockResolvedValue({ labels: [starter], total: 1 });
+
+  const decideUpdate = jest.fn();
+  const updateView = await render(
+    <MuchakuchaThemeProvider>
+      <AssistantActionsPreview
+        householdId="home"
+        actions={[{ id: 'call_update', name: 'update_label', arguments: { id: 'bday', expectedName: '生日', expectedColor: '#AD4067', name: '家族の誕生日' } }]}
+        busy={false}
+        onDecide={decideUpdate}
+      />
+    </MuchakuchaThemeProvider>,
+  );
+  expect(await updateView.findByText('誕生日')).toBeTruthy();
+  expect(updateView.getByText('変更前：誕生日')).toBeTruthy();
+  expect(updateView.queryByText(/対象が変更されました/)).toBeNull();
+  const confirmUpdate = updateView.getByRole('button', { name: '実行を確定' });
+  expect(confirmUpdate).toBeEnabled();
+  await fireEvent.press(confirmUpdate);
+  expect(decideUpdate).toHaveBeenCalledWith(['call_update']);
+
+  const decideDelete = jest.fn();
+  const deleteView = await render(
+    <MuchakuchaThemeProvider>
+      <AssistantActionsPreview
+        householdId="home"
+        actions={[{ id: 'call_delete', name: 'delete_label', arguments: { id: 'bday', expectedName: '生日', expectedColor: '#AD4067' } }]}
+        busy={false}
+        onDecide={decideDelete}
+      />
+    </MuchakuchaThemeProvider>,
+  );
+  expect(await deleteView.findByText('誕生日')).toBeTruthy();
+  expect(deleteView.queryByText(/対象が変更されました/)).toBeNull();
+  const confirmDelete = deleteView.getByRole('button', { name: '削除を確定' });
+  expect(confirmDelete).toBeEnabled();
+  await fireEvent.press(confirmDelete);
+  expect(decideDelete).toHaveBeenCalledWith(['call_delete']);
+
+  jest.mocked(sessionApiClient.listLabels).mockResolvedValue({
+    labels: [{ ...starter, name: '寿星', localizedNames: null }],
+    total: 1,
+  });
+  const staleView = await render(
+    <MuchakuchaThemeProvider>
+      <AssistantActionsPreview
+        householdId="home"
+        actions={[{ id: 'call_update', name: 'update_label', arguments: { id: 'bday', expectedName: '生日', expectedColor: '#AD4067', name: '家族の誕生日' } }]}
+        busy={false}
+        onDecide={jest.fn()}
+      />
+    </MuchakuchaThemeProvider>,
+  );
+  await staleView.findByText('対象が変更されました。この操作を取り消し、アシスタントに再検索と提案の作り直しを依頼してください。');
+  expect(staleView.getByRole('button', { name: '実行を確定' })).toBeDisabled();
+});
+
+test('assistant conversation records show unrenamed starter labels in Japanese', async () => {
+  await act(async () => { setLanguageChoice('ja'); });
+  const records = assistantConversationRecords([
+    { role: 'tool', content: JSON.stringify({ ok: true, tool: 'list_labels', data: { items: [{ id: 'bday', name: '生日', localizedNames: { zh: '生日', ja: '誕生日' }, color: '#AD4067' }], total: 1, nextOffset: null } }) },
+    { role: 'tool', content: JSON.stringify({ ok: true, tool: 'delete_label', data: { id: 'bday', deleted: true } }) },
+  ]);
+  expect(records[0]?.sources).toEqual([{ title: '誕生日', excerpt: '' }]);
+  expect(records[1]?.content).toBe('ラベルを削除（成功）：誕生日。');
 });
