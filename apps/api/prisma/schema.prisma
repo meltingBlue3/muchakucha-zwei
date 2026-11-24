@@ -26,6 +26,7 @@ model User {
   createdRecurrenceRules RecurrenceRule[] @relation("CreatedRecurrenceRules")
   taskAssignments     TaskAssignee[]
   createdNotes        Note[]
+  updatedNotes        Note[]          @relation("NoteUpdatedBy")
   createdLabels       Label[]
   assistantUsage      AssistantUsage[]
   reminderSettings    ReminderSettings?
@@ -235,11 +236,14 @@ model Note {
   title       String    @db.VarChar(200)
   body        String?   @db.Text
   createdBy   String    @map("created_by") @db.Uuid
+  /// Who saved the note last; null once that account is deleted.
+  updatedBy   String?   @map("updated_by") @db.Uuid
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   creator     User      @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  updater     User?     @relation("NoteUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@index([householdId, createdAt(sort: Desc)], map: "Note_household_created_idx")
   @@map("notes")

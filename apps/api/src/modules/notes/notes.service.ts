@@ -13,6 +13,7 @@ interface NoteRow {
   title: string;
   body: string | null;
   createdBy: string;
+  updatedBy: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,6 +64,7 @@ export class NotesService {
         // Whitespace is Markdown syntax; only entirely blank bodies become null.
         body: input.body?.trim() ? input.body : null,
         createdBy: actorId,
+        updatedBy: actorId,
       },
     });
 
@@ -137,7 +139,7 @@ export class NotesService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const updatedAt = await lockContent(tx, 'note', householdId, noteId, input);
       return tx.note.update({
-        where: { id: noteId }, data: { ...data, updatedAt },
+        where: { id: noteId }, data: { ...data, updatedAt, updatedBy: actorId },
       });
     });
 
@@ -178,6 +180,7 @@ export class NotesService {
       title: row.title,
       body: row.body,
       createdBy: row.createdBy,
+      updatedBy: row.updatedBy,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

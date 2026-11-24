@@ -14,7 +14,7 @@ const actor = { userId: '10000000-0000-4000-8000-000000000001', householdId: '20
 const recordId = '30000000-0000-4000-8000-000000000001';
 const otherUserId = '10000000-0000-4000-8000-000000000002';
 const version = '2026-10-04T10:00:00.000Z';
-const note = { id: recordId, householdId: actor.householdId, title: '购物计划', body: '买苹果', createdBy: actor.userId, createdAt: version, updatedAt: version };
+const note = { id: recordId, householdId: actor.householdId, title: '购物计划', body: '买苹果', createdBy: actor.userId, updatedBy: actor.userId, createdAt: version, updatedAt: version };
 const event = {
   ...note, description: '晚饭', startTime: '2026-10-04T12:00:00.000Z', endTime: '2026-10-04T13:00:00.000Z',
   allDay: false, location: null, recurrenceRuleId: null, occurrenceDate: null, cancelledAt: null, recurrence: null, labels: [],

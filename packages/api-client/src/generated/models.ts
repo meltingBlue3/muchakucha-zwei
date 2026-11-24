@@ -406,6 +406,7 @@ export interface NoteResponseDto {
   title: string;
   body?: string | null;
   createdBy: string;
+  updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -30,6 +30,9 @@ export class NoteResponseDto {
   @ApiProperty()
   createdBy!: string;
 
+  @ApiProperty({ type: String, nullable: true, description: 'Who saved the note last; null once that account is deleted.' })
+  updatedBy!: string | null;
+
   @ApiProperty()
   createdAt!: string;
 

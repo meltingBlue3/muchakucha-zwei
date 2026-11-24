@@ -185,7 +185,7 @@ test('tool results distinguish a successful delete from a conflict and summarize
 });
 
 test('delete confirmation resolves the actual note and sends only the explicit human decision', async () => {
-  jest.mocked(sessionApiClient.getNote).mockResolvedValue({ id: 'note', householdId: 'home', title: '开学清单', body: '买书包', createdBy: 'owner', createdAt: provider.updatedAt, updatedAt: provider.updatedAt });
+  jest.mocked(sessionApiClient.getNote).mockResolvedValue({ id: 'note', householdId: 'home', title: '开学清单', body: '买书包', createdBy: 'owner', updatedBy: 'owner', createdAt: provider.updatedAt, updatedAt: provider.updatedAt });
   const decide = jest.fn();
   const view = await render(<MuchakuchaThemeProvider><AssistantActionsPreview householdId="home" actions={[{ id: 'call_delete', name: 'delete_note', arguments: { id: 'note', expectedUpdatedAt: provider.updatedAt } }]} busy={false} onDecide={decide} /></MuchakuchaThemeProvider>);
   expect(await view.findByText('开学清单')).toBeTruthy();
@@ -199,7 +199,7 @@ test('delete confirmation resolves the actual note and sends only the explicit h
 
 test('a batch runs only the checked items that still match their targets', async () => {
   jest.mocked(sessionApiClient.getNote).mockImplementation(async (_token, _household, noteId) => ({
-    id: noteId, householdId: 'home', title: noteId === 'changed' ? '已被家人修改' : '旧清单', body: '', createdBy: 'owner', createdAt: provider.updatedAt,
+    id: noteId, householdId: 'home', title: noteId === 'changed' ? '已被家人修改' : '旧清单', body: '', createdBy: 'owner', updatedBy: 'owner', createdAt: provider.updatedAt,
     updatedAt: noteId === 'changed' ? '2026-10-04T01:00:00.000Z' : provider.updatedAt,
   }));
   const decide = jest.fn();
@@ -221,7 +221,7 @@ test('a batch runs only the checked items that still match their targets', async
 });
 
 test('a changed target cannot be approved under an old proposal', async () => {
-  jest.mocked(sessionApiClient.getNote).mockResolvedValue({ id: 'note', householdId: 'home', title: '已经修改', body: '', createdBy: 'owner', createdAt: provider.updatedAt, updatedAt: '2026-10-04T01:00:00.000Z' });
+  jest.mocked(sessionApiClient.getNote).mockResolvedValue({ id: 'note', householdId: 'home', title: '已经修改', body: '', createdBy: 'owner', updatedBy: 'owner', createdAt: provider.updatedAt, updatedAt: '2026-10-04T01:00:00.000Z' });
   const view = await render(<MuchakuchaThemeProvider><AssistantActionsPreview householdId="home" actions={[{ id: 'call_delete', name: 'delete_note', arguments: { id: 'note', expectedUpdatedAt: provider.updatedAt } }]} busy={false} onDecide={jest.fn()} /></MuchakuchaThemeProvider>);
   await view.findByText('操作对象已有变化。请取消这次操作，让助手重新查询并生成建议。');
   expect(view.getByRole('button', { name: '确认删除' })).toBeDisabled();
