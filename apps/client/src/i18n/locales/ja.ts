@@ -1351,6 +1351,7 @@ export const ja: Catalog = {
       priority: '優先度',
       assigneeIds: '担当者',
       labelIds: 'ラベル',
+      pinned: 'ピン留め',
       color: '色',
       recurrence: '繰り返しルール',
       freq: '頻度',

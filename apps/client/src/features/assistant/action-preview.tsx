@@ -19,7 +19,7 @@ type PendingAction = AssistantConversationResponseDto['pendingActions'][number];
 type Target = {
   title: string; snapshotName?: string; updatedAt?: string; description?: string | null; body?: string | null; startTime?: string; endTime?: string; dueDate?: string | null;
   allDay?: boolean; location?: string | null; status?: string; priority?: string; assigneeIds?: string[]; labels?: Array<{ id: string; name: string; localizedNames?: LabelNamesDto | null }>;
-  color?: string; recurrence?: { updatedAt: string } | null;
+  color?: string; recurrence?: { updatedAt: string } | null; pinnedAt?: string | null;
 };
 export interface ActionPreviewContext { target: Target | null; labels: Record<string, string>; members: Record<string, string> }
 export interface ActionField {
@@ -42,6 +42,7 @@ const SHOWN_CHANGED_LINES = 40;
 function currentValue(key: string, target: Target): unknown {
   if (key === 'name') return target.title;
   if (key === 'labelIds') return target.labels?.map(label => label.id);
+  if (key === 'pinned') return target.pinnedAt === undefined ? undefined : target.pinnedAt !== null;
   return (target as Record<string, unknown>)[key];
 }
 

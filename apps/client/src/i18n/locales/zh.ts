@@ -1351,6 +1351,7 @@ export const zh = {
       priority: '优先级',
       assigneeIds: '负责人',
       labelIds: '标签',
+      pinned: '置顶',
       color: '颜色',
       recurrence: '重复规则',
       freq: '频率',

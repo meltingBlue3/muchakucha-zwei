@@ -10,6 +10,7 @@ import { HouseholdsService } from '../households/households.service.js';
 import { RecurrenceService } from '../recurrence/recurrence.service.js';
 import { firstOccurrence, formatIsoDate, localDateTimeToInstant, parseIsoDate, type CalendarDate } from '../recurrence/recurrence-date.js';
 import type { RecurrenceDto } from '../recurrence/dto/recurrence.dto.js';
+import type { NoteResponseDto } from '../notes/dto/create-note.dto.js';
 import { assertEditVersion } from '../shared/edit-version.js';
 import { validationDetails } from '../shared/validation-details.js';
 import { allDayBounds, localDateOf, localMidnight, localStamp, shiftDate, wallClock, weekdayOf } from './assistant-time.js';
@@ -23,7 +24,7 @@ import {
   UpdateEventArguments, UpdateLabelArguments, UpdateNoteArguments, UpdateTaskArguments,
   editProperties, eventListProperties, eventProperties, findLunarDatesProperties, getContentProperties, idProperties, japaneseEraDatesProperties, japaneseHolidaysProperties,
   labelProperties, labelSnapshotProperties, labelsProperty, listProperties, lunarCalendarProperties, noteProperties,
-  occurrenceEditProperties, recurrenceProperty, seriesListProperties, taskListProperties, taskProperties,
+  occurrenceEditProperties, pinnedProperty, recurrenceProperty, seriesListProperties, taskListProperties, taskProperties,
 } from './assistant-tool-arguments.js';
 
 type Properties = Record<string, Record<string, unknown>>;
@@ -179,6 +180,11 @@ function assertDateRange(from: string | undefined, through: string | undefined):
 function withoutReminder<T extends { myReminder?: unknown }>(item: T): Omit<T, 'myReminder'> {
   const { myReminder: _personal, ...content } = item;
   return content;
+}
+
+/** A note as the model reads it: whether it is pinned for the household, beside its labels. */
+function withPinned(note: NoteResponseDto) {
+  return { ...note, pinned: note.pinnedAt !== null };
 }
 
 type SeriesMarks = Parameters<typeof occurrenceFacts>[0];
@@ -351,8 +357,8 @@ export class AssistantToolsService {
           materializedThrough: result.materializedThrough, recurringCoverage: 'materialized_occurrences_only',
         };
       });
-    this.register('list_notes', 'Search note titles and full Markdown body; returned previews and rows are bounded. Follow nextOffset and use get_note for full text.',
-      ListArguments, listProperties, [], false, async (actor, args) => paginate((await this.notes.list(actor.userId, actor.householdId)).notes, args));
+    this.register('list_notes', 'Search note titles, full Markdown body and label names; returned previews and rows are bounded. pinned marks notes pinned for the whole household. Follow nextOffset and use get_note for full text.',
+      ListArguments, listProperties, [], false, async (actor, args) => paginate((await this.notes.list(actor.userId, actor.householdId)).notes.map(withPinned), args));
     this.register('list_labels', 'Search household labels. Copy current name and color as expectedName and expectedColor before updating or deleting.',
       ListArguments, listProperties, [], false, async (actor, args) => paginate((await this.labels.list(actor.userId, actor.householdId)).labels, args));
     this.register('household_members', 'Search household members to resolve names into userId values for task assigneeIds. Never guess IDs.',
@@ -362,7 +368,7 @@ export class AssistantToolsService {
     this.register('get_task', 'Read one task and its current updatedAt and recurrence.updatedAt before changing it. Long descriptions support character pagination.',
       GetContentArguments, getContentProperties, ['id'], false, async (actor, args) => contentPage(withDueTime(await this.tasks.getById(actor.userId, actor.householdId, args.id), actor.timeZone), 'description', args));
     this.register('get_note', 'Read a note and updatedAt before changing it. Follow nextContentOffset until null to read the full Markdown body.',
-      GetContentArguments, getContentProperties, ['id'], false, async (actor, args) => contentPage(await this.notes.getById(actor.userId, actor.householdId, args.id), 'body', args));
+      GetContentArguments, getContentProperties, ['id'], false, async (actor, args) => contentPage(withPinned(await this.notes.getById(actor.userId, actor.householdId, args.id)), 'body', args));
     this.register('get_label', 'Read a label before changing it; preserve name and color as the expected snapshot.',
       IdArguments, idProperties, ['id'], false, (actor, args) => this.label(actor, args.id));
   }
@@ -477,15 +483,25 @@ export class AssistantToolsService {
   }
 
   private registerNoteTools(): void {
-    this.register('create_note', 'Propose creating a Markdown note.',
-      CreateNoteArguments, noteProperties, ['title'], true,
-      (actor, args) => this.notes.create(actor.userId, actor.householdId, args), async actor => { await this.household(actor); });
-    this.register('update_note', 'Propose updating a note. Copy expectedUpdatedAt from get_note. Body replaces the entire Markdown body; read all chunks first to preserve content when editing part of a note.',
-      UpdateNoteArguments, { ...idProperties, ...editProperties, ...noteProperties }, ['id', 'expectedUpdatedAt'], true,
-      (actor, { id, ...args }) => this.notes.update(actor.userId, actor.householdId, id, args),
+    this.register('create_note', 'Propose creating a Markdown note. Resolve label IDs through list_labels.',
+      CreateNoteArguments, { ...noteProperties, ...labelsProperty, ...pinnedProperty }, ['title'], true,
+      async (actor, args) => withPinned(await this.notes.create(actor.userId, actor.householdId, args)),
+      async (actor, args) => { await this.household(actor); await this.requireLabels(actor, args.labelIds); });
+    this.register('update_note', 'Propose updating a note, including pinning it or changing its labels. Copy expectedUpdatedAt from get_note, also when only pinning or relabelling. Body replaces the entire Markdown body; read all chunks first to preserve content when editing part of a note. labelIds replaces all of the note\'s labels; an empty array clears them. Resolve label IDs through list_labels.',
+      UpdateNoteArguments, { ...idProperties, ...editProperties, ...noteProperties, ...labelsProperty, ...pinnedProperty }, ['id', 'expectedUpdatedAt'], true,
+      async (actor, { id, pinned, labelIds, ...content }) => {
+        // The text is saved first, against the confirmed version; a pin and
+        // labels are not edits of the note and follow on the saved note.
+        let note = content.title !== undefined || content.body !== undefined
+          ? await this.notes.update(actor.userId, actor.householdId, id, content) : undefined;
+        if (pinned !== undefined) note = await this.notes.setPinned(actor.userId, actor.householdId, id, pinned);
+        if (labelIds !== undefined) note = await this.notes.replaceLabels(actor.userId, actor.householdId, id, labelIds);
+        return note === undefined ? undefined : withPinned(note);
+      },
       async (actor, args) => {
         await this.requireEdit(actor, await this.notes.getById(actor.userId, actor.householdId, args.id), args);
         this.requireChanges(args, ['id', 'expectedUpdatedAt']);
+        await this.requireLabels(actor, args.labelIds);
       });
     this.register('delete_note', 'Propose deleting a note. Copy expectedUpdatedAt from the current get_note result.',
       DeleteContentArguments, { ...idProperties, ...editProperties }, ['id', 'expectedUpdatedAt'], true,
@@ -504,7 +520,7 @@ export class AssistantToolsService {
         await this.requireLabelSnapshot(actor, args);
         this.requireChanges(args, ['id', 'expectedName', 'expectedColor']);
       });
-    this.register('delete_label', 'Propose deleting a household label and removing its assignments from events and tasks. Copy the current expectedName and expectedColor from get_label.',
+    this.register('delete_label', 'Propose deleting a household label and removing its assignments from events, tasks and notes. Copy the current expectedName and expectedColor from get_label.',
       DeleteLabelArguments, { ...idProperties, ...labelSnapshotProperties }, ['id', 'expectedName', 'expectedColor'], true,
       async (actor, args) => {
         await this.labels.delete(actor.userId, actor.householdId, args.id, { name: args.expectedName, color: args.expectedColor });
@@ -533,6 +549,17 @@ export class AssistantToolsService {
     const label = (await this.labels.list(actor.userId, actor.householdId)).labels.find(value => value.id === id);
     if (!label) throw new NotFoundException({ code: 'LABEL_NOT_FOUND', message: 'Label not found.' });
     return label;
+  }
+
+  /**
+   * Rejects labels of another household when the change is proposed. A note
+   * edit writes its text before its labels, so a label refused only then would
+   * leave the text saved and the labels not.
+   */
+  private async requireLabels(actor: AssistantActor, ids: string[] | undefined): Promise<void> {
+    if (ids === undefined || ids.length === 0) return;
+    const known = new Set((await this.labels.list(actor.userId, actor.householdId)).labels.map(label => label.id));
+    if (ids.some(id => !known.has(id))) invalid('labelIds', 'invalid');
   }
 
   private async requireLabelAdmin(actor: AssistantActor): Promise<void> {
