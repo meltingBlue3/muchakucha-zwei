@@ -97,14 +97,16 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
   const closeCreate = useCallback(() => { if (!saving) setCreating(false); }, [saving]);
 
   // The new label joins the list and the selection together, so the form never
-  // has to be left to create one.
+  // has to be left to create one. Whoever reads the list hears of it too.
   const createLabel = useCallback(async (name: string, color: string): Promise<CreateError | null> => {
     setSaving(true);
     try {
       const token = await sessionTransport.getAccessToken();
       if (token === null) throw new Error('Session expired');
       const created = await sessionApiClient.createLabel(token, householdId, { name, color });
-      setAllLabels((previous) => [...previous, created]);
+      const labels = [...allLabels, created];
+      setAllLabels(labels);
+      onLabelsLoadedRef.current?.(labels);
       onChange([...selectedLabelIds, created.id]);
       setCreating(false);
       return null;
@@ -113,7 +115,7 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
     } finally {
       setSaving(false);
     }
-  }, [householdId, selectedLabelIds, onChange]);
+  }, [householdId, allLabels, selectedLabelIds, onChange]);
 
   // Opened over the form rather than at its foot, where a short window cut it
   // off: a popover by the button on a wide screen, a step of the window on a phone.

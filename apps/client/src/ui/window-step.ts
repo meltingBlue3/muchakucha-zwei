@@ -6,6 +6,11 @@ export interface RouteWindowStep {
   content: ReactNode;
   onClose(): void;
   onReturn?(): void;
+  /**
+   * Its content may open one step of its own, which closes back to this one,
+   * such as 新建标签 in a note's label step. Other steps open nothing further.
+   */
+  hostsStep?: boolean;
 }
 
 export interface WindowStepHost {
@@ -13,7 +18,7 @@ export interface WindowStepHost {
   hide(owner: object): void;
 }
 
-/** Provided to a window's main content; step content itself gets `null`. */
+/** Provided to a window's main content, and to a step that `hostsStep`; other step content gets `null`. */
 export const WindowStepContext = createContext<WindowStepHost | null>(null);
 
 /**
