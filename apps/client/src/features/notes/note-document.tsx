@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { Keyboard, Pressable, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import type { LabelResponseDto, NoteResponseDto } from '@muchakucha/api-client';
 import Bold from 'lucide-react-native/icons/bold';
@@ -41,6 +41,14 @@ import { useNoteAutosave, type NoteSaveStatus } from './use-note-autosave';
 
 const NO_FORMAT: NoteEditorFormat = { taskList: false, bulletList: false, orderedList: false, heading: 0, bold: false, link: false, inTitle: false, selection: '' };
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+
+/**
+ * On a phone Expo sends every prop of a DOM component into its WebView on each
+ * render, the note's whole first body included. The page re-renders as it saves,
+ * so the editor renders only when one of its own props changes.
+ */
+const Editor = memo(NoteEditor);
+const EDITOR_DOM = { style: { flex: 1 }, hideKeyboardAccessoryView: true } as const;
 
 interface NoteDocumentProps {
   householdId: string;
@@ -214,7 +222,8 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
       });
     }} /> : undefined;
 
-  const labelStep = labelChoice && !desktop ? { title: t('labels'), onClose: closeLabels, content: labelChoice } : null;
+  // 新建标签 inside it is a step of its own, back to this one when it closes.
+  const labelStep = labelChoice && !desktop ? { title: t('labels'), onClose: closeLabels, content: labelChoice, hostsStep: true } : null;
   const step = labelStep ?? (insert ? {
     title: insert.kind === 'link' ? t('format.insertLink') : t('format.insertTable'),
     onClose: () => setInsert(null),
@@ -271,7 +280,7 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
           </Stack> : null}
         </View> : null}
         <View style={{ flex: 1, minHeight: 0 }}>
-          <NoteEditor
+          <Editor
             ref={editor}
             initialTitle={autosave.initial.title}
             initialBody={autosave.initial.body}
@@ -285,7 +294,7 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
             onComposing={onComposing}
             onRequest={onRequest}
             onSave={onSave}
-            dom={{ style: { flex: 1 }, hideKeyboardAccessoryView: true }}
+            dom={EDITOR_DOM}
           />
         </View>
       </Stack>
@@ -369,7 +378,8 @@ const NoteLabelRow = forwardRef<View, { labels: LabelResponseDto[]; expanded: bo
       <Pressable ref={ref} accessibilityRole="button" accessibilityLabel={t('labelsOf', { names: labels.map(labelName).join('、') })}
         accessibilityState={{ expanded }} aria-expanded={expanded} aria-haspopup="dialog" onPress={onPress}
         // A finger needs the full target; the chips stay small inside it.
-        style={({ pressed }) => ({ alignSelf: 'flex-start', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.spacing[1], minHeight: dense ? undefined : theme.controlSizes.touchTarget, paddingVertical: theme.spacing[1], opacity: pressed ? 0.7 : 1 })}>
+        // A wrapping row on native packs its lines at the top unless told otherwise.
+        style={({ pressed }) => ({ alignSelf: 'flex-start', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', alignContent: 'center', gap: theme.spacing[1], minHeight: dense ? undefined : theme.controlSizes.touchTarget, paddingVertical: theme.spacing[1], opacity: pressed ? 0.7 : 1 })}>
         {labels.map(label => <LabelChip key={label.id} label={label} small />)}
       </Pressable>
     </View>;

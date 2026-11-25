@@ -4,6 +4,7 @@ import { Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import X from 'lucide-react-native/icons/x';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
+import { useSoftKeyboardShown } from '../platform/keyboard/soft-keyboard';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
 import { useTranslation } from '../i18n';
 import { Button, ConfirmCancelFocus, Heading, Inline, Text } from './primitives';
@@ -66,6 +67,10 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   }, []);
   const initialFocus = useMemo(() => ({ get current() { return cancel.current ?? initial.current; } }), []);
   const insets = useSafeAreaInsets();
+  // A phone's keyboard covers the home indicator or gesture bar, and the room kept
+  // for the keyboard already reaches the screen's bottom: no inset above it.
+  const keyboardUp = useSoftKeyboardShown() && Platform.OS !== 'web';
+  const bottomInset = keyboardUp ? 0 : insets.bottom;
   const { width } = useWindowDimensions();
   const side = docked && width >= theme.layout.navigationBreakpoint;
   const desktop = useDesktop();
@@ -147,18 +152,18 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
       <View style={{ flex: 1 }}>
         <DialogBackdrop onPress={close} blur={!side} />
         <KeyboardArea pointerEvents="box-none" style={side
-          ? { flex: 1, alignItems: 'flex-end', padding: theme.spacing[3], paddingTop: insets.top + theme.spacing[3], paddingBottom: insets.bottom + theme.spacing[3] }
+          ? { flex: 1, alignItems: 'flex-end', padding: theme.spacing[3], paddingTop: insets.top + theme.spacing[3], paddingBottom: bottomInset + theme.spacing[3] }
           : bottomSheet
           ? { flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + theme.spacing[6] }
           : sheet
           ? { flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + theme.spacing[2] }
-          : { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing[5], paddingTop: insets.top + theme.spacing[5], paddingBottom: insets.bottom + theme.spacing[5] }}>
+          : { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing[5], paddingTop: insets.top + theme.spacing[5], paddingBottom: bottomInset + theme.spacing[5] }}>
           <View ref={panel} testID="app-dialog-panel" {...(Platform.OS === 'web' ? {} : { accessibilityViewIsModal: true, accessibilityLabel: title })} style={side
             ? { width: theme.layout.dockedPanelWidth, maxWidth: '100%', height: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, padding: theme.spacing[6], gap: theme.spacing[4], ...(Platform.OS === 'web' ? { boxShadow: theme.shadow.raised } : {}) }
             : bottomSheet
-            ? { width: '100%', maxHeight: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, padding: theme.spacing[5], paddingBottom: insets.bottom + theme.spacing[5], gap: theme.spacing[4] }
+            ? { width: '100%', maxHeight: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, padding: theme.spacing[5], paddingBottom: bottomInset + theme.spacing[5], gap: theme.spacing[4] }
             : sheet
-            ? { flex: 1, width: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, paddingTop: theme.spacing[2], paddingHorizontal: theme.spacing[2], paddingBottom: insets.bottom + theme.spacing[2], gap: theme.spacing[2] }
+            ? { flex: 1, width: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, paddingTop: theme.spacing[2], paddingHorizontal: theme.spacing[2], paddingBottom: bottomInset + theme.spacing[2], gap: theme.spacing[2] }
             : { width: '100%', maxWidth: size === 'editor' ? theme.layout.editorDialogMaxWidth : theme.layout.dialogMaxWidth, height: fillContent ? '100%' : undefined, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, padding: theme.spacing[6], gap: theme.spacing[4], ...(Platform.OS === 'web' ? { boxShadow: theme.shadow.raised } : {}) }}>
             {sheet ? (
               <Inline gap={1} style={{ paddingRight: theme.spacing[2] }}>

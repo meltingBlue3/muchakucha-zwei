@@ -1,9 +1,11 @@
+import { useContext } from 'react';
 import { useTranslation } from '../../i18n';
 import { Pressable, ScrollView, View } from 'react-native';
 import Check from 'lucide-react-native/icons/check';
 import { useTheme } from '@shopify/restyle';
 import type { LabelResponseDto } from '@muchakucha/api-client';
 import type { Theme } from '../../ui/theme';
+import { PageGutter } from '../../ui/page-gutter';
 import { Text } from '../../ui/primitives';
 import { labelName } from './label-name';
 
@@ -130,6 +132,7 @@ export function LabelFilter({ name, allLabel, labels, value, onChange, dense, sc
   scroll: boolean;
 }) {
   const activeTheme = useTheme<Theme>();
+  const gutter = useContext(PageGutter);
   const target = dense ? activeTheme.layout.desktopControl : activeTheme.controlSizes.touchTarget;
   const option = (id: string | null, optionName: string, color: string | null) => {
     const checked = value === id;
@@ -142,7 +145,9 @@ export function LabelFilter({ name, allLabel, labels, value, onChange, dense, sc
   const chips = [option(null, allLabel, null), ...labels.map(label => option(label.id, labelName(label), label.color))];
   const gap = activeTheme.spacing[2];
   if (scroll) {
-    return <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+    // Out to the screen's edges, so chips slide under the page's margin instead of
+    // being cut at it, while the first one still starts on the page's text line.
+    return <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ marginHorizontal: -gutter }} contentContainerStyle={{ paddingHorizontal: gutter }}>
       <View accessibilityRole="radiogroup" accessibilityLabel={name} style={{ flexDirection: 'row', alignItems: 'center', gap }}>{chips}</View>
     </ScrollView>;
   }

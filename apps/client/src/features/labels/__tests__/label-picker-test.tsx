@@ -73,7 +73,8 @@ test('an admin creates a label without leaving the form, and it is chosen at onc
   jest.mocked(sessionApiClient.listLabels).mockResolvedValue({ labels: [label('chores', '家务')], total: 1 });
   jest.mocked(sessionApiClient.createLabel).mockResolvedValue({ id: 'checkup', householdId: 'family', name: '体检', color: '#3B7DD8', systemKey: null, localizedNames: null, createdBy: 'admin', createdAt: '2026-11-22T00:00:00.000Z' });
   const onChange = jest.fn();
-  const view = await renderForm({ initial: ['chores'], onChange });
+  const onLabelsLoaded = jest.fn();
+  const view = await renderForm({ initial: ['chores'], onChange, onLabelsLoaded });
 
   await fireEvent.press(await view.findByRole('button', { name: '新建标签' }));
   await fireEvent.changeText(view.getByLabelText('标签名称'), ' 体检 ');
@@ -83,6 +84,8 @@ test('an admin creates a label without leaving the form, and it is chosen at onc
   expect(await view.findByLabelText('取消选择标签 体检')).toBeTruthy();
   expect(sessionApiClient.createLabel).toHaveBeenCalledWith('token', 'family', { name: '体检', color: '#3B7DD8' });
   expect(onChange).toHaveBeenLastCalledWith(['chores', 'checkup']);
+  // Whoever names the chosen labels, such as a note before its save returns, knows the new one too.
+  expect(onLabelsLoaded).toHaveBeenLastCalledWith([expect.objectContaining({ id: 'chores' }), expect.objectContaining({ id: 'checkup', name: '体检' })]);
   expect(view.queryByLabelText('标签名称')).toBeNull();
 });
 

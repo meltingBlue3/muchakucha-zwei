@@ -116,24 +116,36 @@ export function RouteWindow({ title, busy = false, children, footer, footerStart
     show: (owner, next) => setOwnedStep({ owner, step: next }),
     hide: owner => setOwnedStep(current => current?.owner === owner ? null : current),
   }), []);
+  // The one further step a step that `hostsStep` may open.
+  const [innerOwned, setInnerOwned] = useState<{ owner: object; step: RouteWindowStep } | null>(null);
+  const innerHost = useMemo<WindowStepHost>(() => ({
+    show: (owner, next) => setInnerOwned({ owner, step: next }),
+    hide: owner => setInnerOwned(current => current?.owner === owner ? null : current),
+  }), []);
   const inlineConfirmation = pane ? undefined : centeredConfirmation;
   const overlayConfirmation = pane ? centeredConfirmation : undefined;
-  const step = inlineConfirmation ?? routeStep ?? ownedStep?.step ?? null;
+  const baseStep = inlineConfirmation ?? routeStep ?? ownedStep?.step ?? null;
+  const innerStep = baseStep?.hostsStep ? innerOwned?.step ?? null : null;
+  const step = innerStep ?? baseStep;
   const previousStep = useRef(step);
+  const previousInner = useRef(innerStep);
   const previousConfirmationTrigger = useRef(inlineConfirmation?.trigger);
   useEffect(() => {
     const previous = previousStep.current;
     const previousTrigger = previousConfirmationTrigger.current;
+    const leftInner = previousInner.current !== null && innerStep === null;
     previousStep.current = step;
+    previousInner.current = innerStep;
     previousConfirmationTrigger.current = inlineConfirmation?.trigger;
-    if (!previous || step) return;
+    // Back to the window's content, or from a step's own step back to that step.
+    if (!previous || (step && !leftInner)) return;
     // Wait until the window has restored its normal content and initial focus.
     const frame = requestAnimationFrame(() => {
       previous.onReturn?.();
       if (previousTrigger) focusOverlayControl(previousTrigger.current);
     });
     return () => cancelAnimationFrame(frame);
-  }, [step, inlineConfirmation?.trigger]);
+  }, [step, innerStep, inlineConfirmation?.trigger]);
   const [confirmation, setConfirmation] = useState<WindowConfirmationRequest | null>(null);
   const confirmationRef = useRef(confirmation);
   confirmationRef.current = confirmation;
@@ -197,7 +209,11 @@ export function RouteWindow({ title, busy = false, children, footer, footerStart
             <View style={step ? { display: 'none' } : fillContent ? { flex: 1 } : undefined} aria-hidden={Boolean(step)} importantForAccessibility={step ? 'no-hide-descendants' : 'auto'}>
               <WindowStepContext.Provider value={stepHost}><SuspendSheetAction suspended={Boolean(step)}>{children}</SuspendSheetAction></WindowStepContext.Provider>
             </View>
-            <WindowStepContext.Provider value={null}>{step?.content}</WindowStepContext.Provider>
+            {/* A step stays mounted, in the same place, while its own step is shown. */}
+            {baseStep ? <View style={innerStep ? { display: 'none' } : undefined} aria-hidden={Boolean(innerStep)} importantForAccessibility={innerStep ? 'no-hide-descendants' : 'auto'}>
+              <WindowStepContext.Provider value={baseStep.hostsStep ? innerHost : null}>{baseStep.content}</WindowStepContext.Provider>
+            </View> : null}
+            <WindowStepContext.Provider value={null}>{innerStep?.content}</WindowStepContext.Provider>
           </>}
         </WindowConfirmation.Provider>
       </AppDialog> : null}

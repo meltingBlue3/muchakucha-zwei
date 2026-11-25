@@ -10,7 +10,7 @@ import { theme } from './theme';
 import { daysSinceMonday, formatYearMonth, formatDayLabel, normalizeDateInput, normalizeTimeInput, parseDateValue, toDateValue, weekHeader } from './date-values';
 import { useTranslation } from '../i18n';
 
-/** Right-aligned 取消 / 确定, like a Material dialog. */
+/** Right-aligned 取消 / 确定, like a Material dialog; one above the other when they do not fit side by side. */
 export function PickerActions({ onCancel, onConfirm, confirmLabel, confirmDisabled = false, busy = false }: {
   onCancel(): void;
   onConfirm(): void;
@@ -21,9 +21,9 @@ export function PickerActions({ onCancel, onConfirm, confirmLabel, confirmDisabl
 }) {
   const { t } = useTranslation('common');
   return (
-    <Inline gap={2} style={{ justifyContent: 'flex-end', marginTop: theme.spacing[2] }}>
-      <Button label={t('cancel')} tone="secondary" disabled={busy} onPress={onCancel} />
-      <Button label={confirmLabel ?? t('confirm')} disabled={confirmDisabled} loading={busy} onPress={onConfirm} />
+    <Inline gap={2} style={{ justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: theme.spacing[2] }}>
+      <Button label={t('cancel')} tone="secondary" disabled={busy} onPress={onCancel} style={{ maxWidth: '100%' }} />
+      <Button label={confirmLabel ?? t('confirm')} disabled={confirmDisabled} loading={busy} onPress={onConfirm} style={{ maxWidth: '100%' }} />
     </Inline>
   );
 }

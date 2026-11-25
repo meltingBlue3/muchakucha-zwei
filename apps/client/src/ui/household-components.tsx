@@ -58,6 +58,7 @@ import { theme } from './theme';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
 import { MemberAvatar } from './member-avatar';
 import { PageHeaderContext, type PageHeader } from './page-intro';
+import { PageGutter } from './page-gutter';
 import { ActionNotice, useActionNoticeDismissal, type ActionNoticeProps } from './action-notice';
 import { formatDateTime } from './date-values';
 import { CardActionsMenu, type CardAction } from './card-actions-menu';
@@ -146,6 +147,7 @@ export const AppShell = ({
   // so a destination page needs no header row of its own.
   const hasNav = (title !== undefined || showBack || showProfile) && !(wideNavigation && headerContent !== undefined && !showBack);
   const inset = width < theme.breakpoints.mobile ? theme.layout.compactInset : theme.layout.mobileInset;
+  const gutter = desktop ? theme.layout.desktopColumnInset : wideNavigation ? theme.spacing[10] : inset;
 
   return (
     <DialogBackground.Provider value={blurTarget}>
@@ -225,7 +227,7 @@ export const AppShell = ({
         {layout === 'workspace' ? children : <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
-            paddingHorizontal: desktop ? theme.layout.desktopColumnInset : wideNavigation ? theme.spacing[10] : inset,
+            paddingHorizontal: gutter,
             paddingTop: desktop ? theme.spacing[4] : wideNavigation ? theme.spacing[8] : hasNav ? theme.spacing[1] : theme.spacing[6],
             paddingBottom: floatingAction && !desktopActions ? theme.spacing[16] + theme.spacing[10] : theme.spacing[10],
             maxWidth: desktop ? undefined : Platform.OS === 'web' ? (contentWidth === 'reading' ? theme.layout.contentMaxWidth : theme.layout.householdMaxWidth) + (wideNavigation ? theme.spacing[10] * 2 : 0) : undefined,
@@ -245,7 +247,7 @@ export const AppShell = ({
             ) : undefined
           }
         >
-          {children}
+          <PageGutter.Provider value={gutter}>{children}</PageGutter.Provider>
         </ScrollView>}
         {floatingAction && !desktopActions ? <View pointerEvents="box-none" style={{ position: 'absolute', right: theme.layout.mobileInset, bottom: theme.spacing[4] }}>{floatingAction}</View> : null}
         {notice ? <View pointerEvents="box-none" style={{ position: 'absolute', top: theme.spacing[2], left: theme.layout.mobileInset, right: theme.layout.mobileInset, alignItems: 'center' }}><ActionNotice {...notice} onTouchCapture={noticeDismissal.noticeCapture} /></View> : null}
