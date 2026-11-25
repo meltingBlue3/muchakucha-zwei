@@ -235,7 +235,7 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
 
   const conflict = autosave.conflict;
   // On a wide pane the notes above the document line up with its reading column.
-  const column: ViewStyle | undefined = desktop ? { width: '100%', maxWidth: theme.layout.readingWidth, alignSelf: 'center' } : undefined;
+  const column = desktop ? { width: '100%', maxWidth: theme.layout.readingWidth, alignSelf: 'center' } satisfies ViewStyle : undefined;
   const quiet = [column, { paddingHorizontal: metrics.gutter }];
   const labelRow = marks && marks.labels.length > 0
     ? <NoteLabelRow ref={labelsRow} labels={marks.labels} expanded={picking !== null} onPress={() => openLabels('row')} style={desktop ? column : { paddingHorizontal: metrics.gutter }} />

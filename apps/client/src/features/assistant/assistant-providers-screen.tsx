@@ -36,7 +36,7 @@ export function UsageSummary({ usage }: { usage: AssistantProviderUsageDto }) {
 }
 
 /** One configuration: what it is, who may use it, and what it cost this month. */
-function ProviderSection({ provider, root, writable, plain }: { provider: AssistantProviderResponseDto; root: string; writable: boolean; plain: boolean }) {
+function ProviderSection({ provider, root, writable, plain }: { provider: AssistantProviderResponseDto; root: ReturnType<typeof assistantPath>; writable: boolean; plain: boolean }) {
   const router = useRouter();
   const { t } = useTranslation('assistant');
   return <SettingsSection plain={plain} title={provider.name} icon={<Settings color={theme.colors.inkMuted} size={theme.controlSizes.icon} />} detail={provider.ownedByMe ? t('models.owned') : t('models.shared')}
