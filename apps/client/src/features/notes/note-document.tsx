@@ -185,8 +185,10 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
     if (!desktop) { command(handle => handle.blur()); Keyboard.dismiss(); }
     setPicking(from);
   };
+  const saveState = <NoteSaveState status={autosave.status} />;
   const header = <Inline gap={1}>
-    <NoteSaveState status={autosave.status} />
+    {/* A phone's header keeps its width for the window's name and buttons; the state follows the byline there. */}
+    {desktop ? saveState : null}
     {/* A note not saved yet has nothing to pin or label: these come with its first save. */}
     {marks ? <>
       <HeaderButton label={t(pinned ? 'unpin' : 'pin')} pressed={pinned} disabled={marking.busy} icon={Pin} onPress={() => void marking.setPinned(!pinned)} />
@@ -246,7 +248,10 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
         {noteId === 'new' ? <View style={column}>{chooseHousehold ? <HouseholdTargetField householdId={householdId} resource="notes" /> : <HouseholdContextNote householdName={householdName} />}</View> : null}
         {/* The title is the editor's first line, so the labels go above it: at the top of the column, or under the byline on a phone. */}
         {desktop ? labelRow : null}
-        {!desktop && byline ? <Text variant="caption" color="inkMuted" style={{ paddingHorizontal: metrics.gutter, fontFamily: theme.fontFamilies.numeric }}>{byline}</Text> : null}
+        {!desktop && (byline || autosave.status !== 'idle') ? <Inline gap={2} style={{ paddingHorizontal: metrics.gutter }}>
+          <Text variant="caption" color="inkMuted" style={{ flex: 1, fontFamily: theme.fontFamilies.numeric }}>{byline}</Text>
+          {saveState}
+        </Inline> : null}
         {!desktop ? labelRow : null}
         <DraftNotice style={quiet} />
         {marking.failure ? <QuietNotice style={quiet} icon={CircleAlert} text={t(marking.failure)} /> : null}

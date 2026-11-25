@@ -49,6 +49,8 @@ for (const width of [320, 390, 1440]) {
     const editor = note.getByRole('textbox', { name: '笔记内容', exact: true });
     await expect(note.getByRole('button', { name: /^更多操作：笔记：/ })).toBeInViewport();
     await expect(note.getByTestId('note-save-state')).toHaveText('已保存');
+    // The window keeps its whole name beside the header's buttons, down to 320.
+    if (width < 1024) expect(await note.getByRole('heading', { name: '笔记', exact: true }).evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`note-detail-${width}.png`) });
     // The note is written where it is read: no 编辑 to press, and the change saves itself.
