@@ -16,6 +16,7 @@ import HardBreak from '@tiptap/extension-hard-break';
 import { TaskItem, TaskList, type TaskItemOptions } from '@tiptap/extension-list';
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import Suggestion, { exitSuggestion, type SuggestionKeyDownProps, type SuggestionProps } from '@tiptap/suggestion';
+import { flip, size, type Middleware } from '@floating-ui/dom';
 import { Markdown } from 'tiptap-markdown';
 import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState, type Ref } from 'react';
@@ -256,6 +257,16 @@ const NoteDocument = Node.create({ name: 'doc', topNode: true, content: 'title b
 
 function bodyStart(doc: ProseMirrorNode): number { return doc.firstChild?.nodeSize ?? 0; }
 
+const inTitle = (editor: Editor) => editor.state.selection.$from.parent.type.name === 'title';
+
+/** Enter in the title goes to the start of the body; it does not split the title. */
+function leaveTitle(editor: Editor): boolean {
+  return editor.chain().command(({ tr }) => {
+    tr.setSelection(TextSelection.near(tr.doc.resolve(bodyStart(tr.doc) + 1)));
+    return true;
+  }).scrollIntoView().run();
+}
+
 const Title = Node.create({
   name: 'title',
   content: 'text*',
@@ -263,16 +274,28 @@ const Title = Node.create({
   defining: true,
   parseHTML: () => [{ tag: 'h1[data-note-title]', priority: 60 }],
   renderHTML: ({ HTMLAttributes }) => ['h1', mergeAttributes(HTMLAttributes, { 'data-note-title': '', class: 'note-title' }), 0],
+  addProseMirrorPlugins() {
+    const { editor } = this;
+    return [new Plugin({
+      key: new PluginKey('noteTitleEnter'),
+      props: {
+        handleDOMEvents: {
+          // Chrome on Android sends Enter past ProseMirror's keymap and splits the
+          // line itself, unless the break it is about to insert is refused here.
+          beforeinput: (_view, event) => {
+            const { inputType } = event as InputEvent;
+            if ((inputType !== 'insertParagraph' && inputType !== 'insertLineBreak') || !inTitle(editor)) return false;
+            event.preventDefault();
+            leaveTitle(editor);
+            return true;
+          },
+        },
+      },
+    })];
+  },
   addKeyboardShortcuts() {
     return {
-      // Enter in the title goes to the start of the body; it does not split the title.
-      Enter: ({ editor }) => {
-        if (editor.state.selection.$from.parent.type.name !== 'title') return false;
-        return editor.chain().command(({ tr }) => {
-          tr.setSelection(TextSelection.near(tr.doc.resolve(bodyStart(tr.doc) + 1)));
-          return true;
-        }).scrollIntoView().run();
-      },
+      Enter: ({ editor }) => inTitle(editor) && leaveTitle(editor),
       // At the very start of the body, Backspace goes back to the title instead of merging into it.
       Backspace: ({ editor }) => {
         const { selection, doc } = editor.state;
@@ -387,6 +410,29 @@ const NoteTaskItem = TaskItem.extend<TaskItemOptions & { labels: () => NoteEdito
 interface SlashState { items: SlashCommand[]; active: number; command: (key: SlashCommand) => void }
 const slashKey = new PluginKey('noteSlash');
 
+/**
+ * Where the `/` menu goes: below the line, or above it when it fits there and
+ * not below, and then only as tall as that side leaves, scrolling inside it, as
+ * a phone's keyboard may leave less room than the whole menu. The side is chosen
+ * by the list's full height rather than the height the last placement left it.
+ * The room is handed to the list inside the positioned layer, which React redraws.
+ */
+function slashMenuPlacement(padding: number, tallest: number): Middleware[] {
+  const fullHeight: Middleware = {
+    name: 'noteSlashFullHeight',
+    fn: ({ rects, elements }) => {
+      const list = elements.floating.firstElementChild;
+      if (!(list instanceof HTMLElement)) return {};
+      const height = Math.min(tallest, list.scrollHeight + list.offsetHeight - list.clientHeight);
+      return height > rects.floating.height ? { reset: { rects: { reference: rects.reference, floating: { ...rects.floating, height } } } } : {};
+    },
+  };
+  return [fullHeight, flip({ padding }), size({
+    padding,
+    apply: ({ availableHeight, elements }) => { elements.floating.style.setProperty('--note-slash-room', `${Math.max(0, Math.floor(availableHeight))}px`); },
+  })];
+}
+
 function bodyOf(editor: Editor): { title: string; body: string } {
   const { doc } = editor.state;
   const title = doc.firstChild?.type.name === 'title' ? doc.firstChild.textContent : '';
@@ -415,8 +461,10 @@ function css(c: NoteEditorColors, m: NoteEditorMetrics): string {
   const reach = (m.touchTarget - m.box) / 2;
   return `
   ${IS_DOM ? `html, body, #root { height: 100%; margin: ${s0}px; padding: ${s0}px; } body { background: ${c.surface}; -webkit-text-size-adjust: 100%; }` : ''}
-  .note-editor { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; color: ${c.ink}; font-family: ${m.fontFamily}, system-ui, sans-serif; }
-  .note-editor .ProseMirror { min-height: 100%; box-sizing: border-box; padding: ${s2}px ${m.gutter}px ${s12}px; ${m.readingWidth ? `max-width: ${m.readingWidth + m.gutter * 2}px; margin-left: auto; margin-right: auto;` : ''} outline: none; font-size: ${m.body.fontSize}px; line-height: ${m.body.lineHeight}px; caret-color: ${c.ink}; overflow-wrap: anywhere; }
+  /* The text fills the page below its last line, so a tap anywhere on it writes. Expo's #root is a row. */
+  .note-editor { flex: 1; min-width: ${s0}px; height: 100%; display: flex; flex-direction: column; overflow-y: auto; -webkit-overflow-scrolling: touch; color: ${c.ink}; font-family: ${m.fontFamily}, system-ui, sans-serif; }
+  .note-editor-content { flex: 1 0 auto; display: flex; flex-direction: column; }
+  .note-editor .ProseMirror { flex: 1 0 auto; width: 100%; box-sizing: border-box; padding: ${s2}px ${m.gutter}px ${s12}px; ${m.readingWidth ? `max-width: ${m.readingWidth + m.gutter * 2}px; margin-left: auto; margin-right: auto;` : ''} outline: none; font-size: ${m.body.fontSize}px; line-height: ${m.body.lineHeight}px; caret-color: ${c.ink}; overflow-wrap: anywhere; }
   .note-editor .ProseMirror > * + * { margin-top: ${s2}px; }
   .note-editor h1.note-title { font-size: ${m.title.fontSize}px; line-height: ${m.title.lineHeight}px; font-weight: ${m.title.fontWeight}; margin: ${s0}px ${s0}px ${s3}px; }
   .note-editor .is-empty::before { content: attr(data-placeholder); color: ${c.inkFaint}; float: left; height: ${s0}px; pointer-events: none; font-weight: inherit; }
@@ -446,7 +494,8 @@ function css(c: NoteEditorColors, m: NoteEditorMetrics): string {
   .note-editor input[type="checkbox"]:checked { background: ${c.ink}; border-color: ${c.ink}; }
   .note-editor input[type="checkbox"]:checked::after { content: ""; width: ${m.box / 2}px; height: ${m.box / 4}px; border-left: ${m.thick}px solid ${c.surface}; border-bottom: ${m.thick}px solid ${c.surface}; transform: translateY(-${m.line}px) rotate(-45deg); }
   .note-editor li[data-checked="true"] > div > p:first-child { color: ${c.inkFaint}; text-decoration: line-through; text-decoration-color: ${c.border}; }
-  .note-slash-menu { z-index: ${m.menuLayer}; width: ${m.menuWidth}px; max-height: ${m.menuWidth}px; overflow-y: auto; box-sizing: border-box; padding: ${s1}px; background: ${c.surface}; border: ${m.line}px solid ${c.separator}; border-radius: ${m.menuRadius}px; box-shadow: ${m.shadow}; font-family: ${m.fontFamily}, system-ui, sans-serif; font-size: ${m.small.fontSize}px; line-height: ${m.small.lineHeight}px; color: ${c.ink}; }
+  .note-slash-layer { z-index: ${m.menuLayer}; }
+  .note-slash-menu { width: ${m.menuWidth}px; max-height: min(${m.menuWidth}px, var(--note-slash-room, ${m.menuWidth}px)); overflow-y: auto; box-sizing: border-box; padding: ${s1}px; background: ${c.surface}; border: ${m.line}px solid ${c.separator}; border-radius: ${m.menuRadius}px; box-shadow: ${m.shadow}; font-family: ${m.fontFamily}, system-ui, sans-serif; font-size: ${m.small.fontSize}px; line-height: ${m.small.lineHeight}px; color: ${c.ink}; }
   .note-slash-item { display: flex; align-items: center; justify-content: space-between; gap: ${s3}px; padding: ${s2}px ${s3}px; border-radius: ${m.radius}px; cursor: pointer; }
   .note-slash-item[aria-selected="true"] { background: ${c.surfaceSelected}; }
   .note-slash-syntax { color: ${c.inkFaint}; font-family: ${m.monoFamily}; white-space: pre; }
@@ -457,6 +506,8 @@ function css(c: NoteEditorColors, m: NoteEditorMetrics): string {
 export default function NoteEditor({ ref, initialTitle, initialBody, colors, metrics, labels, onReady, onChange, onFormat, onFocusChange, onComposing, onRequest, onSave }: Props) {
   const words = useRef(labels);
   words.current = labels;
+  const sizes = useRef(metrics);
+  sizes.current = metrics;
   const callbacks = useRef({ onChange, onFormat, onFocusChange, onComposing, onRequest, onSave });
   callbacks.current = { onChange, onFormat, onFocusChange, onComposing, onRequest, onSave };
   // What was last reported or loaded; an update that serializes the same is not a change.
@@ -467,7 +518,13 @@ export default function NoteEditor({ ref, initialTitle, initialBody, colors, met
   const [slash, setSlash] = useState<SlashState | null>(null);
   const slashRef = useRef<SlashState | null>(null);
   slashRef.current = slash;
-  const menu = useMemo(() => typeof document === 'undefined' ? null : document.createElement('div'), []);
+  // The positioned layer the `/` menu floats in.
+  const menu = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const layer = document.createElement('div');
+    layer.className = 'note-slash-layer';
+    return layer;
+  }, []);
 
   const report = (editor: Editor, tick?: ChecklistTick) => {
     if (composing.current || editor.view.composing) return;
@@ -492,6 +549,8 @@ export default function NoteEditor({ ref, initialTitle, initialBody, colors, met
         editor: this.editor,
         pluginKey: slashKey,
         char: '/',
+        flip: false,
+        floatingUi: { middleware: slashMenuPlacement(sizes.current.space[2], sizes.current.menuWidth) },
         // Only at the start of a line or after a space, and never in the title or in code.
         allow: ({ state, range }) => {
           const $from = state.doc.resolve(range.from);
@@ -521,9 +580,16 @@ export default function NoteEditor({ ref, initialTitle, initialBody, colors, met
             setSlash(current => ({ items: props.items, active: current && current.items.join() === props.items.join() ? current.active : 0, command: props.command }));
           };
           return {
-            onStart: props => { open(props); if (menu) unmount = props.mount(menu); },
+            onStart: props => {
+              open(props);
+              if (!menu) return;
+              // On Web a phone's note window is a modal dialog over the page: the menu joins
+              // that dialog, as the app's other menus do, instead of sinking under it.
+              (props.editor.view.dom.closest('[aria-modal="true"]') ?? document.body).append(menu);
+              unmount = props.mount(menu);
+            },
             onUpdate: open,
-            onExit: () => { unmount?.(); unmount = null; setSlash(null); },
+            onExit: () => { unmount?.(); unmount = null; menu?.remove(); setSlash(null); },
             onKeyDown: ({ event }: SuggestionKeyDownProps) => {
               const current = slashRef.current;
               if (!current) return false;
@@ -607,12 +673,19 @@ export default function NoteEditor({ ref, initialTitle, initialBody, colors, met
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
-  // When the keyboard opens, the WebView shrinks: keep the caret's line in sight.
+  // The keyboard, and then the format toolbar above it, each shrink the page: keep
+  // the caret's line in sight once the page has taken its new size.
+  const pane = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!editor) return undefined;
-    const resize = () => { if (editor.isFocused) editor.commands.scrollIntoView(); };
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
+    const node = pane.current;
+    if (!editor || !node || typeof ResizeObserver === 'undefined') return undefined;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => { if (!editor.isDestroyed && editor.isFocused) editor.commands.scrollIntoView(); });
+    });
+    observer.observe(node);
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
   }, [editor]);
 
   // On Web the page's toolbar is in the same document: pressing it must not take focus from the text.
@@ -691,9 +764,9 @@ export default function NoteEditor({ ref, initialTitle, initialBody, colors, met
     else { dom.removeAttribute('aria-activedescendant'); dom.removeAttribute('aria-controls'); dom.removeAttribute('aria-expanded'); }
   }, [editor, activeId]);
 
-  return <div className="note-editor">
+  return <div className="note-editor" ref={pane}>
     <style>{style}</style>
-    <EditorContent editor={editor} />
+    <EditorContent editor={editor} className="note-editor-content" />
     {menu && slash ? createPortal(<div id="note-slash-menu" className="note-slash-menu" role="listbox" aria-label={labels.menu} onMouseDown={event => event.preventDefault()}>
       {slash.items.length ? slash.items.map((key, index) => <div key={key} id={`note-slash-${key}`} role="option" aria-selected={index === slash.active} className="note-slash-item" onMouseEnter={() => setSlash({ ...slash, active: index })} onClick={() => slash.command(key)}>
         <span>{labels.commands[key]}</span>
