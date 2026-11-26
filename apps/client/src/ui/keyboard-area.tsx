@@ -19,15 +19,17 @@ export const scrollKeyboardDismissMode = Platform.OS === 'web' ? 'none' : 'on-dr
  * the distance from the window top to that parent — for example the status bar
  * inset when the parent sits inside a safe area.
  */
-export function KeyboardArea({ children, style, windowOffset = 0, pointerEvents }: {
+export function KeyboardArea({ children, style, windowOffset = 0, pointerEvents, enabled = true }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
   windowOffset?: number;
   pointerEvents?: 'box-none' | 'auto';
+  enabled?: boolean;
 }) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'web' ? undefined : 'padding'}
+      enabled={enabled}
       keyboardVerticalOffset={windowOffset}
       {...(pointerEvents === undefined ? {} : { pointerEvents })}
       style={style}

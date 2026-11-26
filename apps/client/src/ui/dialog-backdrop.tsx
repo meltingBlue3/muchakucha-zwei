@@ -1,5 +1,5 @@
-import { useContext } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { useContext, type RefObject } from 'react';
+import { Pressable, StyleSheet, type View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { DialogBackground } from './dialog-background';
 import { theme } from './theme';
@@ -10,8 +10,9 @@ import { theme } from './theme';
  * Menus anchored to a button stay on a transparent dismiss layer instead.
  * A window docked beside the page leaves it unblurred, so the list stays readable.
  */
-export function DialogBackdrop({ onPress, testID = 'app-dialog', blur = true }: { onPress(): void; testID?: string; blur?: boolean }) {
-  const blurTarget = useContext(DialogBackground);
+export function DialogBackdrop({ onPress, testID = 'app-dialog', blur = true, target }: { onPress(): void; testID?: string; blur?: boolean; target?: RefObject<View | null> | undefined }) {
+  const contextTarget = useContext(DialogBackground);
+  const blurTarget = target ?? contextTarget;
   return <>
     {blur ? <BlurView testID={`${testID}-blur`} pointerEvents="none" {...(blurTarget ? { blurTarget } : {})} blurMethod="dimezisBlurView" intensity={theme.blur.dialog} tint="light" style={StyleSheet.absoluteFill} /> : null}
     <Pressable testID={`${testID}-dismiss`} accessible={false} tabIndex={-1} onPress={onPress} style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.dialogOverlay }]} />

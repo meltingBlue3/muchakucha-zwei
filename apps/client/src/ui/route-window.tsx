@@ -2,11 +2,12 @@ import { WindowConfirmation, type WindowConfirmationRequest } from './window-con
 import { ConfirmActions, Stack, Text } from './primitives';
 import { useGlobalSearchParams, useIsFocused, useLocalSearchParams, useNavigation, useRoute, useRouter } from 'expo-router';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { View } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
 import { AppDialog } from './app-dialog';
 import { DialogBackground } from './dialog-background';
 import { SuspendSheetAction } from './sheet-action';
+import { theme } from './theme';
 import { WindowStepContext, type RouteWindowStep, type WindowStepHost } from './window-step';
 
 export type { RouteWindowStep };
@@ -55,8 +56,9 @@ const DOCKED_RESOURCES: ReadonlySet<RouteWindowProps['resource']> = new Set(['ta
  * while the window is docked beside the list.
  */
 export function useOpenWindowItem(param: 'taskId' | 'eventId' | 'noteId' | 'ruleId'): string | undefined {
+  const desktop = useDesktop();
   const value = useGlobalSearchParams<Record<typeof param, string>>()[param];
-  return typeof value === 'string' ? value : undefined;
+  return desktop && typeof value === 'string' ? value : undefined;
 }
 
 /**
@@ -194,26 +196,45 @@ export function RouteWindow({ title, busy = false, children, footer, footerStart
       }
     });
   }, [navigation, busy, centeredConfirmation, confirmation, step, onBackStep, exitAllowed, pane, workspace, draftPrefix]);
+  const { width } = useWindowDimensions();
+  const phoneSheet = !pane && size === 'editor' && width < theme.layout.editorSheetBreakpoint;
+  const confirmationContent = confirmation ? (
+    <Stack gap={3}>
+      <Text>{confirmation.message}</Text>
+      <ConfirmActions cancelLabel={t('continueEditing')} confirmLabel={confirmation.confirmLabel} destructive={confirmation.destructive ?? false} busy={busy} onCancel={() => setConfirmation(null)} onConfirm={() => { const request = confirmation; confirmationRef.current = null; setConfirmation(null); request.onConfirm(); }} />
+    </Stack>
+  ) : null;
+  const stepContent = baseStep ? (
+    <>
+      {/* A step stays mounted, in the same place, while its own step is shown. */}
+      <View style={innerStep ? { display: 'none' } : undefined} aria-hidden={Boolean(innerStep)} importantForAccessibility={innerStep ? 'no-hide-descendants' : 'auto'}>
+        <WindowStepContext.Provider value={baseStep.hostsStep ? innerHost : null}>{baseStep.content}</WindowStepContext.Provider>
+      </View>
+      <WindowStepContext.Provider value={null}>{innerStep?.content}</WindowStepContext.Provider>
+    </>
+  ) : null;
+  // On a phone's full-screen sheet, steps and confirmations float centered over the blurred sheet
+  // instead of collapsing the sheet away to reveal the underlying list (and hiding any WebView).
+  const sheetOverlay = phoneSheet && (confirmation !== null || step !== null) ? {
+    title: confirmation?.title ?? step!.title,
+    preferCancel: confirmation !== null || inlineConfirmation !== undefined,
+    content: <WindowConfirmation.Provider value={setConfirmation}>{confirmationContent ?? stepContent}</WindowConfirmation.Provider>,
+  } : null;
+  const replaceInDialog = !sheetOverlay && (confirmation !== null || step !== null);
+
   return (
     <DialogBackground.Provider value={hasBackground ? parentBackground : background}>
       <BlurTargetView ref={background} style={{ flex: 1 }} pointerEvents={backgroundInteractive ? 'auto' : 'none'}>
         {!hasBackground ? fallback : null}
       </BlurTargetView>
-      {focused ? <AppDialog title={confirmation?.title ?? step?.title ?? title} busy={busy} onClose={close} trigger={trigger} size={step || confirmation ? 'standard' : size} docked={docked && !inlineConfirmation} preferCancel={preferCancel || inlineConfirmation !== undefined} reading={resource === 'notes' && overList} wide={besideToday} fillContent={fillContent && !step && !confirmation} headerActions={confirmation || step ? null : headerActions} {...(headerNote && !confirmation && !step ? { headerNote } : {})} {...(footer === undefined || confirmation || step ? {} : { footer })} {...(footerStart === undefined || confirmation || step ? {} : { footerStart })}>
+      {focused ? <AppDialog title={replaceInDialog ? (confirmation?.title ?? step?.title ?? title) : title} busy={busy} onClose={close} trigger={trigger} size={replaceInDialog ? 'standard' : size} docked={docked && !inlineConfirmation} preferCancel={replaceInDialog ? (preferCancel || inlineConfirmation !== undefined) : preferCancel} reading={resource === 'notes' && overList} wide={besideToday} fillContent={fillContent && !replaceInDialog} headerActions={replaceInDialog ? null : headerActions} {...(headerNote && !replaceInDialog ? { headerNote } : {})} {...(footer === undefined || replaceInDialog ? {} : { footer })} {...(footerStart === undefined || replaceInDialog ? {} : { footerStart })} overlay={sheetOverlay}>
         <WindowConfirmation.Provider value={setConfirmation}>
-          {confirmation ? <Stack gap={3}>
-            <Text>{confirmation.message}</Text>
-            <ConfirmActions cancelLabel={t('continueEditing')} confirmLabel={confirmation.confirmLabel} destructive={confirmation.destructive ?? false} busy={busy} onCancel={() => setConfirmation(null)} onConfirm={() => { const request = confirmation; confirmationRef.current = null; setConfirmation(null); request.onConfirm(); }} />
-          </Stack> : <>
+          {replaceInDialog && confirmationContent ? confirmationContent : <>
             {/* Keep the editor mounted while a step owns focus. */}
-            <View style={step ? { display: 'none' } : fillContent ? { flex: 1 } : undefined} aria-hidden={Boolean(step)} importantForAccessibility={step ? 'no-hide-descendants' : 'auto'}>
-              <WindowStepContext.Provider value={stepHost}><SuspendSheetAction suspended={Boolean(step)}>{children}</SuspendSheetAction></WindowStepContext.Provider>
+            <View style={replaceInDialog && step ? { display: 'none' } : fillContent ? { flex: 1 } : undefined} aria-hidden={Boolean(replaceInDialog && step)} importantForAccessibility={replaceInDialog && step ? 'no-hide-descendants' : 'auto'}>
+              <WindowStepContext.Provider value={stepHost}><SuspendSheetAction suspended={Boolean(replaceInDialog && step)}>{children}</SuspendSheetAction></WindowStepContext.Provider>
             </View>
-            {/* A step stays mounted, in the same place, while its own step is shown. */}
-            {baseStep ? <View style={innerStep ? { display: 'none' } : undefined} aria-hidden={Boolean(innerStep)} importantForAccessibility={innerStep ? 'no-hide-descendants' : 'auto'}>
-              <WindowStepContext.Provider value={baseStep.hostsStep ? innerHost : null}>{baseStep.content}</WindowStepContext.Provider>
-            </View> : null}
-            <WindowStepContext.Provider value={null}>{innerStep?.content}</WindowStepContext.Provider>
+            {!sheetOverlay ? stepContent : null}
           </>}
         </WindowConfirmation.Provider>
       </AppDialog> : null}

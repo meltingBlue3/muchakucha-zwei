@@ -21,7 +21,9 @@ import { labelColorPresets, labelTint, type Theme } from '../../../../../src/ui/
 import { getRouteTrigger, rememberRouteTrigger } from '../../../../../src/platform/overlays/route-trigger';
 import { focusFieldOnOpen } from '../../../../../src/platform/keyboard/focus-on-open';
 import { UnsavedSwitchDialog } from '../../../../../src/ui/unsaved-switch-dialog';
+import { useWorkspaceStore } from '../../../../../src/ui/workspace-state';
 import { labelName } from '../../../../../src/features/labels/label-name';
+import { householdLabelsCacheKey } from '../../../../../src/features/labels/use-household-labels';
 
 type LabelAction = { kind: 'create' } | { kind: 'edit'; label: LabelListItemDto };
 
@@ -35,6 +37,7 @@ export default function LabelsIndexRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const desktop = useDesktop();
   const theme = useTheme<Theme>();
+  const workspace = useWorkspaceStore();
   const { households, currentHouseholdId } = useHouseholdContext();
   const householdId = id ?? currentHouseholdId;
   const household = households.find(item => item.id === householdId);
@@ -98,12 +101,13 @@ export default function LabelsIndexRoute() {
       const result = await sessionApiClient.listLabels(token, householdId);
       if (request !== requestGeneration.current) return;
       setLabels(result.labels);
+      workspace.set(householdLabelsCacheKey(householdId), result.labels);
       loadedHousehold.current = householdId;
       if (desktop) void loadMembers(token, householdId);
     } catch {
       if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? 'refreshError' : 'loadError');
     } finally { if (request === requestGeneration.current) setLoading(false); }
-  }, [householdId, desktop]);
+  }, [householdId, desktop, workspace]);
   useFocusEffect(useCallback(() => {
     void fetchLabels();
     return () => { requestGeneration.current++; };
@@ -137,6 +141,7 @@ export default function LabelsIndexRoute() {
   const readChangedLabel = async (token: string, household: string, labelId: string) => {
     const latest = (await sessionApiClient.listLabels(token, household)).labels;
     setLabels(latest);
+    workspace.set(householdLabelsCacheKey(household), latest);
     return latest.find(label => label.id === labelId) ?? null;
   };
   const submit = async () => {
@@ -152,7 +157,11 @@ export default function LabelsIndexRoute() {
       const result = action.kind === 'create'
         ? await sessionApiClient.createLabel(token, householdId, data)
         : await sessionApiClient.updateLabel(token, householdId, action.label.id, { ...data, expectedName: action.label.name, expectedColor: action.label.color });
-      setLabels(previous => action.kind === 'create' ? [...previous, { ...result, usage: { events: 0, tasks: 0, notes: 0 } }] : previous.map(label => label.id === result.id ? { ...label, ...result } : label));
+      setLabels(previous => {
+        const next = action.kind === 'create' ? [...previous, { ...result, usage: { events: 0, tasks: 0, notes: 0 } }] : previous.map(label => label.id === result.id ? { ...label, ...result } : label);
+        workspace.set(householdLabelsCacheKey(householdId), next);
+        return next;
+      });
       setAction(null);
     } catch (caught: unknown) {
       setActionError('saveError');
@@ -176,7 +185,11 @@ export default function LabelsIndexRoute() {
       token = await sessionTransport.getAccessToken();
       if (token === null) throw new Error('Session expired');
       await sessionApiClient.deleteLabel(token, householdId, labelId, { expectedName, expectedColor });
-      setLabels(previous => previous.filter(label => label.id !== labelId));
+      setLabels(previous => {
+        const next = previous.filter(label => label.id !== labelId);
+        workspace.set(householdLabelsCacheKey(householdId), next);
+        return next;
+      });
       setAction(previous => previous?.kind === 'edit' && previous.label.id === labelId ? null : previous);
       setDeleteTarget(null);
     } catch (caught: unknown) {
