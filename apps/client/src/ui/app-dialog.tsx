@@ -1,10 +1,10 @@
-import { createContext, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { DialogBackdrop } from './dialog-backdrop';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
 import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
 import X from 'lucide-react-native/icons/x';
-import { useOverlayFocus } from '../platform/overlays/overlay-focus';
+import { useCoveredOverlay, useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { useSoftKeyboardShown } from '../platform/keyboard/soft-keyboard';
 import { KeyboardArea, scrollKeyboardDismissMode } from './keyboard-area';
 import { useTranslation } from '../i18n';
@@ -103,18 +103,7 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   const confirmationBusy = activePreferCancel && busy;
   // Let the focus outline extend beyond the scroll content without being clipped.
   const focusInset = activePreferCancel && Platform.OS === 'web' ? theme.focus.width + theme.focus.offset : 0;
-  // Keep the covered sheet out of keyboard focus and the Web accessibility tree while a step sits over it.
-  useLayoutEffect(() => {
-    if (!sheetOverlay || Platform.OS !== 'web') return undefined;
-    const node = sheetLayer.current as unknown as HTMLElement | null;
-    if (!node) return undefined;
-    node.inert = true;
-    node.setAttribute('aria-hidden', 'true');
-    return () => {
-      node.inert = false;
-      node.removeAttribute('aria-hidden');
-    };
-  }, [sheetOverlay]);
+  useCoveredOverlay(sheetLayer, sheetOverlay);
   // A dialog can replace its content with a confirmation step. Focus its safe
   // close action again; the element that opened that step may no longer exist.
   useEffect(() => {
@@ -238,11 +227,10 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   return (
     <Modal {...webDialogName(activeTitle)} transparent visible animationType="none" onShow={focus} onRequestClose={Platform.OS === 'web' ? undefined : close} statusBarTranslucent navigationBarTranslucent style={androidModalFrame}>
       <View style={[{ flex: 1 }, androidModalFrame]}>
-        {sheet ? (
-          <BlurTargetView ref={sheetLayer} style={{ flex: 1 }} pointerEvents={sheetOverlay ? 'none' : 'auto'} aria-hidden={sheetOverlay || undefined} importantForAccessibility={sheetOverlay ? 'no-hide-descendants' : 'auto'}>
-            {baseBody}
-          </BlurTargetView>
-        ) : baseBody}
+        {/* The sheet and centered editor share a parent so resizing keeps their content mounted. */}
+        <BlurTargetView ref={sheetLayer} style={{ flex: 1 }} pointerEvents={sheetOverlay ? 'none' : 'auto'} accessibilityElementsHidden={sheetOverlay} importantForAccessibility={sheetOverlay ? 'no-hide-descendants' : 'auto'}>
+          {baseBody}
+        </BlurTargetView>
         {sheetOverlay ? (
           <View style={StyleSheet.absoluteFill}>
             <DialogBackdrop onPress={close} blur target={sheetLayer} />

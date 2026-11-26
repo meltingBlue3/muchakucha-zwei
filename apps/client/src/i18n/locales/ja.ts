@@ -970,6 +970,7 @@ export const ja: Catalog = {
     document: 'ノート',
     loading: 'ノートを読み込み中',
     loadError: 'ノートを読み込めませんでした。',
+    editorLoadError: 'ノートのエディターを起動できませんでした。もう一度お試しください。',
     listError: 'ノートを読み込めませんでした。接続を確認して再試行してください。',
     refreshError: '更新できなかったため、前回のノートを表示しています。接続を確認して再試行してください。',
     retryLoad: 'ノートの読み込みを再試行',

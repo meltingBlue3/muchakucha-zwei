@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import type { View } from 'react-native';
 import type { OverlayFocusOptions } from './overlay-focus.types';
 
@@ -10,6 +10,22 @@ const selector = 'button:not([disabled]), input:not([disabled]), textarea:not([d
 
 export function focusOverlayControl(control: View | null) {
   (control as unknown as HTMLElement | null)?.focus();
+}
+
+export function useCoveredOverlay(layer: RefObject<View | null> | null, covered: boolean) {
+  useLayoutEffect(() => {
+    const node = layer?.current as unknown as HTMLElement | null | undefined;
+    if (!covered || !node) return;
+    const previousInert = node.inert;
+    const previousHidden = node.getAttribute('aria-hidden');
+    node.inert = true;
+    node.setAttribute('aria-hidden', 'true');
+    return () => {
+      node.inert = previousInert;
+      if (previousHidden === null) node.removeAttribute('aria-hidden');
+      else node.setAttribute('aria-hidden', previousHidden);
+    };
+  }, [layer, covered]);
 }
 
 export function useOverlayFocus({ mode, panel, initial, trigger, onClose }: OverlayFocusOptions) {

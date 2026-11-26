@@ -44,7 +44,7 @@ import { useNoteAutosave, type NoteSaveStatus } from './use-note-autosave';
 
 const NO_FORMAT: NoteEditorFormat = { taskList: false, bulletList: false, orderedList: false, heading: 0, bold: false, link: false, inTitle: false, selection: '' };
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-const EDITOR_READY_FALLBACK_MS = 1500;
+const EDITOR_START_TIMEOUT_MS = 10_000;
 
 /**
  * On a phone Expo sends every prop of a DOM component into its WebView on each
@@ -161,12 +161,20 @@ function NoteDocumentBody({ householdId, noteId, note, members, chooseHousehold,
   // On native the editor runs in a WebView, which is blank until TipTap finishes booting.
   // Keep the loading indicator over the document until onReady arrives so title and chrome appear together.
   const [editorReady, setEditorReady] = useState(Platform.OS === 'web');
+  const [editorTimedOut, setEditorTimedOut] = useState(false);
+  const [editorAttempt, setEditorAttempt] = useState(0);
+  const currentEditorAttempt = useRef(editorAttempt);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     if (editorReady) return undefined;
-    const timer = setTimeout(() => setEditorReady(true), EDITOR_READY_FALLBACK_MS);
+    const timer = setTimeout(() => setEditorTimedOut(true), EDITOR_START_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [editorReady]);
+  }, [editorReady, editorAttempt]);
+  const retryEditor = () => {
+    if (ready.current) return;
+    setEditorTimedOut(false);
+    setEditorAttempt(++currentEditorAttempt.current);
+  };
   // The WebView may be gone after leaving the page; never call into it then.
   const command = useCallback((run: (handle: NoteEditorHandle) => void) => {
     if (alive.current && ready.current && editor.current) run(editor.current);
@@ -200,7 +208,11 @@ function NoteDocumentBody({ householdId, noteId, note, members, chooseHousehold,
   const deletion = useContentDeletion('notes', householdId, latest?.id, () => { exitAllowed.current = true; onClose(); });
 
   // The editor's callbacks stay the same functions, so it is never sent new props while typing.
-  const onReady = useCallback(async () => { ready.current = true; setEditorReady(true); }, []);
+  const onReady = useCallback(async () => {
+    if (!alive.current || currentEditorAttempt.current !== editorAttempt) return;
+    ready.current = true;
+    setEditorReady(true);
+  }, [editorAttempt]);
   const onChange = useCallback(async (next: NoteEditorChange) => { setExported(null); change(next); }, [change]);
   const onFormat = useCallback(async (next: NoteEditorFormat) => { setFormat(next); }, []);
   const onFocusChange = useCallback(async (next: boolean) => { setFocused(next); }, []);
@@ -395,7 +407,7 @@ function NoteDocumentBody({ householdId, noteId, note, members, chooseHousehold,
   ) : null;
   return (
     <View style={{ flex: 1, minHeight: 0 }}>
-      <Stack gap={3} style={{ flex: 1, minHeight: 0 }}>
+      <Stack gap={3} style={{ flex: 1, minHeight: 0 }} pointerEvents={editorReady ? 'auto' : 'none'} accessibilityElementsHidden={!editorReady} importantForAccessibility={editorReady ? 'auto' : 'no-hide-descendants'}>
         {noteId === 'new' ? <View style={column}>{chooseHousehold ? <HouseholdTargetField householdId={householdId} resource="notes" /> : <HouseholdContextNote householdName={householdName} />}</View> : null}
         {/* The title is the editor's first line, so the labels go above it: at the top of the column, or under the byline on a phone. */}
         {desktop ? labelRow : null}
@@ -424,6 +436,7 @@ function NoteDocumentBody({ householdId, noteId, note, members, chooseHousehold,
         </View> : null}
         <View style={{ flex: 1, minHeight: 0 }}>
           <Editor
+            key={editorAttempt}
             ref={editor}
             initialTitle={autosave.initial.title}
             initialBody={autosave.initial.body}
@@ -444,7 +457,7 @@ function NoteDocumentBody({ householdId, noteId, note, members, chooseHousehold,
       {!editorReady ? (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.surface }]}>
           <Stack gap={3}>
-            <LoadingState label={t('loading')} />
+            {editorTimedOut ? <LoadError message={t('editorLoadError')} onRetry={retryEditor} /> : <LoadingState label={t('loading')} />}
           </Stack>
         </View>
       ) : null}
