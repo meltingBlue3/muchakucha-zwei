@@ -1,7 +1,8 @@
-import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createContext, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { DialogBackdrop } from './dialog-backdrop';
-import { Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { BlurTargetView } from 'expo-blur';
+import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
 import X from 'lucide-react-native/icons/x';
 import { useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { useSoftKeyboardShown } from '../platform/keyboard/soft-keyboard';
@@ -28,7 +29,7 @@ function webDialogName(title: string): object {
   return Platform.OS === 'web' ? { 'aria-label': title } : {};
 }
 
-export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, footerStart, headerActions, headerNote, reading = false, anchored = false, wide = false, fillContent = false, preferCancel = false }: {
+export function AppDialog({ title, busy, onClose, trigger, children, size = 'standard', docked = false, footer, footerStart, headerActions, headerNote, reading = false, anchored = false, wide = false, fillContent = false, preferCancel = false, overlay = null }: {
   title: string;
   busy: boolean;
   onClose(): void;
@@ -56,8 +57,14 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   /** The content fills the viewport and handles its own scrolling. */
   fillContent?: boolean;
   preferCancel?: boolean;
+  /**
+   * A step or confirmation presented centered above a phone's full-screen sheet,
+   * keeping the sheet (and any WebView inside it) visible and blurred behind it.
+   */
+  overlay?: { title: string; content: ReactNode; preferCancel?: boolean } | null;
 }) {
   const panel = useRef<View>(null);
+  const sheetLayer = useRef<View>(null);
   const initial = useRef<View>(null);
   const cancel = useRef<View>(null);
   const [cancelReady, setCancelReady] = useState(false);
@@ -67,6 +74,11 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   }, []);
   const initialFocus = useMemo(() => ({ get current() { return cancel.current ?? initial.current; } }), []);
   const insets = useSafeAreaInsets();
+  const frame = useSafeAreaFrame();
+  // React Native Fabric on Android sizes a newly mounted Modal without vertical system-bar
+  // insets until onSizeChanged runs, exposing a one-frame strip at the bottom. Pin the first
+  // layout to the full Activity frame height already known from SafeAreaProvider.
+  const androidModalFrame = Platform.OS === 'android' && frame.height > 0 ? { minHeight: frame.height } : undefined;
   // A phone's keyboard covers the home indicator or gesture bar, and the room kept
   // for the keyboard already reaches the screen's bottom: no inset above it.
   const keyboardUp = useSoftKeyboardShown() && Platform.OS !== 'web';
@@ -80,21 +92,36 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
   // On phones an editor fills the screen like a native compose sheet: close on
   // the left, the form's primary action on the right.
   const sheet = size === 'editor' && width < theme.layout.editorSheetBreakpoint;
+  const sheetOverlay = sheet && overlay !== null;
+  const activeTitle = sheetOverlay ? overlay.title : title;
+  const activePreferCancel = sheetOverlay ? (overlay.preferCancel ?? false) : preferCancel;
   const bottomSheet = size === 'sheet' && width < theme.layout.editorSheetBreakpoint;
   const [sheetAction, setSheetAction] = useState<SheetAction | null>(null);
   const close = useCallback(() => { if (!busy) onClose(); }, [busy, onClose]);
   const focus = useOverlayFocus({ mode: popover ? 'closed' : pane ? 'pane' : 'dialog', panel, initial: initialFocus, trigger, onClose: close });
-  const previousTitle = useRef(title);
-  const confirmationBusy = preferCancel && busy;
+  const previousTitle = useRef(activeTitle);
+  const confirmationBusy = activePreferCancel && busy;
   // Let the focus outline extend beyond the scroll content without being clipped.
-  const focusInset = preferCancel && Platform.OS === 'web' ? theme.focus.width + theme.focus.offset : 0;
+  const focusInset = activePreferCancel && Platform.OS === 'web' ? theme.focus.width + theme.focus.offset : 0;
+  // Keep the covered sheet out of keyboard focus and the Web accessibility tree while a step sits over it.
+  useLayoutEffect(() => {
+    if (!sheetOverlay || Platform.OS !== 'web') return undefined;
+    const node = sheetLayer.current as unknown as HTMLElement | null;
+    if (!node) return undefined;
+    node.inert = true;
+    node.setAttribute('aria-hidden', 'true');
+    return () => {
+      node.inert = false;
+      node.removeAttribute('aria-hidden');
+    };
+  }, [sheetOverlay]);
   // A dialog can replace its content with a confirmation step. Focus its safe
   // close action again; the element that opened that step may no longer exist.
   useEffect(() => {
-    const changed = previousTitle.current !== title;
-    previousTitle.current = title;
+    const changed = previousTitle.current !== activeTitle;
+    previousTitle.current = activeTitle;
     if ((!pane && !popover && !confirmationBusy) || (pane && changed)) focus();
-  }, [title, focus, pane, popover, cancelReady, confirmationBusy]);
+  }, [activeTitle, focus, pane, popover, cancelReady, confirmationBusy]);
   const commandKey = useCommandKeyLabel();
   const { t } = useTranslation();
   const entrance = usePaneEntrance(pane);
@@ -143,65 +170,100 @@ export function AppDialog({ title, busy, onClose, trigger, children, size = 'sta
     </View></View>;
   }
   const closeButton = (
-    <Pressable ref={initial} accessibilityRole="button" accessibilityLabel={t('close', { title })} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent, borderRadius: theme.borderRadii.full })}>
+    <Pressable ref={sheetOverlay ? undefined : initial} accessibilityRole="button" accessibilityLabel={t('close', { title })} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent, borderRadius: theme.borderRadii.full })}>
       <X size={sheet ? theme.controlSizes.icon + theme.spacing[1] : theme.controlSizes.icon} color={sheet ? theme.colors.ink : theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
     </Pressable>
   );
-  return (
-    <Modal {...webDialogName(title)} transparent visible animationType="none" onShow={focus} onRequestClose={Platform.OS === 'web' ? undefined : close} statusBarTranslucent navigationBarTranslucent>
-      <View style={{ flex: 1 }}>
-        <DialogBackdrop onPress={close} blur={!side} />
-        <KeyboardArea pointerEvents="box-none" style={side
-          ? { flex: 1, alignItems: 'flex-end', padding: theme.spacing[3], paddingTop: insets.top + theme.spacing[3], paddingBottom: bottomInset + theme.spacing[3] }
+  const baseBody = (
+    <>
+      <DialogBackdrop onPress={close} blur={!side && !sheetOverlay} testID={sheetOverlay ? 'app-dialog-underlay' : 'app-dialog'} />
+      <KeyboardArea enabled={!sheetOverlay} pointerEvents="box-none" style={side
+        ? { flex: 1, alignItems: 'flex-end', padding: theme.spacing[3], paddingTop: insets.top + theme.spacing[3], paddingBottom: bottomInset + theme.spacing[3] }
+        : bottomSheet
+        ? { flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + theme.spacing[6] }
+        : sheet
+        ? { flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + theme.spacing[2] }
+        : { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing[5], paddingTop: insets.top + theme.spacing[5], paddingBottom: bottomInset + theme.spacing[5] }}>
+        <View ref={sheetOverlay ? undefined : panel} {...(sheetOverlay ? {} : { testID: 'app-dialog-panel' })} {...(Platform.OS === 'web' || sheetOverlay ? {} : { accessibilityViewIsModal: true, accessibilityLabel: title })} style={side
+          ? { width: theme.layout.dockedPanelWidth, maxWidth: '100%', height: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, padding: theme.spacing[6], gap: theme.spacing[4], ...(Platform.OS === 'web' ? { boxShadow: theme.shadow.raised } : {}) }
           : bottomSheet
-          ? { flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + theme.spacing[6] }
+          ? { width: '100%', maxHeight: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, padding: theme.spacing[5], paddingBottom: bottomInset + theme.spacing[5], gap: theme.spacing[4] }
           : sheet
-          ? { flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + theme.spacing[2] }
-          : { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing[5], paddingTop: insets.top + theme.spacing[5], paddingBottom: bottomInset + theme.spacing[5] }}>
-          <View ref={panel} testID="app-dialog-panel" {...(Platform.OS === 'web' ? {} : { accessibilityViewIsModal: true, accessibilityLabel: title })} style={side
-            ? { width: theme.layout.dockedPanelWidth, maxWidth: '100%', height: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, padding: theme.spacing[6], gap: theme.spacing[4], ...(Platform.OS === 'web' ? { boxShadow: theme.shadow.raised } : {}) }
-            : bottomSheet
-            ? { width: '100%', maxHeight: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, padding: theme.spacing[5], paddingBottom: bottomInset + theme.spacing[5], gap: theme.spacing[4] }
-            : sheet
-            ? { flex: 1, width: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, paddingTop: theme.spacing[2], paddingHorizontal: theme.spacing[2], paddingBottom: bottomInset + theme.spacing[2], gap: theme.spacing[2] }
-            : { width: '100%', maxWidth: size === 'editor' ? theme.layout.editorDialogMaxWidth : theme.layout.dialogMaxWidth, height: fillContent ? '100%' : undefined, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, padding: theme.spacing[6], gap: theme.spacing[4], ...(Platform.OS === 'web' ? { boxShadow: theme.shadow.raised } : {}) }}>
-            {sheet ? (
-              <Inline gap={1} style={{ paddingRight: theme.spacing[2] }}>
-                {closeButton}
-                <Heading variant="section" level={1} numberOfLines={1} style={{ flex: 1 }}>{title}</Heading>
-                {headerActions}
-                {sheetAction ? <Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} style={{ minHeight: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.full, paddingHorizontal: theme.spacing[5] }} /> : null}
-              </Inline>
-            ) : (
-              <Inline>
-                <Heading style={{ flex: 1 }}>{title}</Heading>
-                {headerActions}
-                {closeButton}
-              </Inline>
-            )}
-            <SheetActionSlot.Provider value={sheet ? setSheetAction : null}>
-              <ScrollView
-                {...(Platform.OS === 'web' && size === 'editor' ? { tabIndex: fillContent ? -1 : 0 } : {})}
-                keyboardDismissMode={scrollKeyboardDismissMode}
-                keyboardShouldPersistTaps="handled"
-                scrollEnabled={!fillContent}
-                scrollsChildToFocus={!fillContent}
-                style={[
-                  side || fillContent ? { flex: 1 } : { flexShrink: 1 },
-                  focusInset ? { marginHorizontal: -focusInset } : undefined,
-                ]}
-                contentContainerStyle={[
-                  sheet ? { paddingHorizontal: theme.spacing[3], paddingBottom: fillContent ? 0 : theme.spacing[6] } : undefined,
-                  fillContent ? { flex: 1 } : undefined,
-                  focusInset ? { paddingHorizontal: focusInset, paddingBottom: focusInset } : undefined,
-                ]}
-              >
-                <ConfirmCancelFocus.Provider value={preferCancel ? registerCancel : null}>{children}</ConfirmCancelFocus.Provider>
-              </ScrollView>
-            </SheetActionSlot.Provider>
-            {footer ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], ...(sheet ? { paddingHorizontal: theme.spacing[3] } : {}) }}>{footer}</View> : null}
+          ? { flex: 1, width: '100%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.borderRadii.xl, borderTopRightRadius: theme.borderRadii.xl, paddingTop: theme.spacing[2], paddingHorizontal: theme.spacing[2], paddingBottom: bottomInset + theme.spacing[2], gap: theme.spacing[2] }
+          : { width: '100%', maxWidth: size === 'editor' ? theme.layout.editorDialogMaxWidth : theme.layout.dialogMaxWidth, height: fillContent ? '100%' : undefined, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, padding: theme.spacing[6], gap: theme.spacing[4], ...(Platform.OS === 'web' ? { boxShadow: theme.shadow.raised } : {}) }}>
+          {sheet ? (
+            <Inline gap={1} style={{ paddingRight: theme.spacing[2] }}>
+              {closeButton}
+              <Heading variant="section" level={1} numberOfLines={1} style={{ flex: 1 }}>{title}</Heading>
+              {headerActions}
+              {sheetAction ? <Button label={sheetAction.label} loading={sheetAction.submitting} disabled={sheetAction.disabled ?? false} onPress={sheetAction.onPress} style={{ minHeight: theme.controlSizes.touchTarget, borderRadius: theme.borderRadii.full, paddingHorizontal: theme.spacing[5] }} /> : null}
+            </Inline>
+          ) : (
+            <Inline>
+              <Heading style={{ flex: 1 }}>{title}</Heading>
+              {headerActions}
+              {closeButton}
+            </Inline>
+          )}
+          <SheetActionSlot.Provider value={sheet ? setSheetAction : null}>
+            <ScrollView
+              {...(Platform.OS === 'web' && size === 'editor' ? { tabIndex: fillContent ? -1 : 0 } : {})}
+              keyboardDismissMode={scrollKeyboardDismissMode}
+              keyboardShouldPersistTaps="handled"
+              scrollEnabled={!fillContent}
+              scrollsChildToFocus={!fillContent}
+              style={[
+                side || fillContent ? { flex: 1 } : { flexShrink: 1 },
+                !sheetOverlay && focusInset ? { marginHorizontal: -focusInset } : undefined,
+              ]}
+              contentContainerStyle={[
+                sheet ? { paddingHorizontal: theme.spacing[3], paddingBottom: fillContent ? 0 : theme.spacing[6] } : undefined,
+                fillContent ? { flex: 1 } : undefined,
+                !sheetOverlay && focusInset ? { paddingHorizontal: focusInset, paddingBottom: focusInset } : undefined,
+              ]}
+            >
+              <ConfirmCancelFocus.Provider value={!sheetOverlay && preferCancel ? registerCancel : null}>{children}</ConfirmCancelFocus.Provider>
+            </ScrollView>
+          </SheetActionSlot.Provider>
+          {footer ? <View style={{ borderTopWidth: theme.borderWidths.default, borderTopColor: theme.colors.separator, paddingTop: theme.spacing[4], ...(sheet ? { paddingHorizontal: theme.spacing[3] } : {}) }}>{footer}</View> : null}
+        </View>
+      </KeyboardArea>
+    </>
+  );
+  const overlayCloseButton = sheetOverlay ? (
+    <Pressable ref={initial} accessibilityRole="button" accessibilityLabel={t('close', { title: overlay.title })} disabled={busy} accessibilityState={{ disabled: busy }} onPress={close} style={({ pressed }) => ({ minWidth: theme.controlSizes.touchTarget, minHeight: theme.controlSizes.touchTarget, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent, borderRadius: theme.borderRadii.full })}>
+      <X size={theme.controlSizes.icon} color={theme.colors.inkMuted} strokeWidth={theme.controlSizes.iconStroke} />
+    </Pressable>
+  ) : null;
+  return (
+    <Modal {...webDialogName(activeTitle)} transparent visible animationType="none" onShow={focus} onRequestClose={Platform.OS === 'web' ? undefined : close} statusBarTranslucent navigationBarTranslucent style={androidModalFrame}>
+      <View style={[{ flex: 1 }, androidModalFrame]}>
+        {sheet ? (
+          <BlurTargetView ref={sheetLayer} style={{ flex: 1 }} pointerEvents={sheetOverlay ? 'none' : 'auto'} aria-hidden={sheetOverlay || undefined} importantForAccessibility={sheetOverlay ? 'no-hide-descendants' : 'auto'}>
+            {baseBody}
+          </BlurTargetView>
+        ) : baseBody}
+        {sheetOverlay ? (
+          <View style={StyleSheet.absoluteFill}>
+            <DialogBackdrop onPress={close} blur target={sheetLayer} />
+            <KeyboardArea pointerEvents="box-none" style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing[5], paddingTop: insets.top + theme.spacing[5], paddingBottom: bottomInset + theme.spacing[5] }}>
+              <View ref={panel} testID="app-dialog-panel" {...(Platform.OS === 'web' ? {} : { accessibilityViewIsModal: true, accessibilityLabel: overlay.title })} style={{ width: '100%', maxWidth: theme.layout.dialogMaxWidth, maxHeight: '100%', backgroundColor: theme.colors.surface, borderRadius: theme.borderRadii.xl, padding: theme.spacing[6], gap: theme.spacing[4], ...(Platform.OS === 'web' ? { boxShadow: theme.shadow.raised } : {}) }}>
+                <Inline>
+                  <Heading style={{ flex: 1 }}>{overlay.title}</Heading>
+                  {overlayCloseButton}
+                </Inline>
+                <ScrollView
+                  keyboardDismissMode={scrollKeyboardDismissMode}
+                  keyboardShouldPersistTaps="handled"
+                  style={[{ flexShrink: 1 }, focusInset ? { marginHorizontal: -focusInset } : undefined]}
+                  contentContainerStyle={focusInset ? { paddingHorizontal: focusInset, paddingBottom: focusInset } : undefined}
+                >
+                  <ConfirmCancelFocus.Provider value={activePreferCancel ? registerCancel : null}>{overlay.content}</ConfirmCancelFocus.Provider>
+                </ScrollView>
+              </View>
+            </KeyboardArea>
           </View>
-        </KeyboardArea>
+        ) : null}
       </View>
     </Modal>
   );

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 // A note on a phone, from the Android acceptance run of 2026-11-25. The browser
 // stands in for the WebView: a short window for the keyboard, and Chrome for
@@ -171,4 +172,64 @@ test('the label filter scrolls under the page’s side margins to the screen edg
   const heading = (await page.getByRole('heading', { name: '笔记', exact: true }).boundingBox())!;
   expect(geometry.first).toBeCloseTo(heading.x, 0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('opening 标签 on a phone keeps the note behind the blur, guards 完成 while loading, and reuses cached labels', async ({ page }) => {
+  let releaseFirstLabels!: () => void;
+  const firstLabels = new Promise<void>(resolve => { releaseFirstLabels = resolve; });
+  let releaseSecondLabels!: () => void;
+  const secondLabels = new Promise<void>(resolve => { releaseSecondLabels = resolve; });
+  let labelsGate: Promise<void> | null = firstLabels;
+
+  await setup(page, [note(noteId(20), 'LangChain & LangGraph', null)], {
+    labels: [{ id: 'health', name: '健康', color: '#4C7537' }, { id: 'chores', name: '家务', color: '#2C716C' }],
+  });
+  await page.route(`**/api/v1/households/${householdId}/labels`, async route => {
+    const gate = labelsGate;
+    if (gate) await gate;
+    await route.fallback();
+  });
+
+  await page.goto(`${base}/notes/${noteId(20)}`);
+  await expect(editorOf(page).locator('h1.note-title')).toHaveText('LangChain & LangGraph');
+  // A phone never marks the underlying list row with the desktop selected state.
+  await expect(page.locator('[aria-current="true"]')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '标签', exact: true }).click();
+  const choice = page.getByRole('dialog', { name: '标签', exact: true });
+  await expect(choice.getByText('加载标签中…', { exact: true })).toBeVisible();
+  await expect(choice.getByRole('button', { name: '完成', exact: true })).toBeDisabled();
+  // The note sheet stays mounted and laid out behind the blurred overlay instead of collapsing to display:none.
+  const editorHidden = await page.evaluate(() => {
+    const el = document.querySelector('.note-editor');
+    return !el || getComputedStyle(el).display === 'none' || el.getBoundingClientRect().height === 0;
+  });
+  expect(editorHidden).toBe(false);
+
+  labelsGate = null;
+  releaseFirstLabels();
+  await expect(choice.getByRole('button', { name: '选择标签 健康', exact: true })).toBeVisible();
+  await expect(choice.getByRole('button', { name: '完成', exact: true })).toBeEnabled();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  await choice.getByRole('button', { name: '关闭标签', exact: true }).click();
+  await expect(editorOf(page).locator('h1.note-title')).toBeVisible();
+
+  // Reopening 标签 shows the cached labels right away while the background refresh is still pending.
+  labelsGate = secondLabels;
+  await page.getByRole('button', { name: '标签', exact: true }).click();
+  await expect(choice.getByRole('button', { name: '选择标签 健康', exact: true })).toBeVisible();
+  await expect(choice.getByText('加载标签中…', { exact: true })).toHaveCount(0);
+  await choice.getByRole('button', { name: '选择标签 健康', exact: true }).click();
+  await choice.getByRole('button', { name: '完成', exact: true }).click();
+  labelsGate = null;
+  releaseSecondLabels();
+
+  const labelButton = page.getByRole('button', { name: '标签：健康', exact: true });
+  await expect(labelButton).toBeVisible();
+  const [chipBox, titleBox] = await Promise.all([
+    labelButton.boundingBox(),
+    editorOf(page).locator('h1.note-title').boundingBox(),
+  ]);
+  expect(titleBox!.y - (chipBox!.y + chipBox!.height)).toBeLessThan(28);
 });

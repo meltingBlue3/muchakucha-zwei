@@ -1,5 +1,5 @@
-import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { Keyboard, Pressable, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { forwardRef, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
+import { Keyboard, Platform, Pressable, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import type { LabelResponseDto, NoteResponseDto } from '@muchakucha/api-client';
 import Bold from 'lucide-react-native/icons/bold';
 import Check from 'lucide-react-native/icons/check';
@@ -23,14 +23,17 @@ import { formatDateTime } from '../../ui/date-values';
 import { DraftNotice } from '../../ui/draft-notice';
 import { summarizeLatest } from '../../ui/edit-conflict';
 import { HouseholdContextNote } from '../../ui/household-components';
-import { Banner, Button, IconButton, Inline, Stack, Text, TextField } from '../../ui/primitives';
+import { Banner, Button, IconButton, Inline, LoadError, LoadingState, Stack, Text, TextField } from '../../ui/primitives';
+import { type RouteWindowProps, type RouteWindowStep } from '../../ui/route-window';
 import { theme } from '../../ui/theme';
 import { useDesktop, useDesktopDensity } from '../../ui/use-desktop';
+import { useWorkspaceStore } from '../../ui/workspace-state';
 import { contentDeleteConfirmation, useContentDeletion } from '../content/content-deletion';
 import { useCanDeleteContent } from '../content/use-content-delete';
 import { LabelChip } from '../labels/label-chip';
 import { labelName } from '../labels/label-name';
 import { LabelPicker } from '../labels/label-picker';
+import { householdLabelsCacheKey, readCachedHouseholdLabels } from '../labels/use-household-labels';
 import { HouseholdTargetField } from '../overview/household-target-field';
 import { PickerActions } from '../../ui/picker-panels';
 import { safeLink } from './markdown';
@@ -41,6 +44,7 @@ import { useNoteAutosave, type NoteSaveStatus } from './use-note-autosave';
 
 const NO_FORMAT: NoteEditorFormat = { taskList: false, bulletList: false, orderedList: false, heading: 0, bold: false, link: false, inTitle: false, selection: '' };
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const EDITOR_READY_FALLBACK_MS = 1500;
 
 /**
  * On a phone Expo sends every prop of a DOM component into its WebView on each
@@ -50,11 +54,27 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 const Editor = memo(NoteEditor);
 const EDITOR_DOM = { style: { flex: 1 }, hideKeyboardAccessoryView: true } as const;
 
+interface NoteWindowChrome {
+  busy: boolean;
+  headerActions: ReactNode;
+  headerNote?: string | undefined;
+  footer?: ReactNode | undefined;
+  step: RouteWindowStep | null;
+  centeredConfirmation?: RouteWindowProps['centeredConfirmation'] | undefined;
+}
+
+const EMPTY_CHROME: NoteWindowChrome = { busy: false, headerActions: null, step: null };
+
 interface NoteDocumentProps {
+  /** Changes only when opening a different note, never when a new note takes its saved id. */
+  documentKey?: string;
   householdId: string;
   /** `new` until the first save. */
   noteId: string;
   note: NoteResponseDto | null;
+  loading?: boolean;
+  error?: 'auth:errors.sessionExpired' | 'loadError' | 'notFound' | null;
+  onRetry?(): void;
   /** Display names by user id, or null while the household could not be read. */
   members: ReadonlyMap<string, string> | null;
   /** A new note opened from the 总览, which asks which household it goes to. */
@@ -67,16 +87,86 @@ interface NoteDocumentProps {
 /**
  * One note as a page that is read and written in place: the title is the
  * document's first line, changes save themselves, and boxes tick while
- * reading. The editor is a DOM component; this component is its native frame.
+ * reading. The editor is a DOM component; this component owns the single
+ * NoteWindow so loading, errors and note switches never unmount the modal.
  */
-export function NoteDocument({ householdId, noteId, note, members, chooseHousehold, householdName, onCreated, onClose }: NoteDocumentProps) {
+export function NoteDocument({ documentKey, householdId, noteId, note, loading = false, error = null, onRetry, members, chooseHousehold, householdName, onCreated, onClose }: NoteDocumentProps) {
+  const { t } = useTranslation(['notes', 'auth']);
+  const waiting = loading || error !== null;
+  const exitAllowed = useRef(false);
+  const flushRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const [chrome, setChrome] = useState<NoteWindowChrome>(EMPTY_CHROME);
+  const handleChrome = useCallback((next: NoteWindowChrome) => { setChrome(next); }, []);
+  const bodyKey = documentKey ?? `${householdId}:${noteId}`;
+
+  return (
+    <NoteWindow
+      title={t('document')}
+      fillContent={error === null}
+      busy={!waiting && chrome.busy}
+      exitAllowed={exitAllowed}
+      onClose={() => { void flushRef.current(); onClose(); }}
+      headerActions={waiting ? null : chrome.headerActions}
+      {...(!waiting && chrome.headerNote ? { headerNote: chrome.headerNote } : {})}
+      {...(!waiting && chrome.footer ? { footer: chrome.footer } : {})}
+      step={waiting ? null : chrome.step}
+      centeredConfirmation={waiting ? undefined : chrome.centeredConfirmation}
+    >
+      {waiting ? (
+        <Stack gap={3}>
+          {loading ? <LoadingState label={t('loading')} /> : <LoadError message={t(error ?? 'notFound')} onRetry={() => onRetry?.()} />}
+        </Stack>
+      ) : (
+        <NoteDocumentBody
+          key={bodyKey}
+          householdId={householdId}
+          noteId={noteId}
+          note={note}
+          members={members}
+          chooseHousehold={chooseHousehold}
+          householdName={householdName}
+          exitAllowed={exitAllowed}
+          flushRef={flushRef}
+          onChrome={handleChrome}
+          onCreated={onCreated}
+          onClose={onClose}
+        />
+      )}
+    </NoteWindow>
+  );
+}
+
+interface NoteDocumentBodyProps {
+  householdId: string;
+  noteId: string;
+  note: NoteResponseDto | null;
+  members: ReadonlyMap<string, string> | null;
+  chooseHousehold: boolean;
+  householdName: string;
+  exitAllowed: MutableRefObject<boolean>;
+  flushRef: MutableRefObject<() => Promise<void>>;
+  onChrome(chrome: NoteWindowChrome): void;
+  onCreated(note: NoteResponseDto): void;
+  onClose(): void;
+}
+
+function NoteDocumentBody({ householdId, noteId, note, members, chooseHousehold, householdName, exitAllowed, flushRef, onChrome, onCreated, onClose }: NoteDocumentBodyProps) {
   const { t, i18n } = useTranslation(['notes', 'auth', 'deleteContent', 'common']);
   const desktop = useDesktop();
   const dense = useDesktopDensity();
+  const workspace = useWorkspaceStore();
   const editor = useRef<NoteEditorHandle>(null);
   const ready = useRef(false);
   const alive = useRef(true);
+  // On native the editor runs in a WebView, which is blank until TipTap finishes booting.
+  // Keep the loading indicator over the document until onReady arrives so title and chrome appear together.
+  const [editorReady, setEditorReady] = useState(Platform.OS === 'web');
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => {
+    if (editorReady) return undefined;
+    const timer = setTimeout(() => setEditorReady(true), EDITOR_READY_FALLBACK_MS);
+    return () => clearTimeout(timer);
+  }, [editorReady]);
   // The WebView may be gone after leaving the page; never call into it then.
   const command = useCallback((run: (handle: NoteEditorHandle) => void) => {
     if (alive.current && ready.current && editor.current) run(editor.current);
@@ -87,6 +177,7 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
     onReplace: content => command(handle => handle.load(content.body, content.title)),
   });
   const { change, flush, composing } = autosave;
+  flushRef.current = flush;
   const latest = autosave.saved;
 
   const [format, setFormat] = useState<NoteEditorFormat>(NO_FORMAT);
@@ -101,7 +192,6 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
     return () => clearTimeout(timer);
   }, [exported]);
   const [comparing, setComparing] = useState(false);
-  const exitAllowed = useRef(false);
   const marking = useNoteMarking(latest);
   const [picking, setPicking] = useState<'button' | 'row' | null>(null);
   const labelsButton = useRef<View>(null);
@@ -110,7 +200,7 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
   const deletion = useContentDeletion('notes', householdId, latest?.id, () => { exitAllowed.current = true; onClose(); });
 
   // The editor's callbacks stay the same functions, so it is never sent new props while typing.
-  const onReady = useCallback(async () => { ready.current = true; }, []);
+  const onReady = useCallback(async () => { ready.current = true; setEditorReady(true); }, []);
   const onChange = useCallback(async (next: NoteEditorChange) => { setExported(null); change(next); }, [change]);
   const onFormat = useCallback(async (next: NoteEditorFormat) => { setFormat(next); }, []);
   const onFocusChange = useCallback(async (next: boolean) => { setFocused(next); }, []);
@@ -182,86 +272,139 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
     const result = await exportMarkdown([heading ? `# ${heading}` : '', content.body].filter(Boolean).join('\n\n'));
     setExported(result === 'failed' ? 'failed' : markdownExportKind === 'copy' ? 'copied' : null);
   };
-  const actions: CardAction[] = [
-    ...(latest && canDelete(latest) ? [{ kind: 'delete' as const, accessibilityLabel: t('deleteCard', { title }), onPress: (trigger: View | null) => void openDelete(trigger) }] : []),
-    { label: t(markdownExportKind === 'copy' ? 'menu.copy' : 'menu.share'), icon: markdownExportKind === 'copy' ? Copy : Share2, accessibilityLabel: t(markdownExportKind === 'copy' ? 'menu.copy' : 'menu.share'), onPress: () => void exportNote() },
-  ];
   const marks = marking.marks;
   const pinned = marks !== null && marks.pinnedAt !== null;
-  const openLabels = (from: 'button' | 'row') => {
+  const hasMarks = marks !== null;
+  const canDeleteLatest = Boolean(latest && canDelete(latest));
+  const openLabels = useCallback((from: 'button' | 'row') => {
     // The choice covers the note on a phone; the keyboard goes with it.
     if (!desktop) { command(handle => handle.blur()); Keyboard.dismiss(); }
     setPicking(from);
-  };
-  const saveState = <NoteSaveState status={autosave.status} />;
-  const header = <Inline gap={1}>
-    {/* A phone's header keeps its width for the window's name and buttons; the state follows the byline there. */}
-    {desktop ? saveState : null}
-    {/* A note not saved yet has nothing to pin or label: these come with its first save. */}
-    {marks ? <>
-      <HeaderButton label={t(pinned ? 'unpin' : 'pin')} filled={pinned} disabled={marking.busy} icon={Pin} onPress={() => void marking.setPinned(!pinned)} />
-      <HeaderButton ref={labelsButton} label={t('labels')} expanded={picking !== null} icon={Tag} onPress={() => openLabels('button')} />
-    </> : null}
-    <CardActionsMenu subject={t('card', { title })} actions={actions} />
-  </Inline>;
-  const closeLabels = () => setPicking(null);
-  const labelChoice = picking && latest && marks ? <NoteLabelChoice householdId={householdId} selected={marks.labels.map(label => label.id)} busy={marking.busy}
+  }, [desktop, command]);
+  const closeLabels = useCallback(() => setPicking(null), []);
+  const rememberLabels = useCallback((loaded: LabelResponseDto[]) => {
+    workspace.set(householdLabelsCacheKey(householdId), loaded);
+  }, [workspace, householdId]);
+  const cachedLabels = useMemo(
+    () => readCachedHouseholdLabels(workspace.get(householdLabelsCacheKey(householdId))),
+    // Re-read when opening the picker so labels updated elsewhere are picked up at once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workspace, householdId, picking],
+  );
+
+  // Keep latest handlers in a ref so the window chrome only updates when visible state changes.
+  const handlers = useRef({ openDelete, exportNote, setPinned: marking.setPinned, setLabels: marking.setLabels, command, t });
+  handlers.current = { openDelete, exportNote, setPinned: marking.setPinned, setLabels: marking.setLabels, command, t };
+
+  const saveState = useMemo(() => <NoteSaveState status={autosave.status} />, [autosave.status]);
+  const pickingOpen = picking !== null;
+  const header = useMemo(() => {
+    const actions: CardAction[] = [
+      ...(canDeleteLatest ? [{ kind: 'delete' as const, accessibilityLabel: handlers.current.t('deleteCard', { title }), onPress: (trigger: View | null) => void handlers.current.openDelete(trigger) }] : []),
+      { label: handlers.current.t(markdownExportKind === 'copy' ? 'menu.copy' : 'menu.share'), icon: markdownExportKind === 'copy' ? Copy : Share2, accessibilityLabel: handlers.current.t(markdownExportKind === 'copy' ? 'menu.copy' : 'menu.share'), onPress: () => void handlers.current.exportNote() },
+    ];
+    return <Inline gap={1}>
+      {/* A phone's header keeps its width for the window's name and buttons; the state follows the byline there. */}
+      {desktop ? saveState : null}
+      {/* A note not saved yet has nothing to pin or label: these come with its first save. */}
+      {hasMarks ? <>
+        <HeaderButton label={handlers.current.t(pinned ? 'unpin' : 'pin')} filled={pinned} disabled={marking.busy} icon={Pin} onPress={() => void handlers.current.setPinned(!pinned)} />
+        <HeaderButton ref={labelsButton} label={handlers.current.t('labels')} expanded={pickingOpen} icon={Tag} onPress={() => openLabels('button')} />
+      </> : null}
+      <CardActionsMenu subject={handlers.current.t('card', { title })} actions={actions} />
+    </Inline>;
+  }, [desktop, saveState, hasMarks, pinned, marking.busy, pickingOpen, openLabels, canDeleteLatest, title, i18n.language]);
+
+  const selectedLabelKey = marks ? marks.labels.map(label => label.id).join(',') : '';
+  const labelChoice = useMemo(() => pickingOpen && latest && hasMarks ? <NoteLabelChoice
+    householdId={householdId}
+    initialLabels={cachedLabels}
+    selected={selectedLabelKey ? selectedLabelKey.split(',') : []}
+    busy={marking.busy}
     onCancel={closeLabels}
-    onDone={(ids, known) => { setPicking(null); void marking.setLabels(ids, known); }} /> : null;
+    onLabelsLoaded={rememberLabels}
+    onDone={(ids, known) => { setPicking(null); void handlers.current.setLabels(ids, known); }}
+  /> : null, [pickingOpen, latest?.id, hasMarks, householdId, cachedLabels, selectedLabelKey, marking.busy, closeLabels, rememberLabels]);
 
   const showToolbar = !desktop && focused && keyboard && insert === null;
-  const toolbar = showToolbar ? <NoteToolbar format={format}
+  const toolbar = useMemo(() => showToolbar ? <NoteToolbar format={format}
     onCommand={key => {
       if (key === 'link') { setInsert({ kind: 'link', label: format.selection }); return; }
-      if (key === 'dismiss') { command(handle => handle.blur()); Keyboard.dismiss(); return; }
-      command(handle => {
+      if (key === 'dismiss') { handlers.current.command(handle => handle.blur()); Keyboard.dismiss(); return; }
+      handlers.current.command(handle => {
         if (key === 'taskList') handle.toggleTaskList();
         else if (key === 'bulletList') handle.toggleBulletList();
         else if (key === 'heading') handle.setHeading(format.heading === 2 ? 0 : 2);
         else handle.toggleBold();
       });
-    }} /> : undefined;
+    }} /> : undefined, [showToolbar, format]);
 
   // 新建标签 inside it is a step of its own, back to this one when it closes.
-  const labelStep = labelChoice && !desktop ? { title: t('labels'), onClose: closeLabels, content: labelChoice, hostsStep: true } : null;
-  const step = labelStep ?? (insert ? {
-    title: insert.kind === 'link' ? t('format.insertLink') : t('format.insertTable'),
-    onClose: () => setInsert(null),
-    onReturn: () => command(handle => handle.focus('')),
-    content: <InsertStep kind={insert.kind} label={insert.label}
-      onLink={(href, label) => { setInsert(null); command(handle => handle.setLink(href, label)); }}
-      onTable={(columns, rows) => { setInsert(null); command(handle => handle.insertTable(columns, rows, Array.from({ length: columns }, (_, index) => t('format.column', { number: index + 1 })))); }} />,
-  } : null);
+  const step = useMemo<RouteWindowStep | null>(() => {
+    if (labelChoice && !desktop) return { title: handlers.current.t('labels'), onClose: closeLabels, content: labelChoice, hostsStep: true };
+    if (!insert) return null;
+    return {
+      title: insert.kind === 'link' ? handlers.current.t('format.insertLink') : handlers.current.t('format.insertTable'),
+      onClose: () => setInsert(null),
+      onReturn: () => handlers.current.command(handle => handle.focus('')),
+      content: <InsertStep kind={insert.kind} label={insert.label}
+        onLink={(href, label) => { setInsert(null); handlers.current.command(handle => handle.setLink(href, label)); }}
+        onTable={(columns, rows) => { setInsert(null); handlers.current.command(handle => handle.insertTable(columns, rows, Array.from({ length: columns }, (_, index) => handlers.current.t('format.column', { number: index + 1 })))); }} />,
+    };
+  }, [labelChoice, desktop, closeLabels, insert, i18n.language]);
+
+  const deletionConfirmation = useMemo(
+    () => contentDeleteConfirmation('notes', deletion, t('deleteContent:title.notes')),
+    // Recompute only when the confirmation dialog's own visible state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deletion.target, deletion.submitting, deletion.error, t],
+  );
+
+  const chrome = useMemo<NoteWindowChrome>(() => ({
+    busy: deletion.submitting !== null,
+    headerActions: editorReady ? header : null,
+    headerNote: editorReady && desktop && byline ? byline : undefined,
+    footer: editorReady ? toolbar : undefined,
+    step,
+    centeredConfirmation: deletionConfirmation,
+  }), [deletion.submitting, editorReady, header, desktop, byline, toolbar, step, deletionConfirmation]);
+
+  useLayoutEffect(() => {
+    onChrome(chrome);
+  }, [onChrome, chrome]);
+  useLayoutEffect(() => () => {
+    onChrome(EMPTY_CHROME);
+    flushRef.current = () => Promise.resolve();
+  }, [onChrome, flushRef]);
 
   const conflict = autosave.conflict;
   // On a wide pane the notes above the document line up with its reading column.
   const column = desktop ? { width: '100%', maxWidth: theme.layout.readingWidth, alignSelf: 'center' } satisfies ViewStyle : undefined;
   const quiet = [column, { paddingHorizontal: metrics.gutter }];
+  // On a phone the label row keeps its 48px touch target while offsetting the excess vertical padding
+  // so the chips stay visually close to the byline above and the document title below.
   const labelRow = marks && marks.labels.length > 0
-    ? <NoteLabelRow ref={labelsRow} labels={marks.labels} expanded={picking !== null} onPress={() => openLabels('row')} style={desktop ? column : { paddingHorizontal: metrics.gutter }} />
+    ? <NoteLabelRow ref={labelsRow} labels={marks.labels} expanded={pickingOpen} onPress={() => openLabels('row')}
+      style={desktop ? column : { paddingHorizontal: metrics.gutter, marginTop: -theme.spacing[1], marginBottom: -theme.spacing[3] }} />
     : null;
+  const phoneMeta = !desktop && (byline || autosave.status !== 'idle') ? (
+    <Inline gap={2} style={{ paddingHorizontal: metrics.gutter }}>
+      <Text variant="caption" color="inkMuted" style={{ flex: 1, fontFamily: theme.fontFamilies.numeric }}>{byline}</Text>
+      {saveState}
+    </Inline>
+  ) : null;
   return (
-    <NoteWindow
-      title={t('document')}
-      fillContent
-      busy={deletion.submitting !== null}
-      exitAllowed={exitAllowed}
-      onClose={() => { void flush(); onClose(); }}
-      headerActions={header}
-      {...(desktop && byline ? { headerNote: byline } : {})}
-      {...(toolbar ? { footer: toolbar } : {})}
-      step={step}
-      centeredConfirmation={contentDeleteConfirmation('notes', deletion, t('deleteContent:title.notes'))}
-    >
+    <View style={{ flex: 1, minHeight: 0 }}>
       <Stack gap={3} style={{ flex: 1, minHeight: 0 }}>
         {noteId === 'new' ? <View style={column}>{chooseHousehold ? <HouseholdTargetField householdId={householdId} resource="notes" /> : <HouseholdContextNote householdName={householdName} />}</View> : null}
         {/* The title is the editor's first line, so the labels go above it: at the top of the column, or under the byline on a phone. */}
         {desktop ? labelRow : null}
-        {!desktop && (byline || autosave.status !== 'idle') ? <Inline gap={2} style={{ paddingHorizontal: metrics.gutter }}>
-          <Text variant="caption" color="inkMuted" style={{ flex: 1, fontFamily: theme.fontFamilies.numeric }}>{byline}</Text>
-          {saveState}
-        </Inline> : null}
-        {!desktop ? labelRow : null}
+        {!desktop && (phoneMeta || labelRow) ? (
+          <Stack gap={1}>
+            {phoneMeta}
+            {labelRow}
+          </Stack>
+        ) : null}
         <DraftNotice style={quiet} />
         {marking.failure ? <QuietNotice style={quiet} icon={CircleAlert} text={t(marking.failure)} /> : null}
         {autosave.status === 'offline' || autosave.status === 'failed' ? <QuietNotice style={quiet} icon={CloudOff} text={t(autosave.status === 'offline' ? 'offline' : 'saveFailed')} /> : null}
@@ -298,10 +441,17 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
           />
         </View>
       </Stack>
+      {!editorReady ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.surface }]}>
+          <Stack gap={3}>
+            <LoadingState label={t('loading')} />
+          </Stack>
+        </View>
+      ) : null}
       {labelChoice && desktop ? (
         <AnchoredPopover scrollable align={picking === 'button' ? 'end' : 'start'} title={t('labels')} trigger={picking === 'row' ? labelsRow : labelsButton} busy={marking.busy} onClose={closeLabels}>{labelChoice}</AnchoredPopover>
       ) : null}
-    </NoteWindow>
+    </View>
   );
 }
 
@@ -388,13 +538,25 @@ const NoteLabelRow = forwardRef<View, { labels: LabelResponseDto[]; expanded: bo
 );
 
 /** Choosing the note's labels, kept here until 完成, as the task form chooses them. */
-function NoteLabelChoice({ householdId, selected: initial, busy, onCancel, onDone }: { householdId: string; selected: string[]; busy: boolean; onCancel(): void; onDone(ids: string[], known: LabelResponseDto[]): void }) {
+function NoteLabelChoice({ householdId, initialLabels, selected: initial, busy, onCancel, onLabelsLoaded, onDone }: {
+  householdId: string;
+  initialLabels: readonly LabelResponseDto[] | null;
+  selected: string[];
+  busy: boolean;
+  onCancel(): void;
+  onLabelsLoaded(labels: LabelResponseDto[]): void;
+  onDone(ids: string[], known: LabelResponseDto[]): void;
+}) {
   const { t } = useTranslation('common');
   const [selected, setSelected] = useState(initial);
-  const [known, setKnown] = useState<LabelResponseDto[]>([]);
+  const [known, setKnown] = useState<LabelResponseDto[] | null>(() => initialLabels ? [...initialLabels] : null);
+  const handleLoaded = useCallback((labels: LabelResponseDto[]) => {
+    setKnown(labels);
+    onLabelsLoaded(labels);
+  }, [onLabelsLoaded]);
   return <Stack gap={2}>
-    <LabelPicker householdId={householdId} selectedLabelIds={selected} onChange={setSelected} onLabelsLoaded={setKnown} />
-    <PickerActions onCancel={onCancel} onConfirm={() => onDone(selected, known)} confirmLabel={t('done')} busy={busy} />
+    <LabelPicker householdId={householdId} initialLabels={initialLabels} selectedLabelIds={selected} onChange={setSelected} onLabelsLoaded={handleLoaded} />
+    <PickerActions onCancel={onCancel} onConfirm={() => { if (known !== null) onDone(selected, known); }} confirmLabel={t('done')} confirmDisabled={known === null} busy={busy} />
   </Stack>;
 }
 

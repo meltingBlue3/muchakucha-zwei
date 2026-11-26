@@ -20,6 +20,8 @@ import { labelName } from './label-name';
 
 interface LabelPickerProps {
   householdId: string;
+  /** Cached labels already known for this household; shown at once while refreshing in the background. */
+  initialLabels?: readonly LabelResponseDto[] | null | undefined;
   selectedLabelIds: string[];
   onChange: (labelIds: string[]) => void;
   onLabelsLoaded?: (labels: LabelResponseDto[]) => void;
@@ -33,17 +35,20 @@ function isDuplicateName(failure: unknown): boolean {
   return Array.isArray(details) && details.some((detail) => detail.field === 'name' && detail.codes?.includes('duplicate') === true);
 }
 
-export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsLoaded }: LabelPickerProps) {
+export function LabelPicker({ householdId, initialLabels, selectedLabelIds, onChange, onLabelsLoaded }: LabelPickerProps) {
   const { t } = useTranslation(['labels', 'common']);
   const activeTheme = useTheme<Theme>();
   const dense = useDesktopDensity();
   const { households } = useHouseholdContext();
   const onLabelsLoadedRef = useRef(onLabelsLoaded);
   onLabelsLoadedRef.current = onLabelsLoaded;
+  const initialRef = useRef(initialLabels);
+  initialRef.current = initialLabels;
   // Only owners and admins may create labels; a member is never offered it.
   const canCreate = canManageLabels(households.find((household) => household.id === householdId)?.role);
-  const [allLabels, setAllLabels] = useState<LabelResponseDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [allLabels, setAllLabels] = useState<LabelResponseDto[]>(() => initialLabels ? [...initialLabels] : []);
+  const [loading, setLoading] = useState(() => initialLabels === undefined || initialLabels === null);
+  const [verified, setVerified] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const desktop = useDesktop();
@@ -53,20 +58,28 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+    const seeded = attempt === 0 ? (initialRef.current ?? null) : null;
+    if (seeded !== null) {
+      setAllLabels([...seeded]);
+      setLoading(false);
+    } else {
       setLoading(true);
-      setFailed(false);
+    }
+    setVerified(false);
+    setFailed(false);
+    async function load() {
       try {
         const token = await sessionTransport.getAccessToken();
         if (token === null) throw new Error('Session expired');
         const result = await sessionApiClient.listLabels(token, householdId);
         if (!cancelled) {
           setAllLabels(result.labels);
+          setVerified(true);
           onLabelsLoadedRef.current?.(result.labels);
         }
       } catch {
-        // An unloaded list is not an empty one; say so and offer a retry.
-        if (!cancelled) setFailed(true);
+        // Keep cached labels usable on a background refresh failure; an uncached list shows retry.
+        if (!cancelled && seeded === null) setFailed(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -76,12 +89,12 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
   }, [householdId, attempt]);
 
   // A draft can outlive a label someone deleted. It cannot be shown here to
-  // unselect, and saving it would be refused, so drop it once the list is known.
+  // unselect, and saving it would be refused, so drop it once the fresh list is known.
   useEffect(() => {
-    if (loading || failed) return;
+    if (!verified || loading || failed) return;
     const known = selectedLabelIds.filter((id) => allLabels.some((label) => label.id === id));
     if (known.length !== selectedLabelIds.length) onChange(known);
-  }, [allLabels, loading, failed, selectedLabelIds, onChange]);
+  }, [allLabels, verified, loading, failed, selectedLabelIds, onChange]);
 
   const handleToggle = useCallback(
     (label: LabelResponseDto) => {
@@ -172,7 +185,7 @@ export function LabelPicker({ householdId, selectedLabelIds, onChange, onLabelsL
         <Text variant="caption" color="inkMuted">{t(canCreate ? 'picker.emptyManager' : 'picker.emptyMember')}</Text>
       ) : null}
       {allLabels.length > 0 || createButton ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: activeTheme.spacing[2], ...(dense ? { paddingVertical: activeTheme.spacing[1] + 2 } : {}) }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: activeTheme.spacing[2], rowGap: dense ? activeTheme.spacing[2] : activeTheme.spacing[0], ...(dense ? { paddingVertical: activeTheme.spacing[1] + 2 } : { marginVertical: -activeTheme.spacing[1] }) }}>
           {allLabels.map((label) => {
             const isSelected = selectedLabelIds.includes(label.id);
             return (

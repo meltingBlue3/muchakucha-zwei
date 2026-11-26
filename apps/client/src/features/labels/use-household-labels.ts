@@ -2,7 +2,15 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import type { LabelResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
+import { useWorkspaceStore } from '../../ui/workspace-state';
 import { labelName } from './label-name';
+
+/** In-memory cache key inside WorkspaceState for a household's labels. */
+export const householdLabelsCacheKey = (householdId: string) => `view:${householdId}:labels`;
+
+export function readCachedHouseholdLabels(value: unknown): LabelResponseDto[] | null {
+  return Array.isArray(value) ? (value as LabelResponseDto[]) : null;
+}
 
 /**
  * Every label the household has, refreshed when the screen regains focus, so a
@@ -10,7 +18,8 @@ import { labelName } from './label-name';
  * merge in the labels seen on loaded items, which covers a failed fetch.
  */
 export function useHouseholdLabels(householdId: string | null | undefined): LabelResponseDto[] {
-  const [labels, setLabels] = useState<LabelResponseDto[]>([]);
+  const workspace = useWorkspaceStore();
+  const [labels, setLabels] = useState<LabelResponseDto[]>(() => (householdId ? readCachedHouseholdLabels(workspace.get(householdLabelsCacheKey(householdId))) : null) ?? []);
   useFocusEffect(useCallback(() => {
     if (!householdId) return undefined;
     let cancelled = false;
@@ -19,13 +28,16 @@ export function useHouseholdLabels(householdId: string | null | undefined): Labe
         const token = await sessionTransport.getAccessToken();
         if (token === null) return;
         const result = await sessionApiClient.listLabels(token, householdId);
-        if (!cancelled) setLabels(result.labels);
+        if (!cancelled) {
+          setLabels(result.labels);
+          workspace.set(householdLabelsCacheKey(householdId), result.labels);
+        }
       } catch {
         // Keep whatever the loaded items show; the filter still works with those.
       }
     })();
     return () => { cancelled = true; };
-  }, [householdId]));
+  }, [householdId, workspace]));
   return labels;
 }
 

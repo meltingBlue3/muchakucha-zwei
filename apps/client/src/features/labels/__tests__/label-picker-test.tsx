@@ -26,9 +26,9 @@ beforeEach(() => {
 });
 
 /** A form that owns the selection, as the event and task forms do. */
-function Form({ initial = [], onChange, onLabelsLoaded }: { initial?: string[]; onChange?: (ids: string[]) => void; onLabelsLoaded?: (labels: LabelListItemDto[]) => void }) {
+function Form({ initial = [], initialLabels, onChange, onLabelsLoaded }: { initial?: string[]; initialLabels?: LabelListItemDto[] | null; onChange?: (ids: string[]) => void; onLabelsLoaded?: (labels: LabelListItemDto[]) => void }) {
   const [selected, setSelected] = useState(initial);
-  return <LabelPicker householdId="family" selectedLabelIds={selected} onChange={(ids) => { onChange?.(ids); setSelected(ids); }} {...(onLabelsLoaded === undefined ? {} : { onLabelsLoaded: (items) => onLabelsLoaded(items as LabelListItemDto[]) })} />;
+  return <LabelPicker householdId="family" initialLabels={initialLabels} selectedLabelIds={selected} onChange={(ids) => { onChange?.(ids); setSelected(ids); }} {...(onLabelsLoaded === undefined ? {} : { onLabelsLoaded: (items) => onLabelsLoaded(items as LabelListItemDto[]) })} />;
 }
 
 const renderForm = (props: Parameters<typeof Form>[0] = {}) => render(<MuchakuchaThemeProvider><Form {...props} /></MuchakuchaThemeProvider>);
@@ -141,4 +141,37 @@ test('reports loaded labels on success and stays quiet on load failure', async (
   const failed = await renderForm({ onLabelsLoaded });
   await failed.findByText('标签没有加载成功。');
   expect(onLabelsLoaded).not.toHaveBeenCalled();
+});
+
+test('shows cached labels immediately while refreshing in the background without dropping unverified selections', async () => {
+  const cached = [label('chores', '家务')];
+  const fresh = [...cached, label('health', '健康')];
+  let resolveRefresh!: (value: { labels: LabelListItemDto[]; total: number }) => void;
+  jest.mocked(sessionApiClient.listLabels).mockReturnValueOnce(new Promise(resolve => { resolveRefresh = resolve; }));
+  const onChange = jest.fn();
+  const onLabelsLoaded = jest.fn();
+
+  const view = await renderForm({ initial: ['chores', 'health'], initialLabels: cached, onChange, onLabelsLoaded });
+
+  expect(view.queryByText('加载标签中…')).toBeNull();
+  expect(view.getByLabelText('取消选择标签 家务')).toBeTruthy();
+  // Before the live refresh arrives, a selection not yet in the cache is kept.
+  expect(onChange).not.toHaveBeenCalled();
+
+  resolveRefresh({ labels: fresh, total: 2 });
+  expect(await view.findByLabelText('取消选择标签 健康')).toBeTruthy();
+  expect(onLabelsLoaded).toHaveBeenCalledWith(fresh);
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+test('keeps cached labels usable when a background refresh fails', async () => {
+  const cached = [label('chores', '家务')];
+  jest.mocked(sessionApiClient.listLabels).mockRejectedValueOnce(new Error('offline'));
+
+  const view = await renderForm({ initial: ['chores'], initialLabels: cached });
+
+  expect(view.getByLabelText('取消选择标签 家务')).toBeTruthy();
+  await waitFor(() => expect(sessionApiClient.listLabels).toHaveBeenCalledTimes(1));
+  expect(view.queryByText('标签没有加载成功。')).toBeNull();
+  expect(view.getByLabelText('取消选择标签 家务')).toBeTruthy();
 });

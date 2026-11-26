@@ -8,7 +8,7 @@ import { useOpenWindowItem } from '../../ui/route-window';
 import { FloatingCreateButton } from '../../ui/floating-create-button';
 import { useContentDelete } from '../content/use-content-delete';
 import { rememberRouteTrigger } from '../../platform/overlays/route-trigger';
-import { useWorkspaceState } from '../../ui/workspace-state';
+import { useWorkspaceState, useWorkspaceStore } from '../../ui/workspace-state';
 import { PageIntro } from '../../ui/page-intro';
 import { GroupLabel, ListGroup } from '../../ui/list-group';
 import { SearchField } from '../../ui/search-field';
@@ -21,6 +21,7 @@ import { sessionApiClient, sessionTransport } from '../auth/session-runtime';
 import { useHouseholdContext } from '../households/household-context';
 import { LabelFilter } from '../labels/label-chip';
 import { labelName } from '../labels/label-name';
+import { householdLabelsCacheKey } from '../labels/use-household-labels';
 import { NoteCard } from '../notes/note-card';
 import { saveNotePin } from './note-marks';
 import { noteListView } from './note-list-view';
@@ -33,6 +34,7 @@ export default function NotesListRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const desktop = useDesktop();
   const dense = useDesktopDensity();
+  const workspace = useWorkspaceStore();
   const openResource = useResourceNavigation();
   const openNoteId = useOpenWindowItem('noteId');
   const deleteNote = useContentDelete('notes');
@@ -83,14 +85,17 @@ export default function NotesListRoute() {
       ]);
       if (request !== requestGeneration.current) return;
       setNotes(result.notes);
-      if (labels !== null) setHouseholdLabels(labels.labels);
+      if (labels !== null) {
+        setHouseholdLabels(labels.labels);
+        workspace.set(householdLabelsCacheKey(householdId), labels.labels);
+      }
       loadedHousehold.current = householdId;
     } catch {
       if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? 'refreshError' : 'listError');
     } finally {
       if (request === requestGeneration.current) setLoading(false);
     }
-  }, [householdId]);
+  }, [householdId, workspace]);
 
   // Refetch whenever this screen regains focus (e.g. returning from
   // create/edit), not just on first mount — otherwise the list shows

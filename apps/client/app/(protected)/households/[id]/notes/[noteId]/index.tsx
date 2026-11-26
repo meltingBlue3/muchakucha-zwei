@@ -1,4 +1,3 @@
-import { useTranslation } from '../../../../../../src/i18n';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NoteResponseDto } from '@muchakucha/api-client';
@@ -6,12 +5,10 @@ import type { NoteResponseDto } from '@muchakucha/api-client';
 import { sessionApiClient, sessionTransport } from '../../../../../../src/features/auth/session-runtime';
 import { useHouseholdContext } from '../../../../../../src/features/households/household-context';
 import { NoteDocument } from '../../../../../../src/features/notes/note-document';
-import { NoteWindow, useNoteWindowClose } from '../../../../../../src/features/notes/note-window';
-import { LoadError, LoadingState, Stack } from '../../../../../../src/ui/primitives';
+import { useNoteWindowClose } from '../../../../../../src/features/notes/note-window';
 
 /** A note, read and written on one page; `/notes/new` is a note not saved yet. */
 export default function NoteRoute() {
-  const { t } = useTranslation(['notes', 'auth']);
   const { id, noteId, overview } = useLocalSearchParams<{ id: string; noteId: string; overview?: string }>();
   const router = useRouter();
   const { households } = useHouseholdContext();
@@ -23,28 +20,42 @@ export default function NoteRoute() {
   // address must not reload the note or remount the document that is being written.
   const created = useRef<{ id: string; key: string } | null>(null);
   const ownNote = noteId !== undefined && noteId === created.current?.id;
-  const documentKey = ownNote ? created.current!.key : `${id}:${noteId}`;
+  const routeKey = `${id}:${noteId}`;
+  const documentKey = ownNote ? created.current!.key : routeKey;
   const currentKey = useRef(documentKey);
   currentKey.current = documentKey;
   const [note, setNote] = useState<NoteResponseDto | null>(null);
   const [members, setMembers] = useState<ReadonlyMap<string, string> | null>(null);
   const [loading, setLoading] = useState(noteId !== 'new');
+  const [loadedKey, setLoadedKey] = useState<string | null>(noteId === 'new' ? routeKey : null);
   const [error, setError] = useState<'auth:errors.sessionExpired' | 'loadError' | null>(null);
+  const loadGeneration = useRef(0);
 
   const loadNote = useCallback(async () => {
-    if (id === undefined || noteId === undefined || noteId === 'new' || noteId === created.current?.id) { setLoading(false); return; }
+    if (id === undefined || noteId === undefined || noteId === 'new' || noteId === created.current?.id) {
+      setLoading(false);
+      setLoadedKey(routeKey);
+      return;
+    }
+    const generation = ++loadGeneration.current;
     setLoading(true);
     setError(null);
     try {
       const token = await sessionTransport.getAccessToken();
+      if (generation !== loadGeneration.current) return;
       if (token === null) { setError('auth:errors.sessionExpired'); return; }
-      setNote(await sessionApiClient.getNote(token, id, noteId));
+      const fetched = await sessionApiClient.getNote(token, id, noteId);
+      if (generation !== loadGeneration.current) return;
+      setNote(fetched);
     } catch {
-      setError('loadError');
+      if (generation === loadGeneration.current) setError('loadError');
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) {
+        setLoadedKey(routeKey);
+        setLoading(false);
+      }
     }
-  }, [id, noteId]);
+  }, [id, noteId, routeKey]);
   useEffect(() => { void loadNote(); }, [loadNote]);
 
   // Who wrote and who changed it, by name; the note opens without them.
@@ -68,17 +79,20 @@ export default function NoteRoute() {
   }, [router]);
 
   if (id === undefined || noteId === undefined) return null;
-  if (!ownNote && noteId !== 'new' && (loading || error !== null || note === null)) {
-    return <NoteWindow title={t('document')}><Stack gap={3}>
-      {loading ? <LoadingState label={t('loading')} /> : <LoadError message={t(error ?? 'notFound')} onRetry={() => void loadNote()} />}
-    </Stack></NoteWindow>;
-  }
+  const loadedNote = !ownNote && noteId !== 'new' && note?.id === noteId ? note : null;
+  const isLoading = !ownNote && noteId !== 'new' && (loading || loadedKey !== routeKey);
+  const loadError = !ownNote && noteId !== 'new' && !isLoading ? (error ?? (loadedNote === null ? 'notFound' : null)) : null;
+
+  // Keep one NoteDocument / NoteWindow mounted across loading, errors and note switches so
+  // native does not close and reopen its modal between states.
   return <NoteDocument
-    // The same document stays open while a note it created takes its address; another note is another document.
-    key={documentKey}
+    documentKey={documentKey}
     householdId={id}
     noteId={noteId}
-    note={ownNote ? null : note}
+    note={ownNote ? null : loadedNote}
+    loading={isLoading}
+    error={loadError}
+    onRetry={() => void loadNote()}
     members={members}
     chooseHousehold={chooseHousehold}
     householdName={householdName}
