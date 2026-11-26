@@ -199,8 +199,8 @@ export function NoteDocument({ householdId, noteId, note, members, chooseHouseho
     {desktop ? saveState : null}
     {/* A note not saved yet has nothing to pin or label: these come with its first save. */}
     {marks ? <>
-      <HeaderButton label={t(pinned ? 'unpin' : 'pin')} pressed={pinned} disabled={marking.busy} icon={Pin} onPress={() => void marking.setPinned(!pinned)} />
-      <HeaderButton ref={labelsButton} label={t('labels')} pressed={false} expanded={picking !== null} icon={Tag} onPress={() => openLabels('button')} />
+      <HeaderButton label={t(pinned ? 'unpin' : 'pin')} filled={pinned} disabled={marking.busy} icon={Pin} onPress={() => void marking.setPinned(!pinned)} />
+      <HeaderButton ref={labelsButton} label={t('labels')} expanded={picking !== null} icon={Tag} onPress={() => openLabels('button')} />
     </> : null}
     <CardActionsMenu subject={t('card', { title })} actions={actions} />
   </Inline>;
@@ -355,16 +355,17 @@ function useNoteMarking(latest: NoteResponseDto | null) {
   };
 }
 
-/** An icon button in the note's header. `pressed` shows a state, such as a pinned note, the way the format tools do. */
-const HeaderButton = forwardRef<View, { label: string; icon: typeof Pin; pressed: boolean; expanded?: boolean; disabled?: boolean; onPress(): void }>(
-  function HeaderButton({ label, icon: Icon, pressed, expanded, disabled = false, onPress }, ref) {
+/** An icon button in the note's header. `filled` inks the icon in, as a pinned note's pin. */
+const HeaderButton = forwardRef<View, { label: string; icon: typeof Pin; filled?: boolean; expanded?: boolean; disabled?: boolean; onPress(): void }>(
+  function HeaderButton({ label, icon: Icon, filled = false, expanded, disabled = false, onPress }, ref) {
     const dense = useDesktopDensity();
     const size = dense ? theme.layout.desktopControl : theme.controlSizes.touchTarget;
     return <Pressable ref={ref} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, ...(expanded === undefined ? {} : { expanded }) }}
       {...(expanded === undefined ? {} : { 'aria-expanded': expanded, 'aria-haspopup': 'dialog' as const })}
       disabled={disabled} onPress={onPress}
-      style={({ pressed: down }) => ({ minWidth: size, minHeight: size, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, backgroundColor: down ? theme.colors.surfaceMuted : pressed ? theme.colors.surfaceSelected : theme.colors.transparent })}>
-      <Icon size={theme.controlSizes.icon - theme.spacing[1] / 2} color={theme.colors.ink} strokeWidth={pressed ? theme.focus.width : theme.controlSizes.iconStroke} />
+      style={({ pressed }) => ({ minWidth: size, minHeight: size, alignItems: 'center', justifyContent: 'center', borderRadius: theme.borderRadii.full, backgroundColor: pressed ? theme.colors.surfaceMuted : theme.colors.transparent })}>
+      {/* Lucide passes an unset fill through as undefined, which an SVG paints black: leave it out instead. */}
+      <Icon size={theme.controlSizes.icon - theme.spacing[1] / 2} color={theme.colors.ink} strokeWidth={theme.controlSizes.iconStroke} {...(filled ? { fill: theme.colors.ink } : {})} />
     </Pressable>;
   },
 );
