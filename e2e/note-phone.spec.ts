@@ -61,6 +61,23 @@ async function setup(page: Page, notes: Note[], { labels = [], labelsSaved }: { 
 
 const editorOf = (page: Page) => page.getByRole('textbox', { name: '笔记内容', exact: true });
 
+test('a note keeps its saved text when crossing the phone sheet breakpoint', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const id = noteId(2);
+  const saves = await setup(page, [note(id, '买菜', '牛奶')]);
+  await page.goto(`${base}/notes/${id}`);
+  const editor = editorOf(page);
+  await editor.getByText('牛奶', { exact: true }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('和面包');
+  await expect.poll(() => saves.at(-1)?.body).toBe('牛奶和面包');
+  await expect(page.getByTestId('note-save-state')).toContainText('已保存');
+
+  await page.setViewportSize({ width: 650, height: 844 });
+  await expect.poll(async () => (await page.getByTestId('app-dialog-panel').boundingBox())?.width ?? 0).toBeGreaterThan(500);
+  await expect(editor).toContainText('牛奶和面包');
+});
+
 test.describe('with Chrome for Android', () => {
   test.use({ userAgent: ANDROID_CHROME });
 
@@ -151,6 +168,48 @@ test('新建标签 in a note’s label step is a step of its own, and the new la
   await expect(page.getByRole('button', { name: '标签：旅行', exact: true })).toBeVisible();
   saveLabels();
   await expect(page.getByRole('button', { name: '标签：旅行', exact: true })).toBeVisible();
+});
+
+test('a pending refresh keeps a newly created note label selected and saves it on 完成', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const id = noteId(2);
+  const chores = { id: 'chores', name: '家务', color: '#277A72' };
+  const other = { id: 'school', name: '学校', color: '#4C7537' };
+  let finishRefresh!: () => void;
+  const pendingRefresh = new Promise<void>(resolve => { finishRefresh = resolve; });
+  let delay = false;
+  await setup(page, [note(id, '买菜', '牛奶', [chores])], { labels: [chores] });
+  const labelsUrl = `**/api/v1/households/${householdId}/labels`;
+  await page.route(labelsUrl, async route => {
+    if (!delay || route.request().method() !== 'GET') return route.fallback();
+    await pendingRefresh;
+    await route.fulfill({ json: { labels: [chores, other] } });
+  });
+  await page.goto(`${base}/notes/${id}`);
+  const labelsButton = page.getByRole('button', { name: '标签', exact: true });
+  const choice = page.getByRole('dialog', { name: '标签', exact: true });
+  await labelsButton.click();
+  await expect(choice.getByRole('button', { name: '取消选择标签 家务' })).toBeVisible();
+  await choice.getByRole('button', { name: '取消', exact: true }).click();
+
+  delay = true;
+  const refresh = page.waitForRequest(request => request.url().endsWith(`/${householdId}/labels`) && request.method() === 'GET');
+  await labelsButton.click();
+  await refresh;
+  await choice.getByRole('button', { name: '新建标签', exact: true }).click();
+  const create = page.getByRole('dialog', { name: '新建标签', exact: true });
+  await create.getByLabel('标签名称', { exact: true }).fill('旅行');
+  await create.getByRole('button', { name: '创建并选中', exact: true }).click();
+  const selected = choice.getByRole('button', { name: '取消选择标签 旅行' });
+  await expect(selected).toBeVisible();
+
+  finishRefresh();
+  await expect(choice.getByRole('button', { name: '选择标签 学校', exact: true })).toBeVisible();
+  await expect(selected).toBeVisible();
+  const saved = page.waitForResponse(response => response.url().endsWith(`/notes/${id}/labels`) && response.request().method() === 'PUT');
+  await choice.getByRole('button', { name: '完成', exact: true }).click();
+  expect((await (await saved).json() as Note).labels.map(label => label.name)).toEqual(['家务', '旅行']);
+  await expect(page.getByRole('button', { name: '标签：家务、旅行', exact: true })).toBeVisible();
 });
 
 test('the label filter scrolls under the page’s side margins to the screen edges', async ({ page }) => {

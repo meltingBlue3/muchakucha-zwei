@@ -178,6 +178,34 @@ test('keeps one NoteWindow mounted across loading and waits for the native edito
   expect(view.getByText('LangChain & LangGraph')).toBeTruthy();
 });
 
+test('keeps a timed-out native editor covered and waits for the current attempt after retry', async () => {
+  jest.useFakeTimers();
+  try {
+    mockGetNote.mockResolvedValue(sampleNote());
+    const view = await renderNoteRoute();
+    await waitFor(() => expect(mockState.onReady).not.toBeNull());
+    const staleReady = mockState.onReady;
+
+    await act(async () => { await jest.advanceTimersByTimeAsync(10_000); });
+    expect(view.getByText('笔记编辑器未能启动，请重试。')).toBeTruthy();
+    expect(view.queryByTestId('mock-note-editor')).toBeNull();
+    expect(view.queryByRole('button', { name: '标签' })).toBeNull();
+
+    await fireEvent.press(view.getByRole('button', { name: '重试' }));
+    expect(mockState.windowMounts).toBe(1);
+    expect(mockState.editorMounts).toBe(2);
+    await act(async () => { await staleReady?.(); });
+    expect(view.getByLabelText('正在加载笔记')).toBeTruthy();
+    expect(view.queryByRole('button', { name: '标签' })).toBeNull();
+
+    await act(async () => { await mockState.onReady?.(); });
+    expect(view.getByTestId('mock-note-editor')).toBeTruthy();
+    expect(view.getByRole('button', { name: '标签' })).toBeTruthy();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test('disables 完成 while labels are loading or failed so existing labels cannot be wiped', async () => {
   const existing = sampleLabel('health', '健康');
   mockGetNote.mockResolvedValue(sampleNote({ labels: [existing] }));

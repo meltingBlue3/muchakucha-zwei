@@ -2,7 +2,7 @@ import { useTranslation } from '../../../../../src/i18n';
 import { useDesktop } from '../../../../../src/ui/use-desktop';
 import { CardActionsMenu } from '../../../../../src/ui/card-actions-menu';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import { ApiClientError, type GetHouseholdMemberDto, type LabelListItemDto, type LabelResponseDto } from '@muchakucha/api-client';
@@ -42,7 +42,13 @@ export default function LabelsIndexRoute() {
   const householdId = id ?? currentHouseholdId;
   const household = households.find(item => item.id === householdId);
   const canManage = canManageLabels(household?.role);
-  const [labels, setLabels] = useState<LabelListItemDto[]>([]);
+  const [labelList, setLabelList] = useState<{ householdId: string; labels: LabelListItemDto[] } | null>(null);
+  const labels = labelList !== null && labelList.householdId === householdId ? labelList.labels : [];
+  useEffect(() => {
+    if (labelList !== null && labelList.householdId === householdId) {
+      workspace.set(householdLabelsCacheKey(householdId), labelList.labels);
+    }
+  }, [householdId, labelList, workspace]);
   const [members, setMembers] = useState<GetHouseholdMemberDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,21 +99,20 @@ export default function LabelsIndexRoute() {
     if (!householdId) return;
     const request = ++requestGeneration.current;
     setError(null);
-    if (loadedHousehold.current !== householdId) { setLoading(true); setLabels([]); setAction(null); setDeleteTarget(null); }
+    if (loadedHousehold.current !== householdId) { setLoading(true); setLabelList(null); setAction(null); setDeleteTarget(null); }
     try {
       const token = await sessionTransport.getAccessToken();
       if (request !== requestGeneration.current) return;
       if (token === null) throw new Error('Session expired');
       const result = await sessionApiClient.listLabels(token, householdId);
       if (request !== requestGeneration.current) return;
-      setLabels(result.labels);
-      workspace.set(householdLabelsCacheKey(householdId), result.labels);
+      setLabelList({ householdId, labels: result.labels });
       loadedHousehold.current = householdId;
       if (desktop) void loadMembers(token, householdId);
     } catch {
       if (request === requestGeneration.current) setError(loadedHousehold.current === householdId ? 'refreshError' : 'loadError');
     } finally { if (request === requestGeneration.current) setLoading(false); }
-  }, [householdId, desktop, workspace]);
+  }, [householdId, desktop]);
   useFocusEffect(useCallback(() => {
     void fetchLabels();
     return () => { requestGeneration.current++; };
@@ -140,8 +145,7 @@ export default function LabelsIndexRoute() {
   // An edit keeps what was typed; only the version it is saved against moves on.
   const readChangedLabel = async (token: string, household: string, labelId: string) => {
     const latest = (await sessionApiClient.listLabels(token, household)).labels;
-    setLabels(latest);
-    workspace.set(householdLabelsCacheKey(household), latest);
+    setLabelList({ householdId: household, labels: latest });
     return latest.find(label => label.id === labelId) ?? null;
   };
   const submit = async () => {
@@ -157,10 +161,13 @@ export default function LabelsIndexRoute() {
       const result = action.kind === 'create'
         ? await sessionApiClient.createLabel(token, householdId, data)
         : await sessionApiClient.updateLabel(token, householdId, action.label.id, { ...data, expectedName: action.label.name, expectedColor: action.label.color });
-      setLabels(previous => {
-        const next = action.kind === 'create' ? [...previous, { ...result, usage: { events: 0, tasks: 0, notes: 0 } }] : previous.map(label => label.id === result.id ? { ...label, ...result } : label);
-        workspace.set(householdLabelsCacheKey(householdId), next);
-        return next;
+      setLabelList(previous => {
+        if (previous !== null && previous.householdId !== householdId) return previous;
+        const current = previous?.labels ?? [];
+        const next = action.kind === 'create'
+          ? [...current, { ...result, usage: { events: 0, tasks: 0, notes: 0 } }]
+          : current.map(label => label.id === result.id ? { ...label, ...result } : label);
+        return { householdId, labels: next };
       });
       setAction(null);
     } catch (caught: unknown) {
@@ -185,10 +192,9 @@ export default function LabelsIndexRoute() {
       token = await sessionTransport.getAccessToken();
       if (token === null) throw new Error('Session expired');
       await sessionApiClient.deleteLabel(token, householdId, labelId, { expectedName, expectedColor });
-      setLabels(previous => {
-        const next = previous.filter(label => label.id !== labelId);
-        workspace.set(householdLabelsCacheKey(householdId), next);
-        return next;
+      setLabelList(previous => {
+        if (previous === null || previous.householdId !== householdId) return previous;
+        return { householdId, labels: previous.labels.filter(label => label.id !== labelId) };
       });
       setAction(previous => previous?.kind === 'edit' && previous.label.id === labelId ? null : previous);
       setDeleteTarget(null);

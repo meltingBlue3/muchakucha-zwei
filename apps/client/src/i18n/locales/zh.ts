@@ -970,6 +970,7 @@ export const zh = {
     document: '笔记',
     loading: '正在加载笔记',
     loadError: '无法加载笔记。',
+    editorLoadError: '笔记编辑器未能启动，请重试。',
     listError: '无法加载笔记，请检查网络连接后重试。',
     refreshError: '刷新失败，仍显示上次的笔记。请检查网络后重试。',
     retryLoad: '重试加载笔记',

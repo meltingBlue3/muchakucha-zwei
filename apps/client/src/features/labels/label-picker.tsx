@@ -29,6 +29,12 @@ interface LabelPickerProps {
 
 type CreateError = 'nameRequired' | 'picker.duplicate' | 'picker.createError';
 
+interface PickerLabelList {
+  labels: LabelResponseDto[];
+  createdWhileLoading: LabelResponseDto[];
+  verified: boolean;
+}
+
 function isDuplicateName(failure: unknown): boolean {
   if (!(failure instanceof ApiClientError) || failure.status !== 400) return false;
   const details = (failure.body as { error?: { details?: Array<{ field?: string; codes?: string[] }> } } | undefined)?.error?.details;
@@ -44,11 +50,15 @@ export function LabelPicker({ householdId, initialLabels, selectedLabelIds, onCh
   onLabelsLoadedRef.current = onLabelsLoaded;
   const initialRef = useRef(initialLabels);
   initialRef.current = initialLabels;
+  const selection = useRef({ householdId, ids: selectedLabelIds, onChange });
+  selection.current = { householdId, ids: selectedLabelIds, onChange };
   // Only owners and admins may create labels; a member is never offered it.
   const canCreate = canManageLabels(households.find((household) => household.id === householdId)?.role);
-  const [allLabels, setAllLabels] = useState<LabelResponseDto[]>(() => initialLabels ? [...initialLabels] : []);
+  const [labelList, setLabelList] = useState<PickerLabelList>(() => ({
+    labels: initialLabels ? [...initialLabels] : [], createdWhileLoading: [], verified: false,
+  }));
+  const { labels: allLabels, createdWhileLoading, verified } = labelList;
   const [loading, setLoading] = useState(() => initialLabels === undefined || initialLabels === null);
-  const [verified, setVerified] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const desktop = useDesktop();
@@ -59,13 +69,8 @@ export function LabelPicker({ householdId, initialLabels, selectedLabelIds, onCh
   useEffect(() => {
     let cancelled = false;
     const seeded = attempt === 0 ? (initialRef.current ?? null) : null;
-    if (seeded !== null) {
-      setAllLabels([...seeded]);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-    setVerified(false);
+    setLabelList({ labels: seeded === null ? [] : [...seeded], createdWhileLoading: [], verified: false });
+    setLoading(seeded === null);
     setFailed(false);
     async function load() {
       try {
@@ -73,9 +78,11 @@ export function LabelPicker({ householdId, initialLabels, selectedLabelIds, onCh
         if (token === null) throw new Error('Session expired');
         const result = await sessionApiClient.listLabels(token, householdId);
         if (!cancelled) {
-          setAllLabels(result.labels);
-          setVerified(true);
-          onLabelsLoadedRef.current?.(result.labels);
+          setLabelList(previous => {
+            // The response may represent a snapshot from before a local creation succeeded.
+            const missing = previous.createdWhileLoading.filter(created => !result.labels.some(label => label.id === created.id));
+            return { labels: [...result.labels, ...missing], createdWhileLoading: [], verified: true };
+          });
         }
       } catch {
         // Keep cached labels usable on a background refresh failure; an uncached list shows retry.
@@ -87,6 +94,10 @@ export function LabelPicker({ householdId, initialLabels, selectedLabelIds, onCh
     void load();
     return () => { cancelled = true; };
   }, [householdId, attempt]);
+
+  useEffect(() => {
+    if (verified || createdWhileLoading.length > 0) onLabelsLoadedRef.current?.(allLabels);
+  }, [allLabels, createdWhileLoading.length, verified]);
 
   // A draft can outlive a label someone deleted. It cannot be shown here to
   // unselect, and saving it would be refused, so drop it once the fresh list is known.
@@ -117,10 +128,14 @@ export function LabelPicker({ householdId, initialLabels, selectedLabelIds, onCh
       const token = await sessionTransport.getAccessToken();
       if (token === null) throw new Error('Session expired');
       const created = await sessionApiClient.createLabel(token, householdId, { name, color });
-      const labels = [...allLabels, created];
-      setAllLabels(labels);
-      onLabelsLoadedRef.current?.(labels);
-      onChange([...selectedLabelIds, created.id]);
+      const currentSelection = selection.current;
+      if (currentSelection.householdId !== householdId) return null;
+      setLabelList(previous => ({
+        ...previous,
+        labels: previous.labels.some(label => label.id === created.id) ? previous.labels : [...previous.labels, created],
+        createdWhileLoading: previous.verified ? previous.createdWhileLoading : [...previous.createdWhileLoading, created],
+      }));
+      if (!currentSelection.ids.includes(created.id)) currentSelection.onChange([...currentSelection.ids, created.id]);
       setCreating(false);
       return null;
     } catch (failure) {
@@ -128,7 +143,7 @@ export function LabelPicker({ householdId, initialLabels, selectedLabelIds, onCh
     } finally {
       setSaving(false);
     }
-  }, [householdId, allLabels, selectedLabelIds, onChange]);
+  }, [householdId]);
 
   // Opened over the form rather than at its foot, where a short window cut it
   // off: a popover by the button on a wide screen, a step of the window on a phone.

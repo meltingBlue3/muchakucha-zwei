@@ -1,7 +1,7 @@
 import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { Portal } from '../platform/layout/portal';
-import { useOverlayFocus } from '../platform/overlays/overlay-focus';
+import { useCoveredOverlay, useOverlayFocus } from '../platform/overlays/overlay-focus';
 import { theme } from './theme';
 import { Heading, IconButton, Inline } from './primitives';
 import X from 'lucide-react-native/icons/x';
@@ -28,18 +28,7 @@ export function AnchoredPopover({ title, trigger, onClose, children, width = the
     });
   }, [align, trigger, viewport.width, viewport.height, width]);
   const open = anchor !== null;
-  useLayoutEffect(() => {
-    if (!open || Platform.OS !== 'web') return;
-    const parentPanel = parent?.current as unknown as HTMLElement | null | undefined;
-    if (!parentPanel) return;
-    // Nested popovers have their own portal. Keep the covered card out of the focus order and accessibility tree.
-    parentPanel.inert = true;
-    parentPanel.setAttribute('aria-hidden', 'true');
-    return () => {
-      parentPanel.inert = false;
-      parentPanel.removeAttribute('aria-hidden');
-    };
-  }, [open, parent]);
+  useCoveredOverlay(parent, open);
   useOverlayFocus({ mode: open ? 'dialog' : 'closed', panel, initial, trigger, onClose });
   // The layer fills the window, so `bottom` is measured from the window's foot and the dismiss layer covers everything.
   return <Portal><View pointerEvents="box-none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
